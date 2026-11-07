@@ -14,8 +14,8 @@
  * - Training roles are ranked viewer < administrator; no training role is no
  *   training access.
  * - eVals roles are ranked the same way, and are independent of the training area's.
- * - Diagnostic has no roles of its own: an assessments viewer takes it, and an
- *   assessments administrator runs it.
+ * - Diagnostic has no roles of its own: an assessments administrator runs it,
+ *   and only its Participants take it, whatever roles anyone holds.
  * - A platform administrator is an administrator in every area whatever their
  *   stored roles say, and alone runs backups and sign-in domains, and grants
  *   platform administration.
@@ -103,8 +103,11 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
   },
   canRunMimirStudio: { actual: roles.canRunMimirStudio, expected: evals("administrator") },
 
-  // Diagnostic is part of the assessments area: a viewer takes it, an administrator runs it.
-  canTakeIris: { actual: roles.canTakeIris, expected: evals("viewer") },
+  // Diagnostic is part of the assessments area: an administrator runs it, and only a Participant takes it.
+  canTakeIris: { actual: roles.canTakeIris, expected: (a) => a.participating },
+  canSitIris: { actual: roles.canSitIris, expected: (a) => a.participating || evals("administrator")(a) },
+  // Whoever can open Diagnostic Settings opens Diagnostic too.
+  canSeeIris: { actual: roles.canSeeIris, expected: (a) => a.participating || evals("administrator")(a) },
   canManageIris: { actual: roles.canManageIris, expected: evals("administrator") },
 
   canManageBackups: { actual: roles.canManageBackups, expected: platformOnly },
@@ -114,6 +117,10 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
   canManageTimedJobs: { actual: roles.canManageTimedJobs, expected: platformOnly },
   canViewAuditTrail: { actual: roles.canViewAuditTrail, expected: platformOnly },
   canImpersonate: { actual: roles.canImpersonate, expected: platformOnly },
+  canSearchTestAccounts: {
+    actual: roles.canSearchTestAccounts,
+    expected: (a) => platformOnly(a) || evals("administrator")(a),
+  },
 
   "canManageRoles(event)": {
     actual: (a) => roles.canManageRoles(a, "event"),
@@ -143,10 +150,11 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
 };
 
 test("the combinations cover every role", () => {
-  // 5 event × (none + 2 training) × (none + 2 assessments) × platform on/off × judging or not × managing or not.
+  // 5 event × (none + 2 training) × (none + 2 assessments) × platform on/off × judging or not × managing or not
+  // × a Diagnostic Participant or not.
   assert.equal(
     EVERY_ACCESS.length,
-    EVENT_ROLES.length * (TRAINING_ROLES.length + 1) * (ASSESSMENTS_ROLES.length + 1) * 2 * 2 * 2,
+    EVENT_ROLES.length * (TRAINING_ROLES.length + 1) * (ASSESSMENTS_ROLES.length + 1) * 2 * 2 * 2 * 2,
   );
   assert.equal(new Set(EVERY_ACCESS.map(describeAccess)).size, EVERY_ACCESS.length);
 });
@@ -210,21 +218,23 @@ describe("the areas are independent", () => {
     assert.equal(roles.canManageUsers(a), true);
   });
 
-  test("an Assessments Administrator runs Diagnostic: everyone's results, the answer key and question review", () => {
+  test("an Assessments Administrator runs Diagnostic, and previews its questions, but does not take its tests", () => {
     const a = PERSONAS.assessmentsAdmin;
-    assert.equal(roles.canTakeIris(a), true);
+    assert.equal(roles.canTakeIris(a), false);
+    assert.equal(roles.canSitIris(a), true);
     assert.equal(roles.canManageIris(a), true);
   });
 
-  test("an Assessments Viewer takes Diagnostic but cannot see its console or manage anyone", () => {
-    const a = PERSONAS.assessmentsViewer;
+  test("a Participant takes Diagnostic but cannot see its settings or manage anyone", () => {
+    const a = PERSONAS.participant;
     assert.equal(roles.canTakeIris(a), true);
     assert.equal(roles.canManageIris(a), false);
     assert.equal(roles.canManageUsers(a), false);
+    assert.equal(roles.canSeeEvals(a), false);
   });
 
-  test("Diagnostic comes with no other area's role", () => {
-    for (const p of ["eventAdmin", "trainingAdmin", "guestJudge", "peopleManager"] as const) {
+  test("no role makes someone a Participant", () => {
+    for (const p of ["assessmentsViewer", "assessmentsAdmin", "platform", "eventAdmin", "trainingAdmin", "guestJudge", "peopleManager"] as const) {
       assert.equal(roles.canTakeIris(PERSONAS[p]), false, p);
     }
   });
@@ -294,7 +304,7 @@ describe("accessBadges", () => {
 
   test("shows the event role, then the training role, then the assessments role", () => {
     assert.deepEqual(
-      roles.accessBadges({ event: "manager", training: "viewer", assessments: "viewer", platform: false, judging: false, manager: false }),
+      roles.accessBadges({ event: "manager", training: "viewer", assessments: "viewer", platform: false, judging: false, manager: false, participating: false }),
       ["Event Manager", "Training Viewer", "Assessments Viewer"],
     );
     assert.deepEqual(roles.accessBadges(PERSONAS.trainingAdmin), ["Training Administrator"]);

@@ -42,6 +42,7 @@ export const POST = audited(async function POST(req: Request) {
         platform: false,
         judging: session.user.access.judging,
         manager: session.user.access.manager,
+        participating: session.user.access.participating,
       }
     : session.user.access;
   return NextResponse.json({ applied: result.applied, home: homePath(access) });

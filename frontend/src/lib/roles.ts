@@ -32,6 +32,12 @@ export type Access = {
    * decides it (`lib/evals/managers.ts`), and it opens Reporting → Canary Wire.
    */
   manager: boolean;
+  /**
+   * A Participant in the Diagnostic. Not a role either: Diagnostic Settings
+   * adds them by hand or by bootcamp auto-enroll (`lib/iris/participants.ts`),
+   * and it opens the Diagnostic's tests and nothing else.
+   */
+  participating: boolean;
 };
 
 /** An area whose roles are granted by that area's own administrators. */
@@ -72,9 +78,9 @@ export const ASSESSMENTS_ROLE_LABELS: Record<AssessmentsRole, string> = {
 };
 
 export const ASSESSMENTS_ROLE_DESCRIPTIONS: Record<AssessmentsRole, string> = {
-  viewer: "Sees assessments, eVals among them, without scoring them, and takes the Diagnostic placement tests.",
+  viewer: "Sees assessments, eVals among them, without scoring them.",
   administrator:
-    "Also scores assessments, manages eVals settings, Google meetings and Coach Canary's settings, sees everyone's Diagnostic results and reviews its questions, and manages everyone's assessments role.",
+    "Also scores assessments, manages eVals settings, Google meetings and Coach Canary's settings, chooses the Diagnostic's Participants, sees their results and reviews its questions, and manages everyone's assessments role.",
 };
 
 export const NO_ASSESSMENTS_ACCESS_LABEL = "No assessments access";
@@ -212,10 +218,19 @@ export const canRunMimirStudio = (access: Access) => canManageMimir(access);
 
 // Diagnostic, part of the assessments area.
 
-/** Takes the placement tests: an Assessments Viewer or above. */
-export const canTakeIris = (access: Access) => assessmentsAtLeast(access, "viewer");
+/** Takes the placement tests: a Participant, and nobody else, whatever their roles. */
+export const canTakeIris = (access: Access) => access.participating;
 
-/** Everyone's results, the answer key, and question review: an Assessments Administrator. */
+/**
+ * Opens Diagnostic: a Participant, to take the tests, and an Assessments
+ * Administrator, who can open its settings, even when they have none assigned.
+ */
+export const canSeeIris = (access: Access) => canTakeIris(access) || canManageIris(access);
+
+/** Carries on a sitting: a Participant's live ones, or an Assessments Administrator's previews. */
+export const canSitIris = (access: Access) => canTakeIris(access) || canManageIris(access);
+
+/** Diagnostic Settings: the Participants and their results, the answer key, and question review. An Assessments Administrator. */
 export const canManageIris = (access: Access) => assessmentsAtLeast(access, "administrator");
 
 // The platform: whatever reaches past a single area.
@@ -241,6 +256,9 @@ export const canViewAuditTrail = (access: Access) => access.platform;
 
 /** Viewing the app as any employee sees into every area, so only a platform administrator may. */
 export const canImpersonate = (access: Access) => access.platform;
+
+/** Finds test accounts: to view the app as, or to add as a Diagnostic Participant. */
+export const canSearchTestAccounts = (access: Access) => canImpersonate(access) || canManageIris(access);
 
 /** Whether `access` may set other people's role in `area`, or the platform flag. */
 export function canManageRoles(access: Access, area: Area | "platform"): boolean {

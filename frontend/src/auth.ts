@@ -27,6 +27,7 @@ import { REQUEST_PATH_HEADER, returnPath } from "@/lib/request-path";
 import { canImpersonate, type Access } from "@/lib/roles";
 import { isJudgingNow } from "@/lib/scheduler/judging";
 import { isManagerNow } from "@/lib/evals/managers";
+import { isParticipantNow } from "@/lib/iris/participants";
 import { bootstrapAdminEmails, isBootstrapAdmin } from "@/lib/site-admins";
 
 /** The bootstrap administrators in SITE_ADMIN_EMAILS are platform administrators. */
@@ -55,6 +56,7 @@ async function accessOf(row: UserRow, email: string | null | undefined): Promise
     platform: row.isPlatformAdmin ?? false,
     judging: await isJudgingNow(email),
     manager: await isManagerNow(email),
+    participating: await isParticipantNow(email),
   };
 }
 

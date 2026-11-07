@@ -9,9 +9,9 @@
  */
 
 import "server-only";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { irisAttempts, irisResponses, irisTakers, type IrisAttempt } from "@/db/schema";
+import { irisAttempts, irisParticipants, irisResponses, irisTakers, users, type IrisAttempt } from "@/db/schema";
 import {
   ENGINE,
   IDK,
@@ -27,7 +27,8 @@ import {
   type Phase,
 } from "@/lib/iris/engine";
 import { ITEMS_BY_ID, approvedCounts, isLive, poolFor } from "@/lib/iris/reviews";
-import { SUBJECTS, SUBJECT_KEYS, type SubjectKey, type Track } from "@/lib/iris/subjects";
+import { OPEN_SUBJECT_KEYS, SUBJECTS, type SubjectKey, type Track } from "@/lib/iris/subjects";
+import { canManageIris, canTakeIris, type Access } from "@/lib/roles";
 
 /**
  * What a taker is shown of a question: its wording and options, nothing else.
@@ -87,8 +88,8 @@ function viewOf(attempt: IrisAttempt): SittingView {
   };
 }
 
-/** `unavailable`: has questions, too few approved yet. `coming_soon`: has no questions yet. */
-export type SubjectStatus = "available" | "in_progress" | "completed" | "unavailable" | "coming_soon";
+/** `unavailable`: has questions, too few approved yet. A subject with no questions yet is not listed at all. */
+export type SubjectStatus = "available" | "in_progress" | "completed" | "unavailable";
 
 export type MyIris = {
   track: Track | null;
@@ -111,8 +112,22 @@ export type MyIris = {
  * `withLevels` adds the placement of each finished subject, and is for Diagnostic
  * administrators only; a taker is never told their level.
  */
+/**
+ * The track `userId` is in: the one they chose, else the one an administrator
+ * chose on adding them as a Participant, else null.
+ */
+export async function trackOf(userId: string): Promise<Track | null> {
+  const [row] = await db
+    .select({ track: sql<string | null>`coalesce(${irisTakers.track}, ${irisParticipants.track})` })
+    .from(users)
+    .leftJoin(irisTakers, eq(irisTakers.userId, users.id))
+    .leftJoin(irisParticipants, eq(irisParticipants.email, sql`lower(${users.email})`))
+    .where(eq(users.id, userId));
+  return (row?.track as Track | null | undefined) ?? null;
+}
+
 export async function myIris(userId: string, form: Form = "A", withLevels = false): Promise<MyIris> {
-  const [taker] = await db.select({ track: irisTakers.track }).from(irisTakers).where(eq(irisTakers.userId, userId));
+  const track = await trackOf(userId);
   const sittings = await db
     .select({ subject: irisAttempts.subject, finishedAt: irisAttempts.finishedAt, placement: irisAttempts.placement })
     .from(irisAttempts)
@@ -120,11 +135,9 @@ export async function myIris(userId: string, form: Form = "A", withLevels = fals
   const bySubject = new Map(sittings.map((s) => [s.subject, s]));
   const approved = await approvedCounts(form);
 
-  const subjects = SUBJECT_KEYS.map((key) => {
+  const subjects = OPEN_SUBJECT_KEYS.map((key) => {
     const sitting = bySubject.get(key);
-    const status: SubjectStatus = SUBJECTS[key].comingSoon
-      ? "coming_soon"
-      : sitting
+    const status: SubjectStatus = sitting
       ? sitting.finishedAt
         ? "completed"
         : "in_progress"
@@ -135,11 +148,11 @@ export async function myIris(userId: string, form: Form = "A", withLevels = fals
     return { key, name: SUBJECTS[key].name, blurb: SUBJECTS[key].blurb, status, ...(placement ? { placement } : {}) };
   });
   return {
-    track: (taker?.track as Track | undefined) ?? null,
+    track,
     form,
     subjects,
     completed: subjects.filter((s) => s.status === "completed").length,
-    open: subjects.filter((s) => s.status !== "coming_soon").length,
+    open: subjects.length,
   };
 }
 
@@ -165,8 +178,7 @@ export async function startSitting(
   mode: "live" | "preview",
   random: () => number = Math.random,
 ): Promise<{ ok: true; sitting: SittingView; resumed: boolean } | { ok: false; error: StartError }> {
-  const [taker] = await db.select({ track: irisTakers.track }).from(irisTakers).where(eq(irisTakers.userId, userId));
-  if (!taker && mode === "live") return { ok: false, error: "no_track" };
+  if (mode === "live" && !(await trackOf(userId))) return { ok: false, error: "no_track" };
 
   const [open] = await db
     .select()
@@ -223,17 +235,36 @@ export async function startSitting(
   return { ok: true, sitting: viewOf(created), resumed: false };
 }
 
-/** Whatever the taker has open on `attemptId`, for a page reload. */
-export async function openSitting(userId: string, attemptId: string): Promise<SittingView | null> {
+export type SittingMode = "live" | "preview";
+
+/**
+ * The sittings `access` may carry on: live ones for a Participant, previews
+ * for an Assessments Administrator. Someone no longer a Participant cannot
+ * go on with a live sitting they left open.
+ */
+export function sittingModes(access: Access): SittingMode[] {
+  return [...(canTakeIris(access) ? ["live" as const] : []), ...(canManageIris(access) ? ["preview" as const] : [])];
+}
+
+const EVERY_MODE: readonly SittingMode[] = ["live", "preview"];
+
+/** Whatever the taker has open on `attemptId`, for a page reload; null for a sitting not in one of `modes`. */
+export async function openSitting(
+  userId: string,
+  attemptId: string,
+  modes: readonly SittingMode[] = EVERY_MODE,
+): Promise<SittingView | null> {
   const [attempt] = await db
     .select()
     .from(irisAttempts)
     .where(and(eq(irisAttempts.id, attemptId), eq(irisAttempts.userId, userId)));
-  return attempt && !attempt.finishedAt && onBank(attempt) ? viewOf(attempt) : null;
+  return attempt && modes.includes(attempt.mode as SittingMode) && !attempt.finishedAt && onBank(attempt)
+    ? viewOf(attempt)
+    : null;
 }
 
 /**
- * - `not_found` — no such sitting of theirs.
+ * - `not_found` — no such sitting of theirs, or not one they may carry on.
  * - `finished`  — it is over.
  * - `stale`     — they answered a question number that is no longer the one on
  *                 screen, from a second tab; `sitting` is the current one.
@@ -264,6 +295,7 @@ export async function answer(
   number: number,
   choice: number,
   random: () => number = Math.random,
+  modes: readonly SittingMode[] = EVERY_MODE,
 ): Promise<AnswerResult> {
   if (!Number.isInteger(choice) || choice < IDK || choice > 3) return { ok: false, error: "invalid_choice" };
 
@@ -275,7 +307,7 @@ export async function answer(
     .select({ subject: irisAttempts.subject, form: irisAttempts.form, mode: irisAttempts.mode })
     .from(irisAttempts)
     .where(and(eq(irisAttempts.id, attemptId), eq(irisAttempts.userId, userId)));
-  if (!sitting) return { ok: false, error: "not_found" };
+  if (!sitting || !modes.includes(sitting.mode as SittingMode)) return { ok: false, error: "not_found" };
   const pool = await poolFor(sitting.subject as SubjectKey, sitting.form as Form, sitting.mode as "live" | "preview");
 
   // The lock is on this one sitting only, so two tabs cannot record two

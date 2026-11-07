@@ -1,53 +1,91 @@
 "use client";
 
-/** The cohort as a table, a row per person with their level in each subject, or as a radar per person against the whole cohort. */
+/**
+ * The Records: a row per person with a sitting, their level in each subject,
+ * or a radar per person against every Participant. Choosing someone opens
+ * their sittings in a pane below; choosing them again closes it.
+ */
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
-import type { CohortRow, CohortSummary } from "@/lib/iris/cohort";
+import type { CohortSummary } from "@/lib/iris/cohort";
+import type { RecordRow } from "@/lib/iris/participants";
 import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, bandOf } from "@/lib/iris/subjects";
-import type { IrisCohortSort } from "@/lib/list-specs";
+import type { IrisRecordSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
-import { LevelBadge } from "../level-badge";
-import { Radar } from "../radar";
+import { Radar } from "@/app/(app)/diagnostic/radar";
+import { PersonView, type Detail } from "./person-view";
+import { ScoreMenu } from "./score-menu";
 
-type Row = Omit<CohortRow, "finishedAt"> & { finishedAt: string };
+type Row = Omit<RecordRow, "addedAt" | "finishedAt"> & { addedAt: string | null; finishedAt: string | null };
 
 const COLUMNS = 6 + OPEN_SUBJECT_KEYS.length;
 
 const AXES = OPEN_SUBJECT_KEYS.map((k) => SUBJECTS[k].short);
 const valuesOf = (r: Row) => OPEN_SUBJECT_KEYS.map((k) => r.placements[k] ?? null);
 
-export function CohortView({
+const day = (iso: string) => new Date(iso).toLocaleDateString();
+
+/** This page's URL with `person` set, or taken off for null. */
+function usePersonHref() {
+  const pathname = usePathname();
+  const params = useSearchParams();
+  return (userId: string | null) => {
+    const next = new URLSearchParams(params);
+    if (userId) next.set("person", userId);
+    else next.delete("person");
+    const qs = next.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  };
+}
+
+export function RecordsView({
   query,
   view,
   summary,
+  total,
   page,
+  detail,
+  detailSummary,
 }: {
-  query: ListQuery<IrisCohortSort>;
+  query: ListQuery<IrisRecordSort>;
   view: "table" | "charts";
-  summary: CohortSummary | null;
+  summary: CohortSummary;
+  total: number;
   page: Page<Row>;
+  detail: Detail | null;
+  detailSummary: CohortSummary;
 }) {
+  const router = useRouter();
   const sortProps = { sort: query.sort, dir: query.dir };
   const rowLink = useRowLink();
+  const personHref = usePersonHref();
+  const pane = useRef<HTMLDivElement>(null);
+  const open = detail?.userId ?? null;
+  // Choosing someone again closes them.
+  const hrefFor = (userId: string) => personHref(open === userId ? null : userId);
+
+  useEffect(() => {
+    if (open) pane.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [open]);
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild} className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <TableSearch value={query.q} placeholder="Search by name or email" label="Search the cohort" />
+          <TableSearch value={query.q} placeholder="Search by name or email" label="Search the Records" />
         </div>
         <ViewSwitch view={view} />
       </motion.div>
 
-      {view === "charts" && summary ? (
+      {view === "charts" ? (
         <motion.div variants={riseChild} className="space-y-4">
-          <CohortCharts rows={page.rows} summary={summary} q={query.q} />
+          <RecordCharts rows={page.rows} summary={summary} q={query.q} open={open} hrefFor={hrefFor} />
           <div className="overflow-hidden rounded-2xl border bg-card shadow-sm empty:hidden">
             <Pager page={page} noun="people" />
           </div>
@@ -55,11 +93,14 @@ export function CohortView({
       ) : (
         <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-260 text-sm">
+            <table className="w-full min-w-280 text-sm">
               <thead>
                 <tr className={HEADER_ROW}>
                   <SortHeader column="person" {...sortProps}>
-                    Person
+                    Person · {total.toLocaleString()}
+                  </SortHeader>
+                  <SortHeader column="added" {...sortProps}>
+                    Enrolled
                   </SortHeader>
                   <SortHeader column="track" {...sortProps}>
                     Track
@@ -74,26 +115,33 @@ export function CohortView({
                   <SortHeader column="finishedAt" {...sortProps}>
                     Last finished
                   </SortHeader>
-                  <PlainHeader />
                 </tr>
               </thead>
               <tbody>
                 {page.rows.length === 0 && (
                   <tr>
                     <td colSpan={COLUMNS} className="px-5 py-8 text-center text-muted-foreground">
-                      {query.q ? <>No one matches &ldquo;{query.q}&rdquo;.</> : "Nobody has finished a test yet."}
+                      {query.q ? <>No one matches &ldquo;{query.q}&rdquo;.</> : "No one has started a test yet."}
                     </td>
                   </tr>
                 )}
                 {page.rows.map((r) => {
-                  const href = `/diagnostic/cohort/${encodeURIComponent(r.userId)}`;
+                  const href = hrefFor(r.userId);
                   return (
-                    <tr key={r.userId} className={LINK_ROW} onClick={rowLink(href)}>
+                    <tr
+                      key={r.userId}
+                      aria-selected={open === r.userId}
+                      className={cn(LINK_ROW, open === r.userId && "bg-brand-subtle/50 hover:bg-brand-subtle/50")}
+                      onClick={rowLink(() => router.push(href, { scroll: false }))}
+                    >
                       <td className="px-5 py-3">
-                        <Link href={href} className="block font-medium group-hover:underline">
+                        <Link href={href} scroll={false} className="block font-medium group-hover:underline">
                           {r.name || r.email}
                         </Link>
                         {r.name && <span className="block truncate text-xs text-muted-foreground">{r.email}</span>}
+                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">
+                        {!r.enrolled ? "Not a Participant" : r.manual ? (r.addedBy ?? "—") : "Bootcamp"}
                       </td>
                       <td className="px-5 py-3 text-muted-foreground">{r.track ?? "—"}</td>
                       <td className="px-5 py-3 text-muted-foreground tnum">
@@ -112,16 +160,21 @@ export function CohortView({
                       {OPEN_SUBJECT_KEYS.map((k) => (
                         <td key={k} className="px-3 py-3">
                           {r.placements[k] ? (
-                            <LevelBadge level={r.placements[k]} />
+                            <ScoreMenu
+                              userId={r.userId}
+                              subject={k}
+                              form="A"
+                              level={r.placements[k]}
+                              who={r.name || r.email}
+                            />
                           ) : (
                             <span className="text-muted-foreground/60">—</span>
                           )}
                         </td>
                       ))}
                       <td className="px-5 py-3 whitespace-nowrap text-muted-foreground tnum">
-                        {new Date(r.finishedAt).toLocaleDateString()}
+                        {r.finishedAt ? day(r.finishedAt) : "—"}
                       </td>
-                      <td className="px-5 py-3 text-right text-xs whitespace-nowrap text-muted-foreground">View path</td>
                     </tr>
                   );
                 })}
@@ -133,6 +186,14 @@ export function CohortView({
           </div>
         </motion.div>
       )}
+
+      <div ref={pane} className="scroll-mt-6">
+        {detail && (
+          <div className="rounded-2xl border bg-muted/20 p-5">
+            <PersonView detail={detail} summary={detailSummary} closeHref={personHref(null)} />
+          </div>
+        )}
+      </div>
     </motion.div>
   );
 }
@@ -149,7 +210,7 @@ function ViewSwitch({ view }: { view: "table" | "charts" }) {
     return qs ? `${pathname}?${qs}` : pathname;
   };
   return (
-    <div className="flex rounded-lg border p-0.5 text-sm" role="group" aria-label="Show the cohort as">
+    <div className="flex rounded-lg border p-0.5 text-sm" role="group" aria-label="Show the Records as">
       {(["table", "charts"] as const).map((v) => (
         <Link
           key={v}
@@ -167,15 +228,29 @@ function ViewSwitch({ view }: { view: "table" | "charts" }) {
   );
 }
 
-/** The whole cohort first, every shape over the median, then a radar per person against that median. */
-function CohortCharts({ rows, summary, q }: { rows: Row[]; summary: CohortSummary; q: string }) {
+/** Every Participant first, every shape over the median, then a radar per person against that median. */
+function RecordCharts({
+  rows: all,
+  summary,
+  q,
+  open,
+  hrefFor,
+}: {
+  rows: Row[];
+  summary: CohortSummary;
+  q: string;
+  open: string | null;
+  hrefFor: (userId: string) => string;
+}) {
+  // Someone with nothing finished has no shape to draw.
+  const rows = all.filter((r) => r.completed > 0);
   const medians = OPEN_SUBJECT_KEYS.map((k) => summary.subjects[k].median);
   const lowest = summary.weakest.length ? summary.subjects[summary.weakest[0]!].median : null;
 
   if (rows.length === 0) {
     return (
       <p className="rounded-2xl border bg-card px-5 py-8 text-center text-sm text-muted-foreground shadow-sm">
-        {q ? <>No one matches &ldquo;{q}&rdquo;.</> : "Nobody has finished a test yet."}
+        {q ? <>No one matches &ldquo;{q}&rdquo;.</> : "No one on this page has finished a test yet."}
       </p>
     );
   }
@@ -187,14 +262,14 @@ function CohortCharts({ rows, summary, q }: { rows: Row[]; summary: CohortSummar
           <span className="size-2.5 rounded-sm bg-brand" /> Their placement
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="w-3.5 border-t-2 border-dashed border-muted-foreground" /> Cohort median
+          <span className="w-3.5 border-t-2 border-dashed border-muted-foreground" /> Participants&apos; median
         </span>
         <span>Rings: 101 · 201 · 301</span>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <div className="rounded-2xl border border-brand/30 bg-brand-subtle/30 p-4 text-sm shadow-sm">
-          <p className="font-medium">Whole cohort</p>
+          <p className="font-medium">Every Participant</p>
           <p className="text-xs text-muted-foreground tnum">
             {summary.people} {summary.people === 1 ? "person" : "people"}
             {q && <> matching &ldquo;{q}&rdquo;</>}
@@ -212,46 +287,49 @@ function CohortCharts({ rows, summary, q }: { rows: Row[]; summary: CohortSummar
                 ...rows.map((r) => ({ values: valuesOf(r), variant: "faint" as const })),
                 { values: medians, variant: "median" as const },
               ]}
-              label="Every placement on this page stacked, with the cohort median"
+              label="Every placement on this page stacked, with the Participants' median"
             />
           </div>
         </div>
 
-        {rows.map((r) => {
-          const href = `/diagnostic/cohort/${encodeURIComponent(r.userId)}`;
-          return (
-            <Link
-              key={r.userId}
-              href={href}
-              className="group rounded-2xl border bg-card p-4 text-sm shadow-sm transition-colors hover:bg-muted/30"
-            >
-              <p className="truncate font-medium group-hover:underline">{r.name || r.email}</p>
-              <p className="text-xs text-muted-foreground tnum">
-                {r.track ?? "No track"}
-                {r.composite !== null && (
-                  <>
-                    {" "}
-                    · {r.composite}, {bandOf(r.composite)}
-                  </>
-                )}
-              </p>
-              <p className="text-xs text-muted-foreground tnum">
-                {r.completed} of {OPEN_SUBJECT_KEYS.length} done
-              </p>
-              <div className="mx-auto mt-3 max-w-72 px-2">
-                <Radar
-                  axes={AXES}
-                  size={260}
-                  series={[
-                    { values: medians, variant: "median" },
-                    { values: valuesOf(r), variant: "person" },
-                  ]}
-                  label={`${r.name || r.email}'s placement in each subject, against the cohort median`}
-                />
-              </div>
-            </Link>
-          );
-        })}
+        {rows.map((r) => (
+          <Link
+            key={r.userId}
+            href={hrefFor(r.userId)}
+            scroll={false}
+            aria-current={open === r.userId ? "true" : undefined}
+            className={cn(
+              "group rounded-2xl border bg-card p-4 text-sm shadow-sm transition-colors hover:bg-muted/30",
+              open === r.userId && "border-brand-border bg-brand-subtle/40",
+            )}
+          >
+            <p className="truncate font-medium group-hover:underline">{r.name || r.email}</p>
+            <p className="text-xs text-muted-foreground tnum">
+              {r.track ?? "No track"}
+              {r.composite !== null && (
+                <>
+                  {" "}
+                  · {r.composite}, {bandOf(r.composite)}
+                </>
+              )}
+            </p>
+            <p className="text-xs text-muted-foreground tnum">
+              {r.completed} of {OPEN_SUBJECT_KEYS.length} done
+              {!r.enrolled && <> · not a Participant</>}
+            </p>
+            <div className="mx-auto mt-3 max-w-72 px-2">
+              <Radar
+                axes={AXES}
+                size={260}
+                series={[
+                  { values: medians, variant: "median" },
+                  { values: valuesOf(r), variant: "person" },
+                ]}
+                label={`${r.name || r.email}'s placement in each subject, against the Participants' median`}
+              />
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );

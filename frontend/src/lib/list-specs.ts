@@ -29,8 +29,20 @@ export type EmployeeSort = (typeof EMPLOYEE_LIST.sorts)[number];
 export const USER_LIST = spec(["user", "eventRole", "trainingRole", "assessmentsRole", "platform"]);
 export type UserSort = (typeof USER_LIST.sorts)[number];
 
-export const IRIS_COHORT_LIST = spec(["finishedAt", "person", "track", "completed"], "desc");
-export type IrisCohortSort = (typeof IRIS_COHORT_LIST.sorts)[number];
+export const IRIS_PARTICIPANT_LIST = spec(["person", "added", "track", "completed", "finishedAt"]);
+export type IrisParticipantSort = (typeof IRIS_PARTICIPANT_LIST.sorts)[number];
+
+export const IRIS_RECORD_LIST = spec(["person", "added", "track", "completed", "finishedAt"]);
+export type IrisRecordSort = (typeof IRIS_RECORD_LIST.sorts)[number];
+
+export const IRIS_REMINDER_RUN_LIST = spec(["startedAt", "status"], "desc");
+export type IrisReminderRunSort = (typeof IRIS_REMINDER_RUN_LIST.sorts)[number];
+
+export const IRIS_REMINDER_MESSAGE_LIST = spec(["at", "person", "outcome"]);
+export type IrisReminderMessageSort = (typeof IRIS_REMINDER_MESSAGE_LIST.sorts)[number];
+
+export const IRIS_FEEDBACK_LIST = spec(["createdAt", "user", "subject", "rating"], "desc");
+export type IrisFeedbackSort = (typeof IRIS_FEEDBACK_LIST.sorts)[number];
 
 export const TITLE_LIST = spec(["title", "addedBy", "createdAt"]);
 export type TitleSort = (typeof TITLE_LIST.sorts)[number];

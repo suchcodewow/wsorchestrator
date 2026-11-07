@@ -253,6 +253,14 @@ and mark those `sessionOnly` in the e2e matrix. A page that shows data needs a
 `frontend/src/lib/api-reference/`, which is published at `/api`. The unit suite
 fails until that entry exists, so describe the handler as it actually behaves.
 
+**Whoever can open a page's settings sees the page itself.** A sidebar entry
+with a `settings` href is visible to everyone who sees that settings entry, and
+its page opens for them, even when there is nothing in it for them: show why
+("No Tests currently assigned to you.") rather than hiding the entry or
+answering 404. A page that vanishes while its settings stay is confusing.
+`test/unit/nav.test.ts` checks every entry against every combination of roles,
+and the e2e matrix checks the page opens.
+
 **A page that needs more room than the reading column uses `WideView`.**
 The shell wraps every page in `max-w-6xl`. A map, a wide table or a canvas
 that gains from the browser's width wraps its content in `WideView`

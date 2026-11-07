@@ -321,7 +321,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             {
               name: "role",
               type: `"viewer" | "administrator" | null`,
-              note: "required when area is training or assessments; null removes access. The assessments role covers Diagnostic too: a viewer takes it, an administrator runs it.",
+              note: "required when area is training or assessments; null removes access. An Assessments Administrator also runs Diagnostic; who takes it is set by its Participants, not a role.",
             },
             { name: "value", type: "boolean", note: "required when area is platform" },
           ],
@@ -414,8 +414,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/users/test-accounts",
-        summary: "Finds test accounts to view the app as, by name or address.",
-        access: "platform",
+        summary: "Finds test accounts to view the app as, or to add as Diagnostic Participants, by name or address.",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "A test account is an account made to test the app as, outside production. Viewing as one (POST /api/me/impersonation with its email), changes go through, except on session-only routes. suggestedName is a famous film or television character's name that no account has yet, for a new one to start with; it is null once all 100 are taken, and on production. On production enabled is false and testAccounts is always empty. At most 8 are returned.",

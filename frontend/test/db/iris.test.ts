@@ -28,17 +28,18 @@ import {
   openSitting,
   setTrack,
   shuffledOrder,
+  sittingModes,
   startSitting,
   withoutLevel,
   type SittingView,
 } from "@/lib/iris/attempts";
-import { clearResults, cohortSummary, listCohort, personDetail } from "@/lib/iris/cohort";
+import { clearResults, cohortSummary, personDetail, resetSitting } from "@/lib/iris/cohort";
+import { listParticipants } from "@/lib/iris/participants";
 import { IDK } from "@/lib/iris/engine";
 import { IRIS_ITEMS } from "@/lib/iris/items";
 import { listQuestions } from "@/lib/iris/questions";
 import { ITEMS_BY_ID, approveDrafts, poolFor, setReviews } from "@/lib/iris/reviews";
-import { SUBJECTS } from "@/lib/iris/subjects";
-import { IRIS_COHORT_LIST } from "@/lib/list-specs";
+import { IRIS_PARTICIPANT_LIST } from "@/lib/list-specs";
 import { PERSONAS } from "../support/access";
 import { testScope, type TestUser } from "../support/seed";
 import { seeded } from "../support/iris-sim";
@@ -90,12 +91,13 @@ const right = (id: string) => ITEMS_BY_ID.get(id)!.answer;
 
 describe("before any question is approved", () => {
   test("a live sitting is not ready, and a subject shows as unavailable", async () => {
-    const taker = await scope.createUser("early", PERSONAS.assessmentsViewer);
+    const taker = await scope.createUser("early", PERSONAS.participant);
     await setTrack(taker.id, "AE");
     assert.deepEqual(await startSitting(taker.id, "sdlc", "A", "live"), { ok: false, error: "not_ready" });
     const mine = await myIris(taker.id);
-    assert.ok(mine.subjects.every((s) => s.status === (SUBJECTS[s.key].comingSoon ? "coming_soon" : "unavailable")));
-    assert.equal(mine.open, 6, "the four coming subjects are left out of the count");
+    assert.ok(mine.subjects.every((s) => s.status === "unavailable"));
+    assert.equal(mine.subjects.length, 6, "the four coming subjects are not listed");
+    assert.equal(mine.open, 6);
     assert.deepEqual(await startSitting(taker.id, "tools", "A", "live"), { ok: false, error: "not_ready" });
   });
 
@@ -110,7 +112,7 @@ describe("a live sitting", () => {
   let taker: TestUser;
   before(async () => {
     assert.deepEqual(await approveDrafts(admin.id, "sdlc", "A"), { ok: true, written: 38 });
-    taker = await scope.createUser("taker", PERSONAS.assessmentsViewer);
+    taker = await scope.createUser("taker", PERSONAS.participant);
   });
 
   test("needs the taker's track first", async () => {
@@ -133,7 +135,7 @@ describe("a live sitting", () => {
   });
 
   test("shows each question's options in a shuffled order, and grades and stores by the original", async () => {
-    const shuffler = await scope.createUser("shuffler", PERSONAS.assessmentsViewer);
+    const shuffler = await scope.createUser("shuffler", PERSONAS.participant);
     await setTrack(shuffler.id, "AE");
     const start = await startSitting(shuffler.id, "sdlc", "A", "live", seeded(42));
     assert.ok(start.ok);
@@ -169,7 +171,7 @@ describe("a live sitting", () => {
       assert.deepEqual(bad, { ok: false, error: "invalid_choice" }, String(choice));
     }
 
-    const other = await scope.createUser("other", PERSONAS.assessmentsViewer);
+    const other = await scope.createUser("other", PERSONAS.participant);
     const theirs = await answer(other.id, first.sitting.attemptId, first.sitting.number, 0);
     assert.deepEqual(theirs, { ok: false, error: "not_found" }, "a sitting is only its taker's");
   });
@@ -202,7 +204,7 @@ describe("a live sitting", () => {
   });
 
   test("\"I don't know\" every time places Beginner", async () => {
-    const shrug = await scope.createUser("shrug", PERSONAS.assessmentsViewer);
+    const shrug = await scope.createUser("shrug", PERSONAS.participant);
     await setTrack(shrug.id, "AE");
     const start = await startSitting(shrug.id, "sdlc", "A", "live");
     assert.ok(start.ok);
@@ -220,7 +222,7 @@ describe("a group answering at once", () => {
     // for a second, so 5 or more at once could take them all and stall.
     const takers = await Promise.all(
       Array.from({ length: 12 }, async (_, i) => {
-        const t = await scope.createUser(`group${i}`, PERSONAS.assessmentsViewer);
+        const t = await scope.createUser(`group${i}`, PERSONAS.participant);
         await setTrack(t.id, "AE");
         const start = await startSitting(t.id, "sdlc", "A", "live");
         assert.ok(start.ok);
@@ -273,17 +275,17 @@ describe("reviews", () => {
 });
 
 describe("what administrators read back", () => {
-  test("the cohort lists finished live sittings, never previews, with the weighted score", async () => {
-    const page = await listCohort({ ...IRIS_COHORT_LIST, q: "iris_", page: 1 }, "A");
+  test("the Participants list their finished live sittings, never previews, with the weighted score", async () => {
+    const page = await listParticipants({ ...IRIS_PARTICIPANT_LIST, q: "iris_", page: 1 }, "A");
     const taker = page.rows.find((r) => r.name === "taker");
     assert.ok(taker, "the taker is listed");
     assert.deepEqual(taker!.placements, { sdlc: 3 });
     assert.equal(taker!.track, "SE");
     assert.equal(taker!.composite, 100);
-    assert.ok(!page.rows.some((r) => r.name === "admin"), "an administrator's preview is not reported");
+    assert.ok(!page.rows.some((r) => r.name === "admin"), "an administrator who is not a Participant is not listed");
   });
 
-  test("the cohort summary is each subject's median and spread, across everyone the search matches", async () => {
+  test("the summary is each subject's median and spread, across every Participant the search matches", async () => {
     // The taker placed Advanced and the shrugger Beginner in SDLC; the admin's preview does not count.
     const summary = await cohortSummary("A", "iris_");
     assert.equal(summary.people, 2);
@@ -294,9 +296,9 @@ describe("what administrators read back", () => {
   });
 
   test("one person's detail has every answer in order, with what they chose", async () => {
-    const page = await listCohort({ ...IRIS_COHORT_LIST, q: "iris_", page: 1 }, "A");
+    const page = await listParticipants({ ...IRIS_PARTICIPANT_LIST, q: "iris_", page: 1 }, "A");
     const taker = page.rows.find((r) => r.name === "taker")!;
-    const detail = await personDetail(taker.userId, "A");
+    const detail = await personDetail(taker.userId!, "A");
     assert.ok(detail);
     const sitting = detail!.sittings.find((s) => s.subject === "sdlc")!;
     assert.equal(sitting.answers.length, sitting.questions);
@@ -311,13 +313,49 @@ describe("what administrators read back", () => {
     assert.ok(rows.every((r) => r.stats.responses === 0 || r.stats.medianMs !== null));
   });
 
+  test("resetting one subject lets them take it again, and leaves their other subjects alone", async () => {
+    const resetter = await scope.createUser("resetter", PERSONAS.participant);
+    await setTrack(resetter.id, "AE");
+    const done = await startSitting(resetter.id, "sdlc", "A", "live");
+    assert.ok(done.ok);
+    await finish(resetter, done.sitting, right);
+    assert.deepEqual(await startSitting(resetter.id, "sdlc", "A", "live"), { ok: false, error: "already_taken" });
+    const otherForm = await startSitting(resetter.id, "sdlc", "B", "live");
+
+    const reset = await resetSitting(resetter.id, "sdlc", "A");
+    assert.deepEqual(reset, { ok: true, deleted: 1, email: resetter.email });
+    const again = await startSitting(resetter.id, "sdlc", "A", "live");
+    assert.ok(again.ok && !again.resumed);
+    if (otherForm.ok) assert.ok(await openSitting(resetter.id, otherForm.sitting.attemptId), "the other form's sitting is kept");
+    assert.deepEqual(await resetSitting(resetter.id, "companies", "A"), { ok: true, deleted: 0, email: resetter.email });
+    assert.deepEqual(await resetSitting("no-such-user", "sdlc", "A"), { ok: false, error: "not_found" });
+  });
+
   test("clearing someone's results lets them sit the subject again", async () => {
-    const page = await listCohort({ ...IRIS_COHORT_LIST, q: "iris_", page: 1 }, "A");
+    const page = await listParticipants({ ...IRIS_PARTICIPANT_LIST, q: "iris_", page: 1 }, "A");
     const taker = page.rows.find((r) => r.name === "taker")!;
-    const cleared = await clearResults(taker.userId);
+    const cleared = await clearResults(taker.userId!);
     assert.ok(cleared.ok && cleared.deleted >= 1);
-    const again = await startSitting(taker.userId, "sdlc", "A", "live");
+    const again = await startSitting(taker.userId!, "sdlc", "A", "live");
     assert.ok(again.ok && !again.resumed);
     assert.deepEqual(await clearResults("no-such-user"), { ok: false, error: "not_found" });
+  });
+});
+
+describe("someone who is no longer a Participant", () => {
+  test("cannot carry on a live sitting they left open, while an administrator's previews still run", async () => {
+    assert.deepEqual(sittingModes(PERSONAS.participant), ["live"]);
+    assert.deepEqual(sittingModes(PERSONAS.assessmentsAdmin), ["preview"]);
+    assert.deepEqual(sittingModes(PERSONAS.assessmentsViewer), []);
+
+    const lapsed = await scope.createUser("lapsed", PERSONAS.participant);
+    await setTrack(lapsed.id, "AE");
+    const start = await startSitting(lapsed.id, "sdlc", "A", "live");
+    assert.ok(start.ok);
+    const { attemptId, number } = start.sitting;
+    const asNonParticipant = sittingModes(PERSONAS.assessmentsAdmin);
+    assert.equal(await openSitting(lapsed.id, attemptId, asNonParticipant), null);
+    assert.deepEqual(await answer(lapsed.id, attemptId, number, 0, Math.random, asNonParticipant), { ok: false, error: "not_found" });
+    assert.ok(await openSitting(lapsed.id, attemptId, sittingModes(PERSONAS.participant)));
   });
 });

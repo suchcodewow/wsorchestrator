@@ -17,6 +17,7 @@ import { LEVEL_LABELS, TRAINING, type SubjectKey } from "@/lib/iris/subjects";
 import { FADE, riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { LevelBadge } from "../../level-badge";
+import { QuestionFeedback } from "./question-feedback";
 
 const IDK = -1;
 const LETTERS = ["A", "B", "C", "D"];
@@ -37,11 +38,14 @@ export function SittingScreen({
   subject,
   name,
   mode,
+  backHref = "/diagnostic/tests",
   selfId,
 }: {
   subject: SubjectKey;
   name: string;
   mode: "live" | "preview";
+  /** Where leaving goes: the subjects for a taker, the questions for a preview. */
+  backHref?: string;
   /** Set for an Assessments Administrator, whose finish screen shows the level and links to the full path. */
   selfId: string | null;
 }) {
@@ -107,6 +111,8 @@ export function SittingScreen({
     const options = state.sitting.question.options.length;
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Typing a comment, or pressing a face, is not answering.
+      if (e.target instanceof Element && e.target.closest("[data-question-feedback]")) return;
       const key = e.key.toUpperCase();
       const letter = LETTERS.indexOf(key);
       if (letter >= 0 && letter < options) setSelected(letter);
@@ -121,16 +127,25 @@ export function SittingScreen({
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="mx-auto max-w-3xl space-y-6">
       <motion.div variants={riseChild} className="flex items-center justify-between gap-4">
-        <Link href="/diagnostic/tests" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+        <Link href={backHref} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" />
-          All subjects
+          {mode === "preview" ? "Questions" : "All subjects"}
         </Link>
-        {mode === "preview" && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
-            <Eye className="size-3.5" />
-            Preview: drafts included, nothing recorded
-          </span>
-        )}
+        <div className="flex items-center gap-4">
+          {mode === "preview" && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+              <Eye className="size-3.5" />
+              Preview: drafts included, nothing recorded
+            </span>
+          )}
+          {state.kind === "asking" && (
+            <QuestionFeedback
+              key={`${state.sitting.attemptId}-${state.sitting.number}`}
+              attemptId={state.sitting.attemptId}
+              number={state.sitting.number}
+            />
+          )}
+        </div>
       </motion.div>
 
       {state.kind === "loading" && (
@@ -145,7 +160,7 @@ export function SittingScreen({
           <p className="font-medium">{name}</p>
           <p className="text-sm text-muted-foreground">{state.message}</p>
           <Button asChild variant="outline" size="sm">
-            <Link href="/diagnostic/tests">Back to the subjects</Link>
+            <Link href={backHref}>{mode === "preview" ? "Back to the questions" : "Back to the subjects"}</Link>
           </Button>
         </motion.div>
       )}
@@ -183,14 +198,14 @@ export function SittingScreen({
           )}
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="brand">
-              <Link href="/diagnostic/tests">
-                Back to the subjects
+              <Link href={backHref}>
+                {mode === "preview" ? "Back to the questions" : "Back to the subjects"}
                 <ArrowRight />
               </Link>
             </Button>
             {selfId && mode === "live" && (
               <Button asChild variant="outline">
-                <Link href={`/diagnostic/cohort/${encodeURIComponent(selfId)}`}>See the full path</Link>
+                <Link href={`/diagnostic-settings/records?person=${encodeURIComponent(selfId)}`}>See the full path</Link>
               </Button>
             )}
           </div>

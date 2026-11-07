@@ -418,7 +418,9 @@ set of roles, use a **test account**. They exist only outside production
    roles, if they have never signed in), but not their test results,
    progress, Harness credentials, or manager and guest-judge status (those
    follow from their own address). Otherwise it starts with no roles. Either
-   way, change its roles in its row like anyone else's.
+   way, change its roles in its row like anyone else's. To take a Diagnostic
+   test, also add it on **Diagnostic Settings → Participants**: no role lets
+   anyone take the tests.
 2. In the account menu, pick it under **Test accounts**. The header says
    "Viewing as … · test account", and changes now go through, recorded in the
    audit trail with you as the actor and the test account under

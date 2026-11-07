@@ -132,6 +132,7 @@ describe("using a link", () => {
         platform: false,
         judging: false,
         manager: false,
+        participating: false,
       }, describeGrant(grant));
     }
   });
@@ -151,9 +152,10 @@ describe("using a link", () => {
       trainingRole: "administrator",
       assessmentsRole: "administrator",
     });
-    // A guest judge and a people manager hold no stored role, so a link
-    // applies to them as to nobody.
-    for (const name of PERSONA_NAMES.filter((p) => p !== "nobody" && p !== "guestJudge" && p !== "peopleManager")) {
+    // A guest judge, a people manager and a Diagnostic Participant hold no
+    // stored role, so a link applies to them as to nobody.
+    const roleless = ["nobody", "guestJudge", "peopleManager", "participant"];
+    for (const name of PERSONA_NAMES.filter((p) => !roleless.includes(p))) {
       const existing = await scope.createUser(`keep_${name}`, PERSONAS[name]);
       const result = await acceptInvite(existing.id, token);
       assert.ok(result.ok && !result.applied, name);

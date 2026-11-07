@@ -6,6 +6,7 @@ import {
   CalendarCog,
   CalendarDays,
   ChartColumn,
+  ClipboardCheck,
   ClipboardList,
   Cloud,
   DatabaseBackup,
@@ -42,7 +43,8 @@ import {
   canSeeReporting,
   canSeeEvals,
   canSeeScheduler,
-  canTakeIris,
+  canManageIris,
+  canSeeIris,
   canUseEvents,
   canUseMimir,
   canUseTraining,
@@ -59,7 +61,11 @@ export type NavItem = {
   also?: string[];
   /** Its page has a row of tabs, each of which can be starred itself, so the entry cannot be. */
   hasTabs?: boolean;
-  /** The href of the entry that configures this one: for someone who can see it, the sidebar swaps this icon for a gear on hover that goes there. */
+  /**
+   * The href of the entry that configures this one: for someone who can see it, the sidebar swaps this icon for a gear on hover that goes there.
+   * Whoever can see that settings entry must see this one too, and be able to open its page: a page that vanishes while its settings stay is confusing.
+   * `test/unit/nav.test.ts` holds every entry to it.
+   */
   settings?: string;
   visible?: (access: Access) => boolean;
 };
@@ -195,7 +201,22 @@ export const NAV_SECTIONS: NavSection[] = [
         description: "Score attendees on bootcamp and intermediate assessments.",
         visible: canSeeEvals,
       },
-      { href: "/diagnostic", hasTabs: true, label: "Diagnostic", Icon: Eye, description: "Adaptive placement tests.", visible: canTakeIris },
+      {
+        href: "/diagnostic",
+        settings: "/diagnostic-settings",
+        label: "Diagnostic",
+        Icon: Eye,
+        description: "Adaptive placement tests, for the Diagnostic's Participants.",
+        visible: canSeeIris,
+      },
+      {
+        href: "/diagnostic-settings",
+        hasTabs: true,
+        label: "Diagnostic Settings",
+        Icon: ClipboardCheck,
+        description: "The Diagnostic's Participants, their Records, its questions and its Slack reminders.",
+        visible: canManageIris,
+      },
       {
         href: "/reporting",
         settings: "/reporting-settings",

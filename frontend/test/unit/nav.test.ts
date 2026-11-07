@@ -55,13 +55,15 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   eventAdmin: [...HOME, ...EVENTS_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
   trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Async Recordings", "Survey Results", ...MIMIR_ONLY, ...ACCOUNT],
   trainingAdmin: [...HOME, ...TRAINING_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
-  // Diagnostic is part of the assessments area: a viewer takes it, an administrator runs it.
-  assessmentsViewer: [...HOME, "[Assessments]", "eVals", "Diagnostic", "Reporting", "Coach Canary", ...ACCOUNT],
+  // Diagnostic is part of the assessments area: an administrator runs it, and only a Participant takes it;
+  // an administrator still sees Diagnostic, since whoever sees an entry's settings sees the entry.
+  assessmentsViewer: [...HOME, "[Assessments]", "eVals", "Reporting", "Coach Canary", ...ACCOUNT],
   assessmentsAdmin: [
     ...HOME,
     "[Assessments]",
     "eVals",
     "Diagnostic",
+    "Diagnostic Settings",
     "Reporting",
     "Reporting Settings",
     "eVals settings",
@@ -72,6 +74,8 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   ],
   // The Scheduler, for the active bootcamp's schedule alone; the rest of Training stays a Training Viewer's.
   guestJudge: [...HOME, "[Training]", "Scheduler", "[Assessments]", "eVals", "Reporting", "Coach Canary", ...ACCOUNT],
+  // A Participant takes the Diagnostic's tests, and has nothing else beyond what everyone has.
+  participant: [...HOME, "[Assessments]", "Diagnostic", "Reporting", "Coach Canary", ...ACCOUNT],
   // HiBob has people reporting to them: the Canary Wire as well as Bootcamp, under the Reporting everyone has.
   peopleManager: [...HOME, "[Assessments]", "Reporting", "Coach Canary", ...ACCOUNT],
   bothAdmins: [...HOME, ...EVENTS_ADMIN, ...TRAINING_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
@@ -81,6 +85,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "[Assessments]",
     "eVals",
     "Diagnostic",
+    "Diagnostic Settings",
     "Reporting",
     "Reporting Settings",
     "eVals settings",
@@ -106,6 +111,18 @@ describe("sidebar", () => {
       assert.ok(sidebar(a).includes("My settings"), describeAccess(a));
       // A guest judge with no Training role can still own checklist items and be tagged.
       assert.ok(sidebar(a).includes("My inbox"), describeAccess(a));
+    }
+  });
+
+  test("whoever sees an entry's settings sees the entry too", () => {
+    for (const a of EVERY_ACCESS) {
+      const labels = new Set(sidebar(a));
+      for (const entry of NAV_SECTIONS.flatMap((s) => s.items)) {
+        if (!entry.settings) continue;
+        const settings = navItemAt(entry.settings);
+        assert.ok(settings, `${entry.label}'s settings ${entry.settings} is a sidebar entry`);
+        if (labels.has(settings.label)) assert.ok(labels.has(entry.label), `${describeAccess(a)}: ${settings.label} without ${entry.label}`);
+      }
     }
   });
 

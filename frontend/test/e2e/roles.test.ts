@@ -36,10 +36,13 @@ import {
   canAddUsers,
   canDeleteUsers,
   canImpersonate,
+  canSearchTestAccounts,
   canManageBackups,
   canManageBootcampRecords,
   canManageEvalsSettings,
   canManageIris,
+  canSeeIris,
+  canSitIris,
   canManageLabGuides,
   canManageMimir,
   canRunMimirStudio,
@@ -302,21 +305,45 @@ const PAGES: Record<string, PageCase> = {
   },
   "/diagnostic": {
     path: () => "/diagnostic",
-    expect: (a) => (canTakeIris(a) ? { to: "/diagnostic/tests" } : 404),
+    expect: (a) => (canSeeIris(a) ? { to: "/diagnostic/tests" } : 404),
   },
-  "/diagnostic/tests": { path: () => "/diagnostic/tests", expect: gated(canTakeIris) },
+  // An administrator who is not a Participant opens it too, to be told none are assigned.
+  "/diagnostic/tests": { path: () => "/diagnostic/tests", expect: gated(canSeeIris) },
   "/diagnostic/tests/<a subject>": { path: () => "/diagnostic/tests/sdlc", expect: gated(canTakeIris) },
+  // The preview moved to Diagnostic Settings; the tests themselves stay a Participant's alone.
   "/diagnostic/tests/<a subject>?mode=preview": {
     path: () => "/diagnostic/tests/sdlc?mode=preview",
-    expect: gated(canManageIris),
+    expect: gated(canTakeIris),
   },
   "/diagnostic/tests/<unknown>": { path: () => "/diagnostic/tests/nonsense", expect: () => 404 },
-  "/diagnostic/cohort": { path: () => "/diagnostic/cohort", expect: gated(canManageIris) },
-  "/diagnostic/cohort?view=charts": { path: () => "/diagnostic/cohort?view=charts&q=e2e", expect: gated(canManageIris) },
-  "/diagnostic/cohort/<a person>": { path: () => `/diagnostic/cohort/${people.assessmentsViewer.id}`, expect: gated(canManageIris) },
-  "/diagnostic/cohort/<unknown>": { path: () => `/diagnostic/cohort/${MISSING}`, expect: () => 404 },
-  "/diagnostic/questions": { path: () => "/diagnostic/questions", expect: gated(canManageIris) },
-  "/diagnostic/questions?subject": { path: () => "/diagnostic/questions?subject=champion&level=3&status=draft", expect: gated(canManageIris) },
+  "/diagnostic-settings": {
+    path: () => "/diagnostic-settings",
+    expect: (a) => (canManageIris(a) ? { to: "/diagnostic-settings/participants" } : 404),
+  },
+  "/diagnostic-settings/participants": { path: () => "/diagnostic-settings/participants", expect: gated(canManageIris) },
+  "/diagnostic-settings/records": { path: () => "/diagnostic-settings/records", expect: gated(canManageIris) },
+  "/diagnostic-settings/records?view=charts": {
+    path: () => "/diagnostic-settings/records?view=charts&q=e2e",
+    expect: gated(canManageIris),
+  },
+  "/diagnostic-settings/records?person=<a person>": {
+    path: () => `/diagnostic-settings/records?person=${people.participant.id}`,
+    expect: gated(canManageIris),
+  },
+  "/diagnostic-settings/records?person=<unknown>": {
+    path: () => `/diagnostic-settings/records?person=${MISSING}`,
+    expect: gated(canManageIris),
+  },
+  "/diagnostic-settings/feedback": { path: () => "/diagnostic-settings/feedback", expect: gated(canManageIris) },
+  "/diagnostic-settings/questions": { path: () => "/diagnostic-settings/questions", expect: gated(canManageIris) },
+  "/diagnostic-settings/questions?subject": {
+    path: () => "/diagnostic-settings/questions?subject=champion&level=3&status=draft",
+    expect: gated(canManageIris),
+  },
+  "/diagnostic-settings/slack": { path: () => "/diagnostic-settings/slack", expect: gated(canManageIris) },
+  "/diagnostic-settings/slack/<unknown run>": { path: () => `/diagnostic-settings/slack/${MISSING}`, expect: () => 404 },
+  "/diagnostic-settings/preview/<a subject>": { path: () => "/diagnostic-settings/preview/sdlc", expect: gated(canManageIris) },
+  "/diagnostic-settings/preview/<unknown>": { path: () => "/diagnostic-settings/preview/nonsense", expect: () => 404 },
   "/reporting": {
     path: () => "/reporting",
     expect: (a) => (canSeeReporting(a) ? { to: visibleReportingTabs(a)[0]!.href } : 404),
@@ -564,8 +591,8 @@ const ROUTES: RouteCase[] = [
   // Diagnostic
   { method: "GET", path: "/api/diagnostic/me", allowed: canTakeIris },
   { method: "PUT", path: "/api/diagnostic/me/track", allowed: canTakeIris, body: () => ({}) },
-  { method: "POST", path: "/api/diagnostic/sittings", allowed: canTakeIris, body: () => ({}) },
-  // A taker gets past the gate but not into a preview, which is the console's.
+  { method: "POST", path: "/api/diagnostic/sittings", allowed: canSitIris, body: () => ({}) },
+  // A Participant gets past the gate but not into a preview, which is Diagnostic Settings'.
   {
     method: "POST",
     path: "/api/diagnostic/sittings",
@@ -573,11 +600,27 @@ const ROUTES: RouteCase[] = [
     body: () => ({ subject: "sdlc", mode: "preview" }),
     denyOnly: true,
   },
-  { method: "GET", path: `/api/diagnostic/sittings/${MISSING}`, allowed: canTakeIris },
-  { method: "POST", path: `/api/diagnostic/sittings/${MISSING}/answers`, allowed: canTakeIris, body: () => ({}) },
-  { method: "GET", path: "/api/diagnostic/cohort", allowed: canManageIris },
-  { method: "GET", path: `/api/diagnostic/cohort/${MISSING}`, allowed: canManageIris },
-  { method: "DELETE", path: `/api/diagnostic/cohort/${MISSING}`, allowed: canManageIris },
+  // And an administrator who is not a Participant gets past it but not into a live sitting.
+  { method: "POST", path: "/api/diagnostic/sittings", allowed: canTakeIris, body: () => ({ subject: "sdlc" }), denyOnly: true },
+  { method: "GET", path: `/api/diagnostic/sittings/${MISSING}`, allowed: canSitIris },
+  { method: "POST", path: `/api/diagnostic/sittings/${MISSING}/answers`, allowed: canSitIris, body: () => ({}) },
+  { method: "POST", path: "/api/diagnostic/feedback", allowed: canSitIris, body: () => ({}) },
+  { method: "GET", path: "/api/diagnostic/feedback", allowed: canManageIris },
+  { method: "PATCH", path: `/api/diagnostic/feedback/${MISSING}`, allowed: canManageIris, body: () => ({}) },
+  { method: "GET", path: "/api/diagnostic/participants", allowed: canManageIris },
+  { method: "POST", path: "/api/diagnostic/participants", allowed: canManageIris, body: () => ({}) },
+  { method: "DELETE", path: "/api/diagnostic/participants", allowed: canManageIris, body: () => ({}) },
+  { method: "GET", path: "/api/diagnostic/records", allowed: canManageIris },
+  { method: "GET", path: "/api/diagnostic/auto-enroll", allowed: canManageIris },
+  { method: "PUT", path: "/api/diagnostic/auto-enroll", allowed: canManageIris, body: () => ({}) },
+  { method: "GET", path: `/api/diagnostic/results/${MISSING}`, allowed: canManageIris },
+  { method: "DELETE", path: `/api/diagnostic/results/${MISSING}`, allowed: canManageIris },
+  { method: "DELETE", path: `/api/diagnostic/results/${MISSING}/sdlc`, allowed: canManageIris },
+  { method: "GET", path: "/api/diagnostic/reminders", allowed: canManageIris },
+  // A body it refuses, so the matrix never starts a run.
+  { method: "POST", path: "/api/diagnostic/reminders", allowed: canManageIris, body: () => ({ nonsense: true }) },
+  { method: "PUT", path: "/api/diagnostic/reminders/settings", allowed: canManageIris, body: () => ({}) },
+  { method: "GET", path: `/api/diagnostic/reminders/${MISSING}`, allowed: canManageIris },
   { method: "GET", path: "/api/diagnostic/questions?subject=sdlc", allowed: canManageIris },
   { method: "PUT", path: "/api/diagnostic/questions/no-such-item/review", allowed: canManageIris, body: () => ({}) },
   { method: "POST", path: "/api/diagnostic/questions/approve-drafts", allowed: canManageIris, body: () => ({}) },
@@ -833,7 +876,7 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/users/${MISSING}`, allowed: canDeleteUsers, sessionOnly: true },
   { method: "POST", path: "/api/users/invites", allowed: canManageUsers, body: () => ({}), sessionOnly: true },
   { method: "POST", path: "/api/invites/accept", allowed: true, body: () => ({}), sessionOnly: true },
-  { method: "GET", path: "/api/users/test-accounts", allowed: canImpersonate },
+  { method: "GET", path: "/api/users/test-accounts", allowed: canSearchTestAccounts },
   { method: "POST", path: "/api/users/test-accounts", allowed: canImpersonate, body: () => ({}), sessionOnly: true },
   { method: "POST", path: `/api/users/test-accounts/${MISSING}/reset`, allowed: canImpersonate, sessionOnly: true },
 
@@ -1158,6 +1201,7 @@ describe("PATCH /api/users/:id", () => {
       platform: false,
       judging: false,
       manager: false,
+      participating: false,
     });
   });
 
@@ -1173,6 +1217,7 @@ describe("PATCH /api/users/:id", () => {
       platform: false,
       judging: false,
       manager: false,
+      participating: false,
     });
   });
 
@@ -1188,6 +1233,7 @@ describe("PATCH /api/users/:id", () => {
       platform: false,
       judging: false,
       manager: false,
+      participating: false,
     });
   });
 
@@ -1216,6 +1262,7 @@ describe("PATCH /api/users/:id", () => {
       platform: true,
       judging: false,
       manager: false,
+      participating: false,
     });
   });
 
@@ -1291,15 +1338,25 @@ describe("a Diagnostic sitting, over HTTP", () => {
 
   test("a taker is told the sitting is over, never their level", async () => {
     assert.equal((await send("assessmentsAdmin", "POST", "/api/diagnostic/questions/approve-drafts", { subject: "pipegen" })).status, 200);
-    const done = await sit("assessmentsViewer");
+    const done = await sit("participant");
     assert.ok(!("placement" in done) && !("confidence" in done), JSON.stringify(done));
-    assert.ok(!("placement" in (await pipegen("assessmentsViewer"))!));
+    assert.ok(!("placement" in (await pipegen("participant"))!));
   });
 
-  test("a Diagnostic administrator sees their own level", async () => {
-    const done = await sit("assessmentsAdmin");
-    assert.equal(done.placement, 1, "\"I don't know\" throughout places Beginner");
-    assert.equal((await pipegen("assessmentsAdmin"))?.placement, 1);
+  test("a Diagnostic administrator added as a Participant sees their own level, and loses the tests when removed", async () => {
+    const email = { email: people.assessmentsAdmin.email };
+    const unassigned = async () => (await send("assessmentsAdmin", "GET", "/diagnostic/tests")).body.includes("No Tests currently assigned to you.");
+    assert.equal(await unassigned(), true, "not a Participant yet");
+    assert.equal((await send("assessmentsAdmin", "POST", "/api/diagnostic/participants", email)).status, 201);
+    try {
+      assert.equal(await unassigned(), false);
+      const done = await sit("assessmentsAdmin");
+      assert.equal(done.placement, 1, "\"I don't know\" throughout places Beginner");
+      assert.equal((await pipegen("assessmentsAdmin"))?.placement, 1);
+    } finally {
+      assert.equal((await send("assessmentsAdmin", "DELETE", "/api/diagnostic/participants", email)).status, 200);
+    }
+    assert.equal(await unassigned(), true);
   });
 });
 
@@ -1335,6 +1392,7 @@ describe("invite links", () => {
       platform: false,
       judging: false,
       manager: false,
+      participating: false,
     });
     assert.equal((await send({ cookie }, "GET", "/events")).status, 200);
   });
@@ -1381,13 +1439,13 @@ describe("invite links", () => {
     assert.equal((await send({ cookie }, "GET", EVALS_TABS[0]!.href)).status, 200);
   });
 
-  test("an assessments link opens Diagnostic too", async () => {
+  test("an assessments link does not open Diagnostic: only being a Participant does", async () => {
     const path = await link("assessmentsAdmin", { eventRole: null, trainingRole: null, assessmentsRole: "viewer" });
     const newcomer = await scope.createUser("inv_iris", PERSONAS.nobody);
     const cookie = await createSession(newcomer.id);
     const res = await accept(cookie, path.split("/").pop()!);
     assert.equal(res.status, 200, res.body);
-    assert.equal((await send({ cookie }, "GET", "/diagnostic/tests")).status, 200);
+    assert.equal((await send({ cookie }, "GET", "/diagnostic/tests")).status, 404);
   });
 
   test("a link that grants nothing, or platform administration, is not made", async () => {
