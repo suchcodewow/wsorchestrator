@@ -17,6 +17,7 @@ import { LEVEL_LABELS, TRAINING, type SubjectKey } from "@/lib/iris/subjects";
 import { FADE, riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { LevelBadge } from "../../level-badge";
+import { QuestionFeedback } from "./question-feedback";
 
 const IDK = -1;
 const LETTERS = ["A", "B", "C", "D"];
@@ -110,6 +111,8 @@ export function SittingScreen({
     const options = state.sitting.question.options.length;
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Typing a comment, or pressing a face, is not answering.
+      if (e.target instanceof Element && e.target.closest("[data-question-feedback]")) return;
       const key = e.key.toUpperCase();
       const letter = LETTERS.indexOf(key);
       if (letter >= 0 && letter < options) setSelected(letter);
@@ -128,12 +131,21 @@ export function SittingScreen({
           <ArrowLeft className="size-4" />
           {mode === "preview" ? "Questions" : "All subjects"}
         </Link>
-        {mode === "preview" && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
-            <Eye className="size-3.5" />
-            Preview: drafts included, nothing recorded
-          </span>
-        )}
+        <div className="flex items-center gap-4">
+          {mode === "preview" && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+              <Eye className="size-3.5" />
+              Preview: drafts included, nothing recorded
+            </span>
+          )}
+          {state.kind === "asking" && (
+            <QuestionFeedback
+              key={`${state.sitting.attemptId}-${state.sitting.number}`}
+              attemptId={state.sitting.attemptId}
+              number={state.sitting.number}
+            />
+          )}
+        </div>
       </motion.div>
 
       {state.kind === "loading" && (
