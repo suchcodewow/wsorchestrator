@@ -2,7 +2,8 @@
  * Smiley and confused ratings given while taking a Diagnostic test, with any
  * comment, and Diagnostic Settings → Feedback's list of them. The server names
  * the question: the one on screen in the taker's sitting, which the browser is
- * never told the id of.
+ * never told the id of. An Assessments Administrator closes one once it is
+ * dealt with, and the list leaves closed ones out unless asked.
  */
 
 import "server-only";
@@ -50,6 +51,9 @@ export type IrisFeedbackRow = {
   comment: string | null;
   createdAt: string;
   user: { name: string | null; email: string | null } | null;
+  closedAt: string | null;
+  /** Who closed it; null while open, or once their account is deleted. */
+  closedBy: { name: string | null; email: string | null } | null;
 };
 
 /**
@@ -104,6 +108,8 @@ export async function recordIrisFeedback(
       comment: row!.comment,
       createdAt: row!.createdAt.toISOString(),
       user: who ?? null,
+      closedAt: null,
+      closedBy: null,
     },
   };
 }
@@ -115,27 +121,55 @@ const SORT_COLUMNS: Record<IrisFeedbackSort, ReturnType<typeof sql>> = {
   rating: sql`f.rating`,
 };
 
-/** Every rating given during a sitting, a page at a time, searched by the comment, the question, or who gave it. */
-export async function listIrisFeedback(query: ListQuery<IrisFeedbackSort>): Promise<Page<IrisFeedbackRow>> {
+/**
+ * The ratings given during a sitting, a page at a time, searched by the
+ * comment, the question, or who gave it; the open ones only, unless `closed`.
+ */
+export async function listIrisFeedback(
+  query: ListQuery<IrisFeedbackSort>,
+  { closed = false }: { closed?: boolean } = {},
+): Promise<Page<IrisFeedbackRow>> {
   const { limit, offset } = pageWindow(query.page);
-  const where = searchAny(query.q, [sql`f.comment`, sql`f.stem`, sql`f.item_id`, sql`u.name`, sql`u.email`]) ?? sql`true`;
+  const search = searchAny(query.q, [sql`f.comment`, sql`f.stem`, sql`f.item_id`, sql`u.name`, sql`u.email`]) ?? sql`true`;
+  const where = closed ? search : sql`${search} and f.closed_at is null`;
   const order = orderFor(SORT_COLUMNS[query.sort], query.dir, sql`f.created_at desc`, sql`f.id`);
   const { rows } = await db.execute<
-    Omit<IrisFeedbackRow, "user"> & { userName: string | null; userEmail: string | null; userId: string | null }
+    Omit<IrisFeedbackRow, "user" | "closedBy"> & {
+      userName: string | null;
+      userEmail: string | null;
+      userId: string | null;
+      closerId: string | null;
+      closerName: string | null;
+      closerEmail: string | null;
+    }
   >(sql`
     select f.id, f.subject, f.mode, f.number, f.item_id as "itemId", f.stem, f.rating, f.comment,
-           f.created_at as "createdAt", f.user_id as "userId", u.name as "userName", u.email as "userEmail"
+           f.created_at as "createdAt", f.user_id as "userId", u.name as "userName", u.email as "userEmail",
+           f.closed_at as "closedAt", f.closed_by as "closerId", c.name as "closerName", c.email as "closerEmail"
       from ${irisFeedback} f
       left join ${users} u on u.id = f.user_id
+      left join ${users} c on c.id = f.closed_by
      where ${where}
      order by ${sql.join(order, sql`, `)}
      limit ${limit} offset ${offset}`);
   return toPage(
-    rows.map(({ userId, userName, userEmail, ...r }) => ({
+    rows.map(({ userId, userName, userEmail, closerId, closerName, closerEmail, ...r }) => ({
       ...r,
       createdAt: new Date(r.createdAt).toISOString(),
       user: userId ? { name: userName, email: userEmail } : null,
+      closedAt: r.closedAt ? new Date(r.closedAt).toISOString() : null,
+      closedBy: closerId ? { name: closerName, email: closerEmail } : null,
     })),
     query.page,
   );
+}
+
+/** Closes a rating as `userId`, or opens it again; false when there is no such rating. */
+export async function setIrisFeedbackClosed(id: string, userId: string, closed: boolean): Promise<boolean> {
+  const updated = await db
+    .update(irisFeedback)
+    .set(closed ? { closedAt: new Date(), closedBy: userId } : { closedAt: null, closedBy: null })
+    .where(eq(irisFeedback.id, id))
+    .returning({ id: irisFeedback.id });
+  return updated.length > 0;
 }

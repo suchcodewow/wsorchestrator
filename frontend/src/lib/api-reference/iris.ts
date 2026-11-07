@@ -10,7 +10,7 @@ const SUBJECT_TYPE = SUBJECT_KEYS.map((k) => `"${k}"`).join(" | ");
 const FORM_QUERY: Field = { name: "form", type: `"A" | "B"`, note: "Default A." };
 const FORM_ERROR = { status: 400, error: "invalid_form", when: "form is neither A nor B" };
 const SITTING_SHAPE = `{ attemptId, subject, form: "A" | "B", mode: "live" | "preview", number, progress, question: { stem, options: string[] } }`;
-const FEEDBACK_SHAPE = `{ id, subject: ${SUBJECT_TYPE}, mode: "live" | "preview", number, itemId, stem, rating: "up" | "down", comment: string | null, createdAt, user: { name, email } | null }`;
+const FEEDBACK_SHAPE = `{ id, subject: ${SUBJECT_TYPE}, mode: "live" | "preview", number, itemId, stem, rating: "up" | "down", comment: string | null, createdAt, user: { name, email } | null, closedAt: string | null, closedBy: { name, email } | null }`;
 const SITTING_ID: Field = { name: "id", type: "string", required: true, note: "the sitting's attemptId" };
 
 export const IRIS_GROUPS: EndpointGroup[] = [
@@ -133,9 +133,27 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         summary: "Lists the ratings given while taking a test, with any comment and the question they were about, a page at a time, the newest first.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "number is the question's place in its sitting, from 1. itemId and stem are the question as it was when rated. Previews' ratings are included, with mode preview. user is null once the account that gave it is deleted.",
-        query: listQuery(IRIS_FEEDBACK_LIST.sorts, "the comment, the question, or the name or email of who gave it", "desc"),
+        notes: "number is the question's place in its sitting, from 1. itemId and stem are the question as it was when rated. Previews' ratings are included, with mode preview. Closed ratings are left out unless closed=1. user is null once the account that gave it is deleted, and closedBy likewise, or while it is open.",
+        query: [
+          ...listQuery(IRIS_FEEDBACK_LIST.sorts, "the comment, the question, or the name or email of who gave it", "desc"),
+          { name: "closed", type: `"1"`, note: "1 includes closed ratings; otherwise only open ones are listed." },
+        ],
         returns: `{ feedback: ${FEEDBACK_SHAPE}[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "PATCH",
+        path: "/api/diagnostic/feedback/{id}",
+        summary: "Closes a rating given during a sitting, or opens it again.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes: "Closing records when and by whom; opening it again clears both.",
+        params: [{ name: "id", type: "string", required: true, note: "the rating's id" }],
+        body: { kind: "json", fields: [{ name: "closed", type: "boolean", required: true }] },
+        returns: "{ ok: true, closed: boolean }",
+        errors: [
+          { status: 400, error: "invalid_body", when: "closed is not a boolean" },
+          { status: 404, error: "not_found", when: "no rating has that id" },
+        ],
       },
       {
         method: "GET",

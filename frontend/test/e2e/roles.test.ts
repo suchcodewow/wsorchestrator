@@ -606,6 +606,7 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: `/api/diagnostic/sittings/${MISSING}/answers`, allowed: canSitIris, body: () => ({}) },
   { method: "POST", path: "/api/diagnostic/feedback", allowed: canSitIris, body: () => ({}) },
   { method: "GET", path: "/api/diagnostic/feedback", allowed: canManageIris },
+  { method: "PATCH", path: `/api/diagnostic/feedback/${MISSING}`, allowed: canManageIris, body: () => ({}) },
   { method: "GET", path: "/api/diagnostic/participants", allowed: canManageIris },
   { method: "POST", path: "/api/diagnostic/participants", allowed: canManageIris, body: () => ({}) },
   { method: "DELETE", path: "/api/diagnostic/participants", allowed: canManageIris, body: () => ({}) },

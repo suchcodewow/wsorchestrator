@@ -3022,6 +3022,9 @@ export const irisFeedback = pgTable(
     rating: text("rating").$type<VideoFeedbackRating>().notNull(),
     comment: text("comment"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Set when an Assessments Administrator closes it; Feedback hides closed ones unless asked. */
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    closedBy: text("closed_by").references(() => users.id, { onDelete: "set null" }),
   },
   (t) => [
     index("iris_feedback_created_at_idx").on(t.createdAt),

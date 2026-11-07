@@ -1,7 +1,7 @@
 /**
  * Ratings given while taking a Diagnostic test: a taker rates the question on
  * screen in their own sitting; Assessments Administrators read them back, a
- * page at a time, for Diagnostic Settings → Feedback.
+ * page at a time, for Diagnostic Settings → Feedback, the closed ones only when asked.
  */
 
 import { NextResponse } from "next/server";
@@ -19,7 +19,10 @@ export async function GET(req: Request) {
   const { error } = await requireCaller(req, canManageIris);
   if (error) return error;
 
-  const { rows, page, hasMore } = await listIrisFeedback(parseListQuery(new URL(req.url).searchParams, IRIS_FEEDBACK_LIST));
+  const params = new URL(req.url).searchParams;
+  const { rows, page, hasMore } = await listIrisFeedback(parseListQuery(params, IRIS_FEEDBACK_LIST), {
+    closed: params.get("closed") === "1",
+  });
   return NextResponse.json({ feedback: rows, page, hasMore });
 }
 
