@@ -41,6 +41,9 @@ export type IrisReminderRunSort = (typeof IRIS_REMINDER_RUN_LIST.sorts)[number];
 export const IRIS_REMINDER_MESSAGE_LIST = spec(["at", "person", "outcome"]);
 export type IrisReminderMessageSort = (typeof IRIS_REMINDER_MESSAGE_LIST.sorts)[number];
 
+export const IRIS_FEEDBACK_LIST = spec(["createdAt", "user", "subject", "rating"], "desc");
+export type IrisFeedbackSort = (typeof IRIS_FEEDBACK_LIST.sorts)[number];
+
 export const TITLE_LIST = spec(["title", "addedBy", "createdAt"]);
 export type TitleSort = (typeof TITLE_LIST.sorts)[number];
 

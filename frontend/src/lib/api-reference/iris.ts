@@ -1,8 +1,8 @@
 /** The Diagnostic placement tests: taking them, who its Participants are, and what Assessments Administrators read and review. */
 
-import { IRIS_NOTE_MAX } from "@/db/schema";
+import { IRIS_NOTE_MAX, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { SUBJECT_KEYS } from "@/lib/iris/subjects";
-import { IRIS_PARTICIPANT_LIST, IRIS_RECORD_LIST, IRIS_REMINDER_MESSAGE_LIST, IRIS_REMINDER_RUN_LIST } from "@/lib/list-specs";
+import { IRIS_FEEDBACK_LIST, IRIS_PARTICIPANT_LIST, IRIS_RECORD_LIST, IRIS_REMINDER_MESSAGE_LIST, IRIS_REMINDER_RUN_LIST } from "@/lib/list-specs";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup, Field } from "./types";
 
@@ -10,6 +10,7 @@ const SUBJECT_TYPE = SUBJECT_KEYS.map((k) => `"${k}"`).join(" | ");
 const FORM_QUERY: Field = { name: "form", type: `"A" | "B"`, note: "Default A." };
 const FORM_ERROR = { status: 400, error: "invalid_form", when: "form is neither A nor B" };
 const SITTING_SHAPE = `{ attemptId, subject, form: "A" | "B", mode: "live" | "preview", number, progress, question: { stem, options: string[] } }`;
+const FEEDBACK_SHAPE = `{ id, subject: ${SUBJECT_TYPE}, mode: "live" | "preview", number, itemId, stem, rating: "up" | "down", comment: string | null, createdAt, user: { name, email } | null }`;
 const SITTING_ID: Field = { name: "id", type: "string", required: true, note: "the sitting's attemptId" };
 
 export const IRIS_GROUPS: EndpointGroup[] = [
@@ -100,6 +101,41 @@ export const IRIS_GROUPS: EndpointGroup[] = [
           { status: 409, error: "finished", when: "the sitting is over" },
           { status: 409, error: "stale", when: "number is not the question on screen; the body carries the current sitting" },
         ],
+      },
+      {
+        method: "POST",
+        path: "/api/diagnostic/feedback",
+        summary: "Rates the question on screen in one of your open sittings with a smiley or confused face, with a comment if you like.",
+        access: "diagnosticSitter",
+        token: true,
+        notes:
+          "The question is the one on screen in the sitting named, worked out on the server; its id, version and wording are kept with the rating. Rating the same question again adds another rating; nothing is replaced, and the sitting is not moved on.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "attemptId", type: "string", required: true, note: "the sitting's attemptId" },
+            { name: "number", type: "integer", required: true, note: "the sitting's number for the question on screen" },
+            { name: "rating", type: `"up" | "down"`, required: true, note: "up is the smiley face, down the confused one" },
+            { name: "comment", type: "string", note: `up to ${VIDEO_FEEDBACK_LIMITS.comment} characters, trimmed; blank is no comment` },
+          ],
+        },
+        returns: `201 { feedback: ${FEEDBACK_SHAPE} }`,
+        errors: [
+          { status: 400, error: "invalid_body", when: "the body does not parse" },
+          { status: 404, error: "not_found", when: "no sitting of yours has that id, or it is live and you are no longer a Participant" },
+          { status: 409, error: "finished", when: "the sitting is over" },
+          { status: 409, error: "stale", when: "number is not the question on screen" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/diagnostic/feedback",
+        summary: "Lists the ratings given while taking a test, with any comment and the question they were about, a page at a time, the newest first.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes: "number is the question's place in its sitting, from 1. itemId and stem are the question as it was when rated. Previews' ratings are included, with mode preview. user is null once the account that gave it is deleted.",
+        query: listQuery(IRIS_FEEDBACK_LIST.sorts, "the comment, the question, or the name or email of who gave it", "desc"),
+        returns: `{ feedback: ${FEEDBACK_SHAPE}[], ${PAGE_FIELDS} }`,
       },
       {
         method: "GET",

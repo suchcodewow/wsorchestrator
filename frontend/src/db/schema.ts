@@ -3000,6 +3000,39 @@ export const irisReminderMessages = pgTable(
 
 export type IrisReminderRun = typeof irisReminderRuns.$inferSelect;
 
+/**
+ * A smiley or confused rating given during a sitting, with a comment if one
+ * was written, from the faces above the question. It keeps the question that
+ * was on screen, its version and its wording then, so a later rewording does
+ * not change what it was about.
+ */
+export const irisFeedback = pgTable(
+  "iris_feedback",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    attemptId: uuid("attempt_id").references(() => irisAttempts.id, { onDelete: "set null" }),
+    subject: text("subject").notNull(),
+    mode: text("mode").notNull(),
+    /** The sitting's 1-based number for the question on screen. */
+    number: integer("number").notNull(),
+    itemId: text("item_id").notNull(),
+    itemVersion: text("item_version").notNull(),
+    stem: text("stem").notNull(),
+    rating: text("rating").$type<VideoFeedbackRating>().notNull(),
+    comment: text("comment"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("iris_feedback_created_at_idx").on(t.createdAt),
+    index("iris_feedback_item_idx").on(t.itemId),
+    check("iris_feedback_rating_check", sql`${t.rating} in ('up', 'down')`),
+    check("iris_feedback_mode_check", sql`${t.mode} in ('live', 'preview')`),
+  ],
+);
+
+export type IrisFeedback = typeof irisFeedback.$inferSelect;
+
 /* ------------------------------------------------------------------ */
 /* Mimir                                                               */
 /* ------------------------------------------------------------------ */

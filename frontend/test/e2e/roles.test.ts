@@ -334,6 +334,7 @@ const PAGES: Record<string, PageCase> = {
     path: () => `/diagnostic-settings/records?person=${MISSING}`,
     expect: gated(canManageIris),
   },
+  "/diagnostic-settings/feedback": { path: () => "/diagnostic-settings/feedback", expect: gated(canManageIris) },
   "/diagnostic-settings/questions": { path: () => "/diagnostic-settings/questions", expect: gated(canManageIris) },
   "/diagnostic-settings/questions?subject": {
     path: () => "/diagnostic-settings/questions?subject=champion&level=3&status=draft",
@@ -603,6 +604,8 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/diagnostic/sittings", allowed: canTakeIris, body: () => ({ subject: "sdlc" }), denyOnly: true },
   { method: "GET", path: `/api/diagnostic/sittings/${MISSING}`, allowed: canSitIris },
   { method: "POST", path: `/api/diagnostic/sittings/${MISSING}/answers`, allowed: canSitIris, body: () => ({}) },
+  { method: "POST", path: "/api/diagnostic/feedback", allowed: canSitIris, body: () => ({}) },
+  { method: "GET", path: "/api/diagnostic/feedback", allowed: canManageIris },
   { method: "GET", path: "/api/diagnostic/participants", allowed: canManageIris },
   { method: "POST", path: "/api/diagnostic/participants", allowed: canManageIris, body: () => ({}) },
   { method: "DELETE", path: "/api/diagnostic/participants", allowed: canManageIris, body: () => ({}) },
