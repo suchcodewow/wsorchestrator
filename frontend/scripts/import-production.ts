@@ -294,6 +294,27 @@ async function main() {
 
     console.log(`>> Done. ${database} is now production's data, with production's runs read-only.`);
     console.log("   Sign in again: the import cleared every session.");
+    console.log(
+      [
+        "",
+        ">> What the import did to the copy (the dump itself skips nothing):",
+        "   Removed:",
+        "     - sessions, verification tokens, user invites and personal access tokens",
+        "     - Harness tokens, deployed secrets, org secrets and template sources; the Slack installation",
+        "     - OAuth refresh/access/id tokens on accounts (the accounts themselves stay)",
+        "     - Google and Zoom connections, synced meetings, meeting selections and sync runs,",
+        "       and the meeting_sync_live switch",
+        `     - ${result.attendeePasswordsCleared} attendee temp password(s), cleared on production's runs`,
+        "   Changed:",
+        "     - every workshop run is stamped environment = 'production', so the local runner",
+        "       will not provision or tear down any of them",
+        "     - every user's roles were revoked, then restored from the local snapshot:",
+        `       ${result.usersRestored} matched by email, ${result.usersAdded} added; everyone else has no access`,
+        `     - ${result.migrations.length} migrations applied, so the schema matches this branch`,
+        "   Replaced, not merged: anything authored only in the old local database is gone.",
+        "   Untouched: workshops_agent.",
+      ].join("\n"),
+    );
   } finally {
     fs.rmSync(workdir, { recursive: true, force: true });
   }
