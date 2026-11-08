@@ -51,11 +51,11 @@ try {
     process.exit(0);
   }
 
-  // Everyone with a Live Sessions card (someone assessed in a class) needs an account to hold results.
+  // Everyone with a Live Sessions card (assessed in a class, or RSVP'd to one) needs an account to hold results.
   const made = await client.query(`
     insert into users (id, name, email, is_test_account)
     select 'seed-' || gen_random_uuid(), coalesce(e.full_name, a.email), a.email, true
-      from (select distinct lower(attendee_email) as email from evals_submissions) a
+      from (select lower(attendee_email) as email from evals_submissions union select lower(email) from intake_responses) a
       left join lateral (select full_name from employees where email = a.email order by active desc limit 1) e on true
      where not exists (select 1 from users u where lower(u.email) = a.email)
     on conflict do nothing`);
@@ -63,7 +63,7 @@ try {
   const { rows: people } = await client.query(`
     select u.id, (select e.track from employees e where e.email = lower(u.email) order by e.active desc limit 1) as employee_track
       from users u
-     where lower(u.email) in (select distinct lower(attendee_email) from evals_submissions)`);
+     where lower(u.email) in (select lower(attendee_email) from evals_submissions union select lower(email) from intake_responses)`);
 
   const { rows: concepts } = await client.query(`
     select c->>'id' as id, exists (select 1 from mimir_concept_videos v where v.concept_id = c->>'id' and v.language = 'en') as has_video
