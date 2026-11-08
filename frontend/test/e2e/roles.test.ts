@@ -1587,7 +1587,12 @@ describe("viewing the app as an employee", () => {
     await scope.createEmployee("viewed", viewed.email);
 
     assert.equal((await start(cookie, viewed.email.toUpperCase())).status, 200);
-    assert.deepEqual(await me(cookie), { ...(await me(cookies.operator)), id: viewed.id, email: viewed.email });
+    assert.deepEqual(await me(cookie), {
+      ...(await me(cookies.operator)),
+      id: viewed.id,
+      email: viewed.email,
+      nameOnRecord: "viewed employee",
+    });
     assert.equal((await send({ cookie }, "GET", "/backups")).status, 404);
     const page = await send({ cookie }, "GET", "/events");
     assert.equal(page.status, 200);
@@ -1715,5 +1720,35 @@ describe("what the browser can read about its session", () => {
     assert.equal(body.user.email, email);
 
     assert.equal((await send({ cookie }, "DELETE", "/api/me/impersonation")).status, 200);
+  });
+});
+
+describe("the preferred name on /api/me", () => {
+  test("is read, set, shown as the name on record, and cleared", async () => {
+    const user = await scope.createUser("prefname", PERSONAS.operator);
+    const cookie = await createSession(user.id);
+    await scope.createEmployee("prefname", user.email);
+    const read = async () =>
+      JSON.parse((await send({ cookie }, "GET", "/api/me")).body) as { preferredName: string | null; nameOnRecord: string | null };
+
+    assert.deepEqual(await read(), { ...(await read()), preferredName: null, nameOnRecord: "prefname employee" });
+
+    // Only the first word is kept, and it replaces the first name on record.
+    assert.equal((await send({ cookie }, "PATCH", "/api/me", { preferredName: "  Zed Extra " })).status, 200);
+    assert.deepEqual(await read(), { ...(await read()), preferredName: "Zed", nameOnRecord: "Zed employee" });
+
+    assert.equal((await send({ cookie }, "PATCH", "/api/me", { preferredName: "" })).status, 200);
+    // The seeded employee has no HiBob record to take their official name from, so only the choice is checked.
+    assert.equal((await read()).preferredName, null);
+  });
+
+  test("refuses a name that is not a short string, and an account with no employee record", async () => {
+    for (const preferredName of [5, null, "x".repeat(101)]) {
+      const res = await send("operator", "PATCH", "/api/me", { preferredName });
+      assert.deepEqual([res.status, JSON.parse(res.body).error], [400, "invalid"], String(preferredName).slice(0, 5));
+    }
+    const lone = await scope.createUser("noemployee", PERSONAS.operator);
+    const res = await send({ cookie: await createSession(lone.id) }, "PATCH", "/api/me", { preferredName: "Zed" });
+    assert.deepEqual([res.status, JSON.parse(res.body).error], [409, "not_an_employee"]);
   });
 });

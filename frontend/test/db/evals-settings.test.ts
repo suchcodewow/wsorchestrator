@@ -35,7 +35,7 @@ import {
   scheduleSessions,
   scheduleSessionStaff,
 } from "@/db/schema";
-import { setChosenName } from "@/lib/evals/chosen-names";
+import { chosenNameOnRecord, nameOnRecord, setChosenName } from "@/lib/evals/chosen-names";
 import { hibobServiceUser, listHibobSyncRuns, syncHibobEmployees } from "@/lib/evals/hibob";
 import { toEmployeeRow } from "@/lib/evals/hibob-record";
 import { currentCohortSummary, listCurrentCohort, type CandidateStage } from "@/lib/evals/current-cohort";
@@ -461,6 +461,8 @@ describe("HiBob sync", () => {
       let row = await read();
       assert.deepEqual([row.chosenName, row.fullName], ["Patty", "Patty Rowe"]);
       assert.equal(toEmployeeRow(row.raw)?.fullName, "Pat Rowe");
+      assert.equal(await chosenNameOnRecord(email("PAT.rowe")), "Patty");
+      assert.equal(await nameOnRecord(email("pat.rowe")), "Patty Rowe");
 
       stubHibob(200, [person("1", "root", ""), person("2", "pat.rowe", "root")]);
       assert.ok((await sync()).ok);
@@ -471,6 +473,12 @@ describe("HiBob sync", () => {
       assert.equal(await setChosenName(email("pat.rowe"), "Pat"), true);
       row = await read();
       assert.deepEqual([row.chosenName, row.fullName], [null, "Pat Rowe"]);
+      assert.equal(await chosenNameOnRecord(email("pat.rowe")), null);
+
+      // Someone who is not an employee has nothing to rename.
+      assert.equal(await setChosenName(email("nobody"), "Nob"), false);
+      assert.equal(await chosenNameOnRecord(email("nobody")), null);
+      assert.equal(await nameOnRecord(email("nobody")), null);
     });
   });
 
