@@ -19,6 +19,8 @@ locals {
     GOOGLE_WORKSPACE_PARENT_OU   = var.workspace_parent_ou
     HARNESS_ACCOUNT_ID           = var.harness_account_id
     HARNESS_BASE_URL             = var.harness_base_url
+    # The app's own address, for the links in the Slack notices about a build.
+    APP_URL = var.app_url
     # Azure (optional; empty when unused). AZURE_* are read by the runner's
     # azureCfg; ARM_* authenticate the azurerm/azuread providers. Tenant and
     # subscription appear under both prefixes because those two consumers look
