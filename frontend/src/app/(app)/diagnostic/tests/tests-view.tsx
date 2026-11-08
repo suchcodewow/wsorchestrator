@@ -70,7 +70,7 @@ export function TestsView({ mine, selfId }: { mine: MyIris; selfId: string | nul
               <p className="font-medium">{s.name}</p>
               {s.blurb && <p className="text-muted-foreground">{s.blurb}</p>}
             </div>
-            <SubjectAction subject={s.key} status={s.status} placement={s.placement} selfId={selfId} />
+            <SubjectAction subject={s.key} status={s.status} selfId={selfId} />
           </div>
         ))}
       </motion.div>
@@ -81,25 +81,14 @@ export function TestsView({ mine, selfId }: { mine: MyIris; selfId: string | nul
 function SubjectAction({
   subject,
   status,
-  placement,
   selfId,
 }: {
   subject: string;
   status: SubjectStatus;
-  placement?: Level;
   selfId: string | null;
 }) {
   if (status === "completed") {
-    if (!placement || !selfId) return <span className="text-muted-foreground">Done</span>;
-    return (
-      <Link
-        href={`/diagnostic-settings/records?person=${encodeURIComponent(selfId)}`}
-        className="flex items-center gap-2 hover:underline"
-      >
-        <LevelBadge level={placement} />
-        <span className="text-xs text-muted-foreground">View path</span>
-      </Link>
-    );
+    return <span className="text-muted-foreground">Done</span>;
   }
   if (status === "unavailable") {
     // An administrator can do something about it: approve the subject's questions.

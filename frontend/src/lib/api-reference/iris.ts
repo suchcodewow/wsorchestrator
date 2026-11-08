@@ -18,7 +18,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
     id: "iris",
     title: "Diagnostic",
     intro:
-      "Adaptive placement tests, one per subject, for its Participants only: whoever an Assessments Administrator adds by hand, and, while Bootcamp Auto-Enroll is on, every bootcamp candidate on the Sales or Engineer track who has RSVP'd. Roles alone do not let anyone take them. The engine runs on the server: a taker is sent one question at a time without its answer, and posts a choice to get the next. Takers never see their placement.",
+      "Adaptive placement tests, one per subject, for its Participants only: whoever an Assessments Administrator adds by hand, and, while Bootcamp Auto-Enroll is on, every bootcamp candidate on the Sales or Engineer track who has RSVP'd. Roles alone do not let anyone take them. The engine runs on the server: a taker is sent one question at a time without its answer, and posts a choice to get the next. Nobody sees their own placement, administrators included; it is recorded for the cohort records.",
     endpoints: [
       {
         method: "GET",
@@ -27,9 +27,9 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         access: "participant",
         token: true,
         notes:
-          "status is completed once you have finished a live sitting of the subject on this form, in_progress while one is open, available when it has enough approved questions to run, and unavailable otherwise. Subjects with no questions yet are not listed. open counts the listed subjects. A finished subject carries placement (1 for 101, 2 for 201, 3 for 301) only when you are an Assessments Administrator; a taker is never told their level.",
+          "status is completed once you have finished a live sitting of the subject on this form, in_progress while one is open, available when it has enough approved questions to run, and unavailable otherwise. Subjects with no questions yet are not listed. open counts the listed subjects. No level is returned, whoever you are.",
         query: [FORM_QUERY],
-        returns: `{ track: "AE" | "SE" | "SDR" | null, form, subjects: { key, name, blurb: string | null, status: "available" | "in_progress" | "completed" | "unavailable", placement?: 1 | 2 | 3 }[], completed: number, open: number }`,
+        returns: `{ track: "AE" | "SE" | "SDR" | null, form, subjects: { key, name, blurb: string | null, status: "available" | "in_progress" | "completed" | "unavailable" }[], completed: number, open: number }`,
         errors: [FORM_ERROR],
       },
       {
@@ -84,7 +84,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         access: "diagnosticSitter",
         token: true,
         notes:
-          "A question is sent as its wording and options only, never its id or level. Each taker sees the options in their own shuffled order, and choice is the position on their screen, from 0, or -1 for \"I don't know\", which is graded as wrong. A sitting ends after 10 to 14 questions plus up to 3 tiebreak questions; the last answer returns done: true, and the placement and confidence only to an Assessments Administrator.",
+          "A question is sent as its wording and options only, never its id or level. Each taker sees the options in their own shuffled order, and choice is the position on their screen, from 0, or -1 for \"I don't know\", which is graded as wrong. A sitting ends after 10 to 14 questions plus up to 3 tiebreak questions; the last answer returns done: true and the number of questions, never a placement or confidence.",
         params: [SITTING_ID],
         body: {
           kind: "json",
@@ -93,7 +93,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
             { name: "choice", type: "-1 | 0 | 1 | 2 | 3", required: true },
           ],
         },
-        returns: `{ done: false, sitting: ${SITTING_SHAPE} } or { done: true, subject, mode, questions: number, placement?: 1 | 2 | 3, confidence?: "high" | "medium" | "low" }`,
+        returns: `{ done: false, sitting: ${SITTING_SHAPE} } or { done: true, subject, mode, questions: number }`,
         errors: [
           { status: 400, error: "invalid_body", when: "the body does not parse" },
           { status: 400, error: "invalid_choice", when: "choice is not -1 to 3" },

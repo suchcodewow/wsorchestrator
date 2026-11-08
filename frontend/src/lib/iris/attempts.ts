@@ -4,8 +4,9 @@
  * graded against the bank. A sitting in progress is stored, so leaving and
  * coming back resumes it rather than starting a fresh, rerollable run.
  *
- * Takers never see their placement. It is recorded for Assessments Administrators and
- * routes training; showing it would turn a starting point into a grade.
+ * Nobody sees their own placement, administrators included, so a sitting is the same
+ * for everyone and an administrator can run one to check it. It is recorded for the
+ * cohort records and routes training; showing it would turn a starting point into a grade.
  */
 
 import "server-only";
@@ -99,8 +100,6 @@ export type MyIris = {
     name: string;
     blurb: string | null;
     status: SubjectStatus;
-    /** Only for an Assessments Administrator looking at their own; a taker never gets it. */
-    placement?: Level;
   }[];
   completed: number;
   /** How many subjects have questions, so "3 of 5 done" leaves out the ones still coming. */
@@ -109,8 +108,7 @@ export type MyIris = {
 
 /**
  * Someone's own view: their track and where they are with each subject.
- * `withLevels` adds the placement of each finished subject, and is for Diagnostic
- * administrators only; a taker is never told their level.
+ * Nobody is told their level here, administrators included, so it reads the same for everyone.
  */
 /**
  * The track `userId` is in: the one they chose, else the one an administrator
@@ -126,10 +124,10 @@ export async function trackOf(userId: string): Promise<Track | null> {
   return (row?.track as Track | null | undefined) ?? null;
 }
 
-export async function myIris(userId: string, form: Form = "A", withLevels = false): Promise<MyIris> {
+export async function myIris(userId: string, form: Form = "A"): Promise<MyIris> {
   const track = await trackOf(userId);
   const sittings = await db
-    .select({ subject: irisAttempts.subject, finishedAt: irisAttempts.finishedAt, placement: irisAttempts.placement })
+    .select({ subject: irisAttempts.subject, finishedAt: irisAttempts.finishedAt })
     .from(irisAttempts)
     .where(and(eq(irisAttempts.userId, userId), eq(irisAttempts.form, form), eq(irisAttempts.mode, "live")));
   const bySubject = new Map(sittings.map((s) => [s.subject, s]));
@@ -144,8 +142,7 @@ export async function myIris(userId: string, form: Form = "A", withLevels = fals
       : isLive(approved[key])
         ? "available"
         : "unavailable";
-    const placement = withLevels && sitting?.finishedAt && sitting.placement ? (sitting.placement as Level) : undefined;
-    return { key, name: SUBJECTS[key].name, blurb: SUBJECTS[key].blurb, status, ...(placement ? { placement } : {}) };
+    return { key, name: SUBJECTS[key].name, blurb: SUBJECTS[key].blurb, status };
   });
   return {
     track,
@@ -280,7 +277,7 @@ export type AnswerResult =
       subject: SubjectKey;
       mode: "live" | "preview";
       questions: number;
-      /** For Assessments Administrators only: strip with `withoutLevel` before answering a taker. */
+      /** Recorded for the cohort records; the answer route never sends it to the one who sat. */
       placement: Level;
       confidence: Confidence;
     }
@@ -409,14 +406,4 @@ export async function answer(
       confidence,
     };
   });
-}
-
-/** A finished sitting as a taker may see it: everything but how they placed. */
-export function withoutLevel<T extends { placement?: unknown; confidence?: unknown }>(
-  result: T,
-): Omit<T, "placement" | "confidence"> {
-  const rest: Record<string, unknown> = { ...result };
-  delete rest.placement;
-  delete rest.confidence;
-  return rest as Omit<T, "placement" | "confidence">;
 }

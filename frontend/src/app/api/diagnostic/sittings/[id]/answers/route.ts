@@ -4,8 +4,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
 import { audited } from "@/lib/audit";
-import { answer, sittingModes, withoutLevel, type AnswerError } from "@/lib/iris/attempts";
-import { canManageIris, canSitIris } from "@/lib/roles";
+import { answer, sittingModes, type AnswerError } from "@/lib/iris/attempts";
+import { canSitIris } from "@/lib/roles";
 
 const idSchema = z.string().uuid();
 const bodySchema = z.object({ number: z.number().int().min(1).max(100), choice: z.number() });
@@ -33,11 +33,9 @@ export const POST = audited(async function POST(req: Request, { params }: { para
       subject: result.subject,
       mode: result.mode,
       questions: result.questions,
-      placement: result.placement,
-      confidence: result.confidence,
     };
-    // A taker is never told their level; an Assessments Administrator is.
-    return NextResponse.json(canManageIris(user.access) ? finished : withoutLevel(finished));
+    // Nobody is told their level, administrators included: a sitting reads the same for everyone.
+    return NextResponse.json(finished);
   }
   return NextResponse.json({ done: false, sitting: result.sitting });
 });

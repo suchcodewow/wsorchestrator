@@ -1332,7 +1332,7 @@ describe("a Diagnostic sitting, over HTTP", () => {
   }
 
   const pipegen = async (who: Persona) =>
-    (JSON.parse((await send(who, "GET", "/api/diagnostic/me")).body).subjects as { key: string; placement?: number }[]).find(
+    (JSON.parse((await send(who, "GET", "/api/diagnostic/me")).body).subjects as { key: string; status?: string; placement?: number }[]).find(
       (s) => s.key === "pipegen",
     );
 
@@ -1343,7 +1343,7 @@ describe("a Diagnostic sitting, over HTTP", () => {
     assert.ok(!("placement" in (await pipegen("participant"))!));
   });
 
-  test("a Diagnostic administrator added as a Participant sees their own level, and loses the tests when removed", async () => {
+  test("a Diagnostic administrator added as a Participant sits like anyone, never sees their level, and loses the tests when removed", async () => {
     const email = { email: people.assessmentsAdmin.email };
     const unassigned = async () => (await send("assessmentsAdmin", "GET", "/diagnostic/tests")).body.includes("No Tests currently assigned to you.");
     assert.equal(await unassigned(), true, "not a Participant yet");
@@ -1351,8 +1351,9 @@ describe("a Diagnostic sitting, over HTTP", () => {
     try {
       assert.equal(await unassigned(), false);
       const done = await sit("assessmentsAdmin");
-      assert.equal(done.placement, 1, "\"I don't know\" throughout places Beginner");
-      assert.equal((await pipegen("assessmentsAdmin"))?.placement, 1);
+      assert.ok(!("placement" in done) && !("confidence" in done), "an administrator is told no level either");
+      assert.equal((await pipegen("assessmentsAdmin"))?.status, "completed");
+      assert.ok(!("placement" in (await pipegen("assessmentsAdmin"))!));
     } finally {
       assert.equal((await send("assessmentsAdmin", "DELETE", "/api/diagnostic/participants", email)).status, 200);
     }

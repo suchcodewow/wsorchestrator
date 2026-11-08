@@ -31,7 +31,7 @@ const START_ERRORS: Record<string, string> = {
 type State =
   | { kind: "loading" }
   | { kind: "asking"; sitting: SittingView }
-  | { kind: "done"; questions: number; placement?: Level; confidence?: Confidence }
+  | { kind: "done"; questions: number }
   | { kind: "error"; message: string };
 
 export function SittingScreen({
@@ -39,15 +39,12 @@ export function SittingScreen({
   name,
   mode,
   backHref = "/diagnostic/tests",
-  selfId,
 }: {
   subject: SubjectKey;
   name: string;
   mode: "live" | "preview";
   /** Where leaving goes: the subjects for a taker, the questions for a preview. */
   backHref?: string;
-  /** Set for an Assessments Administrator, whose finish screen shows the level and links to the full path. */
-  selfId: string | null;
 }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [selected, setSelected] = useState<number | null>(null);
@@ -94,7 +91,7 @@ export function SittingScreen({
       } else if (!res.ok) {
         throw new Error(body?.error === "finished" ? "This sitting is already over." : `Could not save (${res.status})`);
       } else if (body.done) {
-        setState({ kind: "done", questions: body.questions, placement: body.placement, confidence: body.confidence });
+        setState({ kind: "done", questions: body.questions });
       } else {
         setState({ kind: "asking", sitting: body.sitting });
       }
@@ -174,28 +171,6 @@ export function SittingScreen({
           <p className="text-sm text-muted-foreground tnum">
             {name} · {state.questions} questions answered
           </p>
-          {state.placement && (
-            <div className="divide-y overflow-hidden rounded-lg border text-sm">
-              <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-                <span className="text-xs font-medium text-muted-foreground">Placement</span>
-                <LevelBadge level={state.placement} />
-                {state.confidence && <span className="text-muted-foreground">{state.confidence} confidence</span>}
-              </div>
-              {TRAINING[subject] && (
-                <div className="px-4 py-3">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Routes to · {LEVEL_LABELS[state.placement]} tier
-                  </p>
-                  <p className="mt-1">{TRAINING[subject][state.placement]}</p>
-                </div>
-              )}
-              <p className="px-4 py-3 text-xs text-muted-foreground">
-                {mode === "preview"
-                  ? "A preview, so this is not recorded anywhere."
-                  : "Shown because you are an Assessments Administrator. A taker sees only that their answers are recorded."}
-              </p>
-            </div>
-          )}
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="brand">
               <Link href={backHref}>
@@ -203,11 +178,6 @@ export function SittingScreen({
                 <ArrowRight />
               </Link>
             </Button>
-            {selfId && mode === "live" && (
-              <Button asChild variant="outline">
-                <Link href={`/diagnostic-settings/records?person=${encodeURIComponent(selfId)}`}>See the full path</Link>
-              </Button>
-            )}
           </div>
         </motion.div>
       )}
