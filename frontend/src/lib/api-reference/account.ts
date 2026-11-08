@@ -124,7 +124,8 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         returns:
-          "{ id, email: string | null, access: { event, training: string | null, assessments: string | null, iris: string | null, platform: boolean, judging: boolean, manager: boolean }, preferences: { themePreference: \"light\" | \"dark\" | \"system\", calendarScope: \"own\" | \"all\", favoriteTabs: { href: string, label: string }[], videoLanguage: \"en\" | \"es\" } }",
+          "{ id, email: string | null, access: { event, training: string | null, assessments: string | null, iris: string | null, platform: boolean, judging: boolean, manager: boolean }, preferences: { themePreference: \"light\" | \"dark\" | \"system\", calendarScope: \"own\" | \"all\", favoriteTabs: { href: string, label: string }[], videoLanguage: \"en\" | \"es\" }, preferredName: string | null, nameOnRecord: string | null }",
+        notes: "preferredName is the first name you chose, null if none; nameOnRecord is the full name the app shows for you, null if you are not an employee.",
       },
       {
         method: "PATCH",
@@ -145,6 +146,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
               note: "replaces the whole list shown under Favorites in the sidebar; 25 at most; href is an in-app path, label 80 characters at most",
             },
             { name: "videoLanguage", type: "\"en\" | \"es\"", note: "the language Coach Canary videos play in; one not yet in it plays in English" },
+            { name: "preferredName", type: "string", note: "the first name the app shows for you in place of the one HiBob has, as the Pre-Bootcamp form sets it; empty clears it; 100 characters at most" },
           ],
         },
         returns: "{ preferences: { themePreference, calendarScope, favoriteTabs, videoLanguage } }",
@@ -152,6 +154,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
           { status: 400, error: "invalid_body", when: "the body is not a JSON object" },
           { status: 400, error: "invalid", when: "a value is not one of the allowed ones" },
           { status: 403, error: "forbidden", when: "calendarScope is sent by someone below Event Manager" },
+          { status: 409, error: "not_an_employee", when: "preferredName is sent by an account with no employee record" },
         ],
       },
       {

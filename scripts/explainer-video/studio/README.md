@@ -71,3 +71,9 @@ here looks slightly different from one made on the Mac. Narration is cached
 per scene by its text, in `timing.json` beside the MP3s, as it is by hand.
 `seed-reference` uploads whatever audio a checkout has. A scene with no cached
 audio is narrated again, which spends ElevenLabs credits.
+
+## Training videos
+
+The studio makes only explainers today. Making app training videos here too
+(a Tutorials tab, a demo app inside the job) was looked at and set aside; what
+it would take is in [docs/training-videos.md](../../../docs/training-videos.md#making-them-from-mimir-studio-not-built).

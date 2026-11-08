@@ -32,7 +32,7 @@
  * in frontend/.env picks the gcloud configuration.
  */
 
-import { spawnSync, type SpawnSyncOptions } from "node:child_process";
+import { spawn, spawnSync, type SpawnSyncOptions } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -77,6 +77,48 @@ function run(command: string, args: string[], options: SpawnSyncOptions = {}) {
   if (result.status !== 0) {
     fail(`${command} ${args[0] ?? ""} failed (exit ${result.status ?? result.signal})`);
   }
+}
+
+/**
+ * What production being unreachable looks like in gcloud's and the proxy's
+ * output: a reset or refused socket, a timeout, a failed TLS handshake or an
+ * untrusted certificate. A TLS-inspecting platform such as Zscaler causes all of
+ * them (docs/operations.md).
+ */
+const CONNECTION_FAILURE =
+  /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|EAI_AGAIN|i\/o timeout|dial tcp|handshake|x509|certificate|connection reset|connection refused|could not connect|failed to connect|unable to connect|network is unreachable|could not resolve/i;
+
+const CONNECTION_HELP =
+  "A connection to production's database could not be established.\n" +
+  "   Check for zero-trust platforms that interfere with it, such as Zscaler, and disable them.";
+
+/**
+ * `run`, for a command whose stderr says whether production was reachable. The
+ * stderr still reaches the terminal as it is written; a failure that reads as a
+ * connection problem is then replaced by `CONNECTION_HELP`.
+ */
+function runReachingProduction(command: string, args: string[], options: SpawnSyncOptions = {}) {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, { ...options, stdio: ["inherit", "inherit", "pipe"] });
+    let stderr = "";
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+      process.stderr.write(chunk);
+    });
+    child.on("error", (err) => {
+      stderr += String(err);
+    });
+    child.on("close", (status, signal) => {
+      if (status === 0) return resolve();
+      reject(
+        new Error(
+          CONNECTION_FAILURE.test(stderr)
+            ? CONNECTION_HELP
+            : `${command} ${args[0] ?? ""} failed (exit ${status ?? signal})`,
+        ),
+      );
+    });
+  });
 }
 
 async function withClient<T>(url: string, fn: (client: pg.Client) => Promise<T>): Promise<T> {
@@ -179,6 +221,7 @@ async function main() {
   const token = spawnSync("gcloud", ["auth", "print-access-token"], { env: gcloudEnv, encoding: "utf8" });
   if (token.status !== 0) {
     const reason = (token.stderr || String(token.error ?? "")).split("\n")[0];
+    if (CONNECTION_FAILURE.test(token.stderr || String(token.error ?? ""))) fail(CONNECTION_HELP);
     fail(
       `gcloud cannot get a token${GCLOUD_CONFIGURATION ? ` with configuration ${GCLOUD_CONFIGURATION}` : ""}: ${reason}\n` +
         "   Run `gcloud auth login`, or set PRODUCTION_GCLOUD_CONFIGURATION in frontend/.env " +
@@ -204,7 +247,7 @@ async function main() {
     const dump =
       `docker exec ${CONTAINER} pg_dump --format=custom --no-owner --no-privileges ` +
       `--dbname="\${DATABASE_URL/127.0.0.1/host.docker.internal}" > '${dumpFile}'`;
-    run("bash", [path.join(repo, "scripts/with-db.sh"), dump], {
+    await runReachingProduction("bash", [path.join(repo, "scripts/with-db.sh"), dump], {
       cwd: repo,
       env: gcloudEnv,
     });
@@ -294,6 +337,27 @@ async function main() {
 
     console.log(`>> Done. ${database} is now production's data, with production's runs read-only.`);
     console.log("   Sign in again: the import cleared every session.");
+    console.log(
+      [
+        "",
+        ">> What the import did to the copy (the dump itself skips nothing):",
+        "   Removed:",
+        "     - sessions, verification tokens, user invites and personal access tokens",
+        "     - Harness tokens, deployed secrets, org secrets and template sources; the Slack installation",
+        "     - OAuth refresh/access/id tokens on accounts (the accounts themselves stay)",
+        "     - Google and Zoom connections, synced meetings, meeting selections and sync runs,",
+        "       and the meeting_sync_live switch",
+        `     - ${result.attendeePasswordsCleared} attendee temp password(s), cleared on production's runs`,
+        "   Changed:",
+        "     - every workshop run is stamped environment = 'production', so the local runner",
+        "       will not provision or tear down any of them",
+        "     - every user's roles were revoked, then restored from the local snapshot:",
+        `       ${result.usersRestored} matched by email, ${result.usersAdded} added; everyone else has no access`,
+        `     - ${result.migrations.length} migrations applied, so the schema matches this branch`,
+        "   Replaced, not merged: anything authored only in the old local database is gone.",
+        "   Untouched: workshops_agent.",
+      ].join("\n"),
+    );
   } finally {
     fs.rmSync(workdir, { recursive: true, force: true });
   }

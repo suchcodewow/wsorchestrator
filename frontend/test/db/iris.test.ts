@@ -30,7 +30,6 @@ import {
   shuffledOrder,
   sittingModes,
   startSitting,
-  withoutLevel,
   type SittingView,
 } from "@/lib/iris/attempts";
 import { clearResults, cohortSummary, personDetail, resetSitting } from "@/lib/iris/cohort";
@@ -176,14 +175,12 @@ describe("a live sitting", () => {
     assert.deepEqual(theirs, { ok: false, error: "not_found" }, "a sitting is only its taker's");
   });
 
-  test("answered right throughout places Advanced, recorded but not shown to the taker", async () => {
+  test("answered right throughout places Advanced, recorded, shown to no one who sits", async () => {
     const start = await startSitting(taker.id, "sdlc", "A", "live");
     assert.ok(start.ok);
     const done = await finish(taker, start.sitting, right);
     assert.equal(done.subject, "sdlc");
     assert.equal(done.placement, 3);
-    const told = withoutLevel(done);
-    assert.ok(!("placement" in told) && !("confidence" in told), "what a taker is sent carries no level");
 
     const [row] = await db.select().from(irisAttempts).where(eq(irisAttempts.id, start.sitting.attemptId));
     assert.equal(row!.placement, 3);
@@ -192,9 +189,7 @@ describe("a live sitting", () => {
     const mine = await myIris(taker.id);
     assert.equal(mine.subjects.find((s) => s.key === "sdlc")!.status, "completed");
     assert.equal(mine.completed, 1);
-    assert.ok(!JSON.stringify(mine).includes("placement"), "a taker's own view has no levels");
-    const asAdmin = await myIris(taker.id, "A", true);
-    assert.equal(asAdmin.subjects.find((s) => s.key === "sdlc")!.placement, 3);
+    assert.ok(!JSON.stringify(mine).includes("placement"), "one's own view has no levels");
   });
 
   test("cannot be taken twice, and the finished sitting cannot be answered", async () => {

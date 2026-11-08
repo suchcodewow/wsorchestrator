@@ -15,6 +15,7 @@
     "@remotion/renderer": "4.0.535",
     "google-auth-library": "^9.15.1",
     "pg": "^8.23.1",
+    "playwright-core": "^1.49.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "remotion": "4.0.535",

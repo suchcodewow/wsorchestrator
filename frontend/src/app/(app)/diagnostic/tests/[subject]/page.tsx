@@ -3,7 +3,7 @@
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
 import { SUBJECTS, isSubjectKey } from "@/lib/iris/subjects";
-import { canManageIris, canTakeIris } from "@/lib/roles";
+import { canTakeIris } from "@/lib/roles";
 import { SittingScreen } from "./sitting-screen";
 
 export default async function IrisSittingPage({ params }: { params: Promise<{ subject: string }> }) {
@@ -19,7 +19,6 @@ export default async function IrisSittingPage({ params }: { params: Promise<{ su
       subject={subject}
       name={SUBJECTS[subject].name}
       mode="live"
-      selfId={canManageIris(session.user.access) ? session.user.id : null}
     />
   );
 }

@@ -20,7 +20,6 @@ export default async function DiagnosticPreviewPage({ params }: { params: Promis
       name={SUBJECTS[subject].name}
       mode="preview"
       backHref={`/diagnostic-settings/questions?subject=${subject}`}
-      selfId={null}
     />
   );
 }
