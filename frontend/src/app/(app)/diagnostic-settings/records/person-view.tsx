@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { HEADER_ROW, PlainHeader } from "@/components/data-table";
 import type { CohortSummary, DetailAnswer, DetailSitting, PersonDetail } from "@/lib/iris/cohort";
 import { ENGINE, LEVELS, type Form, type Level } from "@/lib/iris/engine";
-import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, TRACK_LABELS, TRAINING, bandOf } from "@/lib/iris/subjects";
+import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, TRACK_LABELS, TRAINING, bandOf, type SubjectKey } from "@/lib/iris/subjects";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { LevelBadge } from "@/app/(app)/diagnostic/level-badge";
@@ -82,7 +82,13 @@ export function PersonView({ detail, summary, closeHref }: { detail: Detail; sum
 }
 
 /** Where this person sits in every subject, against the middle of the whole cohort. */
-function ShapeCard({ detail, summary }: { detail: Detail; summary: CohortSummary }) {
+export function ShapeCard({
+  detail,
+  summary,
+}: {
+  detail: { name: string | null; sittings: { subject: SubjectKey; placement: Level | null; finishedAt: string | null }[] };
+  summary: CohortSummary;
+}) {
   const placed = new Map(
     detail.sittings.filter((s) => s.finishedAt && s.placement).map((s) => [s.subject, s.placement as Level]),
   );

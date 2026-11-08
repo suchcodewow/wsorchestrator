@@ -68,6 +68,25 @@ export function ProductionBackups({
         </p>
       </div>
 
+      <div className="mt-6 divide-y rounded-xl border bg-card/60 text-sm dark:bg-card">
+        <div className="px-5 py-2.5">
+          <span className="font-medium">Removed: </span>
+          <span className="text-muted-foreground">
+            sessions, invites and API tokens; Harness tokens, secrets and
+            template sources; the Slack installation; OAuth tokens on accounts;
+            Google and Zoom connections, synced meetings and the live-sync
+            switch; attendee temp passwords.
+          </span>
+        </div>
+        <div className="px-5 py-2.5">
+          <span className="font-medium">Changed: </span>
+          <span className="text-muted-foreground">
+            every imported event is marked production&apos;s and read-only;
+            roles are reset to what they are here now; migrations are applied.
+          </span>
+        </div>
+      </div>
+
       {error ? (
         <p className="mt-6 rounded-2xl border border-dashed p-8 text-center text-sm leading-relaxed text-muted-foreground">
           {UNAVAILABLE[error] ?? UNAVAILABLE.unavailable}

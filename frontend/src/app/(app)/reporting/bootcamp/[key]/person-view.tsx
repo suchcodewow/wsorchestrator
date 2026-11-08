@@ -24,10 +24,12 @@ import {
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { PersonEmployee, PersonReview, PersonSubmission } from "@/lib/reporting/bootcamp";
 import type { ClassSummary, ReleaseStage } from "@/lib/reporting/bootcamp-values";
+import type { PersonCoachCanary, PersonDiagnostic } from "@/lib/reporting/person-training";
 import { formatDate } from "../../../cohort-settings/format";
 import { ClassCard, Field, TRACK_LABELS } from "../class-card";
 import { EditSessionProvider, SubmissionGroups, useEditSession } from "./assessments";
 import { SlackButton } from "./slack-button";
+import { CoachCanaryLine, DiagnosticLine } from "./training-lines";
 
 export type ViewSubmission = Omit<PersonSubmission, "submittedAt" | "updatedAt"> & {
   submittedAt: string;
@@ -43,6 +45,8 @@ export type ViewPerson = {
   employee: PersonEmployee | null;
   classes: Record<ReleaseStage, ClassSummary>;
   records: { submissions: ViewSubmission[]; reviews: ViewReview[] } | null;
+  diagnostic: PersonDiagnostic | null;
+  coachCanary: PersonCoachCanary | null;
 };
 
 /** Records, once per opening, that the reader opened this card: the eye on the list names them. */
@@ -128,6 +132,16 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
             collapsible={person.classes.intermediate.date !== null}
           />
         </motion.div>
+        {person.diagnostic && (
+          <motion.div variants={riseChild}>
+            <DiagnosticLine diagnostic={person.diagnostic} />
+          </motion.div>
+        )}
+        {person.coachCanary && (
+          <motion.div variants={riseChild}>
+            <CoachCanaryLine canary={person.coachCanary} />
+          </motion.div>
+        )}
       </motion.div>
 
       {records && (

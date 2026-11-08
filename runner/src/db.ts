@@ -136,7 +136,7 @@ type AuditOutcome = "succeeded" | "denied" | "failed";
  * never fails the work it records: a database without `audit_events` yet, or
  * any other error, is logged and dropped.
  */
-async function recordRunAudit(
+export async function recordRunAudit(
   runId: string,
   action: string,
   summary: string,
@@ -1193,4 +1193,75 @@ export async function endPool() {
   if (poolEnded) return;
   poolEnded = true;
   await pool.end();
+}
+
+/* ------------------------------------------------------------------ *
+ * Slack notices about a build
+ * ------------------------------------------------------------------ */
+
+/** The creator of a run, for the Slack notices; null when the run or its creator's address is gone. */
+export async function runNoticeContext(
+  runId: string,
+): Promise<{ name: string; creatorEmail: string | null; creatorName: string | null } | null> {
+  const { rows } = await pool.query<{ name: string; email: string | null; user_name: string | null }>(
+    `select r.name, u.email, u.name as user_name
+       from workshop_runs r
+       join users u on u.id = r.user_id
+      where r.id = $1`,
+    [runId],
+  );
+  const row = rows[0];
+  return row ? { name: row.name, creatorEmail: row.email, creatorName: row.user_name } : null;
+}
+
+/** The sealed bot token of the Slack app's install, if the app has been added to the workspace. */
+export async function slackInstallationToken(): Promise<Buffer | null> {
+  const { rows } = await pool.query<{ token: Buffer }>("select token from slack_installation");
+  return rows[0]?.token ?? null;
+}
+
+/**
+ * Whether Slack is live rather than in dry run: the one switch on Admin Settings
+ * → External Connectors, stored as `slack_sync_live` in `evals_settings`.
+ * Anything but an explicit `true` is a dry run, which QA relies on because it
+ * shares production's workspace.
+ */
+export async function slackLive(): Promise<boolean> {
+  const { rows } = await pool.query<{ value: string }>(
+    "select value from evals_settings where key = 'slack_sync_live'",
+  );
+  return rows[0]?.value === "true";
+}
+
+/** Platform administrators and event administrators, with an address and not a test account. */
+export async function adminContacts(): Promise<{ email: string; name: string | null }[]> {
+  const { rows } = await pool.query<{ email: string; name: string | null }>(
+    `select email, name
+       from users
+      where email is not null
+        and not is_test_account
+        and (is_platform_admin or site_role = 'administrator')
+      order by lower(email)`,
+  );
+  return rows;
+}
+
+export async function cachedSlackChannel(name: string): Promise<string | undefined> {
+  const { rows } = await pool.query<{ slack_channel_id: string }>(
+    "select slack_channel_id from slack_channels where name = $1",
+    [name],
+  );
+  return rows[0]?.slack_channel_id;
+}
+
+export async function saveSlackChannel(name: string, channelId: string, created: boolean): Promise<void> {
+  await pool.query(
+    `insert into slack_channels (name, slack_channel_id, created) values ($1, $2, $3)
+     on conflict (name) do update set slack_channel_id = excluded.slack_channel_id`,
+    [name, channelId, created],
+  );
+}
+
+export async function forgetSlackChannel(name: string): Promise<void> {
+  await pool.query("delete from slack_channels where name = $1", [name]);
 }

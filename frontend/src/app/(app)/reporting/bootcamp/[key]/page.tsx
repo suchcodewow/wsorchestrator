@@ -60,6 +60,8 @@ export default async function BootcampPersonPage({
           })),
           reviews: records.reviews.map((r) => ({ ...r, updatedAt: r.updatedAt.toISOString() })),
         },
+        diagnostic: person.diagnostic,
+        coachCanary: person.coachCanary,
       }}
       canEdit={canManageBootcampRecords(access)}
       back={withParams("/reporting/bootcamp", back)}

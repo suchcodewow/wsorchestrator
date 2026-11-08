@@ -89,6 +89,7 @@ import {
   projectIdentifier,
   projectUrl,
 } from "./harness.js";
+import { notifyBuild } from "./slack-notice.js";
 import {
   accountsFor,
   accountsWithPasswordsFor,
@@ -155,6 +156,8 @@ export async function runWorkshop(runId: string): Promise<void> {
 
   try {
     await setProvisioning(runId);
+    // Only a first build: a grow or a retry of a live workshop is not "setup".
+    if (!run.expires_at) await notifyBuild(runId, "started");
 
     // Before anything is created: a cloud this deployment has no credentials
     // for fails here, not two minutes in with a roster already built.
@@ -278,6 +281,7 @@ export async function runWorkshop(runId: string): Promise<void> {
       run.expires_at ?? new Date(Date.now() + run.ttl_seconds * 1000);
     await setReady(runId, outputs, expiresAt);
     await log(runId, "system", `Ready. Auto-destroys at ${expiresAt.toISOString()}`);
+    if (!run.expires_at) await notifyBuild(runId, "ready");
   } catch (err) {
     // `summarize` keeps a transient-provider blob (e.g. a Google HTML "Error
     // 502" page) from being stored as the whole error — a short, attributed
@@ -298,6 +302,7 @@ export async function runWorkshop(runId: string): Promise<void> {
       // resources it left behind.
       await setFailed(runId, message);
     }
+    await notifyBuild(runId, "failed");
     throw err;
   }
 }
