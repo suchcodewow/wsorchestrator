@@ -516,7 +516,9 @@ export async function classAttendees(
  * still waiting on a score, an exit exam or overall feedback
  * (`releaseBlockers`) cannot be released. Once released it stays
  * so; releasing again changes nothing, and says when it was. `written`
- * counts the people scored in it.
+ * counts the people scored in it. Everyone scored in it also loses the eye on
+ * their card (`scorecard_views`): a manager who opened it before now has
+ * results they have not seen.
  */
 export async function releaseScores(
   actorId: string,
@@ -556,7 +558,12 @@ export async function releaseScores(
       .returning({ at: bootcamps[atColumn] });
     // Someone else released it between our read and our write.
     if (!row) return null;
-    return { releasedAt: row.at ?? now, emails: await classAttendees(bootcamp.id, stage, tx) };
+    const emails = await classAttendees(bootcamp.id, stage, tx);
+    // Their card now has results no one has seen, so every eye on it starts over.
+    for (let i = 0; i < emails.length; i += 500) {
+      await tx.delete(scorecardViews).where(inArray(scorecardViews.attendeeEmail, emails.slice(i, i + 500)));
+    }
+    return { releasedAt: row.at ?? now, emails };
   });
   if (!result) {
     return {
@@ -659,12 +666,9 @@ export type BootcampPerson = {
    * which only Assessments sees, and each class's review as entered.
    */
   records: { submissions: PersonSubmission[]; reviews: PersonReview[] } | null;
-  /**
-   * Null for a reader outside Assessments, and for someone with no finished
-   * Diagnostic subject: how they placed.
-   */
+  /** Null for someone with no finished Diagnostic subject: how they placed. */
   diagnostic: PersonDiagnostic | null;
-  /** Null for a reader outside Assessments, and for someone Coach Canary has no map for yet. */
+  /** Null for someone who has never signed in, and while Coach Canary has no map. */
   coachCanary: PersonCoachCanary | null;
 };
 
@@ -741,7 +745,10 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
     bootcamp: classFor("bootcamp", visible, reviews),
     intermediate: classFor("intermediate", visible, reviews),
   };
-  if (!reader.all) return { key, email, employee: employee ?? null, classes, records: null, diagnostic: null, coachCanary: null };
+  // Not released in classes, so every reader who may see the person sees them.
+  const userId = await userIdOf(email);
+  const [diagnostic, coachCanary] = userId ? await Promise.all([getPersonDiagnostic(userId), getPersonCoachCanary(userId)]) : [null, null];
+  if (!reader.all) return { key, email, employee: employee ?? null, classes, records: null, diagnostic, coachCanary };
 
   const ids = visible.map((x) => x.id);
   const scores =
@@ -765,9 +772,6 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
   for (const { submissionId, ...score } of scores) {
     scoresOf.set(submissionId, [...(scoresOf.get(submissionId) ?? []), score]);
   }
-
-  const userId = await userIdOf(email);
-  const [diagnostic, coachCanary] = userId ? await Promise.all([getPersonDiagnostic(userId), getPersonCoachCanary(userId)]) : [null, null];
 
   return {
     key,

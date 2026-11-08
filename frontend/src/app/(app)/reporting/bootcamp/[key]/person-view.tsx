@@ -111,9 +111,9 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
           {employee && (
             <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
               <Field label="Department">{employee.department || "—"}</Field>
+              <Field label="Track">{employee.track ? TRACK_LABELS[employee.track] : "—"}</Field>
               <Field label="Site">{employee.site || "—"}</Field>
               <Field label="Manager">{employee.reportsToName || "—"}</Field>
-              <Field label="Track">{employee.track ? TRACK_LABELS[employee.track] : "—"}</Field>
             </dl>
           )}
         </motion.section>
