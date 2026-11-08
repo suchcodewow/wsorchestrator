@@ -45,6 +45,7 @@ import { retrackEmployees } from "@/lib/evals/tracks";
 import type { BootcampCohortSort, BootcampRecordSort, HistoryStatus } from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
+import { getPersonCoachCanary, getPersonDiagnostic, userIdOf, type PersonCoachCanary, type PersonDiagnostic } from "@/lib/reporting/person-training";
 import {
   NOT_ATTENDED,
   RELEASE_STAGES,
@@ -658,6 +659,13 @@ export type BootcampPerson = {
    * which only Assessments sees, and each class's review as entered.
    */
   records: { submissions: PersonSubmission[]; reviews: PersonReview[] } | null;
+  /**
+   * Null for a reader outside Assessments, and for someone with no finished
+   * Diagnostic subject: how they placed.
+   */
+  diagnostic: PersonDiagnostic | null;
+  /** Null for a reader outside Assessments, and for someone Coach Canary has no map for yet. */
+  coachCanary: PersonCoachCanary | null;
 };
 
 /**
@@ -733,7 +741,7 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
     bootcamp: classFor("bootcamp", visible, reviews),
     intermediate: classFor("intermediate", visible, reviews),
   };
-  if (!reader.all) return { key, email, employee: employee ?? null, classes, records: null };
+  if (!reader.all) return { key, email, employee: employee ?? null, classes, records: null, diagnostic: null, coachCanary: null };
 
   const ids = visible.map((x) => x.id);
   const scores =
@@ -758,12 +766,17 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
     scoresOf.set(submissionId, [...(scoresOf.get(submissionId) ?? []), score]);
   }
 
+  const userId = await userIdOf(email);
+  const [diagnostic, coachCanary] = userId ? await Promise.all([getPersonDiagnostic(userId), getPersonCoachCanary(userId)]) : [null, null];
+
   return {
     key,
     email,
     employee: employee ?? null,
     classes,
     records: { submissions: visible.map((x) => ({ ...x, scores: scoresOf.get(x.id) ?? [] })), reviews },
+    diagnostic,
+    coachCanary,
   };
 }
 
