@@ -7,8 +7,9 @@
 //
 // Insert-only: a sitting or a concept row someone already has is left alone.
 // Seeded sittings carry question_set 'seed-demo', and seeded concept rows an
-// updated_at of 2000-01-01, which is how --clean finds exactly them. Only
-// people who already have an account are seeded; none is created.
+// updated_at of 2000-01-01, which is how --clean finds exactly them. Someone
+// with no account gets a placeholder one (id 'seed-…', a test account), which
+// --clean deletes with everything under it; a real sign-in never uses it.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,11 +46,20 @@ try {
   if (process.argv.includes("--clean")) {
     const a = await client.query("delete from iris_attempts where question_set = $1", [SEED_SET]);
     const p = await client.query("delete from mimir_concept_progress where updated_at = $1", [SEED_STAMP]);
-    console.log(`${db[0].name}: removed ${a.rowCount} seeded sittings and ${p.rowCount} seeded concept rows.`);
+    const u = await client.query("delete from users where id like 'seed-%' and is_test_account");
+    console.log(`${db[0].name}: removed ${a.rowCount} seeded sittings, ${p.rowCount} seeded concept rows and ${u.rowCount} placeholder accounts.`);
     process.exit(0);
   }
 
-  // Everyone with a Live Sessions card (someone assessed in a class) who has an account.
+  // Everyone with a Live Sessions card (someone assessed in a class) needs an account to hold results.
+  const made = await client.query(`
+    insert into users (id, name, email, is_test_account)
+    select 'seed-' || gen_random_uuid(), coalesce(e.full_name, a.email), a.email, true
+      from (select distinct lower(attendee_email) as email from evals_submissions) a
+      left join lateral (select full_name from employees where email = a.email order by active desc limit 1) e on true
+     where not exists (select 1 from users u where lower(u.email) = a.email)
+    on conflict do nothing`);
+  console.log(`Created ${made.rowCount} placeholder accounts.`);
   const { rows: people } = await client.query(`
     select u.id, (select e.track from employees e where e.email = lower(u.email) order by e.active desc limit 1) as employee_track
       from users u
