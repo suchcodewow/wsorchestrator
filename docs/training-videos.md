@@ -65,3 +65,106 @@ to be made next; the rest are proposed.
   action, or need a stub for that service first.
 - **A Diagnostic Participant** needs their own seed, because the anonymize
   script deletes every Participant and attempt.
+
+## What the first two videos taught
+
+Found while making `guest-judge-schedule` and `guest-judge-evals`, and worth
+knowing before the next one:
+
+- **Look before you write the steps.** Drive the page once as the persona
+  (Playwright, a screenshot after each click) and write the shot list from
+  what it shows. Most steps that failed were guesses about the page.
+- **A control can be clickable without Playwright agreeing.** Schedule cards
+  are `role="button"` divs that dnd-kit marks `aria-disabled` for anyone who
+  can't drag, so `locator.click()` refuses them, yet a judge's real click opens
+  the session. `cli/capture.ts` clicks with the mouse at the target's centre
+  for this reason. Target the cards by their `title`, which starts with the
+  session's name (and its emoji, so use `title*=`).
+- **Labels aren't always where the source says.** `MentionTextarea` takes an
+  `aria-label` that doesn't reach its `<textarea>`; target it by its section,
+  `section:has(h3:has-text("…")) textarea`. Accessible names match as
+  substrings: `role=radio[name="Bootcamp"]` also matches "SE Bootcamp"; add
+  `s` for an exact match.
+- **Narrate what the app does, not what you expect.** Submit in eVals returns
+  to the full attendee list, not Assigned to me. A guest judge can open a
+  session card even though it looks read-only.
+- **Hide what only a dev server shows.** The capture hides the environment
+  badge (`span[title$="not production"]`) and Next's indicator
+  (`nextjs-portal`) with CSS rather than changing the app.
+- **Long typing has to fit before the next step.** `Screen.tsx` speeds a typed
+  comment up so it finishes before the next step's cursor moves; a long
+  comment under a short sentence otherwise overlapped the next click.
+- **Steps that write change the demo.** Submitting a score leaves a submission
+  behind, and the next capture opens a form already filled in. Undo it first
+  (the seed or a one-line delete), or the video changes.
+- **Building the demo database:** `TRUNCATE … CASCADE` on `users` would also
+  empty bootcamps and the schedule, because many tables point at `users`.
+  `demo-anonymize.sql` deletes instead, which respects each foreign key's
+  `ON DELETE`. Some names that look like tables are views (`hibob_employees`).
+- **Cost of the two videos:** about 80 seconds of narration each, a few
+  minutes to capture, and about five minutes each to render on a Mac.
+
+## Making them from Mimir Studio (not built)
+
+Discussed in November 2026 and set aside for now: a **Tutorials** tab in Admin
+Settings (platform administrators) where someone writes a prompt, picks a
+persona, and gets a download link for the MP4, transcript and captions when
+the job finishes. It is viable; this is how it would fit and where it is hard.
+
+**What already fits:**
+
+- **The job.** A tutorial is a third kind of `mimir_studio_jobs` row beside
+  `deck` and `video`. The app queues it and starts `mimir-studio` with its id
+  (`frontend/src/lib/mimir/studio/trigger.ts`). The job's limits (three hours,
+  8 CPUs, 16 GiB, `infra/admin/studio.tf`) are enough. The image already has
+  Chromium, ffmpeg and Remotion; add `playwright-core`, which drives the same
+  Chromium (`CHROME_PATH`) and downloads nothing.
+- **Writing the video.** The agent loop in `studio/video.ts` with tools for this
+  kind of video. Claude reads the prompt and explores the demo as the persona
+  (screenshot plus accessibility tree). It writes `content/` and the shot list,
+  then captures, narrates, renders stills and looks at them, renders, and
+  inspects. `finish` refuses until all of that has been done since the last
+  change, as it does for explainers.
+- **The tab and the download.** Admin Settings' tabs are in
+  `frontend/src/app/(app)/admin-settings/tabs.ts`. The job writes the files
+  under `mimir/` in the recordings bucket; a route streams them, as
+  `api/mimir/map/concepts/[id]/video` serves a concept's video.
+
+**The hard part: an app to film.** The job can't film the deployed app.
+Production and QA both show real people, and a tutorial's clicks (Submit,
+saving a setting) would change real data. Each run needs a private app:
+
+- **An app server inside the job.** The frontend builds as a standalone server
+  (`output: "standalone"` in `next.config.ts`). The image copies that build in
+  and starts it on localhost, with an `.env` holding only the demo database and
+  auth values. It gets no Slack, HiBob, Zoom, Harness or Deepgram keys.
+- **A demo database, stored in the bucket, never in git.** Anonymized data
+  still holds real session names and assessment criteria, and the repo is
+  public. A person makes a dump with `demo-anonymize.sql` and uploads it. Each
+  run restores it into a throwaway database, applies the current migrations and
+  runs the persona's seed. Each environment makes its own dump from its own
+  data; never copy one environment's data into another (CLAUDE.md, "QA is not
+  a sandbox either").
+- **Personas, not free text.** The form picks a persona, which names a seed
+  script and a session token in the demo. The video then shows only what that
+  persona can do.
+
+**What the repo's rules add:**
+
+- **Database:** a migration adding `tutorial` to
+  `mimir_studio_jobs_kind_check`. `mimir_studio_jobs_concept_check` ties
+  `concept_id` to `deck` and needs rewriting.
+- **API:** routes to list, create, read progress and download, each through
+  `requireCaller` and `audited`, with `/api` reference entries and e2e matrix
+  rows.
+- **The list of prompts:** a `ListSpec` with 100-row paging.
+- **Infra:** Terraform for the bigger image and the bucket layout.
+
+**Risk:** the agent writing working steps unattended. Every lesson above was a
+retry while making two videos by hand. The explore tool and capture errors that
+name the failing selector and page are what make it workable; some prompts
+will still fail and need rewording.
+
+**Order to build it in,** each checkable locally before the next: the demo
+dump and its restore, then the job kind and its tools (run with
+`npm run job -- <id>`), then the tab and the download.
