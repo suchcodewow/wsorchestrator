@@ -1,8 +1,9 @@
-// Seed BTC assessments for everyone who has RSVP'd to a bootcamp: a scored
-// submission (criterion scores and comments, positive and constructive
-// feedback) for each active BTC assessment taught to their track, plus the
-// class review (entrance and exit exam, overall feedback), at the active
-// bootcamp, or else the newest one that has begun.
+// Seed BTC and INT assessments for everyone who has RSVP'd to each class of a
+// bootcamp: a scored submission (criterion scores and comments, positive and
+// constructive feedback) for each active assessment of that class taught to
+// their track, plus the class review (entrance and exit exam, overall
+// feedback), at the active bootcamp, or else the newest one that has begun.
+// INT is seeded only when the bootcamp has intermediate days.
 //
 //   node frontend/scripts/seed-assessments.mjs           # seed
 //   node frontend/scripts/seed-assessments.mjs --clean   # remove what it seeded
@@ -77,8 +78,8 @@ try {
   const {
     rows: [bootcamp],
   } = await client.query(
-    `select id, start_date from bootcamps where status = 'active'
-     union all (select id, start_date from bootcamps where status = 'complete' order by start_date desc limit 1)
+    `select id, start_date, int_days from bootcamps where status = 'active'
+     union all (select id, start_date, int_days from bootcamps where status = 'complete' order by start_date desc limit 1)
      limit 1`,
   );
   if (!bootcamp) {
@@ -86,56 +87,62 @@ try {
     process.exit(1);
   }
 
-  const { rows: people } = await client.query(`
-    select r.email, (select e.track from employees e where e.email = r.email order by e.active desc limit 1) as track
-      from (select distinct lower(email) as email from intake_responses where form = 'bootcamp') r`);
-
-  const { rows: assessments } = await client.query(`
-    select a.id, a.name, a.audience, a.built_in,
-           coalesce(json_agg(json_build_object('id', c.id, 'name', c.name) order by c.position) filter (where c.id is not null), '[]') as criteria
-      from evals_assessments a
-      left join evals_assessment_criteria c on c.assessment_id = a.id and c.retired_at is null
-     where a.stage = 'bootcamp' and (a.active or a.built_in = 'participation') and a.name <> 'Exams'
-     group by a.id`);
-
   let submissions = 0;
   let reviews = 0;
+  const summary = [];
   await client.query("begin");
-  for (const person of people) {
-    const audience = person.track === "engineer" ? "engineer" : "sales";
-    for (const a of assessments) {
-      if (a.audience !== "both" && a.audience !== audience) continue;
-      // Participation is a mark, not a criteria form: it carries only its average.
-      const scored = a.built_in ? [] : a.criteria.map((c) => ({ ...c, score: score() }));
-      const average = scored.length ? scored.reduce((n, c) => n + c.score, 0) / scored.length : score();
-      const {
-        rows: [made],
-      } = await client.query(
-        `insert into evals_submissions (bootcamp_id, assessment_id, attendee_email, assessment_name, average_score, positive_feedback, constructive_feedback, submitted_at, updated_at)
-         values ($1, $2, $3, $4, $5, $6, $7, now(), $8)
-         on conflict do nothing returning id`,
-        [bootcamp.id, a.id, person.email, a.name, average, chance(0.7) ? pick(POSITIVE) : "", chance(0.7) ? pick(CONSTRUCTIVE) : "", SEED_STAMP],
-      );
-      if (!made) continue;
-      submissions++;
-      for (const c of scored) {
-        await client.query(
-          `insert into evals_submission_scores (submission_id, criterion_id, criterion_name, score, comment) values ($1, $2, $3, $4, $5)`,
-          [made.id, c.id, c.name, c.score, chance(0.8) ? pick(COMMENTS[c.score]) : ""],
-        );
-      }
-    }
-
-    const exam = () => Math.round(70 + Math.random() * 30);
-    const r = await client.query(
-      `insert into bootcamp_class_reviews (bootcamp_id, stage, attendee_email, positive_feedback, constructive_feedback, other_notes, entrance_exam, exit_exam, updated_at)
-       values ($1, 'bootcamp', $2, $3, $4, $5, $6, $7, $8) on conflict do nothing`,
-      [bootcamp.id, person.email, pick(POSITIVE), pick(CONSTRUCTIVE), pick(NOTES), exam(), exam(), SEED_STAMP],
+  for (const stage of bootcamp.int_days === null ? ["bootcamp"] : ["bootcamp", "intermediate"]) {
+    const { rows: people } = await client.query(
+      `select r.email, (select e.track from employees e where e.email = r.email order by e.active desc limit 1) as track
+         from (select distinct lower(email) as email from intake_responses where form = $1) r`,
+      [stage],
     );
-    reviews += r.rowCount ?? 0;
+    const { rows: assessments } = await client.query(
+      `select a.id, a.name, a.audience, a.built_in,
+              coalesce(json_agg(json_build_object('id', c.id, 'name', c.name) order by c.position) filter (where c.id is not null), '[]') as criteria
+         from evals_assessments a
+         left join evals_assessment_criteria c on c.assessment_id = a.id and c.retired_at is null
+        where a.stage = $1 and (a.active or a.built_in = 'participation') and a.name <> 'Exams'
+        group by a.id`,
+      [stage],
+    );
+    summary.push(`${people.length} at ${stage}`);
+    for (const person of people) {
+      const audience = person.track === "engineer" ? "engineer" : "sales";
+      for (const a of assessments) {
+        if (a.audience !== "both" && a.audience !== audience) continue;
+        // Participation is a mark, not a criteria form: it carries only its average.
+        const scored = a.built_in ? [] : a.criteria.map((c) => ({ ...c, score: score() }));
+        const average = scored.length ? scored.reduce((n, c) => n + c.score, 0) / scored.length : score();
+        const {
+          rows: [made],
+        } = await client.query(
+          `insert into evals_submissions (bootcamp_id, assessment_id, attendee_email, assessment_name, average_score, positive_feedback, constructive_feedback, submitted_at, updated_at)
+           values ($1, $2, $3, $4, $5, $6, $7, now(), $8)
+           on conflict do nothing returning id`,
+          [bootcamp.id, a.id, person.email, a.name, average, chance(0.7) ? pick(POSITIVE) : "", chance(0.7) ? pick(CONSTRUCTIVE) : "", SEED_STAMP],
+        );
+        if (!made) continue;
+        submissions++;
+        for (const c of scored) {
+          await client.query(
+            `insert into evals_submission_scores (submission_id, criterion_id, criterion_name, score, comment) values ($1, $2, $3, $4, $5)`,
+            [made.id, c.id, c.name, c.score, chance(0.8) ? pick(COMMENTS[c.score]) : ""],
+          );
+        }
+      }
+
+      const exam = () => Math.round(70 + Math.random() * 30);
+      const r = await client.query(
+        `insert into bootcamp_class_reviews (bootcamp_id, stage, attendee_email, positive_feedback, constructive_feedback, other_notes, entrance_exam, exit_exam, updated_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9) on conflict do nothing`,
+        [bootcamp.id, stage, person.email, pick(POSITIVE), pick(CONSTRUCTIVE), pick(NOTES), exam(), exam(), SEED_STAMP],
+      );
+      reviews += r.rowCount ?? 0;
+    }
   }
   await client.query("commit");
-  console.log(`${db[0].name}: ${people.length} people at the ${bootcamp.start_date.toISOString().slice(0, 10)} bootcamp; added ${submissions} submissions and ${reviews} reviews.`);
+  console.log(`${db[0].name}: ${summary.join(", ")} at the ${bootcamp.start_date.toISOString().slice(0, 10)} bootcamp; added ${submissions} submissions and ${reviews} reviews.`);
 } catch (err) {
   await client.query("rollback").catch(() => undefined);
   throw err;

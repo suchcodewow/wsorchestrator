@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * The lines under Bootcamp on a person's Live Sessions card, for an
- * Assessments Viewer: their Diagnostic placements, and how far they are
+ * The lines under Bootcamp on a person's Live Sessions card, for whoever
+ * may see it: their Diagnostic placements, and how far they are
  * through Coach Canary's videos and topics. Each is closed on a summary and
  * opens to the detail behind it. Read only; the Diagnostic's Records is
  * where a score is reset.

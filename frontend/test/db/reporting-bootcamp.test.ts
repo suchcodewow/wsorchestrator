@@ -29,6 +29,7 @@ import {
   evalsSubmissionScores,
   intakeResponses,
   releaseNoticeRuns,
+  scorecardViews,
 } from "@/db/schema";
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
@@ -358,8 +359,11 @@ describe("releasing a class", () => {
   });
 
   test("shows a manager the class once released, and releasing again changes nothing", async () => {
+    // Someone opened the card before the release, so there is now something they have not seen.
+    await db.insert(scorecardViews).values({ attendeeEmail: emailOf("newcomer"), viewerId: admin.id });
     const first = await releaseScores(admin.id, "bootcamp");
     assert.ok(first.ok);
+    assert.deepEqual(await db.select().from(scorecardViews).where(eq(scorecardViews.attendeeEmail, emailOf("newcomer"))), []);
     // The review was only there to let it release; the tests after this start without one.
     await db.delete(bootcampClassReviews).where(eq(bootcampClassReviews.attendeeEmail, emailOf("newcomer")));
     assert.ok(first.written >= 1);
