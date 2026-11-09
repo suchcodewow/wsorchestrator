@@ -70,6 +70,18 @@ export function intakeReminderText(
   return `${hello} You haven't filled in your *${INTAKE_FORM_HEADINGS[form]}* yet. It only takes a few minutes: <${link}|complete it here>.`;
 }
 
+/**
+ * The Slack message sent the moment a Training administrator sends someone
+ * their form, such as when adding them to the cohort: an invitation, where
+ * the daily reminder that follows, if they have not answered, says they still
+ * have not.
+ */
+export function intakeInviteText(fullName: string, form: IntakeFormId, link: string): string {
+  const first = fullName.trim().split(/\s+/)[0];
+  const hello = first ? `Hi ${slackEscape(first)}!` : "Hi!";
+  return `${hello} Please fill in your *${INTAKE_FORM_HEADINGS[form]}*. It only takes a few minutes: <${link}|complete it here>.`;
+}
+
 export const KIND_LABELS: Record<IntakeQuestionKind, string> = {
   short: "Short answer",
   paragraph: "Paragraph",

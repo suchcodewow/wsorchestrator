@@ -23,6 +23,7 @@ export const TRACK_LABELS = {
   ignored: "Ignored title",
   exempt: "Exempt",
   deferred: "Deferred",
+  other: "Other",
 } as const;
 
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {

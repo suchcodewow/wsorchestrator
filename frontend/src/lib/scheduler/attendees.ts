@@ -7,7 +7,7 @@
 
 import "server-only";
 
-import { and, inArray, sql } from "drizzle-orm";
+import { and, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   AUDIENCE_TRACKS,
@@ -18,7 +18,7 @@ import {
   type SessionAudience,
   type SurveyAudience,
 } from "@/db/schema";
-import { IN_STAGE, isCandidate, type CandidateStage } from "@/lib/evals/current-cohort";
+import { IN_STAGE, assessedOn, assessedTrack, isCandidate, type CandidateStage } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { stageOf } from "@/lib/scheduler/timeline";
 
@@ -63,9 +63,9 @@ async function stageAttendees(
 ): Promise<{ rows: number; attendees: GroupAttendee[] }> {
   const cutoffs = await getCandidateCutoffs();
   const rows = await db
-    .select({ email: e.email, fullName: e.fullName, title: e.title, track: sql<"sales" | "engineer">`${e.track}` })
+    .select({ email: e.email, fullName: e.fullName, title: e.title, track: assessedTrack as SQL<"sales" | "engineer"> })
     .from(e)
-    .where(and(isCandidate(cutoffs), IN_STAGE[stage], inArray(e.track, [...tracks])))
+    .where(and(isCandidate(cutoffs), IN_STAGE[stage], assessedOn([...tracks])))
     .orderBy(sql`lower(${e.fullName})`, e.email)
     .limit(limit + 1);
   // HiBob can list one email twice; the first by name wins.

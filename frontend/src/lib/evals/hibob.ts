@@ -33,7 +33,7 @@ import { getOrgLeaderEmail } from "@/lib/evals/settings";
 import { emailsWithTimezone, slackTimezones } from "@/lib/evals/timezones";
 import { trackFor } from "@/lib/evals/title-lists";
 import { titleListMap } from "@/lib/evals/titles";
-import { deferralRule } from "@/lib/evals/tracks";
+import { addedTracks, deferralRule } from "@/lib/evals/tracks";
 import type { HibobSyncSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -208,7 +208,7 @@ export async function syncHibobEmployees(
     // Each of them gets a track as things stand now: one set by hand first,
     // then an ignored title, then deferred if they started too close to the
     // next bootcamp, then their title's list.
-    const [lists, deferral] = await Promise.all([titleListMap(), deferralRule()]);
+    const [lists, deferral, added] = await Promise.all([titleListMap(), deferralRule(), addedTracks()]);
 
     // Slack's zone for each of them under the leader who has none yet, before the
     // transaction so the wait on Slack holds no lock.
@@ -263,6 +263,7 @@ export async function syncHibobEmployees(
                     title: r.title,
                     startDate: r.startDate,
                     override: own?.trackPinned ? { track: own.trackOverride } : undefined,
+                    added: added.get(r.email.toLowerCase()),
                   },
                   lists,
                   deferral,

@@ -15,7 +15,7 @@ import "server-only";
 
 import { and, eq, gt, gte, inArray, isNotNull, isNull, not, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { employees, intakeResponses, type Employee } from "@/db/schema";
+import { cohortAdditions, employees, intakeResponses, type Employee } from "@/db/schema";
 import { attended, classDate } from "@/lib/evals/attendance";
 import { getCandidateCutoffs, getDeferralDays, type CandidateCutoffs } from "@/lib/evals/settings";
 import { nextBootcampStart } from "@/lib/evals/tracks";
@@ -30,8 +30,12 @@ export function isCandidateStage(value: unknown): value is CandidateStage {
   return CANDIDATE_STAGES.includes(value as CandidateStage);
 }
 
-/** A candidate's track: `undecided` for a title on no list. */
-export const CANDIDATE_TRACKS = ["sales", "engineer", "undecided", "deferred"] as const;
+/**
+ * A candidate's track: `undecided` for a title on no list; `other` only for
+ * someone added by hand who is neither Sales nor Engineer, who registers and
+ * is catered for but is not assessed.
+ */
+export const CANDIDATE_TRACKS = ["sales", "engineer", "other", "undecided", "deferred"] as const;
 export type CandidateTrack = (typeof CANDIDATE_TRACKS)[number];
 
 export function isCandidateTrack(value: unknown): value is CandidateTrack {
@@ -39,7 +43,7 @@ export function isCandidateTrack(value: unknown): value is CandidateTrack {
 }
 
 /** The tracks on the Current tab; the deferred have a tab of their own. */
-export const CURRENT_TRACKS = ["sales", "engineer", "undecided"] as const;
+export const CURRENT_TRACKS = ["sales", "engineer", "other", "undecided"] as const;
 export type CurrentTrack = (typeof CURRENT_TRACKS)[number];
 
 export function isCurrentTrack(value: unknown): value is CurrentTrack {
@@ -69,6 +73,8 @@ export type CurrentCohortMember = Pick<
   track: CandidateTrack;
   /** Whether an administrator set that track by hand. */
   overridden: boolean;
+  /** Whether they are in the cohort because a Training administrator added them by hand. */
+  added: boolean;
   stage: CandidateStage;
   /** Their employee id, for their Reporting → Live Sessions page; null for someone who has attended no class. */
   recordKey: string | null;
@@ -115,26 +121,81 @@ export const IN_STAGE: Record<CandidateStage, SQL> = {
   intermediate: and(attendedBtc, not(attendedInt))!,
 };
 
+/** The tracks that are asked to register and are catered for: everyone attending, assessed or not. */
+const ATTENDING = ["sales", "engineer", "other"] as const;
+
+/** Sales or Engineer: the tracks that are scored in eVals and invited to the Google Meetings. */
+export type AssessedTrack = "sales" | "engineer";
+
+/**
+ * Whose assessments score someone and whose meetings invite them: their own
+ * track on Sales or Engineer; on Other, the track their addition says they
+ * follow, once their latest answer to their stage's form says Yes to
+ * attending; otherwise null, not assessed. `alias` is how the surrounding
+ * query names `employees`, written in so a subquery's own columns are never
+ * mistaken for it.
+ */
+export function assessedTrackOf(alias = "employees"): SQL<AssessedTrack | null> {
+  const track = sql.raw(`"${alias}"."track"`);
+  const email = sql.raw(`lower("${alias}"."email")`);
+  return sql<AssessedTrack | null>`(case
+      when ${track} in ('sales', 'engineer') then ${track}
+      when ${track} = 'other' then (
+        select ca.follows from ${cohortAdditions} ca
+         where ca.email = ${email}
+           and coalesce((
+             select r.answers ->> 'attend' from ${intakeResponses} r
+              where r.email = ${email} and r.form = ca.stage
+              order by r.submitted_at desc limit 1
+           ), '') ilike 'yes%'
+      )
+    end)`;
+}
+
+/** `employees` row's assessed track, for a query that names the table itself. */
+export const assessedTrack = assessedTrackOf();
+
+/** Assessed on one of `tracks`: Sales and Engineer as they are, and an Other who confirmed and follows one. */
+export function assessedOn(tracks: readonly AssessedTrack[]): SQL {
+  return sql`${assessedTrack} in (${sql.join(
+    tracks.map((t) => sql`${t}`),
+    sql`, `,
+  )})`;
+}
+
 const ON_TRACK: Record<CandidateTrack, SQL> = {
   sales: eq(e.track, "sales"),
   engineer: eq(e.track, "engineer"),
+  other: eq(e.track, "other"),
   undecided: isNull(e.track),
   deferred: eq(e.track, "deferred"),
 };
 
 /**
- * In the org, in a stage, on a track still to train or none yet, and recent
- * enough by the cutoffs. Reads `employees` and who attended what; eVals
- * scoring draws its attendees with it too.
+ * Added to the current cohort by hand, to the stage their attendance still
+ * puts them in: once they attend that stage's class, the addition lapses.
  */
-export function isCandidate({ startDateOnOrAfter, activeEffectiveDateAfter }: CandidateCutoffs) {
-  return and(
+const addedToStage = sql<boolean>`exists (select 1 from ${cohortAdditions} ca where ca.email = lower(${e.email}) and ca.stage = ${candidateStage})`;
+
+/**
+ * In the org, in a stage, on a track still to train or none yet, and recent
+ * enough by the cutoffs; or added to the cohort by hand, in the stage they
+ * were added to, whatever the org, the cutoffs or their title say. Reads
+ * `employees` and who attended what; eVals scoring draws its attendees with it
+ * too. `additions: false` asks only the rules, as adding someone does.
+ */
+export function isCandidate(
+  { startDateOnOrAfter, activeEffectiveDateAfter }: CandidateCutoffs,
+  { additions = true }: { additions?: boolean } = {},
+) {
+  const byRules = and(
     isNotNull(e.orgDepth),
     or(IN_STAGE.bootcamp, IN_STAGE.intermediate),
     or(isNull(e.track), inArray(e.track, ["sales", "engineer", "deferred"])),
     startDateOnOrAfter ? or(isNull(e.startDate), gte(e.startDate, startDateOnOrAfter)) : undefined,
     activeEffectiveDateAfter ? gt(e.activeEffectiveDate, activeEffectiveDateAfter) : undefined,
   );
+  return additions ? or(byRules, and(addedToStage, eq(e.active, true))) : byRules;
 }
 
 /**
@@ -146,7 +207,7 @@ export function rsvpedForBootcamp(cutoffs: CandidateCutoffs): SQL {
   return and(
     isCandidate(cutoffs),
     IN_STAGE.bootcamp,
-    inArray(e.track, ["sales", "engineer"]),
+    assessedOn(["sales", "engineer"]),
     sql`exists (select 1 from ${intakeResponses} where ${intakeResponses.form} = 'bootcamp' and ${intakeResponses.email} = lower(${e.email}))`,
   )!;
 }
@@ -176,6 +237,7 @@ export async function listCurrentCohort(
       activeEffectiveDate: e.activeEffectiveDate,
       track: candidateTrack,
       overridden: e.trackPinned,
+      added: addedToStage,
       stage: candidateStage,
       recordKey: sql<string | null>`case when ${attendedBtc} then ${e.id} end`,
       btcDate,
@@ -185,7 +247,7 @@ export async function listCurrentCohort(
       and(
         isCandidate(cutoffs),
         filter.stage ? IN_STAGE[filter.stage] : undefined,
-        filter.track ? ON_TRACK[filter.track] : or(isNull(e.track), inArray(e.track, ["sales", "engineer"])),
+        filter.track ? ON_TRACK[filter.track] : or(isNull(e.track), inArray(e.track, [...ATTENDING])),
         filter.unanswered ? not(rsvped) : undefined,
         searchAny(query.q, [e.fullName, e.email, e.title, candidateTrack]),
       ),
@@ -203,7 +265,15 @@ export async function listCurrentCohort(
  * page, since the sync needs all of them; it is one email per candidate.
  */
 export async function currentCohortEmails(): Promise<
-  { email: string; fullName: string; stage: CandidateStage; track: "sales" | "engineer"; timezone: string | null; startDate: string | null }[]
+  {
+    email: string;
+    fullName: string;
+    stage: CandidateStage;
+    track: "sales" | "engineer" | "other";
+    assessed: AssessedTrack | null;
+    timezone: string | null;
+    startDate: string | null;
+  }[]
 > {
   const cutoffs = await getCandidateCutoffs();
   return db
@@ -211,12 +281,14 @@ export async function currentCohortEmails(): Promise<
       email: sql<string>`lower(${e.email})`,
       fullName: e.fullName,
       stage: candidateStage,
-      track: sql<"sales" | "engineer">`${e.track}`,
+      track: sql<"sales" | "engineer" | "other">`${e.track}`,
+      /** Whose meetings invite them: their own track, or an Other's, once confirmed; null for not yet. */
+      assessed: assessedTrack,
       timezone: e.timezone,
       startDate: e.startDate,
     })
     .from(e)
-    .where(and(isCandidate(cutoffs), inArray(e.track, ["sales", "engineer"])));
+    .where(and(isCandidate(cutoffs), inArray(e.track, [...ATTENDING])));
 }
 
 /**
@@ -246,7 +318,7 @@ export async function currentCohortPeople(
               ),
             )
           : IN_STAGE[stage],
-        track === "both" ? inArray(e.track, ["sales", "engineer"]) : eq(e.track, track),
+        track === "both" ? assessedOn(["sales", "engineer"]) : assessedOn([track]),
       ),
     )
     .orderBy(sql`lower(${e.fullName})`)
@@ -266,7 +338,7 @@ export async function currentCohortSubquery() {
       stage: candidateStage.as("cohort_stage"),
     })
     .from(e)
-    .where(and(isCandidate(cutoffs), inArray(e.track, ["sales", "engineer"])))
+    .where(and(isCandidate(cutoffs), inArray(e.track, [...ATTENDING])))
     .as("cohort");
 }
 
@@ -284,7 +356,7 @@ export async function cohortStageOf(email: string): Promise<CandidateStage | nul
       and(
         sql`lower(${e.email}) = ${email.trim().toLowerCase()}`,
         isCandidate(cutoffs),
-        inArray(e.track, ["sales", "engineer"]),
+        inArray(e.track, [...ATTENDING]),
       ),
     )
     .limit(1);
@@ -301,7 +373,7 @@ export async function currentCohortNames(): Promise<{ fullName: string; stage: C
   return db
     .select({ fullName: e.fullName, stage: candidateStage })
     .from(e)
-    .where(and(isCandidate(cutoffs), or(isNull(e.track), inArray(e.track, ["sales", "engineer"]))))
+    .where(and(isCandidate(cutoffs), or(isNull(e.track), inArray(e.track, [...ATTENDING]))))
     .orderBy(candidateStage, sql`lower(${e.fullName})`, e.id);
 }
 

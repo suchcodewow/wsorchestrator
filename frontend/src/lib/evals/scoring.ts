@@ -13,7 +13,7 @@
 
 import "server-only";
 
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -35,7 +35,7 @@ import {
   type ScheduleTrack,
 } from "@/db/schema";
 import { averageScore, requiredFeedback, tracksFor, wholeScore } from "@/lib/evals/assessment-values";
-import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
+import { IN_STAGE, assessedOn, assessedTrack, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { listTranscripts, type Transcript } from "@/lib/evals/transcripts";
 import type { AssessmentAttendeeSort } from "@/lib/list-specs";
@@ -93,7 +93,7 @@ export async function askedCriteria(assessmentId: string) {
 
 async function attendeeCondition(assessment: ScoringAssessment) {
   const cutoffs = await getCandidateCutoffs();
-  return and(isCandidate(cutoffs), IN_STAGE[assessment.stage], inArray(e.track, tracksFor(assessment.audience)));
+  return and(isCandidate(cutoffs), IN_STAGE[assessment.stage], assessedOn(tracksFor(assessment.audience)));
 }
 
 export type AttendeeRow = {
@@ -112,7 +112,7 @@ const SORT_COLUMNS = {
   fullName: sql`lower(${e.fullName})`,
   email: e.email,
   title: sql`lower(${blankAsNull(e.title)})`,
-  track: e.track,
+  track: assessedTrack,
   averageScore: s.averageScore,
 } as const;
 
@@ -188,7 +188,7 @@ export async function listAttendees(
       email: e.email,
       fullName: e.fullName,
       title: e.title,
-      track: sql<"sales" | "engineer">`${e.track}`,
+      track: assessedTrack as SQL<"sales" | "engineer">,
       averageScore: s.averageScore,
       needsRescoring: sql<boolean>`(${s.id} is not null and exists (
         select 1 from ${evalsAssessmentCriteria} c
@@ -255,21 +255,21 @@ export async function scoringProgress(): Promise<Record<ScheduleTrack, ScoringTa
       const bootcamp = await scoringBootcamp(stage);
       const rows = await db
         .select({
-          track: sql<"sales" | "engineer">`${e.track}`,
+          track: assessedTrack as SQL<"sales" | "engineer">,
           total: sql<number>`count(*)::int`,
           scored: sql<number>`count(${s.id})::int`,
         })
         .from(e)
         .innerJoin(
           a,
-          and(eq(a.active, true), eq(a.stage, stage), sql`${a.audience} in ('both', ${e.track})`),
+          and(eq(a.active, true), eq(a.stage, stage), sql`${a.audience} in ('both', ${assessedTrack})`),
         )
         .leftJoin(
           s,
           and(eq(s.attendeeEmail, e.email), eq(s.assessmentId, a.id), bootcamp ? eq(s.bootcampId, bootcamp.id) : sql`false`),
         )
-        .where(and(isCandidate(cutoffs), IN_STAGE[stage], inArray(e.track, ["sales", "engineer"])))
-        .groupBy(e.track);
+        .where(and(isCandidate(cutoffs), IN_STAGE[stage], assessedOn(["sales", "engineer"])))
+        .groupBy(assessedTrack);
       const tally = (track: "sales" | "engineer"): ScoringTally => {
         const row = rows.find((r) => r.track === track);
         return { scored: row?.scored ?? 0, total: row?.total ?? 0 };
@@ -309,7 +309,7 @@ async function eligibleAttendee(assessment: ScoringAssessment, employeeId: strin
       email: e.email,
       fullName: e.fullName,
       title: e.title,
-      track: sql<"sales" | "engineer">`${e.track}`,
+      track: assessedTrack as SQL<"sales" | "engineer">,
     })
     .from(e)
     .where(and(eq(e.id, employeeId), await attendeeCondition(assessment)));

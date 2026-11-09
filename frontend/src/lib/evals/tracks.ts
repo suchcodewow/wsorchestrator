@@ -12,7 +12,9 @@ import { and, asc, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   bootcamps,
+  cohortAdditions,
   employees,
+  type CohortAdditionTrack,
   EVALS_TITLE_LISTS,
   evalsTitles,
   type EmployeeTrack,
@@ -22,6 +24,15 @@ import { noteAudit } from "@/lib/audit-context";
 import { getDeferralDays } from "@/lib/evals/settings";
 import { cleanTitle, titleKey, trackFor, type DeferralRule, type TrackOverride } from "@/lib/evals/title-lists";
 import { addTitles, titleListMap } from "@/lib/evals/titles";
+
+/** The tracks people were added to the current cohort on by hand, by lowercased email; only these emails' when given. */
+export async function addedTracks(emails?: readonly string[]): Promise<Map<string, { track: CohortAdditionTrack }>> {
+  const rows = await db
+    .select({ email: cohortAdditions.email, track: cohortAdditions.track })
+    .from(cohortAdditions)
+    .where(emails ? inArray(cohortAdditions.email, emails.map((x) => x.toLowerCase())) : undefined);
+  return new Map(rows.map((r) => [r.email, { track: r.track }]));
+}
 
 /** The tracks administrators set by hand, by lowercased email; only these emails' when given. */
 export async function trackOverrides(emails?: readonly string[]): Promise<Map<string, TrackOverride>> {
@@ -88,9 +99,10 @@ export async function deferralRule(): Promise<DeferralRule | null> {
 const BATCH = 100;
 
 /**
- * Resets the track of the org members with these emails, from the lists,
- * the deferral rule and any track set by hand, as they all stand.
- * Returns how many tracks changed.
+ * Resets the track of the people with these emails, from the lists, the
+ * deferral rule, any track set by hand and any addition to the cohort, as they
+ * all stand: org members, and anyone outside the org who was added to the
+ * cohort or has a track left from being added. Returns how many tracks changed.
  */
 export async function retrackEmployees(emails: readonly string[]): Promise<number> {
   const wanted = [...new Set(emails.map((e) => e.toLowerCase()))];
@@ -106,18 +118,22 @@ export async function retrackEmployees(emails: readonly string[]): Promise<numbe
         title: employees.title,
         startDate: employees.startDate,
         track: employees.track,
+        inOrg: sql<boolean>`${employees.orgDepth} is not null`,
       })
       .from(employees)
-      .where(and(isNotNull(employees.orgDepth), inArray(employees.email, batch)));
+      .where(inArray(employees.email, batch));
     if (people.length === 0) continue;
-    const overrides = await trackOverrides(batch);
+    const [overrides, added] = await Promise.all([trackOverrides(batch), addedTracks(batch)]);
     for (const p of people) {
+      // Outside the org only someone added to the cohort by hand has a track to keep.
+      if (!p.inOrg && !added.has(p.email) && p.track === null) continue;
       const track = trackFor(
         {
-          inOrg: true,
+          inOrg: p.inOrg,
           title: p.title,
           startDate: p.startDate,
           override: overrides.get(p.email),
+          added: added.get(p.email),
         },
         lists,
         deferral,
@@ -135,8 +151,11 @@ export async function retrackEmployees(emails: readonly string[]): Promise<numbe
  * as the deferral window or the next bootcamp.
  */
 export async function retrackOrg(): Promise<number> {
-  const org = await db.select({ email: employees.email }).from(employees).where(isNotNull(employees.orgDepth));
-  return retrackEmployees(org.map((p) => p.email));
+  const [org, added] = await Promise.all([
+    db.select({ email: employees.email }).from(employees).where(isNotNull(employees.orgDepth)),
+    addedTracks(),
+  ]);
+  return retrackEmployees([...org.map((p) => p.email), ...added.keys()]);
 }
 
 /** What an administrator can set: any track, `undecided` to keep none, or `automatic` to let the rules decide again. */

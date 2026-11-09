@@ -50,7 +50,8 @@ export function cohortChannels(startDate: string, holdsIntermediate: boolean, te
   );
 }
 
-export type CohortMember = { email: string; stage: CohortStage; track: "sales" | "engineer" };
+/** `other` is someone added by hand who is neither Sales nor Engineer: they join the stage's main channel only. */
+export type CohortMember = { email: string; stage: CohortStage; track: "sales" | "engineer" | "other" };
 export type ChannelContact = { email: string; kind: ChannelContactKind };
 
 /** Each channel's emails, lowercased: its stage's cohort on the tracks it takes, then its contacts. */

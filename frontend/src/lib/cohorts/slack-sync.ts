@@ -50,7 +50,9 @@ import {
   intakeRemindersSentToday,
   outstandingIntake,
 } from "@/lib/logistics/intake-reminders";
-import { INTAKE_FORM_HEADINGS, intakeReminderText } from "@/lib/logistics/intake-values";
+import { INTAKE_FORM_HEADINGS, intakeInviteText, intakeReminderText } from "@/lib/logistics/intake-values";
+import { answeredIntake, getIntakeForm } from "@/lib/logistics/intake";
+import { cohortStageOf } from "@/lib/evals/current-cohort";
 import {
   channelAudience,
   cohortChannels,
@@ -58,7 +60,7 @@ import {
   type CohortChannel,
   type CohortChannelKind,
 } from "@/lib/cohorts/slack-plan";
-import { forgetTestArtifact, outboundCohort, recordTestArtifact, testArtifacts } from "@/lib/cohorts/test-group";
+import { forgetTestArtifact, getTestGroup, outboundCohort, recordTestArtifact, testArtifacts } from "@/lib/cohorts/test-group";
 import type { SlackSyncChangeSort, SlackSyncSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -592,6 +594,90 @@ async function sendReminders(slack: SlackClient | null, dryRun: boolean, appUrl:
   }
   await log.flush();
   return null;
+}
+
+/* ------------------------------------------------------------------ */
+/* One registration link, now                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Why a registration link was not sent: `not_live` while the sync is in dry
+ * run, as QA always is, when it is logged instead; `test_group` while the test
+ * group is on, when nothing goes to anyone real.
+ */
+export type RegistrationLinkReason =
+  | "not_in_cohort"
+  | "no_questions"
+  | "answered"
+  | "test_group"
+  | "not_live"
+  | "not_configured"
+  | "missing_scopes"
+  | "not_in_slack"
+  | "busy"
+  | "slack_error";
+
+export type RegistrationLinkResult = { sent: true } | { sent: false; reason: RegistrationLinkReason; detail?: string };
+
+/**
+ * Sends `email` their stage's registration form in Slack now, rather than in
+ * the next morning's reminders, which then follow each day they still have
+ * not answered. Logged as a run of its own, so the Slack tab's log shows it
+ * with the reminders. Sends only what the daily reminder would: to someone
+ * in the cohort, whose form asks something and who has not answered it, and
+ * only while the sync is live and the test group off.
+ */
+export async function sendRegistrationLink(actorId: string, email: string, appUrl: string): Promise<RegistrationLinkResult> {
+  const lower = email.trim().toLowerCase();
+  const stage = await cohortStageOf(lower);
+  if (!stage) return { sent: false, reason: "not_in_cohort" };
+  const [{ questions }, answered] = await Promise.all([getIntakeForm(stage), answeredIntake(stage, [lower])]);
+  if (questions.length === 0) return { sent: false, reason: "no_questions" };
+  if (answered.has(lower)) return { sent: false, reason: "answered" };
+  if ((await getTestGroup()).on) return { sent: false, reason: "test_group" };
+
+  const [person] = await db.select({ fullName: employees.fullName }).from(employees).where(eq(employees.email, lower)).limit(1);
+  const text = intakeInviteText(person?.fullName ?? "", stage, `${appUrl.replace(/\/+$/, "")}/intake`);
+  const live = await getSlackSyncLive();
+  const token = await slackToken();
+  if (live && !token) return { sent: false, reason: "not_configured" };
+  if (live) {
+    const { missingScopes } = await intakeReminderSlack();
+    if (missingScopes.length > 0) return { sent: false, reason: "missing_scopes", detail: missingScopes.join(", ") };
+  }
+
+  const runId = await startRun("manual", actorId, !live, "reminders");
+  if (!runId) return { sent: false, reason: "busy" };
+  const log = new RunLog(runId);
+  try {
+    if (!live) {
+      log.note({ channelName: "", action: "messaged", email: lower, detail: text });
+      await log.flush();
+      await finishRun(runId, "succeeded", { ...log.tally });
+      return { sent: false, reason: "not_live" };
+    }
+    const slack = slackClient(token!, Date.now() + 30_000);
+    const user = (await resolveSlackUsers(slack, [lower])).get(lower);
+    if (!user) {
+      log.note({ channelName: "", action: "not_in_slack", email: lower, detail: `Not sent the ${INTAKE_FORM_HEADINGS[stage]} form` });
+      await log.flush();
+      await finishRun(runId, "succeeded", { ...log.tally });
+      return { sent: false, reason: "not_in_slack" };
+    }
+    const { channel } = await slack.call<{ channel: { id: string } }>("conversations.open", { users: user });
+    await slack.call("chat.postMessage", { channel: channel.id, text, unfurl_links: "false" });
+    log.note({ channelName: "", action: "messaged", email: lower, detail: text });
+    await log.flush();
+    await finishRun(runId, "succeeded", { ...log.tally });
+    return { sent: true };
+  } catch (err) {
+    const detail = err instanceof SlackError ? err.error : err instanceof Error ? err.message.slice(0, 200) : "failed";
+    log.note({ channelName: "", action: "failed", email: lower, detail: `Message: ${detail}` });
+    await log.flush().catch(() => {});
+    await finishRun(runId, "failed", { ...log.tally, error: `The registration link was not sent: ${detail}` }).catch(() => {});
+    if (err instanceof SlackError || err instanceof SlackOutOfTime) return { sent: false, reason: "slack_error", detail };
+    throw err;
+  }
 }
 
 /* ------------------------------------------------------------------ */
