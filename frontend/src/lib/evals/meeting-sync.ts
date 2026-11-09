@@ -837,7 +837,11 @@ export async function runMeetingSync(
   { preview = false } = {},
 ): Promise<MeetingSyncResult> {
   const dryRun = preview || !(await getMeetingSyncLive());
-  const { cohort: outbound, group } = await outboundCohort();
+  const { cohort: everyone, group } = await outboundCohort();
+  // The meetings are planned for Sales and Engineer; an Other attendee added by hand is invited to none.
+  const outbound = everyone.filter(
+    (m): m is (typeof everyone)[number] & { track: "sales" | "engineer" } => m.track !== "other",
+  );
   // A test group member has no stage or track of their own on record, but their time zone and start date are the employee record's.
   const cohort = await withClassRecord(group.on ? await withEmployeeRecord(outbound) : outbound, group.on);
   const runId = await startRun(trigger, actorId, dryRun, group.on);

@@ -87,7 +87,7 @@ export function trackFor(
     startDate?: string | null;
     override?: TrackOverride | null;
     /** The track they were added to the current cohort on by hand, if they were. */
-    added?: { track: "sales" | "engineer" } | null;
+    added?: { track: "sales" | "engineer" | "other" } | null;
   },
   lists: ReadonlyMap<string, EvalsTitleList>,
   deferral: DeferralRule | null = null,

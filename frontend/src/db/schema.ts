@@ -1051,7 +1051,12 @@ export const EVALS_TITLE_LISTS = ["sales", "engineer", "ignored"] as const;
 export type EvalsTitleList = (typeof EVALS_TITLE_LISTS)[number];
 
 /** An employee's track: a title list's, `exempt`, or `deferred`; see `employees.track` for which wins. */
-export const EMPLOYEE_TRACKS = [...EVALS_TITLE_LISTS, "exempt", "deferred"] as const;
+/**
+ * `other` is only ever given by adding someone to the cohort by hand
+ * (`cohort_additions`): an attendee who is neither Sales nor Engineer, such
+ * as a CTO joining, who registers and is catered for but is not assessed.
+ */
+export const EMPLOYEE_TRACKS = [...EVALS_TITLE_LISTS, "exempt", "deferred", "other"] as const;
 export type EmployeeTrack = (typeof EMPLOYEE_TRACKS)[number];
 
 /**
@@ -3834,7 +3839,7 @@ export const pageTourViews = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.tourId] }), index("page_tour_views_tour_id_idx").on(t.tourId)],
 );
 
-export const COHORT_ADDITION_TRACKS = ["sales", "engineer"] as const;
+export const COHORT_ADDITION_TRACKS = ["sales", "engineer", "other"] as const;
 export type CohortAdditionTrack = (typeof COHORT_ADDITION_TRACKS)[number];
 
 /**
@@ -3859,6 +3864,6 @@ export const cohortAdditions = pgTable(
   },
   (t) => [
     check("cohort_additions_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
-    check("cohort_additions_track_check", sql`${t.track} in ('sales', 'engineer')`),
+    check("cohort_additions_track_check", sql`${t.track} in ('sales', 'engineer', 'other')`),
   ],
 );

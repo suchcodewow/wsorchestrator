@@ -17,7 +17,35 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import type { CohortAdditionTrack } from "@/db/schema";
 import type { CandidateStage } from "@/lib/evals/current-cohort";
+import type { RegistrationLinkResult } from "@/lib/cohorts/slack-sync";
 import { cn } from "@/lib/utils";
+
+/** What became of sending someone their registration link, in words, for the line under the table. */
+export function registrationLinkMessage(result: RegistrationLinkResult, who: string): string {
+  if (result.sent) return `Sent ${who} their registration link in Slack. If they don't fill it in, the daily reminder follows.`;
+  switch (result.reason) {
+    case "answered":
+      return `${who} has already registered, so no link was sent.`;
+    case "not_in_cohort":
+      return `${who} isn't in the current cohort, so no link was sent.`;
+    case "no_questions":
+      return `${who}'s registration form has no questions yet, so no link was sent.`;
+    case "test_group":
+      return `The cohort test group is on, so no link was sent to ${who}. Messages only go to the test group while it is on.`;
+    case "not_live":
+      return `Slack messages are in dry run here, so ${who}'s link was logged, not sent. Send them /intake yourself if needed.`;
+    case "not_configured":
+      return `Slack isn't connected, so no link was sent to ${who}.`;
+    case "missing_scopes":
+      return `The Slack app is missing ${result.detail ?? "a scope"}, so no link was sent. Add the app again in Cohort Settings → Slack.`;
+    case "not_in_slack":
+      return `${who} has no Slack account the app can find, so no link was sent. Send them /intake yourself.`;
+    case "busy":
+      return `A Slack sync is running right now, so no link was sent to ${who}. Try again in a minute.`;
+    default:
+      return `Slack refused the message to ${who}${result.detail ? ` (${result.detail})` : ""}.`;
+  }
+}
 
 const STAGES: { stage: CandidateStage; label: string }[] = [
   { stage: "bootcamp", label: "Bootcamp" },
@@ -27,7 +55,10 @@ const STAGES: { stage: CandidateStage; label: string }[] = [
 const TRACKS: { track: CohortAdditionTrack; label: string }[] = [
   { track: "sales", label: "Sales" },
   { track: "engineer", label: "Engineer" },
+  { track: "other", label: "Other" },
 ];
+
+const TRACK_NAMES: Record<CohortAdditionTrack, string> = { sales: "Sales", engineer: "Engineer", other: "Other" };
 
 const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
@@ -57,6 +88,7 @@ export function AddAttendeeDialog({ open, onClose, onAdded }: { open: boolean; o
   const [focused, setFocused] = useState(false);
   const [stage, setStage] = useState<CandidateStage>("bootcamp");
   const [track, setTrack] = useState<CohortAdditionTrack>("sales");
+  const [notify, setNotify] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { matches, clear } = useEmployeeSearch(query.trim(), focused && !picked && query.trim().length > 1);
@@ -69,6 +101,7 @@ export function AddAttendeeDialog({ open, onClose, onAdded }: { open: boolean; o
       setPicked(null);
       setStage("bootcamp");
       setTrack("sales");
+      setNotify(true);
       setError(null);
     }
   }
@@ -81,11 +114,12 @@ export function AddAttendeeDialog({ open, onClose, onAdded }: { open: boolean; o
       const res = await fetch("/api/cohorts/current/attendees", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: picked.email, stage, track }),
+        body: JSON.stringify({ email: picked.email, stage, track, notify }),
       });
       const out = await res.json().catch(() => null);
       if (!res.ok) return setError(refusal(out?.error ?? "", picked.fullName, stage, out?.date ?? null));
-      onAdded(`${picked.fullName} was added to ${stage === "bootcamp" ? "Bootcamp" : "Intermediate"} on the ${track === "sales" ? "Sales" : "Engineer"} track.`);
+      const added = `${picked.fullName} was added to ${stage === "bootcamp" ? "Bootcamp" : "Intermediate"} on the ${TRACK_NAMES[track]} track.`;
+      onAdded(out?.notified ? `${added} ${registrationLinkMessage(out.notified, picked.fullName)}` : added);
       onClose();
       router.refresh();
     } catch {
@@ -161,7 +195,29 @@ export function AddAttendeeDialog({ open, onClose, onAdded }: { open: boolean; o
                 </Choice>
               ))}
             </div>
+            {track === "other" && (
+              <p className="text-xs text-muted-foreground">
+                Neither Sales nor Engineer, such as a CTO joining: registers, is catered for and joins the cohort&apos;s main
+                Slack channel, but isn&apos;t scored in eVals or invited to the track meetings.
+              </p>
+            )}
           </fieldset>
+
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={notify}
+              onChange={(ev) => setNotify(ev.target.checked)}
+              className="mt-0.5 size-3.5 shrink-0 accent-brand"
+            />
+            <span>
+              Send them the registration link in Slack now
+              <span className="block text-xs text-muted-foreground">
+                Otherwise it goes with the next morning&apos;s reminders. Either way, the daily reminder follows until they
+                fill it in.
+              </span>
+            </span>
+          </label>
 
           {error && (
             <p role="alert" className="text-sm text-destructive">

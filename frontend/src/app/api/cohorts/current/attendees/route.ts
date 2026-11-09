@@ -10,6 +10,8 @@ import { requireCaller } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
 import { addAttendee, removeAttendee, type AddAttendeeError } from "@/lib/cohorts/additions";
 import { CANDIDATE_STAGES } from "@/lib/evals/current-cohort";
+import { sendRegistrationLink } from "@/lib/cohorts/slack-sync";
+import { appBase } from "@/lib/oauth-callback";
 import { canManageTrainingSettings } from "@/lib/roles";
 
 const addSchema = z
@@ -17,6 +19,8 @@ const addSchema = z
     email: z.string().trim().min(1).max(320),
     stage: z.enum(CANDIDATE_STAGES),
     track: z.enum(COHORT_ADDITION_TRACKS),
+    /** Send them their registration form in Slack now, rather than in the next morning's reminders. */
+    notify: z.boolean().default(false),
   })
   .strict();
 
@@ -35,12 +39,14 @@ export const POST = audited(async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
   noteAudit({ target: parsed.data.email.toLowerCase(), targetLabel: parsed.data.email });
-  const added = await addAttendee(user.id, parsed.data);
+  const { notify, ...input } = parsed.data;
+  const added = await addAttendee(user.id, input);
   if (!added.ok) {
     return NextResponse.json({ error: added.error, date: added.date ?? null }, { status: STATUS[added.error] });
   }
   noteAudit({ target: added.email, targetLabel: added.fullName });
-  return NextResponse.json(added, { status: 201 });
+  const notified = notify ? await sendRegistrationLink(user.id, added.email, appBase(req)) : null;
+  return NextResponse.json({ ...added, notified }, { status: 201 });
 });
 
 export const DELETE = audited(async function DELETE(req: Request) {

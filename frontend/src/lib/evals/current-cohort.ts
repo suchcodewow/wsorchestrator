@@ -30,8 +30,12 @@ export function isCandidateStage(value: unknown): value is CandidateStage {
   return CANDIDATE_STAGES.includes(value as CandidateStage);
 }
 
-/** A candidate's track: `undecided` for a title on no list. */
-export const CANDIDATE_TRACKS = ["sales", "engineer", "undecided", "deferred"] as const;
+/**
+ * A candidate's track: `undecided` for a title on no list; `other` only for
+ * someone added by hand who is neither Sales nor Engineer, who registers and
+ * is catered for but is not assessed.
+ */
+export const CANDIDATE_TRACKS = ["sales", "engineer", "other", "undecided", "deferred"] as const;
 export type CandidateTrack = (typeof CANDIDATE_TRACKS)[number];
 
 export function isCandidateTrack(value: unknown): value is CandidateTrack {
@@ -39,7 +43,7 @@ export function isCandidateTrack(value: unknown): value is CandidateTrack {
 }
 
 /** The tracks on the Current tab; the deferred have a tab of their own. */
-export const CURRENT_TRACKS = ["sales", "engineer", "undecided"] as const;
+export const CURRENT_TRACKS = ["sales", "engineer", "other", "undecided"] as const;
 export type CurrentTrack = (typeof CURRENT_TRACKS)[number];
 
 export function isCurrentTrack(value: unknown): value is CurrentTrack {
@@ -117,9 +121,13 @@ export const IN_STAGE: Record<CandidateStage, SQL> = {
   intermediate: and(attendedBtc, not(attendedInt))!,
 };
 
+/** The tracks that are asked to register and are catered for: everyone attending, assessed or not. */
+const ATTENDING = ["sales", "engineer", "other"] as const;
+
 const ON_TRACK: Record<CandidateTrack, SQL> = {
   sales: eq(e.track, "sales"),
   engineer: eq(e.track, "engineer"),
+  other: eq(e.track, "other"),
   undecided: isNull(e.track),
   deferred: eq(e.track, "deferred"),
 };
@@ -200,7 +208,7 @@ export async function listCurrentCohort(
       and(
         isCandidate(cutoffs),
         filter.stage ? IN_STAGE[filter.stage] : undefined,
-        filter.track ? ON_TRACK[filter.track] : or(isNull(e.track), inArray(e.track, ["sales", "engineer"])),
+        filter.track ? ON_TRACK[filter.track] : or(isNull(e.track), inArray(e.track, [...ATTENDING])),
         filter.unanswered ? not(rsvped) : undefined,
         searchAny(query.q, [e.fullName, e.email, e.title, candidateTrack]),
       ),
@@ -218,7 +226,7 @@ export async function listCurrentCohort(
  * page, since the sync needs all of them; it is one email per candidate.
  */
 export async function currentCohortEmails(): Promise<
-  { email: string; fullName: string; stage: CandidateStage; track: "sales" | "engineer"; timezone: string | null; startDate: string | null }[]
+  { email: string; fullName: string; stage: CandidateStage; track: "sales" | "engineer" | "other"; timezone: string | null; startDate: string | null }[]
 > {
   const cutoffs = await getCandidateCutoffs();
   return db
@@ -226,12 +234,12 @@ export async function currentCohortEmails(): Promise<
       email: sql<string>`lower(${e.email})`,
       fullName: e.fullName,
       stage: candidateStage,
-      track: sql<"sales" | "engineer">`${e.track}`,
+      track: sql<"sales" | "engineer" | "other">`${e.track}`,
       timezone: e.timezone,
       startDate: e.startDate,
     })
     .from(e)
-    .where(and(isCandidate(cutoffs), inArray(e.track, ["sales", "engineer"])));
+    .where(and(isCandidate(cutoffs), inArray(e.track, [...ATTENDING])));
 }
 
 /**
@@ -281,7 +289,7 @@ export async function currentCohortSubquery() {
       stage: candidateStage.as("cohort_stage"),
     })
     .from(e)
-    .where(and(isCandidate(cutoffs), inArray(e.track, ["sales", "engineer"])))
+    .where(and(isCandidate(cutoffs), inArray(e.track, [...ATTENDING])))
     .as("cohort");
 }
 
@@ -299,7 +307,7 @@ export async function cohortStageOf(email: string): Promise<CandidateStage | nul
       and(
         sql`lower(${e.email}) = ${email.trim().toLowerCase()}`,
         isCandidate(cutoffs),
-        inArray(e.track, ["sales", "engineer"]),
+        inArray(e.track, [...ATTENDING]),
       ),
     )
     .limit(1);
@@ -316,7 +324,7 @@ export async function currentCohortNames(): Promise<{ fullName: string; stage: C
   return db
     .select({ fullName: e.fullName, stage: candidateStage })
     .from(e)
-    .where(and(isCandidate(cutoffs), or(isNull(e.track), inArray(e.track, ["sales", "engineer"]))))
+    .where(and(isCandidate(cutoffs), or(isNull(e.track), inArray(e.track, [...ATTENDING]))))
     .orderBy(candidateStage, sql`lower(${e.fullName})`, e.id);
 }
 

@@ -50,7 +50,7 @@ import type { ListQuery, Page } from "@/lib/paging";
 import type { ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 import { cn } from "@/lib/utils";
 import { confirmDialog } from "@/components/ui/confirm";
-import { AddAttendeeDialog } from "./add-attendee-dialog";
+import { AddAttendeeDialog, registrationLinkMessage } from "./add-attendee-dialog";
 import { motion } from "framer-motion";
 import {
   CalendarCheck,
@@ -87,10 +87,15 @@ const STAGE_COUNTERS: { stage: CandidateStage; label: string; Icon: LucideIcon }
   { stage: "intermediate", label: "Intermediate", Icon: GraduationCap },
 ];
 
-/** `warn` tints the one that holds people who still need something done, while it holds anyone. */
-const TRACK_COUNTERS: { track: CurrentTrack; label: string; Icon: LucideIcon; warn?: boolean }[] = [
+/**
+ * `warn` tints the one that holds people who still need something done, while
+ * it holds anyone. `onlyWhenAny` hides one that is empty: Other, which only an
+ * attendee added by hand is on, though it always counts toward each stage.
+ */
+const TRACK_COUNTERS: { track: CurrentTrack; label: string; Icon: LucideIcon; warn?: boolean; onlyWhenAny?: boolean }[] = [
   { track: "sales", label: "Sales", Icon: Handshake },
   { track: "engineer", label: "Engineer", Icon: Code },
+  { track: "other", label: "Other", Icon: Users, onlyWhenAny: true },
   { track: "undecided", label: "Needs track selected", Icon: CircleHelp, warn: true },
 ];
 
@@ -113,9 +118,11 @@ const TRACK_OPTIONS: { choice: Exclude<TrackChoice, "automatic" | "undecided">; 
   { choice: "exempt", label: "Exempt", hint: () => "Exempt this one person from Bootcamp" },
 ];
 
-const CHOICE_LABELS: Record<Exclude<TrackChoice, "automatic">, string> = {
+const CHOICE_LABELS: Record<Exclude<TrackChoice, "automatic"> | "other", string> = {
   ...(Object.fromEntries(TRACK_OPTIONS.map((o) => [o.choice, o.label])) as Record<(typeof TRACK_OPTIONS)[number]["choice"], string>),
   undecided: "Undecided",
+  // Only someone added by hand has it, and the track menu does not offer it.
+  other: "Other",
 };
 
 const ERRORS: Record<string, string> = {
@@ -259,13 +266,13 @@ export function CurrentCohortView({
         setChange(null);
       } else {
         const result = body as SetTrackResult;
-        const now = (result.track ?? "undecided") as Exclude<TrackChoice, "automatic">;
+        const now = (result.track ?? "undecided") as keyof typeof CHOICE_LABELS;
         const leaves = leavesTab(now);
         const moved = result.title;
         const others = result.retracked - (now === member.track ? 0 : 1);
         setChange({
           member,
-          undo: moved ? null : member.overridden ? member.track : "automatic",
+          undo: moved ? null : member.overridden && member.track !== "other" ? member.track : "automatic",
           message:
             choice === "automatic"
               ? `${member.fullName} is back on the rules: ${CHOICE_LABELS[now]}.`
@@ -346,7 +353,7 @@ export function CurrentCohortView({
 
       {tab === "current" && (
         <motion.div variants={riseChild} role="group" aria-label="Track" className={COUNTER_GRID}>
-          {TRACK_COUNTERS.map(({ track, label, Icon, warn }) => (
+          {TRACK_COUNTERS.filter((c) => !c.onlyWhenAny || trackCount(c.track) > 0 || filter.track === c.track).map(({ track, label, Icon, warn }) => (
             <Counter
               key={track}
               label={label}
@@ -501,7 +508,8 @@ export function CurrentCohortView({
                       )}
                       {/* React bubbles the menu's clicks through its portal, so they stop here rather than toggling the row. */}
                       <td className="px-5 py-1" onClick={(ev) => ev.stopPropagation()}>
-                        {canSetTrack ? (
+                        {/* Someone added by hand keeps the track they were added on; take them off and add them again to change it. */}
+                        {canSetTrack && !m.added ? (
                           <TrackMenu
                             member={m}
                             busy={busy === m.email}
@@ -523,8 +531,9 @@ export function CurrentCohortView({
                         <td colSpan={columnCount} className="px-5 pt-1 pb-4 pl-10">
                           <PersonDetails
                             member={m}
+                            registered={(intakes[m.email.toLowerCase()] ?? []).some((i) => i.form === m.stage)}
                             canRemove={canSetTrack}
-                            onRemoved={(message) => {
+                            onNotice={(message) => {
                               setChange(null);
                               setError(null);
                               setNotice(message);
@@ -630,17 +639,40 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
 /** Everything the row leaves out, from the last HiBob sync and the classes they attended. */
 function PersonDetails({
   member: m,
+  registered,
   canRemove,
-  onRemoved,
+  onNotice,
   onError,
 }: {
   member: CurrentCohortMember;
+  /** Whether they have answered their stage's registration form. */
+  registered: boolean;
+  /** Whether the viewer is a Training administrator: may take them off, or send them their link. */
   canRemove: boolean;
-  onRemoved: (message: string) => void;
+  onNotice: (message: string) => void;
   onError: (message: string) => void;
 }) {
   const router = useRouter();
   const [removing, setRemoving] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  async function sendLink() {
+    setSending(true);
+    try {
+      const res = await fetch("/api/cohorts/current/registration-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: m.email }),
+      });
+      const out = await res.json().catch(() => null);
+      if (!res.ok || !out) return onError(`Could not send it (${res.status}).`);
+      onNotice(registrationLinkMessage(out, m.fullName));
+    } catch {
+      onError("Could not reach the server.");
+    } finally {
+      setSending(false);
+    }
+  }
 
   async function remove() {
     const sure = await confirmDialog({
@@ -656,7 +688,7 @@ function PersonDetails({
         method: "DELETE",
       });
       if (!res.ok && res.status !== 404) return onError(`Could not take them off (${res.status}).`);
-      onRemoved(`${m.fullName} was taken off the current cohort.`);
+      onNotice(`${m.fullName} was taken off the current cohort.`);
       router.refresh();
     } catch {
       onError("Could not reach the server.");
@@ -681,6 +713,25 @@ function PersonDetails({
       <Field label="In position since">{formatDate(m.activeEffectiveDate)}</Field>
       <Field label="Stage">{m.stage === "bootcamp" ? "Bootcamp" : "Intermediate"}</Field>
       <Field label="Track set by">{m.overridden ? "An administrator" : "The rules"}</Field>
+      {canRemove && m.track !== "undecided" && m.track !== "deferred" && (
+        <Field label="Registration">
+          {registered ? (
+            "Registered"
+          ) : (
+            <button
+              type="button"
+              disabled={sending}
+              onClick={(ev) => {
+                ev.stopPropagation();
+                void sendLink();
+              }}
+              className="cursor-pointer text-brand underline-offset-2 hover:underline disabled:cursor-wait"
+            >
+              {sending ? "Sending…" : "Send registration link now"}
+            </button>
+          )}
+        </Field>
+      )}
       {m.added && (
         <Field label="In the cohort">
           Added by hand

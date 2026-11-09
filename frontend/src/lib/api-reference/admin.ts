@@ -485,7 +485,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { name: "rsvp", type: `"none"`, note: "only those who have not RSVP'd to their stage's registration form" },
           ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title or track"),
         ],
-        returns: `{ stage: string | null, track: string | null, rsvp: "none" | null, members: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "sales" | "engineer" | "undecided", overridden: boolean, added: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null, meetings: { meetingId, name, mark: "leaving" | "attended" | "accepted" | "pending" | "uninvited" | "none_left" | "finished", marked: boolean | null, startsAt: ISO 8601 string | null, endsAt: ISO 8601 string | null, predicted: boolean, timezone: string | null, outOfHours: boolean, instances: { startsAt: ISO 8601 string, endsAt: ISO 8601 string, mark: "attended" | "missed" | "accepted" | "pending" | "uninvited" | "leaving", outOfHours: boolean }[] | null, leaving: { why: "attended" | "not_for_them" | "extra", dryRun: boolean, occurrences: { startsAt: ISO 8601 string, endsAt: ISO 8601 string }[] } | null }[] }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, unanswered: the same as counts, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
+        returns: `{ stage: string | null, track: string | null, rsvp: "none" | null, members: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "sales" | "engineer" | "other" | "undecided", overridden: boolean, added: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null, meetings: { meetingId, name, mark: "leaving" | "attended" | "accepted" | "pending" | "uninvited" | "none_left" | "finished", marked: boolean | null, startsAt: ISO 8601 string | null, endsAt: ISO 8601 string | null, predicted: boolean, timezone: string | null, outOfHours: boolean, instances: { startsAt: ISO 8601 string, endsAt: ISO 8601 string, mark: "attended" | "missed" | "accepted" | "pending" | "uninvited" | "leaving", outOfHours: boolean }[] | null, leaving: { why: "attended" | "not_for_them" | "extra", dryRun: boolean, occurrences: { startsAt: ISO 8601 string, endsAt: ISO 8601 string }[] } | null }[] }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, unanswered: the same as counts, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
         errors: [
           { status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" },
           { status: 400, error: "invalid_track", when: "track is not sales, engineer or undecided" },
@@ -565,20 +565,21 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/cohorts/current/attendees",
-        summary: "Adds someone from the employee list to the current cohort by hand, to Bootcamp or Intermediate on the Sales or Engineer track.",
+        summary: "Adds someone from the employee list to the current cohort by hand, to Bootcamp or Intermediate on the Sales, Engineer or Other track.",
         access: "trainingAdmin",
         token: true,
         notes:
-          "For a one-off attendee the cohort's rules leave out: someone outside the org, past the start-date cutoffs, or on a track that skips them. They then count as a candidate everywhere the cohort is drawn (Cohorts, the registration form and its reminders, Dietary needs, name cards, the Slack channel sync, eVals) while that is still the stage their attendance puts them in, on that track, which the HiBob sync keeps. Once they attend that stage's class the addition lapses. Adding someone already added replaces their stage and track. members on GET /api/cohorts/current mark them added.",
+          "For a one-off attendee the cohort's rules leave out: someone outside the org, past the start-date cutoffs, or on a track that skips them. They then count as a candidate everywhere the cohort is drawn (Cohorts, the registration form and its reminders, Dietary needs, name cards, the Slack channel sync, eVals) while that is still the stage their attendance puts them in, on that track, which the HiBob sync keeps. Once they attend that stage's class the addition lapses. Adding someone already added replaces their stage and track. members on GET /api/cohorts/current mark them added. Other is for an attendee who is neither Sales nor Engineer, such as a CTO joining: they register, are catered for and join the stage's main Slack channel, but are not scored in eVals, counted in Reporting or invited to the Google Meetings. With notify, they are sent their registration form in Slack at once, as POST /api/cohorts/current/registration-link does, and notified says what became of it.",
         body: {
           kind: "json",
           fields: [
             { name: "email", type: "string", required: true, note: "their email in the employee list" },
             { name: "stage", type: '"bootcamp" | "intermediate"', required: true },
-            { name: "track", type: '"sales" | "engineer"', required: true },
+            { name: "track", type: '"sales" | "engineer" | "other"', required: true },
+            { name: "notify", type: "boolean", note: "send them their registration form in Slack now; default false" },
           ],
         },
-        returns: '201 { ok: true, email, fullName, stage: "bootcamp" | "intermediate", track: "sales" | "engineer" }',
+        returns: '201 { ok: true, email, fullName, stage: "bootcamp" | "intermediate", track: "sales" | "engineer" | "other", notified: { sent: true } | { sent: false, reason, detail? } | null }',
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
           { status: 404, error: "not_an_employee", when: "no one active in the employee list has that email" },
@@ -586,6 +587,19 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 409, error: "no_bootcamp", when: "stage is intermediate and they have not attended a Bootcamp class" },
           { status: 409, error: "already_in_cohort", when: "the cohort's rules already put them in it on the Sales or Engineer track" },
         ],
+      },
+      {
+        method: "POST",
+        path: "/api/cohorts/current/registration-link",
+        summary: "Sends someone in the current cohort their registration form in Slack now, rather than in the next morning's reminders.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The same direct message the daily reminder sends, worded as an invitation, and logged on Cohort Settings → Slack as a run of its own. The daily reminder then follows each day they have not answered. Sent only where the reminders would be: to someone in the cohort whose stage's form asks something and who has not answered it, while the Slack sync is live and the cohort test group is off. In dry run, as QA is, it is logged rather than sent, and reason says not_live.",
+        body: { kind: "json", fields: [{ name: "email", type: "string", required: true }] },
+        returns:
+          '{ sent: true } | { sent: false, reason: "not_in_cohort" | "no_questions" | "answered" | "test_group" | "not_live" | "not_configured" | "missing_scopes" | "not_in_slack" | "busy" | "slack_error", detail?: string }',
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
       },
       {
         method: "DELETE",
