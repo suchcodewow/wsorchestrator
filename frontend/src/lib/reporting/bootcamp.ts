@@ -39,7 +39,7 @@ import {
 } from "@/db/schema";
 import { averageScore, requiredFeedback, wholeScore } from "@/lib/evals/assessment-values";
 import { attended } from "@/lib/evals/attendance";
-import { isCandidate } from "@/lib/evals/current-cohort";
+import { assessedOn, assessedTrackOf, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { retrackEmployees } from "@/lib/evals/tracks";
 import type { BootcampCohortSort, BootcampRecordSort, HistoryStatus } from "@/lib/list-specs";
@@ -330,14 +330,14 @@ async function cohortSql(bootcamp: { id: string; startDate: string }, stages: Re
                (case when ${attended("bootcamp", sql`${employees.email}`, { before: bootcamp.startDate })}
                      then 'intermediate' else 'bootcamp' end) as stage
           from ${employees}
-         where ${and(isCandidate(cutoffs), inArray(employees.track, ["sales", "engineer"]))}
+         where ${and(isCandidate(cutoffs), assessedOn(["sales", "engineer"]))}
         union
         select s.attendee_email, a.stage
           from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
          where s.bootcamp_id = ${bootcamp.id}
       ) c
       left join lateral (
-        select n.track from ${employees} n where n.email = c.email order by n.active desc, n.id limit 1
+        select ${assessedTrackOf("n")} as track from ${employees} n where n.email = c.email order by n.active desc, n.id limit 1
       ) e on true
      where c.stage in (${sql.join(stages.map((st) => sql`${st}`), sql`, `)})
        and exists (select 1 from ${intakeResponses} i where i.form = c.stage and i.email = lower(c.email))

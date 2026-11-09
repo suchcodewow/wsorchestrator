@@ -838,10 +838,13 @@ export async function runMeetingSync(
 ): Promise<MeetingSyncResult> {
   const dryRun = preview || !(await getMeetingSyncLive());
   const { cohort: everyone, group } = await outboundCohort();
-  // The meetings are planned for Sales and Engineer; an Other attendee added by hand is invited to none.
-  const outbound = everyone.filter(
-    (m): m is (typeof everyone)[number] & { track: "sales" | "engineer" } => m.track !== "other",
-  );
+  // The meetings are planned for Sales and Engineer. An Other attendee added by hand is invited to the
+  // ones of the track they follow once they confirm they are attending, and to none before.
+  const outbound = everyone.flatMap((m) => {
+    // A test group member stands in on the Sales or Engineer track they were given.
+    const track = "assessed" in m ? m.assessed : m.track;
+    return track ? [{ ...m, track }] : [];
+  });
   // A test group member has no stage or track of their own on record, but their time zone and start date are the employee record's.
   const cohort = await withClassRecord(group.on ? await withEmployeeRecord(outbound) : outbound, group.on);
   const runId = await startRun(trigger, actorId, dryRun, group.on);

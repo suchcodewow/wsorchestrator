@@ -3859,11 +3859,18 @@ export const cohortAdditions = pgTable(
     email: text("email").primaryKey(),
     stage: text("stage").$type<"bootcamp" | "intermediate">().notNull(),
     track: text("track").$type<CohortAdditionTrack>().notNull(),
+    /**
+     * For the Other track: whose sessions they follow, so whose assessments
+     * score them and whose meetings invite them, once they confirm they are
+     * attending (`assessedTrackOf`). Null on Sales and Engineer.
+     */
+    follows: text("follows").$type<"sales" | "engineer">(),
     addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
     addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     check("cohort_additions_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
     check("cohort_additions_track_check", sql`${t.track} in ('sales', 'engineer', 'other')`),
+    check("cohort_additions_follows_check", sql`${t.follows} is null or ${t.follows} in ('sales', 'engineer')`),
   ],
 );

@@ -1,7 +1,9 @@
 -- People a Training administrator adds to the current cohort by hand, from
 -- the Cohorts page's Add attendee: one-off attendees the cohort's rules leave
 -- out. Each is added to one stage, on the Sales, Engineer or Other track:
--- Other is for an attendee who is neither, such as a CTO joining.
+-- Other is for an attendee who is neither, such as a CTO joining; follows says
+-- whose sessions they follow, which scores them in eVals and invites them to
+-- the meetings once they confirm they are attending.
 --
 -- Safe to run on any database:
 --   * fresh/empty      — skipped entirely; db:push creates the schema outright
@@ -21,11 +23,13 @@ begin
     email text primary key,
     stage text not null,
     track text not null,
+    follows text,
     added_by text
       constraint cohort_additions_added_by_users_id_fk references users (id) on delete set null,
     added_at timestamptz not null default now(),
     constraint cohort_additions_stage_check check (stage in ('bootcamp', 'intermediate')),
-    constraint cohort_additions_track_check check (track in ('sales', 'engineer', 'other'))
+    constraint cohort_additions_track_check check (track in ('sales', 'engineer', 'other')),
+    constraint cohort_additions_follows_check check (follows is null or follows in ('sales', 'engineer'))
   );
 end $$;
 

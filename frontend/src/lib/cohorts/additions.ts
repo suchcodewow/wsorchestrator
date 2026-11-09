@@ -44,7 +44,7 @@ const lowerEmail = sql`lower(${e.email})`;
  */
 export async function addAttendee(
   actorId: string,
-  input: { email: string; stage: CandidateStage; track: CohortAdditionTrack },
+  input: { email: string; stage: CandidateStage; track: CohortAdditionTrack; follows?: "sales" | "engineer" | null },
 ): Promise<AddAttendeeResult> {
   const lower = input.email.trim().toLowerCase();
   const cutoffs = await getCandidateCutoffs();
@@ -69,12 +69,14 @@ export async function addAttendee(
   if (input.stage === "intermediate" && !person.attendedBtc) return { ok: false, error: "no_bootcamp" };
   if (person.byRules) return { ok: false, error: "already_in_cohort" };
 
+  // Only Other follows another track's sessions; Sales and Engineer follow their own.
+  const follows = input.track === "other" ? (input.follows ?? null) : null;
   await db
     .insert(cohortAdditions)
-    .values({ email: lower, stage: input.stage, track: input.track, addedBy: actorId })
+    .values({ email: lower, stage: input.stage, track: input.track, follows, addedBy: actorId })
     .onConflictDoUpdate({
       target: cohortAdditions.email,
-      set: { stage: input.stage, track: input.track, addedBy: actorId, addedAt: new Date() },
+      set: { stage: input.stage, track: input.track, follows, addedBy: actorId, addedAt: new Date() },
     });
   await retrackEmployees([lower]);
   return { ok: true, email: lower, fullName: person.fullName, stage: input.stage, track: input.track };

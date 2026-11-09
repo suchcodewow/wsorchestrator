@@ -124,6 +124,45 @@ export const IN_STAGE: Record<CandidateStage, SQL> = {
 /** The tracks that are asked to register and are catered for: everyone attending, assessed or not. */
 const ATTENDING = ["sales", "engineer", "other"] as const;
 
+/** Sales or Engineer: the tracks that are scored in eVals and invited to the Google Meetings. */
+export type AssessedTrack = "sales" | "engineer";
+
+/**
+ * Whose assessments score someone and whose meetings invite them: their own
+ * track on Sales or Engineer; on Other, the track their addition says they
+ * follow, once their latest answer to their stage's form says Yes to
+ * attending; otherwise null, not assessed. `alias` is how the surrounding
+ * query names `employees`, written in so a subquery's own columns are never
+ * mistaken for it.
+ */
+export function assessedTrackOf(alias = "employees"): SQL<AssessedTrack | null> {
+  const track = sql.raw(`"${alias}"."track"`);
+  const email = sql.raw(`lower("${alias}"."email")`);
+  return sql<AssessedTrack | null>`(case
+      when ${track} in ('sales', 'engineer') then ${track}
+      when ${track} = 'other' then (
+        select ca.follows from ${cohortAdditions} ca
+         where ca.email = ${email}
+           and coalesce((
+             select r.answers ->> 'attend' from ${intakeResponses} r
+              where r.email = ${email} and r.form = ca.stage
+              order by r.submitted_at desc limit 1
+           ), '') ilike 'yes%'
+      )
+    end)`;
+}
+
+/** `employees` row's assessed track, for a query that names the table itself. */
+export const assessedTrack = assessedTrackOf();
+
+/** Assessed on one of `tracks`: Sales and Engineer as they are, and an Other who confirmed and follows one. */
+export function assessedOn(tracks: readonly AssessedTrack[]): SQL {
+  return sql`${assessedTrack} in (${sql.join(
+    tracks.map((t) => sql`${t}`),
+    sql`, `,
+  )})`;
+}
+
 const ON_TRACK: Record<CandidateTrack, SQL> = {
   sales: eq(e.track, "sales"),
   engineer: eq(e.track, "engineer"),
@@ -168,7 +207,7 @@ export function rsvpedForBootcamp(cutoffs: CandidateCutoffs): SQL {
   return and(
     isCandidate(cutoffs),
     IN_STAGE.bootcamp,
-    inArray(e.track, ["sales", "engineer"]),
+    assessedOn(["sales", "engineer"]),
     sql`exists (select 1 from ${intakeResponses} where ${intakeResponses.form} = 'bootcamp' and ${intakeResponses.email} = lower(${e.email}))`,
   )!;
 }
@@ -226,7 +265,15 @@ export async function listCurrentCohort(
  * page, since the sync needs all of them; it is one email per candidate.
  */
 export async function currentCohortEmails(): Promise<
-  { email: string; fullName: string; stage: CandidateStage; track: "sales" | "engineer" | "other"; timezone: string | null; startDate: string | null }[]
+  {
+    email: string;
+    fullName: string;
+    stage: CandidateStage;
+    track: "sales" | "engineer" | "other";
+    assessed: AssessedTrack | null;
+    timezone: string | null;
+    startDate: string | null;
+  }[]
 > {
   const cutoffs = await getCandidateCutoffs();
   return db
@@ -235,6 +282,8 @@ export async function currentCohortEmails(): Promise<
       fullName: e.fullName,
       stage: candidateStage,
       track: sql<"sales" | "engineer" | "other">`${e.track}`,
+      /** Whose meetings invite them: their own track, or an Other's, once confirmed; null for not yet. */
+      assessed: assessedTrack,
       timezone: e.timezone,
       startDate: e.startDate,
     })
@@ -269,7 +318,7 @@ export async function currentCohortPeople(
               ),
             )
           : IN_STAGE[stage],
-        track === "both" ? inArray(e.track, ["sales", "engineer"]) : eq(e.track, track),
+        track === "both" ? assessedOn(["sales", "engineer"]) : assessedOn([track]),
       ),
     )
     .orderBy(sql`lower(${e.fullName})`)

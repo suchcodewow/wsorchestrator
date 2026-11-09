@@ -569,13 +569,14 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "For a one-off attendee the cohort's rules leave out: someone outside the org, past the start-date cutoffs, or on a track that skips them. They then count as a candidate everywhere the cohort is drawn (Cohorts, the registration form and its reminders, Dietary needs, name cards, the Slack channel sync, eVals) while that is still the stage their attendance puts them in, on that track, which the HiBob sync keeps. Once they attend that stage's class the addition lapses. Adding someone already added replaces their stage and track. members on GET /api/cohorts/current mark them added. Other is for an attendee who is neither Sales nor Engineer, such as a CTO joining: they register, are catered for and join the stage's main Slack channel, but are not scored in eVals, counted in Reporting or invited to the Google Meetings. With notify, they are sent their registration form in Slack at once, as POST /api/cohorts/current/registration-link does, and notified says what became of it.",
+          "For a one-off attendee the cohort's rules leave out: someone outside the org, past the start-date cutoffs, or on a track that skips them. They then count as a candidate everywhere the cohort is drawn (Cohorts, the registration form and its reminders, Dietary needs, name cards, the Slack channel sync, eVals) while that is still the stage their attendance puts them in, on that track, which the HiBob sync keeps. Once they attend that stage's class the addition lapses. Adding someone already added replaces their stage and track. members on GET /api/cohorts/current mark them added. Other is for an attendee who is neither Sales nor Engineer, such as a CTO joining: they register, are catered for and join the stage's main Slack channel straight away, and once their latest answer to their stage's form says Yes to attending they are also scored in eVals, counted in Reporting and invited to the Google Meetings as the track they follow. Before that they are none of those. With notify, they are sent their registration form in Slack at once, as POST /api/cohorts/current/registration-link does, and notified says what became of it.",
         body: {
           kind: "json",
           fields: [
             { name: "email", type: "string", required: true, note: "their email in the employee list" },
             { name: "stage", type: '"bootcamp" | "intermediate"', required: true },
             { name: "track", type: '"sales" | "engineer" | "other"', required: true },
+            { name: "follows", type: '"sales" | "engineer" | null', note: "with track other, required: whose sessions they follow; ignored otherwise" },
             { name: "notify", type: "boolean", note: "send them their registration form in Slack now; default false" },
           ],
         },

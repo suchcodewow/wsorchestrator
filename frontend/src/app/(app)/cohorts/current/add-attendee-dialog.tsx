@@ -89,6 +89,7 @@ export function AddAttendeeDialog({ open, onClose, onAdded }: { open: boolean; o
   const [stage, setStage] = useState<CandidateStage>("bootcamp");
   const [track, setTrack] = useState<CohortAdditionTrack>("sales");
   const [notify, setNotify] = useState(true);
+  const [follows, setFollows] = useState<"sales" | "engineer" | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { matches, clear } = useEmployeeSearch(query.trim(), focused && !picked && query.trim().length > 1);
@@ -102,23 +103,27 @@ export function AddAttendeeDialog({ open, onClose, onAdded }: { open: boolean; o
       setStage("bootcamp");
       setTrack("sales");
       setNotify(true);
+      setFollows(null);
       setError(null);
     }
   }
 
   async function save() {
     if (!picked) return setError("Find the person in the employee list first.");
+    if (track === "other" && !follows) return setError("Choose whose sessions they follow.");
     setPending(true);
     setError(null);
     try {
       const res = await fetch("/api/cohorts/current/attendees", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: picked.email, stage, track, notify }),
+        body: JSON.stringify({ email: picked.email, stage, track, follows: track === "other" ? follows : null, notify }),
       });
       const out = await res.json().catch(() => null);
       if (!res.ok) return setError(refusal(out?.error ?? "", picked.fullName, stage, out?.date ?? null));
-      const added = `${picked.fullName} was added to ${stage === "bootcamp" ? "Bootcamp" : "Intermediate"} on the ${TRACK_NAMES[track]} track.`;
+      const added =
+        `${picked.fullName} was added to ${stage === "bootcamp" ? "Bootcamp" : "Intermediate"} on the ${TRACK_NAMES[track]} track` +
+        (track === "other" && follows ? `, following the ${TRACK_NAMES[follows]} sessions once they confirm.` : ".");
       onAdded(out?.notified ? `${added} ${registrationLinkMessage(out.notified, picked.fullName)}` : added);
       onClose();
       router.refresh();
@@ -197,11 +202,28 @@ export function AddAttendeeDialog({ open, onClose, onAdded }: { open: boolean; o
             </div>
             {track === "other" && (
               <p className="text-xs text-muted-foreground">
-                Neither Sales nor Engineer, such as a CTO joining: registers, is catered for and joins the cohort&apos;s main
-                Slack channel, but isn&apos;t scored in eVals or invited to the track meetings.
+                Neither Sales nor Engineer, such as a CTO joining. They register, are catered for and join the cohort&apos;s
+                main Slack channel straight away.
               </p>
             )}
           </fieldset>
+
+          {track === "other" && (
+            <fieldset className="space-y-1.5">
+              <legend className="text-sm font-medium">Follows the sessions for</legend>
+              <div className="flex gap-2">
+                {(["sales", "engineer"] as const).map((t) => (
+                  <Choice key={t} on={follows === t} onPick={() => setFollows(t)}>
+                    {TRACK_NAMES[t]}
+                  </Choice>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Once they answer Yes to attending on their registration form, that track&apos;s eVals assessments score them
+                and its Google Meetings invite them.
+              </p>
+            </fieldset>
+          )}
 
           <label className="flex items-start gap-2 text-sm">
             <input
