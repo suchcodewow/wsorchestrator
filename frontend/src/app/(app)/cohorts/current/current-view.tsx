@@ -49,6 +49,8 @@ import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 import { cn } from "@/lib/utils";
+import { confirmDialog } from "@/components/ui/confirm";
+import { AddAttendeeDialog } from "./add-attendee-dialog";
 import { motion } from "framer-motion";
 import {
   CalendarCheck,
@@ -69,6 +71,7 @@ import {
   Pin,
   Printer,
   RotateCcw,
+  UserPlus,
   Users,
   X,
   type LucideIcon,
@@ -205,6 +208,8 @@ export function CurrentCohortView({
   const [error, setError] = useState<string | null>(null);
   const [change, setChange] = useState<Change | null>(null);
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const [adding, setAdding] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   // One search shows an extra row; reference-row.tsx says what it does and how to take it out.
   const reference = useReferenceRow(tab === "current" ? query.q : "");
 
@@ -365,6 +370,12 @@ export function CurrentCohortView({
         />
         {tab === "current" && (
           <div className="flex flex-wrap items-center gap-2">
+            {canSetTrack && (
+              <Button variant="brand" onClick={() => setAdding(true)}>
+                <UserPlus />
+                Add attendee
+              </Button>
+            )}
             <Button variant="secondary" asChild>
               <a href="/cohorts/name-cards" target="_blank" rel="noopener">
                 <Printer />
@@ -374,6 +385,24 @@ export function CurrentCohortView({
           </div>
         )}
       </motion.div>
+
+      {notice && !error && !change && (
+        <motion.p variants={riseChild} role="status" className="text-sm text-muted-foreground">
+          {notice}
+        </motion.p>
+      )}
+
+      {canSetTrack && tab === "current" && (
+        <AddAttendeeDialog
+          open={adding}
+          onClose={() => setAdding(false)}
+          onAdded={(message) => {
+            setChange(null);
+            setError(null);
+            setNotice(message);
+          }}
+        />
+      )}
 
       {(change || error) && (
         <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3 text-sm">
@@ -449,6 +478,14 @@ export function CurrentCohortView({
                             className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-90")}
                           />
                           {m.fullName}
+                          {m.added && (
+                            <span
+                              title="Added to the cohort by hand"
+                              className="rounded-full border px-1.5 text-[10px] font-normal uppercase tracking-wider text-muted-foreground"
+                            >
+                              Added
+                            </span>
+                          )}
                         </button>
                       </td>
                       {showAttendance && (
@@ -484,7 +521,16 @@ export function CurrentCohortView({
                     {expanded && (
                       <tr id={`person-${m.email}`} className="border-b bg-muted/30 last:border-b-0">
                         <td colSpan={columnCount} className="px-5 pt-1 pb-4 pl-10">
-                          <PersonDetails member={m} />
+                          <PersonDetails
+                            member={m}
+                            canRemove={canSetTrack}
+                            onRemoved={(message) => {
+                              setChange(null);
+                              setError(null);
+                              setNotice(message);
+                            }}
+                            onError={setError}
+                          />
                           <Registrations
                             stage={m.stage}
                             intakes={intakes[m.email.toLowerCase()] ?? []}
@@ -582,7 +628,43 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
 }
 
 /** Everything the row leaves out, from the last HiBob sync and the classes they attended. */
-function PersonDetails({ member: m }: { member: CurrentCohortMember }) {
+function PersonDetails({
+  member: m,
+  canRemove,
+  onRemoved,
+  onError,
+}: {
+  member: CurrentCohortMember;
+  canRemove: boolean;
+  onRemoved: (message: string) => void;
+  onError: (message: string) => void;
+}) {
+  const router = useRouter();
+  const [removing, setRemoving] = useState(false);
+
+  async function remove() {
+    const sure = await confirmDialog({
+      title: `Take ${m.fullName} off the current cohort?`,
+      description: "They were added by hand. Their track goes back to what the cohort's rules give them.",
+      confirmLabel: "Take off",
+      destructive: true,
+    });
+    if (!sure) return;
+    setRemoving(true);
+    try {
+      const res = await fetch(`/api/cohorts/current/attendees?${new URLSearchParams({ email: m.email })}`, {
+        method: "DELETE",
+      });
+      if (!res.ok && res.status !== 404) return onError(`Could not take them off (${res.status}).`);
+      onRemoved(`${m.fullName} was taken off the current cohort.`);
+      router.refresh();
+    } catch {
+      onError("Could not reach the server.");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   return (
     <dl className="grid grid-cols-2 gap-x-8 gap-y-3 lg:grid-cols-4">
       <Field label="Email">{m.email}</Field>
@@ -599,6 +681,24 @@ function PersonDetails({ member: m }: { member: CurrentCohortMember }) {
       <Field label="In position since">{formatDate(m.activeEffectiveDate)}</Field>
       <Field label="Stage">{m.stage === "bootcamp" ? "Bootcamp" : "Intermediate"}</Field>
       <Field label="Track set by">{m.overridden ? "An administrator" : "The rules"}</Field>
+      {m.added && (
+        <Field label="In the cohort">
+          Added by hand
+          {canRemove && (
+            <button
+              type="button"
+              disabled={removing}
+              onClick={(ev) => {
+                ev.stopPropagation();
+                void remove();
+              }}
+              className="ml-2 cursor-pointer text-xs text-destructive underline-offset-2 hover:underline disabled:cursor-wait"
+            >
+              {removing ? "Taking off…" : "Take off the cohort"}
+            </button>
+          )}
+        </Field>
+      )}
     </dl>
   );
 }

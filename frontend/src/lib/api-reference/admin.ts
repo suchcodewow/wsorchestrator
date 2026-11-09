@@ -485,7 +485,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { name: "rsvp", type: `"none"`, note: "only those who have not RSVP'd to their stage's registration form" },
           ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title or track"),
         ],
-        returns: `{ stage: string | null, track: string | null, rsvp: "none" | null, members: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "sales" | "engineer" | "undecided", overridden: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null, meetings: { meetingId, name, mark: "leaving" | "attended" | "accepted" | "pending" | "uninvited" | "none_left" | "finished", marked: boolean | null, startsAt: ISO 8601 string | null, endsAt: ISO 8601 string | null, predicted: boolean, timezone: string | null, outOfHours: boolean, instances: { startsAt: ISO 8601 string, endsAt: ISO 8601 string, mark: "attended" | "missed" | "accepted" | "pending" | "uninvited" | "leaving", outOfHours: boolean }[] | null, leaving: { why: "attended" | "not_for_them" | "extra", dryRun: boolean, occurrences: { startsAt: ISO 8601 string, endsAt: ISO 8601 string }[] } | null }[] }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, unanswered: the same as counts, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
+        returns: `{ stage: string | null, track: string | null, rsvp: "none" | null, members: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "sales" | "engineer" | "undecided", overridden: boolean, added: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null, meetings: { meetingId, name, mark: "leaving" | "attended" | "accepted" | "pending" | "uninvited" | "none_left" | "finished", marked: boolean | null, startsAt: ISO 8601 string | null, endsAt: ISO 8601 string | null, predicted: boolean, timezone: string | null, outOfHours: boolean, instances: { startsAt: ISO 8601 string, endsAt: ISO 8601 string, mark: "attended" | "missed" | "accepted" | "pending" | "uninvited" | "leaving", outOfHours: boolean }[] | null, leaving: { why: "attended" | "not_for_them" | "extra", dryRun: boolean, occurrences: { startsAt: ISO 8601 string, endsAt: ISO 8601 string }[] } | null }[] }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, unanswered: the same as counts, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
         errors: [
           { status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" },
           { status: 400, error: "invalid_track", when: "track is not sales, engineer or undecided" },
@@ -504,7 +504,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { name: "stage", type: `"bootcamp" | "intermediate"`, note: "only that stage; both if omitted" },
           ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title or track"),
         ],
-        returns: `{ stage: string | null, members: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "deferred", overridden: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, counts: { bootcamp: number, intermediate: number }, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
+        returns: `{ stage: string | null, members: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "deferred", overridden: boolean, added: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, counts: { bootcamp: number, intermediate: number }, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
         errors: [{ status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" }],
       },
       {
@@ -561,6 +561,42 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 400, error: "invalid", when: "the body is not that shape" },
           { status: 404, error: "not_found", when: "no one under the Organization Leader has that email" },
         ],
+      },
+      {
+        method: "POST",
+        path: "/api/cohorts/current/attendees",
+        summary: "Adds someone from the employee list to the current cohort by hand, to Bootcamp or Intermediate on the Sales or Engineer track.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "For a one-off attendee the cohort's rules leave out: someone outside the org, past the start-date cutoffs, or on a track that skips them. They then count as a candidate everywhere the cohort is drawn (Cohorts, the registration form and its reminders, Dietary needs, name cards, the Slack channel sync, eVals) while that is still the stage their attendance puts them in, on that track, which the HiBob sync keeps. Once they attend that stage's class the addition lapses. Adding someone already added replaces their stage and track. members on GET /api/cohorts/current mark them added.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "email", type: "string", required: true, note: "their email in the employee list" },
+            { name: "stage", type: '"bootcamp" | "intermediate"', required: true },
+            { name: "track", type: '"sales" | "engineer"', required: true },
+          ],
+        },
+        returns: '201 { ok: true, email, fullName, stage: "bootcamp" | "intermediate", track: "sales" | "engineer" }',
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_an_employee", when: "no one active in the employee list has that email" },
+          { status: 409, error: "already_attended", when: "they have attended a class of that stage; date says the latest" },
+          { status: 409, error: "no_bootcamp", when: "stage is intermediate and they have not attended a Bootcamp class" },
+          { status: 409, error: "already_in_cohort", when: "the cohort's rules already put them in it on the Sales or Engineer track" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/cohorts/current/attendees",
+        summary: "Takes someone added by hand off the current cohort.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Their track goes back to what the rules give them; someone the rules include stays in the cohort.",
+        query: [{ name: "email", type: "string", required: true, note: "the email they were added under" }],
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "no one was added under that email" }],
       },
       {
         method: "POST",

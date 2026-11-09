@@ -3833,3 +3833,32 @@ export const pageTourViews = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.tourId] }), index("page_tour_views_tour_id_idx").on(t.tourId)],
 );
+
+export const COHORT_ADDITION_TRACKS = ["sales", "engineer"] as const;
+export type CohortAdditionTrack = (typeof COHORT_ADDITION_TRACKS)[number];
+
+/**
+ * People a Training administrator added to the current cohort by hand, for
+ * the one-off attendee the cohort's rules leave out: someone outside the
+ * org, past the start-date cutoffs, or on a track that skips them. Each is
+ * added to one stage, and counts as a candidate while that is still the stage
+ * their attendance puts them in (`isCandidate`), on the track given here,
+ * which the HiBob sync and every retrack keep (`trackFor`). Once they have
+ * attended that stage's class the row no longer applies. Kept apart from
+ * `employees`, which the sync rewrites.
+ */
+export const cohortAdditions = pgTable(
+  "cohort_additions",
+  {
+    /** Lowercased. */
+    email: text("email").primaryKey(),
+    stage: text("stage").$type<"bootcamp" | "intermediate">().notNull(),
+    track: text("track").$type<CohortAdditionTrack>().notNull(),
+    addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("cohort_additions_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
+    check("cohort_additions_track_check", sql`${t.track} in ('sales', 'engineer')`),
+  ],
+);

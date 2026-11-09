@@ -15,7 +15,7 @@ import "server-only";
 
 import { and, eq, gt, gte, inArray, isNotNull, isNull, not, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { employees, intakeResponses, type Employee } from "@/db/schema";
+import { cohortAdditions, employees, intakeResponses, type Employee } from "@/db/schema";
 import { attended, classDate } from "@/lib/evals/attendance";
 import { getCandidateCutoffs, getDeferralDays, type CandidateCutoffs } from "@/lib/evals/settings";
 import { nextBootcampStart } from "@/lib/evals/tracks";
@@ -69,6 +69,8 @@ export type CurrentCohortMember = Pick<
   track: CandidateTrack;
   /** Whether an administrator set that track by hand. */
   overridden: boolean;
+  /** Whether they are in the cohort because a Training administrator added them by hand. */
+  added: boolean;
   stage: CandidateStage;
   /** Their employee id, for their Reporting → Live Sessions page; null for someone who has attended no class. */
   recordKey: string | null;
@@ -123,18 +125,30 @@ const ON_TRACK: Record<CandidateTrack, SQL> = {
 };
 
 /**
- * In the org, in a stage, on a track still to train or none yet, and recent
- * enough by the cutoffs. Reads `employees` and who attended what; eVals
- * scoring draws its attendees with it too.
+ * Added to the current cohort by hand, to the stage their attendance still
+ * puts them in: once they attend that stage's class, the addition lapses.
  */
-export function isCandidate({ startDateOnOrAfter, activeEffectiveDateAfter }: CandidateCutoffs) {
-  return and(
+const addedToStage = sql<boolean>`exists (select 1 from ${cohortAdditions} ca where ca.email = lower(${e.email}) and ca.stage = ${candidateStage})`;
+
+/**
+ * In the org, in a stage, on a track still to train or none yet, and recent
+ * enough by the cutoffs; or added to the cohort by hand, in the stage they
+ * were added to, whatever the org, the cutoffs or their title say. Reads
+ * `employees` and who attended what; eVals scoring draws its attendees with it
+ * too. `additions: false` asks only the rules, as adding someone does.
+ */
+export function isCandidate(
+  { startDateOnOrAfter, activeEffectiveDateAfter }: CandidateCutoffs,
+  { additions = true }: { additions?: boolean } = {},
+) {
+  const byRules = and(
     isNotNull(e.orgDepth),
     or(IN_STAGE.bootcamp, IN_STAGE.intermediate),
     or(isNull(e.track), inArray(e.track, ["sales", "engineer", "deferred"])),
     startDateOnOrAfter ? or(isNull(e.startDate), gte(e.startDate, startDateOnOrAfter)) : undefined,
     activeEffectiveDateAfter ? gt(e.activeEffectiveDate, activeEffectiveDateAfter) : undefined,
   );
+  return additions ? or(byRules, and(addedToStage, eq(e.active, true))) : byRules;
 }
 
 /**
@@ -176,6 +190,7 @@ export async function listCurrentCohort(
       activeEffectiveDate: e.activeEffectiveDate,
       track: candidateTrack,
       overridden: e.trackPinned,
+      added: addedToStage,
       stage: candidateStage,
       recordKey: sql<string | null>`case when ${attendedBtc} then ${e.id} end`,
       btcDate,
