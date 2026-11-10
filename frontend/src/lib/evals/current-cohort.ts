@@ -104,8 +104,14 @@ const attendedBtc = attended("bootcamp", sql`${e.email}`);
 const attendedInt = attended("intermediate", sql`${e.email}`);
 const candidateStage = sql<CandidateStage>`(case when ${attendedBtc} then 'intermediate' else 'bootcamp' end)`;
 const btcDate = classDate("bootcamp", sql`${e.email}`);
+/**
+ * `employees.email`, lowercased, written in for a subquery's outer reference.
+ * In a single-table select, drizzle writes `${e.email}` as a bare `"email"`,
+ * which a subquery over a table with its own `email` column reads as that one.
+ */
+const employeeEmail = sql.raw(`lower("employees"."email")`);
 /** They saved answers to their stage's registration form, as the RSVP mark beside their name shows. */
-const rsvped = sql<boolean>`exists (select 1 from ${intakeResponses} where ${intakeResponses.form} = ${candidateStage} and ${intakeResponses.email} = lower(${e.email}))`;
+const rsvped = sql<boolean>`exists (select 1 from ${intakeResponses} where ${intakeResponses.form} = ${candidateStage} and ${intakeResponses.email} = ${employeeEmail})`;
 
 const SORT_COLUMNS = {
   fullName: sql`lower(${e.fullName})`,
@@ -175,7 +181,7 @@ const ON_TRACK: Record<CandidateTrack, SQL> = {
  * Added to the current cohort by hand, to the stage their attendance still
  * puts them in: once they attend that stage's class, the addition lapses.
  */
-const addedToStage = sql<boolean>`exists (select 1 from ${cohortAdditions} ca where ca.email = lower(${e.email}) and ca.stage = ${candidateStage})`;
+const addedToStage = sql<boolean>`exists (select 1 from ${cohortAdditions} ca where ca.email = ${employeeEmail} and ca.stage = ${candidateStage})`;
 
 /**
  * In the org, in a stage, on a track still to train or none yet, and recent

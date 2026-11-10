@@ -23,6 +23,7 @@ import { db } from "@/db";
 import {
   bootcampJudges,
   bootcamps,
+  cohortAdditions,
   employees,
   EVALS_SETTINGS_KEYS,
   evalsAssessments,
@@ -31,6 +32,7 @@ import {
   evalsSubmissions,
   evalsTitles,
   hibobSyncRuns,
+  intakeResponses,
   scheduleSessionGroups,
   scheduleSessions,
   scheduleSessionStaff,
@@ -38,6 +40,7 @@ import {
 import { chosenNameOnRecord, nameOnRecord, setChosenName } from "@/lib/evals/chosen-names";
 import { hibobServiceUser, listHibobSyncRuns, syncHibobEmployees } from "@/lib/evals/hibob";
 import { toEmployeeRow } from "@/lib/evals/hibob-record";
+import { addAttendee } from "@/lib/cohorts/additions";
 import { currentCohortSummary, listCurrentCohort, type CandidateStage } from "@/lib/evals/current-cohort";
 import { listOrganizationMembers, loadRoster } from "@/lib/evals/roster";
 import {
@@ -97,6 +100,8 @@ const runIds: string[] = [];
 async function clearOwnRows() {
   await db.delete(evalsTitles).where(like(evalsTitles.title, `${TEST_PREFIX}%`));
   await db.delete(evalsSlackContacts).where(like(evalsSlackContacts.email, `%@${TEST_EMAIL_DOMAIN}`));
+  await db.delete(cohortAdditions).where(like(cohortAdditions.email, `%@${TEST_EMAIL_DOMAIN}`));
+  await db.delete(intakeResponses).where(like(intakeResponses.email, `%@${TEST_EMAIL_DOMAIN}`));
   await db.delete(employees).where(like(employees.id, `${TEST_PREFIX}%`));
 }
 
@@ -748,6 +753,24 @@ describe("HiBob sync", () => {
     assert.deepEqual((await currentCohortSummary()).counts, {
       bootcamp: { sales: 2, engineer: 2, other: 0, undecided: 1, deferred: 0 },
       intermediate: { sales: 1, engineer: 0, other: 0, undecided: 0, deferred: 0 },
+    });
+
+    // Someone added by hand is marked Added, and no one else is; one RSVP leaves the rest unanswered.
+    assert.ok((await addAttendee(admin.id, { email: email("c-out"), stage: "bootcamp", track: "sales" })).ok);
+    await db.insert(intakeResponses).values({ form: "bootcamp", email: email("c-ae"), answers: { attend: "Yes" } });
+    const bootcamp = (
+      await listCurrentCohort({ stage: "bootcamp", track: null }, { ...CURRENT_COHORT_LIST, q: "", page: 1, sort: "email", dir: "asc" })
+    ).rows;
+    assert.deepEqual(
+      bootcamp.filter((m) => m.added).map((m) => m.email.split("@")[0]),
+      ["c-out"],
+    );
+    assert.deepEqual((await currentCohortSummary()).unanswered.bootcamp, {
+      sales: 2,
+      engineer: 2,
+      other: 0,
+      undecided: 1,
+      deferred: 0,
     });
     });
   });
