@@ -19,13 +19,10 @@ const addSchema = z
     email: z.string().trim().min(1).max(320),
     stage: z.enum(CANDIDATE_STAGES),
     track: z.enum(COHORT_ADDITION_TRACKS),
-    /** On Other: whose sessions they follow, which scores them and invites them once they confirm. */
-    follows: z.enum(["sales", "engineer"]).nullable().optional(),
     /** Send them their registration form in Slack now, rather than in the next morning's reminders. */
     notify: z.boolean().default(false),
   })
-  .strict()
-  .refine((b) => b.track !== "other" || !!b.follows, "Other needs the track whose sessions they follow");
+  .strict();
 
 const STATUS: Record<AddAttendeeError, number> = {
   not_an_employee: 404,

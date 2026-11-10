@@ -540,15 +540,15 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PUT",
         path: "/api/cohorts/current/track",
-        summary: "Sets one org member's track by hand; sales, engineer and ignored put their title on that list.",
+        summary: "Sets one org member's track by hand, or an added attendee's; sales, engineer and ignored put an org member's title on that list.",
         access: "trainingAdmin",
         token: true,
         notes:
-          "sales, engineer and ignored put the person's title on that list, moving it off another list if it is on one, and re-track everyone in the org who holds it, compared as the lists compare titles; title says where it went, and is null when it was on that list already or the person has no title. Anyone else with the title whose track was set by hand keeps it. The person is also pinned to the choice where the rules still give them something else, such as a late start, and always when they have no title. undecided, deferred and exempt pin just this person; deferred moves them from the Current tab to the Deferred tab. A pin holds through every later sync, title-list change and bootcamp change, until automatic hands the person back to the rules. ignored and exempt take people off the Current tab. track in the response is the one the person has now, overridden whether they are pinned, and retracked how many people's tracks changed, the person included.",
+          "sales, engineer and ignored put the person's title on that list, moving it off another list if it is on one, and re-track everyone in the org who holds it, compared as the lists compare titles; title says where it went, and is null when it was on that list already or the person has no title. Anyone else with the title whose track was set by hand keeps it. The person is also pinned to the choice where the rules still give them something else, such as a late start, and always when they have no title. undecided, deferred and exempt pin just this person; deferred moves them from the Current tab to the Deferred tab. A pin holds through every later sync, title-list change and bootcamp change, until automatic hands the person back to the rules. ignored and exempt take people off the Current tab. Someone added to the cohort by hand (POST /api/cohorts/current/attendees), inside the org or not, is pinned to every choice with no title moved, and automatic gives them back the track they were added on. track in the response is the one the person has now, overridden whether they are pinned, and retracked how many people's tracks changed, the person included.",
         body: {
           kind: "json",
           fields: [
-            { name: "email", type: "string", required: true, note: "anyone under the Organization Leader" },
+            { name: "email", type: "string", required: true, note: "anyone under the Organization Leader, or anyone added to the cohort by hand" },
             {
               name: "track",
               type: `"sales" | "engineer" | "undecided" | "deferred" | "ignored" | "exempt" | "automatic"`,
@@ -565,22 +565,21 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/cohorts/current/attendees",
-        summary: "Adds someone from the employee list to the current cohort by hand, to Bootcamp or Intermediate on the Sales, Engineer or Other track.",
+        summary: "Adds someone from the employee list to the current cohort by hand, to Bootcamp or Intermediate on the Sales or Engineer track.",
         access: "trainingAdmin",
         token: true,
         notes:
-          "For a one-off attendee the cohort's rules leave out: someone outside the org, past the start-date cutoffs, or on a track that skips them. They then count as a candidate everywhere the cohort is drawn (Cohorts, the registration form and its reminders, Dietary needs, name cards, the Slack channel sync, eVals) while that is still the stage their attendance puts them in, on that track, which the HiBob sync keeps. Once they attend that stage's class the addition lapses. Adding someone already added replaces their stage and track. members on GET /api/cohorts/current mark them added. Other is for an attendee who is neither Sales nor Engineer, such as a CTO joining: they register, are catered for and join the stage's main Slack channel straight away, and once their latest answer to their stage's form says Yes to attending they are also scored in eVals, counted in Reporting and invited to the Google Meetings as the track they follow. Before that they are none of those. With notify, they are sent their registration form in Slack at once, as POST /api/cohorts/current/registration-link does, and notified says what became of it.",
+          "For a one-off attendee the cohort's rules leave out: someone outside the org, past the start-date cutoffs, or on a track that skips them. They then count as a candidate everywhere the cohort is drawn (Cohorts, the registration form and its reminders, Dietary needs, name cards, the Slack channel sync, eVals, Reporting, the Google Meetings) as anyone else on that track is, until they attend an INT class: someone added to Bootcamp moves on to Intermediate after attending its class, as anyone else does. Their track is pinned as PUT /api/cohorts/current/track pins it, which can set it to another later; the HiBob sync keeps it. Adding someone already added replaces their stage and track. members on GET /api/cohorts/current mark them added. With notify, they are sent their registration form in Slack at once, as POST /api/cohorts/current/registration-link does, and notified says what became of it.",
         body: {
           kind: "json",
           fields: [
             { name: "email", type: "string", required: true, note: "their email in the employee list" },
             { name: "stage", type: '"bootcamp" | "intermediate"', required: true },
-            { name: "track", type: '"sales" | "engineer" | "other"', required: true },
-            { name: "follows", type: '"sales" | "engineer" | null', note: "with track other, required: whose sessions they follow; ignored otherwise" },
+            { name: "track", type: '"sales" | "engineer"', required: true },
             { name: "notify", type: "boolean", note: "send them their registration form in Slack now; default false" },
           ],
         },
-        returns: '201 { ok: true, email, fullName, stage: "bootcamp" | "intermediate", track: "sales" | "engineer" | "other", notified: { sent: true } | { sent: false, reason, detail? } | null }',
+        returns: '201 { ok: true, email, fullName, stage: "bootcamp" | "intermediate", track: "sales" | "engineer", notified: { sent: true } | { sent: false, reason, detail? } | null }',
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
           { status: 404, error: "not_an_employee", when: "no one active in the employee list has that email" },
@@ -608,7 +607,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Takes someone added by hand off the current cohort.",
         access: "trainingAdmin",
         token: true,
-        notes: "Their track goes back to what the rules give them; someone the rules include stays in the cohort.",
+        notes: "Their track, and any track set by hand, goes back to what the rules give them; someone the rules include stays in the cohort.",
         query: [{ name: "email", type: "string", required: true, note: "the email they were added under" }],
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "no one was added under that email" }],

@@ -194,10 +194,11 @@ describe("title lists", () => {
     assert.equal(trackFor({ ...ae, override: { track: "exempt" } }, lists), "exempt");
     assert.equal(trackFor({ ...ae, title: "Director", override: { track: "exempt" } }, lists), "exempt");
     assert.equal(trackFor({ ...ae, title: "Director" }, lists), null);
-    // Added to the cohort by hand: their track, ahead of every rule and outside the org too.
+    // Added to the cohort by hand: their track, ahead of every rule and outside the org too, unless one was set by hand since.
     assert.equal(trackFor({ ...ae, title: "Director", added: { track: "engineer" } }, lists), "engineer");
     assert.equal(trackFor({ ...ae, inOrg: false, added: { track: "sales" } }, lists), "sales");
-    assert.equal(trackFor({ ...ae, override: { track: "exempt" }, added: { track: "sales" } }, lists), "sales");
+    assert.equal(trackFor({ ...ae, override: { track: "exempt" }, added: { track: "sales" } }, lists), "exempt");
+    assert.equal(trackFor({ ...ae, inOrg: false, override: { track: "engineer" }, added: { track: "sales" } }, lists), "engineer");
     assert.equal(trackFor({ ...ae, inOrg: false }, lists), null);
     assert.equal(trackFor({ ...ae, inOrg: false, override: { track: "exempt" } }, lists), null);
   });

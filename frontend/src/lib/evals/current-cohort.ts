@@ -178,15 +178,17 @@ const ON_TRACK: Record<CandidateTrack, SQL> = {
 };
 
 /**
- * Added to the current cohort by hand, to the stage their attendance still
- * puts them in: once they attend that stage's class, the addition lapses.
+ * Added to the current cohort by hand, and still in a stage of it: someone
+ * added to Bootcamp moves on to Intermediate once they attend its class, as
+ * anyone else does, and someone added to Intermediate is in it until they
+ * attend that. Either way, attending an INT class takes them out.
  */
-const addedToStage = sql<boolean>`exists (select 1 from ${cohortAdditions} ca where ca.email = ${employeeEmail} and ca.stage = ${candidateStage})`;
+const addedToStage = sql<boolean>`(exists (select 1 from ${cohortAdditions} ca where ca.email = ${employeeEmail} and (ca.stage = 'bootcamp' or ca.stage = ${candidateStage})) and ${or(IN_STAGE.bootcamp, IN_STAGE.intermediate)})`;
 
 /**
  * In the org, in a stage, on a track still to train or none yet, and recent
- * enough by the cutoffs; or added to the cohort by hand, in the stage they
- * were added to, whatever the org, the cutoffs or their title say. Reads
+ * enough by the cutoffs; or added to the cohort by hand, still in a stage of
+ * it, whatever the org, the cutoffs or their title say. Reads
  * `employees` and who attended what; eVals scoring draws its attendees with it
  * too. `additions: false` asks only the rules, as adding someone does.
  */

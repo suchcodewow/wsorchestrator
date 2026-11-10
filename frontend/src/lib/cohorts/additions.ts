@@ -2,8 +2,10 @@
  * Adding someone to the current cohort by hand, from the Cohorts page's Add
  * attendee: a one-off attendee the cohort's rules leave out. They are added
  * to Bootcamp or Intermediate on the Sales or Engineer track, and from then on
- * count as a candidate everywhere the cohort is drawn (`isCandidate`), on that
- * track (`trackFor`), until their attendance moves them past that stage.
+ * count as a candidate everywhere the cohort is drawn (`isCandidate`), as
+ * anyone else does: one added to Bootcamp carries on to Intermediate after
+ * it. Their track is pinned as if set from the track menu, which can change it
+ * later like anyone else's.
  *
  * Bootcamp is for someone who has not attended a BTC class; Intermediate for
  * someone who has attended BTC and not INT. Anything else is refused, as is
@@ -18,7 +20,7 @@ import { cohortAdditions, employees, users, type CohortAdditionTrack } from "@/d
 import { attended, classDate } from "@/lib/evals/attendance";
 import { isCandidate, type CandidateStage } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
-import { retrackEmployees } from "@/lib/evals/tracks";
+import { pin, retrackEmployees, unpin } from "@/lib/evals/tracks";
 
 export type AddAttendeeError =
   /** No one in the employee list has that email. */
@@ -44,7 +46,7 @@ const lowerEmail = sql`lower(${e.email})`;
  */
 export async function addAttendee(
   actorId: string,
-  input: { email: string; stage: CandidateStage; track: CohortAdditionTrack; follows?: "sales" | "engineer" | null },
+  input: { email: string; stage: CandidateStage; track: CohortAdditionTrack },
 ): Promise<AddAttendeeResult> {
   const lower = input.email.trim().toLowerCase();
   const cutoffs = await getCandidateCutoffs();
@@ -69,24 +71,24 @@ export async function addAttendee(
   if (input.stage === "intermediate" && !person.attendedBtc) return { ok: false, error: "no_bootcamp" };
   if (person.byRules) return { ok: false, error: "already_in_cohort" };
 
-  // Only Other follows another track's sessions; Sales and Engineer follow their own.
-  const follows = input.track === "other" ? (input.follows ?? null) : null;
   await db
     .insert(cohortAdditions)
-    .values({ email: lower, stage: input.stage, track: input.track, follows, addedBy: actorId })
+    .values({ email: lower, stage: input.stage, track: input.track, addedBy: actorId })
     .onConflictDoUpdate({
       target: cohortAdditions.email,
-      set: { stage: input.stage, track: input.track, follows, addedBy: actorId, addedAt: new Date() },
+      set: { stage: input.stage, track: input.track, addedBy: actorId, addedAt: new Date() },
     });
+  await pin(lower, input.track);
   await retrackEmployees([lower]);
   return { ok: true, email: lower, fullName: person.fullName, stage: input.stage, track: input.track };
 }
 
-/** Takes `email` off the current cohort's additions; whether they were on it. Their track goes back to the rules'. */
+/** Takes `email` off the current cohort's additions; whether they were on it. Their track, and any pin, goes back to the rules'. */
 export async function removeAttendee(email: string): Promise<{ removed: boolean; fullName: string | null }> {
   const lower = email.trim().toLowerCase();
   const rows = await db.delete(cohortAdditions).where(eq(cohortAdditions.email, lower)).returning({ email: cohortAdditions.email });
   if (rows.length === 0) return { removed: false, fullName: null };
+  await unpin(lower);
   await retrackEmployees([lower]);
   const [person] = await db.select({ fullName: e.fullName }).from(e).where(eq(lowerEmail, lower)).limit(1);
   return { removed: true, fullName: person?.fullName ?? null };
