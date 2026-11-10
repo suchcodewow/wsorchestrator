@@ -106,20 +106,18 @@ function Intro({ onStart }: { onStart: () => void }) {
             🔍
           </span>
           <p className="max-w-3xl">
-            <span className="font-medium">The customer meeting is in an hour.</span> Your team keeps drafting “Our
-            understanding” slides, and every one of them has small mistakes in it. Find them before the customer does.
+            <span className="font-medium">We need your help!</span> The customer meeting is just around the corner and the “Our
+            Understanding” slide has problems!
           </p>
         </div>
         <div className="space-y-2 px-5 py-4 text-sm">
           <p className="font-medium">How it works</p>
           <ul className="list-disc space-y-1 pl-5 marker:text-muted-foreground">
             <li>
-              You see one slide at a time. Each has between {FLAWS_PER_SLIDE.min} and {FLAWS_PER_SLIDE.max} things wrong with
-              it, and there’s always another slide.
+              You’ll see an Our Understanding slide with {FLAWS_PER_SLIDE.min}-{FLAWS_PER_SLIDE.max} problems.
             </li>
-            <li>Click anything that’s wrong and it corrects itself.</li>
-            <li>When you think you’ve found everything, click Next. You’ll see what you missed before the next slide.</li>
-            <li>Stop whenever you like with Finish for now, and see how this session went.</li>
+            <li>Click anything incorrect to fix it.</li>
+            <li>When you’ve found everything you can, click “next”.</li>
           </ul>
         </div>
         <div className="flex flex-wrap gap-x-8 gap-y-1 px-5 py-2.5 text-sm">
@@ -137,10 +135,14 @@ function Intro({ onStart }: { onStart: () => void }) {
         </div>
         <div className="space-y-2 px-5 py-4 text-sm">
           <p className="font-medium">What to look for</p>
+          <p className="text-muted-foreground">Look for:</p>
+          <ul className="list-disc space-y-1 pl-5 text-muted-foreground marker:text-muted-foreground">
+            <li>spelling and grammar errors</li>
+            <li>punctuation problems &amp; extra spaces</li>
+            <li>formatting issues</li>
+          </ul>
           <p className="text-muted-foreground">
-            Spelling and grammar, punctuation, capitalization, a font or size that doesn’t match the rest, bold or italic out of
-            place, colors, anything out of line or unevenly spaced, the wrong icon, text that runs over its column, and anything
-            left behind from an edit.
+            Don’t worry about the content itself. The goal is to practice spotting the issues above.
           </p>
         </div>
       </section>
