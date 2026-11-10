@@ -1967,9 +1967,21 @@ export const meetingSyncRuns = pgTable(
 
 /**
  * `cancelled` is an event the old create-a-meeting flow made, taken off the
- * calendar; `none_left` is someone with no occurrence before their bootcamp.
+ * calendar; `none_left` is someone with no occurrence before their bootcamp;
+ * `zoom_replaced` is an occurrence moved to a Zoom meeting the connected Zoom
+ * user hosts, and `zoom_hosts` a facilitator added to one as an alternative host.
  */
-export const MEETING_SYNC_ACTIONS = ["invited", "removed", "attended", "missed", "none_left", "cancelled", "failed"] as const;
+export const MEETING_SYNC_ACTIONS = [
+  "invited",
+  "removed",
+  "attended",
+  "missed",
+  "none_left",
+  "cancelled",
+  "zoom_replaced",
+  "zoom_hosts",
+  "failed",
+] as const;
 export type MeetingSyncAction = (typeof MEETING_SYNC_ACTIONS)[number];
 
 /** What one run did, or in a dry run would have done, to each meeting and person. */

@@ -3,7 +3,7 @@
 import { after, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { authorizationUrl, exchangeCode, grantedScopes, refreshTokens, ZoomError } from "../../src/lib/zoom";
+import { alternativeHostsOf, authorizationUrl, createMeeting, exchangeCode, grantedScopes, refreshTokens, setAlternativeHosts, zoomClient, ZoomError } from "../../src/lib/zoom";
 
 const realFetch = globalThis.fetch;
 after(() => {
@@ -58,14 +58,62 @@ test("an answer with no new refresh token is a failure, since the old one is spe
 });
 
 test("every meeting scope and the profile scope are needed, named with or without a suffix; an answer that names none is let through", () => {
-  const all = "meeting:read:list_past_instances meeting:read:list_past_participants meeting:delete:meeting user:read:user";
+  const all = "meeting:read:list_past_instances meeting:read:list_past_participants meeting:delete:meeting meeting:write:meeting meeting:read:meeting meeting:update:meeting user:read:user";
   assert.equal(grantedScopes(all), true);
   assert.equal(
-    grantedScopes("meeting:read:list_past_instances:admin meeting:read:list_past_participants:admin meeting:delete:meeting:admin user:read:user:admin"),
+    grantedScopes(all.split(" ").map((s) => `${s}:admin`).join(" ")),
     true,
   );
   assert.equal(grantedScopes(all.replace(" user:read:user", "")), false);
   // A connection from before attendance was read has the old create-a-meeting scopes alone.
   assert.equal(grantedScopes("meeting:write:meeting meeting:read:meeting meeting:update:meeting meeting:delete:meeting user:read:user"), false);
+  // One from before the sync made its own meetings can read attendance but not make a meeting.
+  assert.equal(
+    grantedScopes("meeting:read:list_past_instances meeting:read:list_past_participants meeting:delete:meeting user:read:user"),
+    false,
+  );
   assert.equal(grantedScopes(""), true);
+});
+
+test("a meeting is made as a one-off under the connected user, with its facilitators as alternative hosts", async () => {
+  const sent: { url: string; method: string; body: unknown }[] = [];
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    sent.push({ url: String(input), method: String(init?.method), body: JSON.parse(String(init?.body)) });
+    return new Response(JSON.stringify({ id: 1, join_url: "https://zoom.us/j/1" }), { status: 201, headers: { "Content-Type": "application/json" } });
+  }) as typeof fetch;
+  const zoom = zoomClient(async () => "token");
+
+  await createMeeting(zoom, {
+    topic: "Pre Bootcamp",
+    startsAt: new Date("2026-11-10T18:30:00.000Z"),
+    minutes: 60,
+    timeZone: "America/New_York",
+    alternativeHosts: ["a@harness.io", "b@harness.io"],
+  });
+  assert.equal(sent[0]!.url, "https://api.zoom.us/v2/users/me/meetings");
+  assert.deepEqual(sent[0]!.body, {
+    topic: "Pre Bootcamp",
+    type: 2,
+    start_time: "2026-11-10T18:30:00Z",
+    duration: 60,
+    timezone: "America/New_York",
+    settings: { alternative_hosts: "a@harness.io;b@harness.io" },
+  });
+
+  await createMeeting(zoom, { topic: "t", startsAt: new Date("2026-11-10T18:30:00Z"), minutes: 30, timeZone: "UTC", alternativeHosts: [] });
+  assert.deepEqual((sent[1]!.body as { settings: unknown }).settings, {});
+
+  await setAlternativeHosts(zoom, "123", ["a@harness.io", "c@harness.io"]);
+  assert.equal(sent[2]!.method, "PATCH");
+  assert.equal(sent[2]!.url, "https://api.zoom.us/v2/meetings/123");
+  assert.deepEqual(sent[2]!.body, { settings: { alternative_hosts: "a@harness.io;c@harness.io" } });
+});
+
+test("a meeting's alternative hosts are read lowercased, however Zoom separates them", () => {
+  assert.deepEqual(alternativeHostsOf({ settings: { alternative_hosts: "A@harness.io; b@harness.io,c@harness.io" } }), [
+    "a@harness.io",
+    "b@harness.io",
+    "c@harness.io",
+  ]);
+  assert.deepEqual(alternativeHostsOf({}), []);
 });

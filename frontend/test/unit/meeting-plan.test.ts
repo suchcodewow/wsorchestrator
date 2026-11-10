@@ -23,6 +23,7 @@ import {
   mergeAttendees,
   addDays,
   planMeeting,
+  rewriteZoomLink,
   sameGuests,
   windowsFor,
   zoomMeetingIdIn,
@@ -403,6 +404,42 @@ test("the Zoom meeting is read from the first join link found", () => {
   assert.equal(zoomMeetingIdIn(null, "Join: https://harness-io.zoom.us/j/91234567890?pwd=abc"), "91234567890");
   assert.equal(zoomMeetingIdIn("https://zoom.us/my/123456789", "https://zoom.us/j/99999999999"), "123456789");
   assert.equal(zoomMeetingIdIn("https://meet.google.com/abc-defg-hij", undefined), null);
+});
+
+const NEW_MEETING = { url: "https://harness-io.zoom.us/j/94345958761?pwd=new", id: 94345958761, passcode: "054262" };
+
+test("the add-on's invite block is replaced whole, and the agenda around it is kept", () => {
+  const rewrite = rewriteZoomLink(
+    {
+      location: "https://harness-io.zoom.us/j/93816625886?pwd=old",
+      description:
+        "<p>Agenda: certification</p><p><br>──────────<br><br>Join: https://harness-io.zoom.us/j/93816625886?pwd=old<br>Meeting ID: 938 1662 5886<br>Password: 742141<br>──────────</p>",
+      conferenceData: { entryPoints: [{ uri: "https://harness-io.zoom.us/j/93816625886?pwd=old" }] },
+    },
+    NEW_MEETING,
+  );
+  assert.equal(rewrite.location, NEW_MEETING.url);
+  assert.equal(rewrite.clearConference, true);
+  assert.match(rewrite.description, /^<p>Agenda: certification<\/p><p>Join Zoom: <a href="https:\/\/harness-io\.zoom\.us\/j\/94345958761\?pwd=new">/);
+  assert.match(rewrite.description, /Meeting ID: 94345958761<br>Passcode: 054262<\/p>$/);
+  assert.doesNotMatch(rewrite.description, /93816625886|742141|──/);
+});
+
+test("a bare link in the text is swapped for the new one, and plain text stays plain", () => {
+  const rewrite = rewriteZoomLink({ description: "Certification prep\nJoin: https://zoom.us/j/93816625886" }, NEW_MEETING);
+  assert.equal(rewrite.location, undefined);
+  assert.equal(rewrite.clearConference, false);
+  assert.equal(rewrite.description, `Certification prep\nJoin:\n\nJoin Zoom: ${NEW_MEETING.url}\nMeeting ID: 94345958761\nPasscode: 054262`);
+});
+
+test("a physical location is left alone, and an event whose link is only the add-on's still gets the new details", () => {
+  const rewrite = rewriteZoomLink(
+    { location: "Boston office", description: "", conferenceData: { entryPoints: [{ uri: "https://zoom.us/j/93816625886" }] } },
+    { ...NEW_MEETING, passcode: null },
+  );
+  assert.equal(rewrite.location, undefined);
+  assert.equal(rewrite.clearConference, true);
+  assert.equal(rewrite.description, `Join Zoom: ${NEW_MEETING.url}\nMeeting ID: 94345958761`);
 });
 
 test("Zoom's participants match by email, else by full name", () => {

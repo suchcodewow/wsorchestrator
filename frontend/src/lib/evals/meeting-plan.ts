@@ -459,6 +459,57 @@ export function zoomMeetingIdIn(...texts: (string | null | undefined)[]): string
   return null;
 }
 
+const ZOOM_URL = /https?:\/\/[^\s"'<>]*zoom\.us\/[^\s"'<>]+/i;
+const allZoomUrls = () => new RegExp(ZOOM_URL.source, "gi");
+/** The invite block Zoom's Google Calendar add-on writes, between two rules, with the `<p>` it sits in. */
+const ZOOM_INVITE_BLOCK = /(?:<p>(?:<br\s*\/?>)*)?─{5,}[\s\S]*?─{5,}(?:<\/p>)?/;
+
+export type ZoomLinkRewrite = {
+  /** The event's new location, or undefined to leave it. */
+  location?: string;
+  /** The event's new description. */
+  description: string;
+  /** The event's Zoom add-on conference must be cleared too, or its "Join with Zoom" button keeps the old meeting. */
+  clearConference: boolean;
+};
+
+/**
+ * Moves an event from the Zoom meeting in its link to the one at `join`. The
+ * old link and its invite block (dial-in numbers, meeting id, passcode) go and
+ * the new meeting's take their place; the rest of the description stays. A
+ * location that holds a Zoom link gets the new one, and any other location is
+ * left alone.
+ */
+export function rewriteZoomLink(
+  event: { location?: string | null; description?: string | null; conferenceData?: { entryPoints?: { uri?: string }[] } },
+  join: { url: string; id: string | number; passcode?: string | null },
+): ZoomLinkRewrite {
+  const description = event.description ?? "";
+  const html = /<[a-z][^>]*>/i.test(description);
+  const passcode = join.passcode ? `Passcode: ${join.passcode}` : "";
+  const block = html
+    ? `<p>Join Zoom: <a href="${join.url}">${join.url}</a><br>Meeting ID: ${join.id}${passcode ? `<br>${passcode}` : ""}</p>`
+    : `Join Zoom: ${join.url}\nMeeting ID: ${join.id}${passcode ? `\n${passcode}` : ""}`;
+
+  let next: string;
+  const invite = ZOOM_INVITE_BLOCK.exec(description);
+  if (invite && /zoom\.us/i.test(invite[0])) {
+    next = description.replace(ZOOM_INVITE_BLOCK, () => block);
+  } else if (ZOOM_URL.test(description)) {
+    // The link is in the text without the add-on's block around it: swap the link, and add the details after it.
+    next = `${description.replace(allZoomUrls(), "").trim()}${html ? "" : "\n\n"}${block}`;
+  } else {
+    next = `${description}${description && !html ? "\n\n" : ""}${block}`;
+  }
+
+  const location = event.location ?? "";
+  return {
+    ...(location && ZOOM_URL.test(location) ? { location: location.replace(allZoomUrls(), join.url) } : {}),
+    description: next,
+    clearConference: (event.conferenceData?.entryPoints ?? []).some((p) => /zoom\.us/i.test(p.uri ?? "")),
+  };
+}
+
 /** A participant as Zoom's past-meeting participants report lists one. */
 export type ZoomParticipant = { name?: string; user_email?: string };
 

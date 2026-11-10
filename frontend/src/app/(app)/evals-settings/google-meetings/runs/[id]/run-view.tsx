@@ -40,6 +40,8 @@ const ACTIONS: Record<MeetingSyncAction, { live: string; dry: string }> = {
   missed: { live: "Missed", dry: "Missed" },
   none_left: { live: "None left before bootcamp", dry: "None left before bootcamp" },
   cancelled: { live: "Cancelled the old meeting", dry: "Would cancel the old meeting" },
+  zoom_replaced: { live: "Moved to our Zoom meeting", dry: "Would move to our Zoom meeting" },
+  zoom_hosts: { live: "Added as a Zoom host", dry: "Would add as a Zoom host" },
   failed: { live: "Failed", dry: "Failed" },
 };
 

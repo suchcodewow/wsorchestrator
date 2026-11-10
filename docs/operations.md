@@ -274,6 +274,23 @@ Each run does the following for each picked meeting
 - **Who it takes off.** It takes off only the guests it added itself. Anyone
   added by hand, or by the meeting's owner, stays.
 - **Replies.** It reads each guest's reply back from the event.
+- **Zoom meetings.** Zoom reports who joined only for a meeting the connected
+  Zoom user hosts, so each upcoming occurrence a cohort member is on is held in
+  one of that user's meetings.
+  - If the invite's Zoom link is to a meeting that user already hosts, it is
+    kept, and any meeting facilitator who is not yet one of its alternative
+    hosts is added.
+  - Any other Zoom link, a meeting someone else hosts, is replaced: the sync
+    makes a meeting for that occurrence, with every facilitator as an
+    alternative host, and changes the event's location and description (and
+    its Zoom add-on's conference) to it. The old meeting is the owner's and is
+    left alone, so a guest who kept its link would join a meeting nothing
+    reports on.
+  - An event with no Zoom link is left as it is.
+  - A facilitator without a licensed Zoom account in the same Zoom account is
+    refused by Zoom; the run's notes name them.
+  - Zoom allows about 100 meetings a day; a run that reaches it stops making
+    them and the next run carries on.
 - **Attendance.** It reads attendance from Zoom once an occurrence has been
   over for 30 minutes.
   - A guest Zoom saw join, by email or by full name, is done.
@@ -336,17 +353,22 @@ Setting it up in an environment:
 4. **Zoom (optional; for attendance).**
    - Create a **General App** in the Zoom Marketplace, managed by *User*. Give
      it the user-level scopes `meeting:read:list_past_instances`,
-     `meeting:read:list_past_participants`, `meeting:delete:meeting` and
-     `user:read:user`, and nothing with `:admin`. `meeting:delete:meeting`
-     only cancels the Zoom meetings the old create-a-meeting flow made.
+     `meeting:read:list_past_participants`, `meeting:read:meeting`,
+     `meeting:write:meeting`, `meeting:update:meeting`,
+     `meeting:delete:meeting` and `user:read:user`, and nothing with `:admin`.
+     The write and update scopes make an occurrence's meeting and add its
+     alternative hosts; `meeting:delete:meeting` cancels the Zoom meetings the
+     old create-a-meeting flow made, and the one a failed calendar change left.
    - Under OAuth, add `{AUTH_URL}/api/auth/callback/google` as the redirect
      URL.
    - Set `zoom_client_id` on the workspace and `zoom_client_secret` as a
      secret (`tf_zoom_client_secret`).
    - Press *Connect Zoom user* on Admin Settings → External Connectors, and
-     sign in as **the Zoom user who hosts the calendar's meetings**. Zoom
-     reports participants only for meetings that user hosts. For any other
-     meeting, attendance is marked by hand on the Current tab.
+     sign in as **the Zoom user who will host the calendar's meetings** (a
+     licensed user such as `svc_harnessevents@harness.io`). Zoom reports
+     participants only for meetings that user hosts, and the sync moves each
+     occurrence to a meeting that user hosts. An event with no Zoom link has no
+     attendance to read: mark it by hand on the Current tab.
    - A user connected under the old scopes must be reconnected after the
      app's scopes change, or Zoom refuses to report attendance.
    - Zoom rotates the refresh token on every use, and each sync saves the new

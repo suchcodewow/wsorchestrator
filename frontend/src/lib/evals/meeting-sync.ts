@@ -77,6 +77,7 @@ import {
   meetingKey,
   mergeAttendees,
   planMeeting,
+  rewriteZoomLink,
   sameGuests,
   windowsFor,
   zoomMeetingIdIn,
@@ -90,7 +91,7 @@ import {
 import { accessToken, calendarClient, GoogleError, oauthClient, type CalendarClient } from "@/lib/google-calendar";
 import { openSecret } from "@/lib/secret-box";
 import { classDate } from "@/lib/evals/attendance";
-import { ZoomError, type ZoomClient } from "@/lib/zoom";
+import { alternativeHostsOf, createMeeting, getMeeting, setAlternativeHosts, ZoomError, type ZoomClient, type ZoomMeeting } from "@/lib/zoom";
 import { connectedZoom } from "@/lib/zoom-connection";
 
 /** The calendar the meetings are picked from, and invites sent on. */
@@ -387,6 +388,10 @@ type Invite = PlanInvite & { test: boolean; responseStatus: string | null };
 type Context = {
   calendar: CalendarClient;
   zoom: ZoomClient | null;
+  /** The connected Zoom user, who hosts the meetings the sync makes. */
+  zoomEmail: string | null;
+  /** Zoom would make no more meetings today, so no more are tried this run. */
+  zoomCapped: boolean;
   dryRun: boolean;
   testGroup: boolean;
   now: Date;
@@ -580,6 +585,123 @@ async function readAttendance(ctx: Context, meeting: MeetingSelection, occurrenc
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Holding an occurrence in the connected Zoom user's own meeting      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Zoom answers a meeting the connected user does not host as one that does
+ * not exist or is not theirs. A refusal about the token or its scopes is not
+ * that, and is no reason to make a second meeting.
+ */
+function notOurs(err: unknown): boolean {
+  return err instanceof ZoomError && [400, 403, 404].includes(err.status) && !/scope|token/i.test(err.message);
+}
+
+/**
+ * Makes sure an upcoming occurrence is held in a Zoom meeting the connected
+ * Zoom user hosts, since Zoom reports who joined only for a meeting its
+ * connected user hosts, and that every meeting facilitator can start it.
+ *
+ * - A link to a meeting that user already hosts keeps it, and has any
+ *   facilitator it lacks added as an alternative host.
+ * - Any other link, a meeting someone else hosts, is replaced: a meeting is
+ *   made for the occurrence and the event's link, and its Zoom add-on's, are
+ *   changed to it. The old meeting is the owner's and is left alone.
+ * - An event with no Zoom link is left as it is.
+ *
+ * A dry run reads Zoom and logs what a live run would do.
+ */
+async function ensureOwnZoom(ctx: Context, meeting: MeetingSelection, occ: Occurrence): Promise<void> {
+  const event = occ.event;
+  if (!event) return;
+  const oldId = zoomMeetingIdIn(event.location, event.description, ...(event.conferenceData?.entryPoints ?? []).map((p) => p.uri));
+  if (!oldId) return;
+  if (!ctx.zoom || !ctx.zoomEmail) {
+    noteOnce(ctx, "no-zoom-own", "No Zoom user is connected, so the meetings' Zoom links were left as they are. Connect one on Admin Settings → External Connectors.");
+    return;
+  }
+  const zoom = ctx.zoom;
+  const wanted = [...new Set(ctx.facilitators.map((e) => e.trim().toLowerCase()))].filter((e) => e && e !== ctx.zoomEmail);
+  const where = { meetingName: meeting.name, occurrenceStartsAt: occ.startsAt };
+
+  let existing: ZoomMeeting | null = null;
+  try {
+    existing = await getMeeting(zoom, oldId);
+    if (existing.host_email?.trim().toLowerCase() !== ctx.zoomEmail) existing = null;
+  } catch (err) {
+    if (!notOurs(err)) {
+      ctx.log.note({ ...where, action: "failed", detail: (err as Error).message });
+      return;
+    }
+  }
+
+  if (existing) {
+    const have = new Set(alternativeHostsOf(existing));
+    const missing = wanted.filter((e) => !have.has(e));
+    if (missing.length === 0) return;
+    for (const email of missing) ctx.log.note({ ...where, action: "zoom_hosts", email });
+    if (ctx.dryRun) return;
+    try {
+      await setAlternativeHosts(zoom, oldId, [...have, ...missing]);
+      const now = new Set(alternativeHostsOf(await getMeeting(zoom, oldId)));
+      const refused = missing.filter((e) => !now.has(e));
+      if (refused.length > 0) noteOnce(ctx, `hosts:${refused.join()}`, hostsRefused(refused));
+    } catch (err) {
+      ctx.log.note({ ...where, action: "failed", detail: (err as Error).message });
+    }
+    return;
+  }
+
+  ctx.log.note({ ...where, action: "zoom_replaced", detail: `The Zoom meeting in the invite is not hosted by ${ctx.zoomEmail}.` });
+  if (ctx.dryRun || ctx.zoomCapped) return;
+  let made: ZoomMeeting;
+  try {
+    made = await createMeeting(zoom, {
+      topic: event.summary!.trim(),
+      startsAt: occ.startsAt,
+      minutes: Math.max(1, Math.round((occ.endsAt.getTime() - occ.startsAt.getTime()) / 60_000)),
+      timeZone: ctx.timeZone,
+      alternativeHosts: wanted,
+    });
+  } catch (err) {
+    if (err instanceof ZoomError && err.status === 429) {
+      ctx.zoomCapped = true;
+      noteOnce(ctx, "zoom-capped", "Zoom would make no more meetings for now, so the rest are replaced on a later run.");
+      return;
+    }
+    ctx.log.note({ ...where, action: "failed", detail: (err as Error).message });
+    return;
+  }
+
+  const rewrite = rewriteZoomLink(event, { url: made.join_url, id: made.id, passcode: made.password });
+  try {
+    await ctx.calendar.call("PATCH", `${events}/${enc(occ.eventId)}`, {
+      query: { sendUpdates: "none", ...(rewrite.clearConference ? { conferenceDataVersion: "1" } : {}) },
+      body: {
+        description: rewrite.description,
+        ...(rewrite.location === undefined ? {} : { location: rewrite.location }),
+        ...(rewrite.clearConference ? { conferenceData: null } : {}),
+      },
+    });
+  } catch (err) {
+    // The calendar kept the old link, so the new meeting would be one nobody is sent to.
+    await zoom.call("DELETE", `/meetings/${enc(String(made.id))}`).catch(() => {});
+    if (err instanceof GoogleError && err.revoked) throw err;
+    ctx.log.note({ ...where, action: "failed", detail: (err as Error).message });
+    return;
+  }
+  await db.update(meetingOccurrences).set({ zoomMeetingId: String(made.id) }).where(eq(meetingOccurrences.id, occ.id));
+
+  const accepted = new Set(alternativeHostsOf(made));
+  const refused = wanted.filter((e) => !accepted.has(e));
+  if (refused.length > 0) noteOnce(ctx, `hosts:${refused.join()}`, hostsRefused(refused));
+}
+
+function hostsRefused(emails: readonly string[]): string {
+  return `Zoom would not make ${emails.join(", ")} an alternative host, probably because they have no licensed Zoom account in this account: they can join but not start the meeting.`;
+}
+
 async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<void> {
   const occurrences = await occurrencesOf(ctx, meeting);
   const invites = await invitesOn(occurrences);
@@ -718,6 +840,11 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
         .delete(meetingInvites)
         .where(and(eq(meetingInvites.occurrenceId, occ.id), inArray(meetingInvites.email, dropping.map((inv) => inv.email))));
     }
+  }
+
+  // An occurrence a cohort member is on is held in a meeting the connected Zoom user hosts, with the facilitators as its hosts.
+  for (const occ of upcoming) {
+    if ((membersOn.get(occ.id)?.size ?? 0) > 0) await ensureOwnZoom(ctx, meeting, occ);
   }
 
   if (!ctx.dryRun) await db.update(meetingSelections).set({ syncedAt: ctx.now }).where(eq(meetingSelections.id, meeting.id));
@@ -861,9 +988,12 @@ export async function runMeetingSync(
     const { connection, calendar } = connected;
     const now = new Date();
     const bootcamp = await meetingBootcamp();
+    const zoom = await connectedZoom();
     const ctx: Context = {
       calendar,
-      zoom: (await connectedZoom())?.client ?? null,
+      zoom: zoom?.client ?? null,
+      zoomEmail: zoom?.email.trim().toLowerCase() ?? null,
+      zoomCapped: false,
       dryRun,
       testGroup: group.on,
       now,

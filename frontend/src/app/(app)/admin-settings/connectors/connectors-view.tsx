@@ -52,13 +52,13 @@ function googleMessage(result: string, current: string | null): Message | null {
 
 function zoomMessage(result: string): Message | null {
   const messages: Record<string, Message> = {
-    connected: { tone: "ok", text: "Zoom is connected. Sync Now reads who joined the meetings this user hosts." },
+    connected: { tone: "ok", text: "Zoom is connected. Sync Now holds meetings in Zoom meetings this user hosts, and reads who joined them." },
     denied: { tone: "error", text: "Zoom was not given access, so nothing changed." },
     expired: { tone: "error", text: "That sign-in took too long or started in another tab. Connect again." },
     failed: { tone: "error", text: "Zoom did not finish connecting. Connect again." },
     scope: {
       tone: "error",
-      text: "Zoom did not grant every scope the app needs (meeting:read:list_past_instances, meeting:read:list_past_participants, meeting:delete:meeting and user:read:user). Add the missing ones to the app in the Zoom Marketplace, then connect again.",
+      text: "Zoom did not grant every scope the app needs (meeting:read:list_past_instances, meeting:read:list_past_participants, meeting:read:meeting, meeting:write:meeting, meeting:update:meeting, meeting:delete:meeting and user:read:user). Add the missing ones to the app in the Zoom Marketplace, then connect again.",
     },
   };
   return messages[result] ?? null;
@@ -212,7 +212,7 @@ export function ConnectorsView({
           connected={Boolean(zoom.connection)}
           detail={
             zoom.connection
-              ? `${zoom.connection.email}, connected ${formatWhen(zoom.connection.connectedAt)}${zoom.connection.connectedBy ? ` by ${zoom.connection.connectedBy}` : ""}. Google Meetings reads who joined the meetings this user hosts.`
+              ? `${zoom.connection.email}, connected ${formatWhen(zoom.connection.connectedAt)}${zoom.connection.connectedBy ? ` by ${zoom.connection.connectedBy}` : ""}. Google Meetings holds each meeting in a Zoom meeting this user hosts, with the meeting facilitators as its hosts, and reads who joined it.`
               : zoom.configured
                 ? "None yet, so attendance is only what an administrator marks. Sign in as the user who hosts the meetings."
                 : "Zoom is not set up here, so attendance is only what an administrator marks."

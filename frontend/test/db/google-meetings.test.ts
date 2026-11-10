@@ -84,7 +84,18 @@ let bootcamp: { id: string; startDate: string; movedFrom: string | null };
 
 type Call = { method: string; url: URL; body: Record<string, unknown> | null };
 type Guest = { email: string; responseStatus?: string };
-type FakeEvent = { id: string; summary: string; status?: string; start: { dateTime?: string; date?: string }; end: { dateTime?: string; date?: string }; location?: string; attendees?: Guest[] };
+type FakeEvent = {
+  id: string;
+  summary: string;
+  status?: string;
+  start: { dateTime?: string; date?: string };
+  end: { dateTime?: string; date?: string };
+  location?: string;
+  description?: string;
+  conferenceData?: { entryPoints?: { uri?: string }[] } | null;
+  attendees?: Guest[];
+};
+type FakeZoomMeeting = { id: number; host_email: string; join_url: string; password: string; settings: { alternative_hosts: string } };
 
 const fake = {
   calls: [] as Call[],
@@ -92,7 +103,10 @@ const fake = {
   /** Past sessions of a Zoom meeting, by meeting id; their participants by session uuid. */
   instances: new Map<string, { uuid: string; start_time: string }[]>(),
   participants: new Map<string, { name?: string; user_email?: string }[]>(),
+  /** The meetings the connected Zoom user hosts, by id. Any other meeting answers "No permission", as Zoom does for one someone else hosts. */
+  zoomMeetings: new Map<string, FakeZoomMeeting>(),
   reset() {
+    this.zoomMeetings.clear();
     this.calls = [];
     this.events.clear();
     this.instances.clear();
@@ -127,7 +141,7 @@ async function fakeFetch(input: string | URL | Request, init?: RequestInit): Pro
       access_token: "zoom-access",
       refresh_token: "zoom-refresh",
       expires_in: 3600,
-      scope: "meeting:read:list_past_instances meeting:read:list_past_participants meeting:delete:meeting user:read:user",
+      scope: "meeting:read:list_past_instances meeting:read:list_past_participants meeting:delete:meeting meeting:write:meeting meeting:read:meeting meeting:update:meeting user:read:user",
     });
   }
   if (url.host === "api.zoom.us") {
@@ -136,6 +150,29 @@ async function fakeFetch(input: string | URL | Request, init?: RequestInit): Pro
     const participants = /^\/v2\/past_meetings\/([^/]+)\/participants$/.exec(path);
     if (participants) return json({ participants: fake.participants.get(decodeURIComponent(decodeURIComponent(participants[1]!))) ?? [] });
     if (/^\/v2\/meetings\/[^/]+$/.test(path) && method === "DELETE") return new Response(null, { status: 204 });
+    const hosted = /^\/v2\/meetings\/([^/]+)$/.exec(path);
+    if (hosted && method === "GET") {
+      const found = fake.zoomMeetings.get(hosted[1]!);
+      return found ? json(found) : json({ code: 4711, message: "No permission" }, 400);
+    }
+    if (hosted && method === "PATCH") {
+      const found = fake.zoomMeetings.get(hosted[1]!);
+      if (!found) return json({ code: 3001, message: "Meeting does not exist" }, 404);
+      found.settings.alternative_hosts = String((body as { settings: { alternative_hosts: string } }).settings.alternative_hosts);
+      return new Response(null, { status: 204 });
+    }
+    if (path === "/v2/users/me/meetings" && method === "POST") {
+      const id = 70_000_000_000 + fake.zoomMeetings.size + 1;
+      const made: FakeZoomMeeting = {
+        id,
+        host_email: ZOOM_USER,
+        join_url: `https://harness-io.zoom.us/j/${id}?pwd=made`,
+        password: "123456",
+        settings: { alternative_hosts: String((body as { settings?: { alternative_hosts?: string } }).settings?.alternative_hosts ?? "") },
+      };
+      fake.zoomMeetings.set(String(id), made);
+      return json(made, 201);
+    }
   }
   if (url.host === "www.googleapis.com") {
     const match = /^\/calendar\/v3\/calendars\/([^/]+)\/events(?:\/([^/]+))?$/.exec(path);
@@ -821,6 +858,85 @@ describe("Sync Now", () => {
     await sync_ok();
     assert.ok(!fake.guests("e1").includes(picked.toLowerCase()));
     assert.ok(fake.guests("e1").includes(salesEmail), "the cohort stays");
+  });
+
+  test("an occurrence in someone else's Zoom meeting is moved to the connected user's own, with the facilitators as its hosts", async () => {
+    await connect();
+    const id = await pick();
+    event("e1", 1, NAME, {
+      location: `https://harness-io.zoom.us/j/${ZOOM_ID}?pwd=x`,
+      description: `<p>Agenda</p><p><br>──────────<br>Join: https://harness-io.zoom.us/j/${ZOOM_ID}?pwd=x<br>Meeting ID: 912 3456 7890<br>──────────</p>`,
+      conferenceData: { entryPoints: [{ uri: `https://harness-io.zoom.us/j/${ZOOM_ID}?pwd=x` }] },
+    });
+
+    await sync_ok(true);
+    assert.equal(fake.calls.filter((c) => c.method === "POST" && c.url.host === "api.zoom.us").length, 0, "a dry run makes no meeting");
+    assert.equal(fake.events.get("e1")!.location, `https://harness-io.zoom.us/j/${ZOOM_ID}?pwd=x`, "and changes no event");
+
+    await sync_ok();
+    const made = [...fake.zoomMeetings.values()];
+    assert.equal(made.length, 1);
+    assert.equal(made[0]!.settings.alternative_hosts, admin.email, "every facilitator can start it");
+    const moved = fake.events.get("e1")!;
+    assert.equal(moved.location, made[0]!.join_url);
+    assert.match(moved.description!, /^<p>Agenda<\/p><p>Join Zoom: /);
+    assert.doesNotMatch(moved.description!, new RegExp(ZOOM_ID));
+    assert.equal(moved.conferenceData, null, "its Zoom add-on's button no longer points at the old meeting");
+    const move = fake.calls.filter((c) => c.method === "PATCH" && c.url.host === "www.googleapis.com").at(-1)!;
+    assert.equal(move.url.searchParams.get("sendUpdates"), "none");
+    assert.equal(move.url.searchParams.get("conferenceDataVersion"), "1");
+    const [occ] = await db.select({ zoom: meetingOccurrences.zoomMeetingId }).from(meetingOccurrences).where(eq(meetingOccurrences.meetingId, id));
+    assert.equal(occ!.zoom, String(made[0]!.id));
+    assert.ok(fake.guests("e1").includes(salesEmail), "the guests are untouched");
+
+    fake.calls = [];
+    await sync_ok();
+    assert.equal(fake.zoomMeetings.size, 1, "a meeting the connected user hosts is kept");
+    assert.deepEqual(fake.writes(), []);
+  });
+
+  test("a facilitator added later becomes an alternative host of the meeting the sync made", async () => {
+    await connect();
+    await pick();
+    event("e1", 1);
+    await sync_ok();
+    const added = `${TEST_PREFIX}Added@${TEST_EMAIL_DOMAIN}`.toLowerCase();
+    await setMeetingFacilitators(admin.id, [
+      { email: admin.email, fullName: "Admin" },
+      { email: added, fullName: "Added" },
+    ]);
+    await sync_ok();
+    assert.equal(fake.zoomMeetings.size, 1);
+    assert.deepEqual([...fake.zoomMeetings.values()][0]!.settings.alternative_hosts.split(";").sort(), [admin.email, added].sort());
+  });
+
+  test("an event with no Zoom link is left as it is", async () => {
+    await connect();
+    await pick();
+    event("e1", 1, NAME, { location: "Boston office" });
+    await sync_ok();
+    assert.equal(fake.zoomMeetings.size, 0);
+    assert.equal(fake.events.get("e1")!.location, "Boston office");
+  });
+
+  test("a refusal about the token's scopes is no reason to make another meeting", async (t) => {
+    await connect();
+    await pick();
+    event("e1", 1);
+    const before = fake.zoomMeetings.size;
+    const outer = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      if (url.host === "api.zoom.us" && url.pathname.startsWith("/v2/meetings/")) {
+        return json({ code: 4711, message: "Invalid access token, does not contain scopes:[meeting:read:meeting]" }, 400);
+      }
+      return outer(input, init);
+    }) as typeof fetch;
+    t.after(() => {
+      globalThis.fetch = outer;
+    });
+    await sync_ok();
+    assert.equal(fake.zoomMeetings.size, before);
   });
 
   test("the facilitators are lowercased, listed once and in order", async () => {
