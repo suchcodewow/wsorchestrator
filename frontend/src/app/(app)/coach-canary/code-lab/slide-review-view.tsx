@@ -38,7 +38,7 @@ import {
   type Target,
 } from "@/lib/mimir/slide-review/slides";
 import { cn } from "@/lib/utils";
-import { ArrowRight, Check, Eye, EyeOff, Flag, MousePointerClick, RotateCcw, Timer, X } from "lucide-react";
+import { ArrowRight, Check, Eye, EyeOff, Flag, MousePointerClick, RotateCcw, X } from "lucide-react";
 import { Geist } from "next/font/google";
 import Image from "next/image";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
@@ -96,10 +96,6 @@ export function SlideReviewView() {
 function Intro({ onStart }: { onStart: () => void }) {
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Timer className="size-4" />
-        About a minute a slide, for as long as you like
-      </p>
       <section className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="flex gap-3 bg-brand-subtle/50 px-5 py-4 text-sm">
           <span className="text-base leading-5" aria-hidden>
