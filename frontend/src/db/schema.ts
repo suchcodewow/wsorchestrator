@@ -1051,7 +1051,12 @@ export const EVALS_TITLE_LISTS = ["sales", "engineer", "ignored"] as const;
 export type EvalsTitleList = (typeof EVALS_TITLE_LISTS)[number];
 
 /** An employee's track: a title list's, `exempt`, or `deferred`; see `employees.track` for which wins. */
-export const EMPLOYEE_TRACKS = [...EVALS_TITLE_LISTS, "exempt", "deferred"] as const;
+/**
+ * `other` is only ever given by adding someone to the cohort by hand
+ * (`cohort_additions`): an attendee who is neither Sales nor Engineer, such
+ * as a CTO joining, who registers and is catered for but is not assessed.
+ */
+export const EMPLOYEE_TRACKS = [...EVALS_TITLE_LISTS, "exempt", "deferred", "other"] as const;
 export type EmployeeTrack = (typeof EMPLOYEE_TRACKS)[number];
 
 /**
@@ -3832,4 +3837,40 @@ export const pageTourViews = pgTable(
     seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.tourId] }), index("page_tour_views_tour_id_idx").on(t.tourId)],
+);
+
+export const COHORT_ADDITION_TRACKS = ["sales", "engineer", "other"] as const;
+export type CohortAdditionTrack = (typeof COHORT_ADDITION_TRACKS)[number];
+
+/**
+ * People a Training administrator added to the current cohort by hand, for
+ * the one-off attendee the cohort's rules leave out: someone outside the
+ * org, past the start-date cutoffs, or on a track that skips them. Each is
+ * added to one stage, and counts as a candidate while that is still the stage
+ * their attendance puts them in (`isCandidate`), on the track given here,
+ * which the HiBob sync and every retrack keep (`trackFor`). Once they have
+ * attended that stage's class the row no longer applies. Kept apart from
+ * `employees`, which the sync rewrites.
+ */
+export const cohortAdditions = pgTable(
+  "cohort_additions",
+  {
+    /** Lowercased. */
+    email: text("email").primaryKey(),
+    stage: text("stage").$type<"bootcamp" | "intermediate">().notNull(),
+    track: text("track").$type<CohortAdditionTrack>().notNull(),
+    /**
+     * For the Other track: whose sessions they follow, so whose assessments
+     * score them and whose meetings invite them, once they confirm they are
+     * attending (`assessedTrackOf`). Null on Sales and Engineer.
+     */
+    follows: text("follows").$type<"sales" | "engineer">(),
+    addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("cohort_additions_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
+    check("cohort_additions_track_check", sql`${t.track} in ('sales', 'engineer', 'other')`),
+    check("cohort_additions_follows_check", sql`${t.follows} is null or ${t.follows} in ('sales', 'engineer')`),
+  ],
 );

@@ -34,6 +34,7 @@ import {
   checkAnswers,
   withAutomaticQuestions,
   withoutAutomaticQuestions,
+  intakeInviteText,
   intakeReminderText,
   isFirstName,
   firstNameOf,
@@ -738,5 +739,20 @@ describe("listing both forms' responses together", () => {
       hotel,
     ]);
     assert.equal(columns.at(-1)!.id, "hotel-nights");
+  });
+});
+
+describe("the registration link sent at once", () => {
+  test("invites rather than reminds, by first name, linking to the form", () => {
+    const text = intakeInviteText("Pat Example", "intermediate", "https://qa.harnessevents.io/intake");
+    assert.equal(
+      text,
+      "Hi Pat! Please fill in your *Intermediate Registration*. It only takes a few minutes: <https://qa.harnessevents.io/intake|complete it here>.",
+    );
+    assert.doesNotMatch(text, /haven't/);
+  });
+
+  test("escapes Slack's markup in a name", () => {
+    assert.match(intakeInviteText("<Pat> Example", "bootcamp", "x"), /^Hi &lt;Pat&gt;!/);
   });
 });

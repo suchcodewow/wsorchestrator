@@ -708,8 +708,8 @@ describe("HiBob sync", () => {
       ]);
       assert.deepEqual(await stage("intermediate"), [["c-int", "sales", "2026-03-01"]]);
       assert.deepEqual((await currentCohortSummary()).counts, {
-        bootcamp: { sales: 1, engineer: 0, undecided: 5, deferred: 0 },
-        intermediate: { sales: 1, engineer: 0, undecided: 0, deferred: 0 },
+        bootcamp: { sales: 1, engineer: 0, other: 0, undecided: 5, deferred: 0 },
+        intermediate: { sales: 1, engineer: 0, other: 0, undecided: 0, deferred: 0 },
       });
 
       // Engineer: the title goes on the list, and both spellings of it move at once.
@@ -746,8 +746,8 @@ describe("HiBob sync", () => {
       ["c-new2", "engineer", null],
     ]);
     assert.deepEqual((await currentCohortSummary()).counts, {
-      bootcamp: { sales: 2, engineer: 2, undecided: 1, deferred: 0 },
-      intermediate: { sales: 1, engineer: 0, undecided: 0, deferred: 0 },
+      bootcamp: { sales: 2, engineer: 2, other: 0, undecided: 1, deferred: 0 },
+      intermediate: { sales: 1, engineer: 0, other: 0, undecided: 0, deferred: 0 },
     });
     });
   });
@@ -784,7 +784,7 @@ describe("HiBob sync", () => {
       // A blank start date passes, as it did in the Sheet; a blank active effective date does not.
       assert.deepEqual(await listed(), ["bootcamp:k-cutoff-day", "bootcamp:k-new", "bootcamp:k-no-start"]);
       assert.deepEqual((await currentCohortSummary()).cutoffs, SHEET_CUTOFFS);
-      assert.deepEqual((await currentCohortSummary()).counts.bootcamp, { sales: 3, engineer: 0, undecided: 0, deferred: 0 });
+      assert.deepEqual((await currentCohortSummary()).counts.bootcamp, { sales: 3, engineer: 0, other: 0, undecided: 0, deferred: 0 });
 
       // Saved empty, each is off; the next read sees it, with no sync between.
       await setCandidateCutoffs(admin.id, { startDateOnOrAfter: null });
@@ -856,7 +856,7 @@ describe("HiBob sync", () => {
         assert.deepEqual(await listed({ stage: "bootcamp", track: "sales" }), ["d-early", "d-edge", "d-no-start"]);
         assert.deepEqual(await listed({ stage: "intermediate", track: "sales" }), []);
         const summary = await currentCohortSummary();
-        assert.deepEqual(summary.counts.bootcamp, { sales: 3, engineer: 0, undecided: 0, deferred: 3 });
+        assert.deepEqual(summary.counts.bootcamp, { sales: 3, engineer: 0, other: 0, undecided: 0, deferred: 3 });
         assert.deepEqual(summary.deferral, { days: 14, bootcampStart: "2026-11-02" });
 
         // Moving the bootcamp later puts the 10-20 and 10-25 starters in time for it.

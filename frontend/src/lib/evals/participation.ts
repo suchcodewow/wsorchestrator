@@ -36,7 +36,7 @@ import {
   type ParticipationPolarity,
 } from "@/db/schema";
 import { attended } from "@/lib/evals/attendance";
-import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
+import { IN_STAGE, assessedOn, isCandidate } from "@/lib/evals/current-cohort";
 import { writeFeedback, type FeedbackPerson, type WrittenFeedback } from "@/lib/evals/participation-feedback";
 import { pendingOverall } from "@/lib/reporting/overall-feedback";
 import {
@@ -187,7 +187,7 @@ async function bootcampAttendee(
       fullName: employees.fullName,
       title: employees.title,
       stage: sql<EvalsAssessmentStage>`case when ${attended("bootcamp", sql`${employees.email}`, { before: bootcamp.startDate })} then 'intermediate' else 'bootcamp' end`,
-      eligible: sql<boolean>`(${and(isCandidate(cutoffs), inArray(employees.track, ["sales", "engineer"]))})
+      eligible: sql<boolean>`(${and(isCandidate(cutoffs), assessedOn(["sales", "engineer"]))})
         or exists (select 1 from ${s} where ${s.bootcampId} = ${bootcamp.id} and ${s.attendeeEmail} = ${employees.email})`,
     })
     .from(employees)
@@ -489,7 +489,7 @@ async function generationPlans(bootcamp: { id: string; startDate: string }, stag
   const candidates = await db
     .select({ email: employees.email, fullName: employees.fullName })
     .from(employees)
-    .where(and(isCandidate(cutoffs), IN_STAGE[stage], inArray(employees.track, ["sales", "engineer"])))
+    .where(and(isCandidate(cutoffs), IN_STAGE[stage], assessedOn(["sales", "engineer"])))
     .orderBy(sql`lower(${employees.fullName})`)
     .limit(1_000);
   const skipped = candidates.filter((c) => !byEmail.has(c.email) && !assessedEmails.has(c.email)).map((c) => c.fullName);
