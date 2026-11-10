@@ -508,8 +508,7 @@ export function CurrentCohortView({
                       )}
                       {/* React bubbles the menu's clicks through its portal, so they stop here rather than toggling the row. */}
                       <td className="px-5 py-1" onClick={(ev) => ev.stopPropagation()}>
-                        {/* Someone added by hand keeps the track they were added on; take them off and add them again to change it. */}
-                        {canSetTrack && !m.added ? (
+                        {canSetTrack ? (
                           <TrackMenu
                             member={m}
                             busy={busy === m.email}
@@ -828,7 +827,8 @@ function TrackMenu({
   disabled: boolean;
   onPick: (choice: TrackChoice) => void;
 }) {
-  const title = member.title?.trim() || undefined;
+  // Someone added by hand is set on their own, so no choice moves their title's list.
+  const title = member.added ? undefined : member.title?.trim() || undefined;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger

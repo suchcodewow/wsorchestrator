@@ -74,9 +74,10 @@ export function isDeferred(startDate: string | null, rule: DeferralRule | null):
 export type TrackOverride = { track: EmployeeTrack | null };
 
 /**
- * An employee's track, first that applies: the one they were added to the
- * cohort on by hand (`cohort_additions`), inside the org or not; none outside
- * the org; the one an administrator set by hand, which is the only way to
+ * An employee's track, first that applies: for someone added to the cohort
+ * by hand (`cohort_additions`), inside the org or not, the one an
+ * administrator set, else the one they were added on; none outside the org;
+ * the one an administrator set by hand, which is the only way to
  * `exempt`; `ignored` for a title on the Ignored list; `deferred` when they
  * started too close to the next bootcamp; otherwise their title's list, or none.
  */
@@ -87,12 +88,12 @@ export function trackFor(
     startDate?: string | null;
     override?: TrackOverride | null;
     /** The track they were added to the current cohort on by hand, if they were. */
-    added?: { track: "sales" | "engineer" | "other" } | null;
+    added?: { track: "sales" | "engineer" } | null;
   },
   lists: ReadonlyMap<string, EvalsTitleList>,
   deferral: DeferralRule | null = null,
 ): EmployeeTrack | null {
-  if (person.added) return person.added.track;
+  if (person.added) return person.override ? person.override.track : person.added.track;
   if (!person.inOrg) return null;
   if (person.override) return person.override.track;
   const list = listForTitle(person.title, lists);

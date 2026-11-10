@@ -215,16 +215,17 @@ async function placeTitle(
   return { title, from: null };
 }
 
-async function pin(email: string, track: EmployeeTrack | null) {
+/** Pins `email` to `track` by hand, as the track menu does; `unpin` hands them back to the rules. */
+export async function pin(email: string, track: EmployeeTrack | null) {
   await db.update(employees).set({ trackPinned: true, trackOverride: track }).where(eq(employees.email, email));
 }
 
-async function unpin(email: string) {
+export async function unpin(email: string) {
   await db.update(employees).set({ trackPinned: false, trackOverride: null }).where(eq(employees.email, email));
 }
 
 /**
- * Sets one org member's track, whatever the rules say.
+ * Sets one org member's track, or an added attendee's, whatever the rules say.
  *
  * Sales, Engineer and Ignored are title lists: picking one puts the person's
  * title on it, moving it off another list if need be, and retracks everyone
@@ -232,7 +233,9 @@ async function unpin(email: string) {
  * choice only where the rules still give them something else, such as a late
  * start; anyone else with the title who was set by hand
  * keeps that. Undecided, Deferred and Exempt pin just this person, until
- * someone picks `automatic`. A pin lasts through every sync.
+ * someone picks `automatic`. A pin lasts through every sync. Someone added to
+ * the cohort by hand is in it for themselves, not their title, so every choice
+ * pins just them, and `automatic` gives them back the track they were added on.
  */
 export async function setTrack(
   actorId: string,
@@ -241,16 +244,26 @@ export async function setTrack(
 ): Promise<{ ok: true; result: SetTrackResult } | { ok: false; error: "not_found" }> {
   const lower = email.trim().toLowerCase();
   const [person] = await db
-    .select({ fullName: employees.fullName, title: employees.title, track: employees.track })
+    .select({
+      fullName: employees.fullName,
+      title: employees.title,
+      track: employees.track,
+      added: sql<boolean>`exists (select 1 from ${cohortAdditions} ca where ca.email = ${lower})`,
+    })
     .from(employees)
-    .where(and(isNotNull(employees.orgDepth), eq(employees.email, lower)));
+    .where(
+      and(
+        eq(employees.email, lower),
+        or(isNotNull(employees.orgDepth), sql`exists (select 1 from ${cohortAdditions} ca where ca.email = ${lower})`),
+      ),
+    );
   if (!person) return { ok: false, error: "not_found" };
   noteAudit({ target: lower, targetLabel: person.fullName });
 
   const title = isListChoice(choice) ? cleanTitle(person.title) : "";
   let moved: SetTrackResult["title"] = null;
   let retracked: number;
-  if (isListChoice(choice) && title) {
+  if (isListChoice(choice) && title && !person.added) {
     const holders = await holdersOf(title);
     if (!holders.includes(lower)) holders.push(lower);
     const tracksOf = async () =>
@@ -282,7 +295,7 @@ export async function setTrack(
   const [now] = await db
     .select({ track: employees.track, overridden: employees.trackPinned })
     .from(employees)
-    .where(and(isNotNull(employees.orgDepth), eq(employees.email, lower)));
+    .where(eq(employees.email, lower));
   const track = now?.track ?? null;
   const overridden = now?.overridden ?? false;
   noteAudit({

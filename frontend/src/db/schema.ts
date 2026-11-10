@@ -3839,7 +3839,7 @@ export const pageTourViews = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.tourId] }), index("page_tour_views_tour_id_idx").on(t.tourId)],
 );
 
-export const COHORT_ADDITION_TRACKS = ["sales", "engineer", "other"] as const;
+export const COHORT_ADDITION_TRACKS = ["sales", "engineer"] as const;
 export type CohortAdditionTrack = (typeof COHORT_ADDITION_TRACKS)[number];
 
 /**
@@ -3847,10 +3847,11 @@ export type CohortAdditionTrack = (typeof COHORT_ADDITION_TRACKS)[number];
  * the one-off attendee the cohort's rules leave out: someone outside the
  * org, past the start-date cutoffs, or on a track that skips them. Each is
  * added to one stage, and counts as a candidate while that is still the stage
- * their attendance puts them in (`isCandidate`), on the track given here,
- * which the HiBob sync and every retrack keep (`trackFor`). Once they have
- * attended that stage's class the row no longer applies. Kept apart from
- * `employees`, which the sync rewrites.
+ * their attendance puts them in (`isCandidate`): someone added to Bootcamp
+ * carries on to Intermediate as anyone else does. They are pinned to the track
+ * given here as if an administrator had set it, and can be set to another the
+ * same way; with no pin, the HiBob sync and every retrack give them this one
+ * (`trackFor`). Kept apart from `employees`, which the sync rewrites.
  */
 export const cohortAdditions = pgTable(
   "cohort_additions",
@@ -3859,18 +3860,14 @@ export const cohortAdditions = pgTable(
     email: text("email").primaryKey(),
     stage: text("stage").$type<"bootcamp" | "intermediate">().notNull(),
     track: text("track").$type<CohortAdditionTrack>().notNull(),
-    /**
-     * For the Other track: whose sessions they follow, so whose assessments
-     * score them and whose meetings invite them, once they confirm they are
-     * attending (`assessedTrackOf`). Null on Sales and Engineer.
-     */
+    /** Left from the Other track, which is gone: always null now. */
     follows: text("follows").$type<"sales" | "engineer">(),
     addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
     addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     check("cohort_additions_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
-    check("cohort_additions_track_check", sql`${t.track} in ('sales', 'engineer', 'other')`),
+    check("cohort_additions_track_check", sql`${t.track} in ('sales', 'engineer')`),
     check("cohort_additions_follows_check", sql`${t.follows} is null or ${t.follows} in ('sales', 'engineer')`),
   ],
 );

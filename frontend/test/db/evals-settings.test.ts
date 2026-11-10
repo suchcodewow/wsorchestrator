@@ -23,6 +23,7 @@ import { db } from "@/db";
 import {
   bootcampJudges,
   bootcamps,
+  cohortAdditions,
   employees,
   EVALS_SETTINGS_KEYS,
   evalsAssessments,
@@ -31,6 +32,7 @@ import {
   evalsSubmissions,
   evalsTitles,
   hibobSyncRuns,
+  intakeResponses,
   scheduleSessionGroups,
   scheduleSessions,
   scheduleSessionStaff,
@@ -38,6 +40,7 @@ import {
 import { chosenNameOnRecord, nameOnRecord, setChosenName } from "@/lib/evals/chosen-names";
 import { hibobServiceUser, listHibobSyncRuns, syncHibobEmployees } from "@/lib/evals/hibob";
 import { toEmployeeRow } from "@/lib/evals/hibob-record";
+import { addAttendee, removeAttendee } from "@/lib/cohorts/additions";
 import { currentCohortSummary, listCurrentCohort, type CandidateStage } from "@/lib/evals/current-cohort";
 import { listOrganizationMembers, loadRoster } from "@/lib/evals/roster";
 import {
@@ -97,6 +100,8 @@ const runIds: string[] = [];
 async function clearOwnRows() {
   await db.delete(evalsTitles).where(like(evalsTitles.title, `${TEST_PREFIX}%`));
   await db.delete(evalsSlackContacts).where(like(evalsSlackContacts.email, `%@${TEST_EMAIL_DOMAIN}`));
+  await db.delete(cohortAdditions).where(like(cohortAdditions.email, `%@${TEST_EMAIL_DOMAIN}`));
+  await db.delete(intakeResponses).where(like(intakeResponses.email, `%@${TEST_EMAIL_DOMAIN}`));
   await db.delete(employees).where(like(employees.id, `${TEST_PREFIX}%`));
 }
 
@@ -749,6 +754,50 @@ describe("HiBob sync", () => {
       bootcamp: { sales: 2, engineer: 2, other: 0, undecided: 1, deferred: 0 },
       intermediate: { sales: 1, engineer: 0, other: 0, undecided: 0, deferred: 0 },
     });
+
+    // Someone added by hand is marked Added, and no one else is; one RSVP leaves the rest unanswered.
+    assert.ok((await addAttendee(admin.id, { email: email("c-out"), stage: "bootcamp", track: "sales" })).ok);
+    await db.insert(intakeResponses).values({ form: "bootcamp", email: email("c-ae"), answers: { attend: "Yes" } });
+    const listed = async (s: CandidateStage) =>
+      (await listCurrentCohort({ stage: s, track: null }, { ...CURRENT_COHORT_LIST, q: "", page: 1, sort: "email", dir: "asc" })).rows;
+    const outsider = async (s: CandidateStage) => {
+      const m = (await listed(s)).find((r) => r.email === email("c-out"));
+      return m && [m.track, m.overridden, m.added];
+    };
+    assert.deepEqual(
+      (await listed("bootcamp")).filter((m) => m.added).map((m) => m.email.split("@")[0]),
+      ["c-out"],
+    );
+    // Added on Sales, they are pinned there as the track menu pins anyone.
+    assert.deepEqual(await outsider("bootcamp"), ["sales", true, true]);
+    assert.deepEqual((await currentCohortSummary()).unanswered.bootcamp, {
+      sales: 2,
+      engineer: 2,
+      other: 0,
+      undecided: 1,
+      deferred: 0,
+    });
+
+    // The track menu sets them like anyone else, moving no title's list, and the rules give back the track they were added on.
+    const toEngineer = await setTrack(admin.id, email("c-out"), "engineer");
+    assert.ok(toEngineer.ok);
+    assert.deepEqual([toEngineer.result.track, toEngineer.result.overridden, toEngineer.result.title], ["engineer", true, null]);
+    assert.equal((await myTitles("engineer")).some((t) => t.title === T("Cand Odd")), false);
+    assert.ok((await setTrack(admin.id, email("c-out"), "automatic")).ok);
+    assert.deepEqual(await outsider("bootcamp"), ["sales", false, true]);
+
+    // Attending Bootcamp moves them on to Intermediate, as it does anyone; attending Intermediate takes them out.
+    await giveClasses([{ name: "c-out", btcDate: "2026-03-01" }]);
+    assert.deepEqual(await outsider("bootcamp"), undefined);
+    assert.deepEqual(await outsider("intermediate"), ["sales", false, true]);
+    await giveClasses([{ name: "c-out", intDate: "2026-04-01" }]);
+    assert.deepEqual(await outsider("intermediate"), undefined);
+
+    // Taken off, they lose any pin with the addition.
+    assert.ok((await addAttendee(admin.id, { email: email("c-blank"), stage: "bootcamp", track: "engineer" })).ok);
+    assert.deepEqual((await removeAttendee(email("c-blank"))).removed, true);
+    const [blank] = await db.select().from(employees).where(eq(employees.email, email("c-blank")));
+    assert.deepEqual([blank.track, blank.trackPinned], [null, false]);
     });
   });
 
