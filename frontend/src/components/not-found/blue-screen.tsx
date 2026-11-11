@@ -99,12 +99,7 @@ export function BlueScreen({ path }: { path: string }) {
       <h1 className="sr-only">Page not found</h1>
 
       <div className="grid flex-1 gap-8 md:grid-cols-[1fr_1.4fr_1.4fr]">
-        <Column
-          lines={left}
-          visible={visible}
-          className="hidden md:block"
-          header={<p className="mb-[30vh]">:/ ORCHESTRATOR.EXE</p>}
-        />
+        <Column lines={left} visible={visible} className="hidden md:block" header={<p className="mb-[30vh]">:/ ORCHESTRATOR.EXE</p>} />
 
         <Column
           lines={middle}

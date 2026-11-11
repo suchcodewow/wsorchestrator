@@ -163,7 +163,15 @@ export const NAV_SECTIONS: NavSection[] = [
         description: "Employees, HiBob, the organization and Slack channels.",
         visible: canManageTrainingSettings,
       },
-      { href: "/logistics", settings: "/logistics-settings", hasTabs: true, label: "Logistics", Icon: Luggage, description: "Guest judges, dietary needs and food orders.", visible: canUseTraining },
+      {
+        href: "/logistics",
+        settings: "/logistics-settings",
+        hasTabs: true,
+        label: "Logistics",
+        Icon: Luggage,
+        description: "Guest judges, dietary needs and food orders.",
+        visible: canUseTraining,
+      },
       {
         href: "/logistics-settings",
         hasTabs: true,
@@ -313,9 +321,7 @@ export function visibleSections(access: Access): NavSection[] {
 }
 
 export function isNavItemActive(pathname: string, item: NavItem): boolean {
-  return [item.href, ...(item.also ?? [])].some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`),
-  );
+  return [item.href, ...(item.also ?? [])].some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
 /** The sidebar entry at `href`, wherever it sits, for the icon a favorite of it shows. */

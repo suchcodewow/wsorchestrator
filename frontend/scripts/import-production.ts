@@ -111,11 +111,7 @@ function runReachingProduction(command: string, args: string[], options: SpawnSy
     child.on("close", (status, signal) => {
       if (status === 0) return resolve();
       reject(
-        new Error(
-          CONNECTION_FAILURE.test(stderr)
-            ? CONNECTION_HELP
-            : `${command} ${args[0] ?? ""} failed (exit ${status ?? signal})`,
-        ),
+        new Error(CONNECTION_FAILURE.test(stderr) ? CONNECTION_HELP : `${command} ${args[0] ?? ""} failed (exit ${status ?? signal})`),
       );
     });
   });
@@ -269,8 +265,19 @@ async function main() {
     try {
       run(
         "docker",
-        ["exec", "-i", CONTAINER, "pg_restore", "--no-owner", "--no-privileges",
-          "--exit-on-error", "-U", target.username || "postgres", "-d", staging],
+        [
+          "exec",
+          "-i",
+          CONTAINER,
+          "pg_restore",
+          "--no-owner",
+          "--no-privileges",
+          "--exit-on-error",
+          "-U",
+          target.username || "postgres",
+          "-d",
+          staging,
+        ],
         { stdio: [input, "inherit", "inherit"] },
       );
     } finally {
@@ -307,14 +314,16 @@ async function main() {
     // records. Not `recordAudit`: lib/audit.ts imports Next's request context,
     // which does not load outside Next.
     await withClient(urlFor(staging), (client) =>
-      drizzle(client).insert(auditEvents).values({
-        actorName: process.env.USER || "local import",
-        via: "system",
-        action: "local.import-production",
-        summary: `Replaced the local database with a copy of production's (${PRODUCTION_PROJECT})`,
-        outcome: "succeeded",
-        detail: { project: PRODUCTION_PROJECT, ...result, migrations: result.migrations.length },
-      }),
+      drizzle(client)
+        .insert(auditEvents)
+        .values({
+          actorName: process.env.USER || "local import",
+          via: "system",
+          action: "local.import-production",
+          summary: `Replaced the local database with a copy of production's (${PRODUCTION_PROJECT})`,
+          outcome: "succeeded",
+          detail: { project: PRODUCTION_PROJECT, ...result, migrations: result.migrations.length },
+        }),
     );
 
     /* ---------------------------------------------------------------- */

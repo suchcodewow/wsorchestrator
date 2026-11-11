@@ -5,17 +5,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-  PenLine,
-  Plus,
-  Save,
-  Search,
-  Trash2,
-  X,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, PenLine, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LAB_WORKSHOP_LIMITS, type LabWorkshop } from "@/db/schema";
@@ -53,20 +43,13 @@ export function WorkshopEditor({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const byId = useMemo(
-    () => new Map(guides.map((g) => [g.id, g])),
-    [guides],
-  );
+  const byId = useMemo(() => new Map(guides.map((g) => [g.id, g])), [guides]);
 
-  const chosen = contents
-    .map((id) => byId.get(id))
-    .filter((g): g is PickerGuide => g !== undefined);
+  const chosen = contents.map((id) => byId.get(id)).filter((g): g is PickerGuide => g !== undefined);
 
   const available = guides.filter((g) => !contents.includes(g.id));
   const matches = query.trim()
-    ? available.filter((g) =>
-        `${g.title} ${g.summary}`.toLowerCase().includes(query.trim().toLowerCase()),
-      )
+    ? available.filter((g) => `${g.title} ${g.summary}`.toLowerCase().includes(query.trim().toLowerCase()))
     : available;
 
   const full = contents.length >= LAB_WORKSHOP_LIMITS.guides;
@@ -101,19 +84,16 @@ export function WorkshopEditor({
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(
-        editing ? `/api/lab-workshops/${workshop.id}` : "/api/lab-workshops",
-        {
-          method: editing ? "PATCH" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title,
-            summary,
-            published,
-            guideIds: contents,
-          }),
-        },
-      );
+      const res = await fetch(editing ? `/api/lab-workshops/${workshop.id}` : "/api/lab-workshops", {
+        method: editing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          summary,
+          published,
+          guideIds: contents,
+        }),
+      });
       if (!res.ok) {
         throw new Error(
           res.status === 400
@@ -125,9 +105,7 @@ export function WorkshopEditor({
       const { workshop: saved } = await res.json();
       return saved;
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not save the workshop",
-      );
+      setError(err instanceof Error ? err.message : "Could not save the workshop");
       setSaving(false);
       return null;
     }
@@ -152,7 +130,12 @@ export function WorkshopEditor({
   async function removeWorkshop() {
     if (!editing) return;
     if (
-      !(await confirmDialog({ title: `Delete "${workshop.title}"?`, description: "The guides in it are kept.", confirmLabel: "Delete", destructive: true }))
+      !(await confirmDialog({
+        title: `Delete "${workshop.title}"?`,
+        description: "The guides in it are kept.",
+        confirmLabel: "Delete",
+        destructive: true,
+      }))
     ) {
       return;
     }
@@ -167,9 +150,7 @@ export function WorkshopEditor({
       router.push("/labs");
       router.refresh();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not delete the workshop",
-      );
+      setError(err instanceof Error ? err.message : "Could not delete the workshop");
       setDeleting(false);
     }
   }
@@ -199,10 +180,8 @@ export function WorkshopEditor({
         />
         {editing && workshop.published && (
           <p className="text-xs leading-relaxed text-muted-foreground">
-            The address stays{" "}
-            <code className="text-foreground">/labs/{workshop.slug}</code> — it
-            was published under that URL, and moving it now would break every
-            link already handed out.
+            The address stays <code className="text-foreground">/labs/{workshop.slug}</code> — it was published under that URL, and moving
+            it now would break every link already handed out.
           </p>
         )}
       </div>
@@ -225,18 +204,11 @@ export function WorkshopEditor({
           <div>
             <h2 className="text-sm font-medium">Contents</h2>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              The order the room works through, using guides that can sit in
-              any number of workshops.
+              The order the room works through, using guides that can sit in any number of workshops.
             </p>
           </div>
 
-          <Button
-            type="button"
-            variant={picking ? "secondary" : "outline"}
-            size="sm"
-            disabled={full}
-            onClick={() => setPicking((p) => !p)}
-          >
+          <Button type="button" variant={picking ? "secondary" : "outline"} size="sm" disabled={full} onClick={() => setPicking((p) => !p)}>
             {picking ? <X /> : <Plus />}
             {picking ? "Done" : "Add a guide"}
           </Button>
@@ -246,30 +218,17 @@ export function WorkshopEditor({
           {chosen.length === 0 ? (
             <div className="rounded-lg border border-dashed p-6 text-center">
               <p className="text-sm font-medium">No guides yet</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Add a guide to give the room something to read.
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">Add a guide to give the room something to read.</p>
             </div>
           ) : (
             <ol className="grid min-w-0 grid-cols-1 gap-2">
               {chosen.map((guide, i) => (
-                <li
-                  key={guide.id}
-                  className="flex items-center gap-3 rounded-lg border bg-card/60 dark:bg-card p-3"
-                >
-                  <span className="tnum w-5 shrink-0 text-center text-sm text-muted-foreground">
-                    {i + 1}
-                  </span>
+                <li key={guide.id} className="flex items-center gap-3 rounded-lg border bg-card/60 dark:bg-card p-3">
+                  <span className="tnum w-5 shrink-0 text-center text-sm text-muted-foreground">{i + 1}</span>
 
                   <span className="block min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">
-                      {guide.title}
-                    </span>
-                    {guide.summary && (
-                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                        {guide.summary}
-                      </span>
-                    )}
+                    <span className="block truncate text-sm font-medium">{guide.title}</span>
+                    {guide.summary && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{guide.summary}</span>}
                   </span>
 
                   <span className="flex shrink-0 items-center gap-0.5">
@@ -313,18 +272,12 @@ export function WorkshopEditor({
             </ol>
           )}
 
-          {full && (
-            <p className="text-xs text-muted-foreground">
-              A workshop holds at most {LAB_WORKSHOP_LIMITS.guides} guides.
-            </p>
-          )}
+          {full && <p className="text-xs text-muted-foreground">A workshop holds at most {LAB_WORKSHOP_LIMITS.guides} guides.</p>}
         </div>
 
         {picking && (
           <div className="grid gap-3 border-t bg-muted/60 p-4">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Add to these contents
-            </p>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Add to these contents</p>
 
             <div className="flex items-center gap-2 rounded-md border border-input bg-field px-2.5">
               <Search className="size-4 shrink-0 text-muted-foreground" />
@@ -339,17 +292,12 @@ export function WorkshopEditor({
 
             {matches.length === 0 ? (
               <p className="px-1 py-3 text-center text-xs text-muted-foreground">
-                {available.length === 0
-                  ? "Every guide is already in this workshop."
-                  : "No guide matches that."}
+                {available.length === 0 ? "Every guide is already in this workshop." : "No guide matches that."}
               </p>
             ) : (
               <ul className="max-h-72 min-w-0 overflow-y-auto">
                 {matches.map((guide) => (
-                  <li
-                    key={guide.id}
-                    className="flex items-center gap-1 rounded-md pr-1 transition-colors hover:bg-accent/60"
-                  >
+                  <li key={guide.id} className="flex items-center gap-1 rounded-md pr-1 transition-colors hover:bg-accent/60">
                     <button
                       type="button"
                       onClick={() => add(guide.id)}
@@ -359,14 +307,8 @@ export function WorkshopEditor({
                     >
                       <Plus className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="block min-w-0 flex-1">
-                        <span className="block truncate text-sm">
-                          {guide.title}
-                        </span>
-                        {guide.summary && (
-                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                            {guide.summary}
-                          </span>
-                        )}
+                        <span className="block truncate text-sm">{guide.title}</span>
+                        {guide.summary && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{guide.summary}</span>}
                       </span>
                     </button>
 
@@ -379,24 +321,15 @@ export function WorkshopEditor({
             <div className="grid gap-2">
               <div className="flex items-center gap-3">
                 <span className="h-px flex-1 bg-border" />
-                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                  or
-                </span>
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">or</span>
                 <span className="h-px flex-1 bg-border" />
               </div>
 
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() => void saveThenWriteGuide()}
-                className="w-full"
-              >
+              <Button type="button" disabled={busy} onClick={() => void saveThenWriteGuide()} className="w-full">
                 {saving ? <Loader2 className="animate-spin" /> : <PenLine />}
                 Write a new guide
               </Button>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                This workshop is saved first, so nothing here is lost.
-              </p>
+              <p className="text-xs leading-relaxed text-muted-foreground">This workshop is saved first, so nothing here is lost.</p>
             </div>
           </div>
         )}
@@ -412,8 +345,7 @@ export function WorkshopEditor({
         <span>
           <span className="font-medium">Published</span>
           <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
-            A published workshop is readable by anyone with the link, while a
-            draft is visible only to managers.
+            A published workshop is readable by anyone with the link, while a draft is visible only to managers.
           </span>
         </span>
       </label>

@@ -84,11 +84,7 @@ export function SlackButton({ personKey }: { personKey: string }) {
           ) : (
             "You are not in it: the app found no Slack account for you."
           )}
-          {opened.skipped.length > 0 && (
-            <span className="block">
-              Not in Slack, or refused: {opened.skipped.join(", ")}
-            </span>
-          )}
+          {opened.skipped.length > 0 && <span className="block">Not in Slack, or refused: {opened.skipped.join(", ")}</span>}
         </p>
       )}
     </div>

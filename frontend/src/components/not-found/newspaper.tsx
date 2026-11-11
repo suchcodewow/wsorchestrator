@@ -12,14 +12,10 @@ export function Newspaper({ path }: { path: string }) {
   });
 
   return (
-    <main
-      className={`${blackletter.variable} ${playfair.variable} min-h-dvh bg-[#e9e2d0] px-3 py-6 text-[#1b1a17] sm:px-6 sm:py-10`}
-    >
+    <main className={`${blackletter.variable} ${playfair.variable} min-h-dvh bg-[#e9e2d0] px-3 py-6 text-[#1b1a17] sm:px-6 sm:py-10`}>
       <article className="mx-auto max-w-5xl bg-[#f6f1e4] px-5 py-6 shadow-[0_30px_60px_-30px_rgba(0,0,0,0.45)] sm:rotate-[-0.6deg] sm:px-10 sm:py-8">
         <header className="border-b-4 border-double border-[#1b1a17] pb-3 text-center">
-          <p className="font-(family-name:--font-blackletter) text-[clamp(2.4rem,8vw,5.5rem)] leading-none">
-            The Daily Endpoint
-          </p>
+          <p className="font-(family-name:--font-blackletter) text-[clamp(2.4rem,8vw,5.5rem)] leading-none">The Daily Endpoint</p>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#1b1a17] pt-2 font-(family-name:--font-playfair) text-[11px] tracking-[0.18em] uppercase sm:text-xs">
             <span>Vol. 404 · No. 404</span>
             <span>{today}</span>
@@ -46,21 +42,20 @@ export function Newspaper({ path }: { path: string }) {
         <div className="grid gap-8 border-t border-[#1b1a17] pt-6 md:grid-cols-[2fr_1fr]">
           <div className="columns-1 gap-8 font-(family-name:--font-playfair) text-[15px] leading-relaxed text-justify hyphens-auto sm:columns-2">
             <p className="first-letter:float-left first-letter:mr-2 first-letter:text-6xl first-letter:leading-[0.8] first-letter:font-black">
-              HARNESS EVENTS — A page reported at{" "}
-              <span className="font-mono text-[13px] break-all">{path}</span> was declared missing this morning, after a
-              visitor arrived to find nothing but a status code and an uncomfortable silence.
+              HARNESS EVENTS — A page reported at <span className="font-mono text-[13px] break-all">{path}</span> was declared missing this
+              morning, after a visitor arrived to find nothing but a status code and an uncomfortable silence.
             </p>
             <p className="mt-3">
-              &ldquo;It was here a minute ago,&rdquo; said one router, who asked not to be named because it is not
-              authorized to speak to the press. &ldquo;Or it was never here at all. Honestly, the logs are unclear.&rdquo;
+              &ldquo;It was here a minute ago,&rdquo; said one router, who asked not to be named because it is not authorized to speak to
+              the press. &ldquo;Or it was never here at all. Honestly, the logs are unclear.&rdquo;
             </p>
             <p className="mt-3">
-              Search parties combed the sidebar, the settings tabs and the back of the database, turning up three expired
-              sessions, a lab guide&rsquo;s missing semicolon and a single unattributed cookie.
+              Search parties combed the sidebar, the settings tabs and the back of the database, turning up three expired sessions, a lab
+              guide&rsquo;s missing semicolon and a single unattributed cookie.
             </p>
             <p className="mt-3">
-              Experts urge anyone who encounters the page not to approach it, and to return home instead, where the kettle
-              is on. <em>Continued on page 200.</em>
+              Experts urge anyone who encounters the page not to approach it, and to return home instead, where the kettle is on.{" "}
+              <em>Continued on page 200.</em>
             </p>
           </div>
 

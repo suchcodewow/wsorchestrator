@@ -36,9 +36,7 @@ export function isLocalContainer(databaseUrl) {
 
 /** Cloud SQL's own role, which no local Postgres has: the check that does not depend on a port. */
 export async function isCloudSql(client) {
-  const { rows } = await client.query(
-    "select exists (select 1 from pg_roles where rolname = 'cloudsqlsuperuser') as cloud",
-  );
+  const { rows } = await client.query("select exists (select 1 from pg_roles where rolname = 'cloudsqlsuperuser') as cloud");
   return rows[0].cloud;
 }
 

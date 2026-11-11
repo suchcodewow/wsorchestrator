@@ -41,12 +41,7 @@ function htmlBodyOf(err: unknown): string | undefined {
   if (typeof err !== "object" || err === null) return undefined;
   const e = err as { message?: unknown; response?: { data?: unknown } };
   const data = e.response?.data;
-  const body =
-    typeof data === "string"
-      ? data
-      : typeof e.message === "string"
-        ? e.message
-        : "";
+  const body = typeof data === "string" ? data : typeof e.message === "string" ? e.message : "";
   return /<!doctype html|<html[\s>]/i.test(body) ? body : undefined;
 }
 
@@ -123,13 +118,8 @@ export function summarize(err: unknown): string {
 
   const raw = err instanceof Error ? err.message : String(err);
   const oneLine = raw.replace(/\s+/g, " ").trim();
-  const withStatus =
-    status !== undefined && !oneLine.includes(String(status))
-      ? `HTTP ${status}: ${oneLine}`
-      : oneLine;
-  return withStatus.length > MAX_SUMMARY_LEN
-    ? `${withStatus.slice(0, MAX_SUMMARY_LEN - 1)}…`
-    : withStatus;
+  const withStatus = status !== undefined && !oneLine.includes(String(status)) ? `HTTP ${status}: ${oneLine}` : oneLine;
+  return withStatus.length > MAX_SUMMARY_LEN ? `${withStatus.slice(0, MAX_SUMMARY_LEN - 1)}…` : withStatus;
 }
 
 /** A retry attempt, handed to `onRetry` for logging. */
@@ -167,10 +157,7 @@ export type RetryOptions = {
  * failure exhausts every attempt is the error replaced — with a short one-liner
  * that names the system and says the fault is on its side, not the caller's.
  */
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  opts: RetryOptions,
-): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, opts: RetryOptions): Promise<T> {
   const attempts = opts.attempts ?? DEFAULT_ATTEMPTS;
   const base = opts.baseDelayMs ?? DEFAULT_BASE_DELAY_MS;
 
@@ -221,11 +208,7 @@ export async function withRetry<T>(
  * which is worse to clean up than the extra wait. Callers get the first error,
  * as `Promise.all` would give them.
  */
-export async function mapConcurrent<T, R>(
-  items: readonly T[],
-  limit: number,
-  fn: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
+export async function mapConcurrent<T, R>(items: readonly T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length);
   const width = Math.max(1, Math.min(limit, items.length));
   let next = 0;

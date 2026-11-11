@@ -33,10 +33,7 @@ import type { GuideValues } from "@/lib/guide-variables";
 const IMG = "11111111-1111-4111-8111-111111111111";
 const IMG2 = "22222222-2222-4222-8222-222222222222";
 
-async function html(
-  markdown: string,
-  options?: Parameters<typeof renderMarkdown>[1],
-): Promise<string> {
+async function html(markdown: string, options?: Parameters<typeof renderMarkdown>[1]): Promise<string> {
   return (await renderMarkdown(markdown, options)).html;
 }
 
@@ -137,10 +134,7 @@ describe("guide variables", () => {
   });
 
   test("fill a link's href, a reference definition and an image's alt", async () => {
-    const out = await html(
-      `[open]({{projectUrl}}) [ref][d] ![{{project}}](/pic.png)\n\n[d]: {{projectUrl}}`,
-      { values },
-    );
+    const out = await html(`[open]({{projectUrl}}) [ref][d] ![{{project}}](/pic.png)\n\n[d]: {{projectUrl}}`, { values });
     assert.equal((out.match(/href="https:\/\/app\.harness\.io/g) ?? []).length, 2);
     assert.match(out, /alt="shawn_pearson"/);
   });
@@ -174,10 +168,9 @@ describe("guide variables", () => {
   });
 
   test("report which were used, which stayed blank, and which are not variables", async () => {
-    const { variables, html: out } = await renderMarkdown(
-      "{{project}} {{ org }} {{nope}} {{Project}} {{project}}",
-      { values: { project: "p" } },
-    );
+    const { variables, html: out } = await renderMarkdown("{{project}} {{ org }} {{nope}} {{Project}} {{project}}", {
+      values: { project: "p" },
+    });
     assert.deepEqual(variables, {
       used: ["project", "org"],
       missing: ["org"],
@@ -234,10 +227,7 @@ describe("headings and the table of contents", () => {
 describe("links", () => {
   test("off-site links open in a new tab without an opener", async () => {
     const out = await html("[a](https://x.example) [b](http://y.example)");
-    assert.equal(
-      (out.match(/target="_blank" rel="noopener noreferrer"/g) ?? []).length,
-      2,
-    );
+    assert.equal((out.match(/target="_blank" rel="noopener noreferrer"/g) ?? []).length, 2);
   });
 
   test("relative, anchor and mailto links stay in place", async () => {
@@ -429,10 +419,7 @@ describe("lists", () => {
   });
 
   test("a two-space sub-list under a numbered item nests", async () => {
-    assert.equal(
-      await html("1. One\n  - sub\n2. Two"),
-      "<ol>\n<li>One\n<ul>\n<li>sub</li>\n</ul>\n</li>\n<li>Two</li>\n</ol>",
-    );
+    assert.equal(await html("1. One\n  - sub\n2. Two"), "<ol>\n<li>One\n<ul>\n<li>sub</li>\n</ul>\n</li>\n<li>Two</li>\n</ol>");
   });
 
   test("text back at the margin leaves the list", async () => {
@@ -466,18 +453,14 @@ describe("missing library images", () => {
 
   test("a reader, who passes no list, gets the plain image", async () => {
     for (const missingImages of [undefined, []]) {
-      assert.equal(
-        await html(`![alt](/api/lab-images/${IMG})`, { missingImages }),
-        `<p><img src="/api/lab-images/${IMG}" alt="alt"></p>`,
-      );
+      assert.equal(await html(`![alt](/api/lab-images/${IMG})`, { missingImages }), `<p><img src="/api/lab-images/${IMG}" alt="alt"></p>`);
     }
   });
 
   test("only the named ids, and only library images, are ringed", async () => {
-    const out = await html(
-      `![a](/api/lab-images/${IMG}) ![b](/api/lab-images/${IMG2}) ![c](https://e.example/${IMG}.png)`,
-      { missingImages: [IMG] },
-    );
+    const out = await html(`![a](/api/lab-images/${IMG}) ![b](/api/lab-images/${IMG2}) ![c](https://e.example/${IMG}.png)`, {
+      missingImages: [IMG],
+    });
     assert.equal((out.match(/lab-image-missing"/g) ?? []).length, 1);
     assert.match(out, new RegExp(`data-image-id="${IMG}"`));
   });
@@ -491,9 +474,7 @@ describe("labImageRefs", () => {
 
   test("lists each image once, first mention first, with its first alt", () => {
     assert.deepEqual(
-      labImageRefs(
-        `![two](/api/lab-images/${IMG2})\n\n![one](/api/lab-images/${IMG})\n\n![again](/api/lab-images/${IMG2})`,
-      ),
+      labImageRefs(`![two](/api/lab-images/${IMG2})\n\n![one](/api/lab-images/${IMG})\n\n![again](/api/lab-images/${IMG2})`),
       [
         { id: IMG2, alt: "two" },
         { id: IMG, alt: "one" },
@@ -518,13 +499,10 @@ describe("labImageRefs", () => {
   });
 
   test("finds images inside callouts and list items", () => {
-    assert.deepEqual(
-      labImageRefs(`:::note Look\n![n](/api/lab-images/${IMG})\n:::\n\n1. Step\n  ![s](/api/lab-images/${IMG2})`),
-      [
-        { id: IMG, alt: "n" },
-        { id: IMG2, alt: "s" },
-      ],
-    );
+    assert.deepEqual(labImageRefs(`:::note Look\n![n](/api/lab-images/${IMG})\n:::\n\n1. Step\n  ![s](/api/lab-images/${IMG2})`), [
+      { id: IMG, alt: "n" },
+      { id: IMG2, alt: "s" },
+    ]);
   });
 
   test("counts a reference-style image, which the renderer shows and rings", () => {

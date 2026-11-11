@@ -102,9 +102,7 @@ export function TimedJobsView({ jobs }: { jobs: TimedJobRow[] }) {
                     <td className="px-5 py-3">
                       <div className="font-medium">{job.name}</div>
                       <div className="text-muted-foreground">{job.summary}</div>
-                      {!job.enabled && job.offWarning && (
-                        <div className="mt-1 text-destructive">{job.offWarning}</div>
-                      )}
+                      {!job.enabled && job.offWarning && <div className="mt-1 text-destructive">{job.offWarning}</div>}
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
                       <div className="text-foreground">{job.schedule}</div>

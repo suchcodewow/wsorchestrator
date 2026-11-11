@@ -2,13 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { requireEvalsAdministrator } from "@/lib/api-auth";
-import {
-  hibobServiceUser,
-  listHibobSyncRuns,
-  STATUS_FOR,
-  syncHibobEmployees,
-  syncInProgress,
-} from "@/lib/evals/hibob";
+import { hibobServiceUser, listHibobSyncRuns, STATUS_FOR, syncHibobEmployees, syncInProgress } from "@/lib/evals/hibob";
 import { audited } from "@/lib/audit";
 import { HIBOB_SYNC_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
@@ -31,10 +25,7 @@ export const POST = audited(async function POST(req: Request) {
 
   const result = await syncHibobEmployees("manual", user.id);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, detail: result.detail },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error, detail: result.detail }, { status: STATUS_FOR[result.error] });
   }
   return NextResponse.json({ count: result.count, skipped: result.skipped });
 });

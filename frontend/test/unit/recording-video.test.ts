@@ -30,13 +30,22 @@ import {
 
 describe("pickVideoMimeType", () => {
   test("Chrome and Edge, which record H.264 in MP4, get MP4", () => {
-    assert.equal(pickVideoMimeType(() => true, true), "video/mp4;codecs=avc1.640033,mp4a.40.2");
-    assert.equal(pickVideoMimeType(() => true, false), "video/mp4;codecs=avc1.640033");
+    assert.equal(
+      pickVideoMimeType(() => true, true),
+      "video/mp4;codecs=avc1.640033,mp4a.40.2",
+    );
+    assert.equal(
+      pickVideoMimeType(() => true, false),
+      "video/mp4;codecs=avc1.640033",
+    );
   });
 
   test("a browser that rejects the high level falls back to one it takes", () => {
     const supported = new Set(["video/mp4;codecs=avc1,mp4a.40.2", "video/webm;codecs=vp9,opus"]);
-    assert.equal(pickVideoMimeType((t) => supported.has(t), true), "video/mp4;codecs=avc1,mp4a.40.2");
+    assert.equal(
+      pickVideoMimeType((t) => supported.has(t), true),
+      "video/mp4;codecs=avc1,mp4a.40.2",
+    );
   });
 
   test("Firefox, which records only WebM, gets VP9 or VP8", () => {
@@ -50,7 +59,10 @@ describe("pickVideoMimeType", () => {
   });
 
   test("a browser that records no video gets null", () => {
-    assert.equal(pickVideoMimeType(() => false, true), null);
+    assert.equal(
+      pickVideoMimeType(() => false, true),
+      null,
+    );
   });
 });
 
@@ -80,7 +92,11 @@ describe("missingChunks", () => {
 describe("pieceRanges", () => {
   // Chrome's MP4 recorder can hand over 17 MB at once at 20 Mbit/s; Next.js keeps only the first 10 MB of a body.
   test("cuts a large chunk into pieces of at most the limit, covering every byte once", () => {
-    assert.deepEqual(pieceRanges(10, 4), [[0, 4], [4, 8], [8, 10]]);
+    assert.deepEqual(pieceRanges(10, 4), [
+      [0, 4],
+      [4, 8],
+      [8, 10],
+    ]);
   });
 
   test("leaves a chunk under the limit whole", () => {
@@ -88,7 +104,10 @@ describe("pieceRanges", () => {
   });
 
   test("gives an exact multiple no empty piece at the end", () => {
-    assert.deepEqual(pieceRanges(8, 4), [[0, 4], [4, 8]]);
+    assert.deepEqual(pieceRanges(8, 4), [
+      [0, 4],
+      [4, 8],
+    ]);
   });
 
   test("gives nothing for nothing", () => {
@@ -100,7 +119,10 @@ describe("retryDelayMs", () => {
   const middle = () => 0.5;
 
   test("doubles from one second", () => {
-    assert.deepEqual([0, 1, 2, 3].map((n) => retryDelayMs(n, middle)), [1_000, 2_000, 4_000, 8_000]);
+    assert.deepEqual(
+      [0, 1, 2, 3].map((n) => retryDelayMs(n, middle)),
+      [1_000, 2_000, 4_000, 8_000],
+    );
   });
 
   test("never waits more than half a minute, give or take the jitter", () => {
@@ -109,8 +131,14 @@ describe("retryDelayMs", () => {
   });
 
   test("spreads retries a quarter either way", () => {
-    assert.equal(retryDelayMs(0, () => 0), 750);
-    assert.equal(retryDelayMs(0, () => 1), 1_250);
+    assert.equal(
+      retryDelayMs(0, () => 0),
+      750,
+    );
+    assert.equal(
+      retryDelayMs(0, () => 1),
+      1_250,
+    );
   });
 });
 
@@ -158,4 +186,3 @@ describe("deletesOn", () => {
     assert.equal(deletesOn("2026-10-09T15:43:00.000Z").toISOString(), "2027-01-07T15:43:00.000Z");
   });
 });
-

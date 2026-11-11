@@ -40,12 +40,7 @@ import {
   scenarioWorkName,
 } from "./scenarios.js";
 import { mapConcurrent, summarize } from "./retry.js";
-import {
-  tfDestroy,
-  tfInit,
-  warmProviderCache,
-  withWorkDir,
-} from "./terraform.js";
+import { tfDestroy, tfInit, warmProviderCache, withWorkDir } from "./terraform.js";
 import { deleteAccount, deleteOrgUnit } from "./directory.js";
 import { teardownOrder } from "./components.js";
 import {
@@ -76,10 +71,7 @@ import {
   type Component,
   type RunRow,
 } from "./db.js";
-import {
-  decideDestroyFailure,
-  describeDestroyFailure,
-} from "./destroy-policy.js";
+import { decideDestroyFailure, describeDestroyFailure } from "./destroy-policy.js";
 import {
   deleteProject as deleteGcpProject,
   deleteStateObject,
@@ -193,7 +185,10 @@ async function destroyRun(run: RunRow): Promise<void> {
     // worked in — see `deleteAccountUser`. Runs before the roster is dropped
     // below, for the same reason the Google deletes do: it is the only record of
     // who has to be removed.
-    await removeHarnessUsers(run, accounts.map((a) => a.email));
+    await removeHarnessUsers(
+      run,
+      accounts.map((a) => a.email),
+    );
 
     if (accounts.length > 0) {
       await log(run.id, "system", `Deleting ${accounts.length} attendee account(s)`);
@@ -243,8 +238,7 @@ async function destroyRun(run: RunRow): Promise<void> {
       await log(run.id, "stderr", decision.note);
       await setDestroyRetry(run.id, decision.note);
       console.error(
-        `reaper: destroy of ${run.id} hit a self-clearing failure on attempt ` +
-          `${claim.attempt}, retrying next tick:`,
+        `reaper: destroy of ${run.id} hit a self-clearing failure on attempt ` + `${claim.attempt}, retrying next tick:`,
         message,
       );
       return;
@@ -278,16 +272,10 @@ async function destroyHarness(run: RunRow): Promise<void> {
     projectIds = await listOrgProjects(orgId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await log(
-      run.id,
-      "stdout",
-      `could not list org projects (${message}); falling back to the roster`,
-    );
+    await log(run.id, "stdout", `could not list org projects (${message}); falling back to the roster`);
     projectIds = [
       ...(await accountsFor(run.id)).map((a) => projectIdentifier(a.email)),
-      ...(await loadTemplateSources())
-        .map((s) => s.projectIdentifier)
-        .filter((id): id is string => id !== null),
+      ...(await loadTemplateSources()).map((s) => s.projectIdentifier).filter((id): id is string => id !== null),
     ];
   }
   for (const projectId of projectIds) {
@@ -329,18 +317,12 @@ async function destroyHarness(run: RunRow): Promise<void> {
     if (component.kind === "template") continue;
 
     const remove =
-      component.kind === "connector"
-        ? () => deleteConnector(orgId, component.identifier)
-        : () => deleteSecret(orgId, component.identifier);
+      component.kind === "connector" ? () => deleteConnector(orgId, component.identifier) : () => deleteSecret(orgId, component.identifier);
     try {
       await remove();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await log(
-        run.id,
-        "stdout",
-        `${component.kind} ${component.identifier} delete skipped: ${message}`,
-      );
+      await log(run.id, "stdout", `${component.kind} ${component.identifier} delete skipped: ${message}`);
     }
   }
 
@@ -374,34 +356,17 @@ async function destroyHarness(run: RunRow): Promise<void> {
  * run must not sit in `destroying` forever, with its clouds already gone, over
  * one user Harness will not remove.
  */
-async function removeHarnessUsers(
-  run: RunRow,
-  emails: string[],
-): Promise<void> {
+async function removeHarnessUsers(run: RunRow, emails: string[]): Promise<void> {
   if (emails.length === 0) return;
 
-  await log(
-    run.id,
-    "system",
-    `Removing ${emails.length} attendee(s) from the Harness account`,
-  );
+  await log(run.id, "system", `Removing ${emails.length} attendee(s) from the Harness account`);
   for (const email of emails) {
     try {
       const removed = await deleteAccountUser(email);
-      await log(
-        run.id,
-        "stdout",
-        removed
-          ? `removed Harness user ${email}`
-          : `no Harness user for ${email} — nothing to remove`,
-      );
+      await log(run.id, "stdout", removed ? `removed Harness user ${email}` : `no Harness user for ${email} — nothing to remove`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await log(
-        run.id,
-        "stdout",
-        `Harness user ${email} removal skipped: ${message}`,
-      );
+      await log(run.id, "stdout", `Harness user ${email} removal skipped: ${message}`);
     }
   }
 }
@@ -449,9 +414,7 @@ async function destroySandbox(run: RunRow): Promise<void> {
     // else — and deleting it is what revokes the key Harness was given.
     serviceAccountId: makeHarnessIdentity(run.slug, run.id),
   });
-  await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
-    log(run.id, l.stream, l.text),
-  );
+  await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) => log(run.id, l.stream, l.text));
   await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
 }
 
@@ -531,9 +494,7 @@ async function deleteRunProjects(run: RunRow, known: string[]): Promise<void> {
     await log(
       run.id,
       "system",
-      standing.length === 1
-        ? `Deleting GCP project ${standing[0]}`
-        : `Deleting ${standing.length} GCP project(s)`,
+      standing.length === 1 ? `Deleting GCP project ${standing[0]}` : `Deleting ${standing.length} GCP project(s)`,
     );
   }
   for (const id of standing) {
@@ -555,10 +516,7 @@ async function deleteRunProjects(run: RunRow, known: string[]): Promise<void> {
 async function deleteGcpState(run: RunRow): Promise<void> {
   const bucket = stateBucket();
   try {
-    const names = gcpStateObjects(
-      run.state_prefix,
-      await listStateObjects(bucket, `${run.state_prefix}/`),
-    );
+    const names = gcpStateObjects(run.state_prefix, await listStateObjects(bucket, `${run.state_prefix}/`));
     for (const name of names) await deleteStateObject(bucket, name);
     await log(run.id, "stdout", `deleted ${names.length} GCP state file(s)`);
   } catch (err) {
@@ -598,14 +556,11 @@ async function destroyScenarioLayers(
     writeOne: (workDir: string, scenarioId: string, email: string) => void;
   },
 ): Promise<void> {
-  const standing = [
-    ...new Set([...appliedScenarios(run.outputs), ...run.scenarios]),
-  ];
+  const standing = [...new Set([...appliedScenarios(run.outputs), ...run.scenarios])];
   if (standing.length === 0) return;
 
   const bucket = stateBucket();
-  const line = (l: { stream: "stdout" | "stderr"; text: string }) =>
-    log(run.id, l.stream, l.text);
+  const line = (l: { stream: "stdout" | "stderr"; text: string }) => log(run.id, l.stream, l.text);
 
   for (const id of standing) {
     const scenario = scenarioById(id);
@@ -634,53 +589,32 @@ async function destroyScenarioLayers(
       if (!scenario.perCompetitor) {
         const workDir = path.join(TF_ROOT, scenarioTfSource(id));
         ctx.writeRoster(workDir, id);
-        await tfInit(
-          workDir,
-          bucket,
-          scenarioStatePrefix(run.state_prefix, id),
-          line,
-        );
+        await tfInit(workDir, bucket, scenarioStatePrefix(run.state_prefix, id), line);
         await tfDestroy(workDir, line);
         continue;
       }
 
-      await warmProviderCache(
-        scenarioTfSource(id),
-        bucket,
-        scenarioStatePrefix(run.state_prefix, id),
-      );
+      await warmProviderCache(scenarioTfSource(id), bucket, scenarioStatePrefix(run.state_prefix, id));
       await mapConcurrent(ctx.emails, SCENARIO_CONCURRENCY, async (email) => {
         const slug = competitorSlug(email);
-        await withWorkDir(
-          scenarioTfSource(id),
-          scenarioWorkName(run.id, id, slug),
-          async (workDir) => {
-            ctx.writeOne(workDir, id, email);
-            await tfInit(
-              workDir,
-              bucket,
-              scenarioStatePrefix(run.state_prefix, id, slug),
-              line,
-            );
-            await tfDestroy(workDir, line);
-          },
-        );
+        await withWorkDir(scenarioTfSource(id), scenarioWorkName(run.id, id, slug), async (workDir) => {
+          ctx.writeOne(workDir, id, email);
+          await tfInit(workDir, bucket, scenarioStatePrefix(run.state_prefix, id, slug), line);
+          await tfDestroy(workDir, line);
+        });
       });
     } catch (err) {
       await log(
         run.id,
         "stderr",
-        `Scenario ${id} would not destroy (${summarize(err)}). Continuing — ` +
-          `destroying the environment removes what it built.`,
+        `Scenario ${id} would not destroy (${summarize(err)}). Continuing — ` + `destroying the environment removes what it built.`,
       );
     }
   }
 }
 
 /** Address -> temp-password map, matching the Azure tfvars provisioning wrote. */
-async function attendeePasswords(
-  runId: string,
-): Promise<Record<string, string>> {
+async function attendeePasswords(runId: string): Promise<Record<string, string>> {
   const accounts = await accountsWithPasswordsFor(runId);
   return Object.fromEntries(accounts.map((a) => [a.email, a.tempPassword]));
 }
@@ -710,12 +644,7 @@ async function destroyAzure(run: RunRow): Promise<void> {
     // was given.
     makeHarnessIdentity(run.slug, run.id),
   );
-  await tfInit(
-    workDir,
-    stateBucket(),
-    cloudStatePrefix(run.state_prefix, "azure"),
-    (l) => log(run.id, l.stream, l.text),
-  );
+  await tfInit(workDir, stateBucket(), cloudStatePrefix(run.state_prefix, "azure"), (l) => log(run.id, l.stream, l.text));
   await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
 }
 
@@ -724,11 +653,7 @@ async function destroyAzurePerUser(run: RunRow): Promise<void> {
   const workDir = path.join(TF_ROOT, AZURE_CHALLENGE_TF_SOURCE);
 
   const attendees = await attendeePasswords(run.id);
-  const groups = challengeResourceGroupMap(
-    run.slug,
-    run.id,
-    Object.keys(attendees),
-  );
+  const groups = challengeResourceGroupMap(run.slug, run.id, Object.keys(attendees));
 
   // Scenarios, then the clusters they sat on, then the resource groups — the
   // reverse of provisioning, for the same reason as GCP: removing a resource
@@ -736,57 +661,29 @@ async function destroyAzurePerUser(run: RunRow): Promise<void> {
   // reconciling against resources that no longer exist.
   await destroyScenarioLayers(run, "azure", {
     emails: Object.keys(groups),
-    writeRoster: (dir, id) =>
-      writeAzureScenarioTfvars(dir, run.id, id, groups, {}, {}),
-    writeOne: (dir, id, email) =>
-      writeAzureScenarioTfvars(
-        dir,
-        run.id,
-        id,
-        { [email]: groups[email] },
-        {},
-        {},
-      ),
+    writeRoster: (dir, id) => writeAzureScenarioTfvars(dir, run.id, id, groups, {}, {}),
+    writeOne: (dir, id, email) => writeAzureScenarioTfvars(dir, run.id, id, { [email]: groups[email] }, {}, {}),
   });
   await destroyAzureChallengeCluster(run, groups);
 
-  await log(
-    run.id,
-    "system",
-    `Destroying ${Object.keys(groups).length} competitor Azure resource group(s)`,
-  );
+  await log(run.id, "system", `Destroying ${Object.keys(groups).length} competitor Azure resource group(s)`);
   writeAzureChallengeTfvars(workDir, run.id, groups, attendees);
-  await tfInit(
-    workDir,
-    stateBucket(),
-    cloudStatePrefix(run.state_prefix, "azure"),
-    (l) => log(run.id, l.stream, l.text),
-  );
+  await tfInit(workDir, stateBucket(), cloudStatePrefix(run.state_prefix, "azure"), (l) => log(run.id, l.stream, l.text));
   await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
 }
 
 /** Destroy a challenge's per-competitor AKS clusters, if a scenario built them. */
-async function destroyAzureChallengeCluster(
-  run: RunRow,
-  groups: Record<string, string>,
-): Promise<void> {
+async function destroyAzureChallengeCluster(run: RunRow, groups: Record<string, string>): Promise<void> {
   // The recorded output is the "were there any" test, for the same reason GCP's
   // is: a scenario dropped from the repo since the run was built would answer
   // that question wrong, and what was recorded cannot.
   if (!run.outputs?.aks_clusters) return;
 
   const workDir = path.join(TF_ROOT, AZURE_CHALLENGE_AKS_TF_SOURCE);
-  await log(
-    run.id,
-    "system",
-    `Destroying ${Object.keys(groups).length} competitor AKS cluster(s)`,
-  );
+  await log(run.id, "system", `Destroying ${Object.keys(groups).length} competitor AKS cluster(s)`);
   writeAzureClusterTfvars(workDir, run.id, groups);
-  await tfInit(
-    workDir,
-    stateBucket(),
-    clusterStatePrefix(cloudStatePrefix(run.state_prefix, "azure")),
-    (l) => log(run.id, l.stream, l.text),
+  await tfInit(workDir, stateBucket(), clusterStatePrefix(cloudStatePrefix(run.state_prefix, "azure")), (l) =>
+    log(run.id, l.stream, l.text),
   );
   await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
 }
@@ -803,11 +700,7 @@ async function destroyAws(run: RunRow): Promise<void> {
   const accountName = makeAwsAccountName(run.slug, run.id);
   const accountEmail = awsAccountEmail(accountName, cfg.accountEmailDomain);
 
-  await log(
-    run.id,
-    "system",
-    `Destroying AWS account ${accountName} (closes the account)`,
-  );
+  await log(run.id, "system", `Destroying AWS account ${accountName} (closes the account)`);
   const attendees = (await accountsFor(run.id)).map((a) => a.email);
   writeAwsTfvars(
     workDir,
@@ -821,12 +714,7 @@ async function destroyAws(run: RunRow): Promise<void> {
     // destroyed a description of what was built.
     makeHarnessIdentity(run.slug, run.id),
   );
-  await tfInit(
-    workDir,
-    stateBucket(),
-    cloudStatePrefix(run.state_prefix, "aws"),
-    (l) => log(run.id, l.stream, l.text),
-  );
+  await tfInit(workDir, stateBucket(), cloudStatePrefix(run.state_prefix, "aws"), (l) => log(run.id, l.stream, l.text));
   await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
 }
 
@@ -848,8 +736,7 @@ async function destroyAwsPerUser(run: RunRow): Promise<void> {
 
   await destroyScenarioLayers(run, "aws", {
     emails: emails.filter((e) => accountIds[e]),
-    writeRoster: (dir, id) =>
-      writeAwsCompetitorScenarioTfvars(dir, run.id, id, "", "", ""),
+    writeRoster: (dir, id) => writeAwsCompetitorScenarioTfvars(dir, run.id, id, "", "", ""),
     writeOne: (dir, id, email) =>
       writeAwsCompetitorScenarioTfvars(
         dir,
@@ -862,11 +749,7 @@ async function destroyAwsPerUser(run: RunRow): Promise<void> {
   });
   await destroyAwsChallengeCluster(run, accountIds);
 
-  await log(
-    run.id,
-    "system",
-    `Destroying ${emails.length} competitor AWS account(s)`,
-  );
+  await log(run.id, "system", `Destroying ${emails.length} competitor AWS account(s)`);
 
   for (const email of emails) {
     const accountName = makeChallengeAwsAccountName(run.slug, run.id, email);
@@ -875,9 +758,7 @@ async function destroyAwsPerUser(run: RunRow): Promise<void> {
 
     await log(run.id, "system", `Closing AWS account ${accountName} (${email})`);
     writeAwsChallengeTfvars(workDir, run.id, accountName, accountEmail, email);
-    await tfInit(workDir, stateBucket(), prefix, (l) =>
-      log(run.id, l.stream, l.text),
-    );
+    await tfInit(workDir, stateBucket(), prefix, (l) => log(run.id, l.stream, l.text));
     await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
   }
 }
@@ -890,42 +771,24 @@ async function destroyAwsPerUser(run: RunRow): Promise<void> {
  * slower to close and leaves a bill running in the meantime, so this is worth
  * doing properly rather than leaving to the account closure.
  */
-async function destroyAwsChallengeCluster(
-  run: RunRow,
-  accountIds: Record<string, string>,
-): Promise<void> {
+async function destroyAwsChallengeCluster(run: RunRow, accountIds: Record<string, string>): Promise<void> {
   if (!run.outputs?.eks_clusters) return;
 
   const emails = Object.keys(accountIds);
   const bucket = stateBucket();
   const base = cloudStatePrefix(run.state_prefix, "aws");
-  const line = (l: { stream: "stdout" | "stderr"; text: string }) =>
-    log(run.id, l.stream, l.text);
+  const line = (l: { stream: "stdout" | "stderr"; text: string }) => log(run.id, l.stream, l.text);
 
-  await log(
-    run.id,
-    "system",
-    `Destroying ${emails.length} competitor EKS cluster(s)`,
-  );
+  await log(run.id, "system", `Destroying ${emails.length} competitor EKS cluster(s)`);
 
   await warmProviderCache(AWS_CHALLENGE_EKS_TF_SOURCE, bucket, `${base}/cluster`);
   await mapConcurrent(emails, SCENARIO_CONCURRENCY, async (email) => {
     const slug = competitorSlug(email);
-    await withWorkDir(
-      AWS_CHALLENGE_EKS_TF_SOURCE,
-      scenarioWorkName(run.id, "eks", slug),
-      async (workDir) => {
-        writeAwsClusterTfvars(
-          workDir,
-          run.id,
-          email,
-          accountIds[email],
-          makeChallengeAwsAccountName(run.slug, run.id, email),
-        );
-        await tfInit(workDir, bucket, `${base}/cluster/${slug}`, line);
-        await tfDestroy(workDir, line);
-      },
-    );
+    await withWorkDir(AWS_CHALLENGE_EKS_TF_SOURCE, scenarioWorkName(run.id, "eks", slug), async (workDir) => {
+      writeAwsClusterTfvars(workDir, run.id, email, accountIds[email], makeChallengeAwsAccountName(run.slug, run.id, email));
+      await tfInit(workDir, bucket, `${base}/cluster/${slug}`, line);
+      await tfDestroy(workDir, line);
+    });
   });
 }
 
@@ -933,8 +796,6 @@ async function destroyAwsChallengeCluster(
 function mapOutput(v: unknown): Record<string, string> {
   if (!v || typeof v !== "object" || Array.isArray(v)) return {};
   return Object.fromEntries(
-    Object.entries(v as Record<string, unknown>).flatMap(([k, val]) =>
-      typeof val === "string" ? [[k, val] as const] : [],
-    ),
+    Object.entries(v as Record<string, unknown>).flatMap(([k, val]) => (typeof val === "string" ? [[k, val] as const] : [])),
   );
 }

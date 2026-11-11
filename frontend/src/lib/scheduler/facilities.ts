@@ -144,7 +144,11 @@ async function setRooms(tx: Tx, facilityId: string, rooms: z.infer<typeof roomSc
     .where(and(eq(facilityRooms.facilityId, facilityId), keep.length > 0 ? notInArray(facilityRooms.id, keep) : undefined));
   // Kept rooms are renamed in two steps, so a swap of two names never trips the unique index.
   for (const r of rooms) {
-    if (r.id) await tx.update(facilityRooms).set({ name: `renaming ${r.id}` }).where(eq(facilityRooms.id, r.id));
+    if (r.id)
+      await tx
+        .update(facilityRooms)
+        .set({ name: `renaming ${r.id}` })
+        .where(eq(facilityRooms.id, r.id));
   }
   for (const [position, r] of rooms.entries()) {
     if (r.id) {
@@ -165,10 +169,7 @@ export async function createFacility(
   if (input.rooms.some((r) => r.id)) return { ok: false, error: "unknown_room" };
   try {
     const id = await db.transaction(async (tx) => {
-      const [made] = await tx
-        .insert(facilities)
-        .values({ name: input.name, createdBy: actorId })
-        .returning({ id: facilities.id });
+      const [made] = await tx.insert(facilities).values({ name: input.name, createdBy: actorId }).returning({ id: facilities.id });
       await setRooms(tx, made!.id, input.rooms);
       return made!.id;
     });
@@ -186,10 +187,7 @@ class Refused extends Error {
   }
 }
 
-export async function updateFacility(
-  id: string,
-  patch: z.infer<typeof facilityPatchSchema>,
-): Promise<{ ok: true } | Failure> {
+export async function updateFacility(id: string, patch: z.infer<typeof facilityPatchSchema>): Promise<{ ok: true } | Failure> {
   const [before] = await db.select({ name: facilities.name }).from(facilities).where(eq(facilities.id, id));
   if (!before) return { ok: false, error: "not_found" };
   noteAudit({ target: id, targetLabel: patch.name ?? before.name });

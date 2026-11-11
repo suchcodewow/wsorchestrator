@@ -22,21 +22,10 @@ type Shown =
 const ERRORS: Record<InviteError, string> = {
   not_found: "This invite link doesn't exist. Check you copied all of it.",
   expired: "This invite link has expired. Ask whoever sent it for a new one.",
-  revoked:
-    "This invite link no longer works — whoever made it can't grant those roles any more. Ask an administrator for a new one.",
+  revoked: "This invite link no longer works — whoever made it can't grant those roles any more. Ask an administrator for a new one.",
 };
 
-export function InviteView({
-  token,
-  email,
-  home,
-  invite,
-}: {
-  token: string;
-  email: string;
-  home: string;
-  invite: Shown;
-}) {
+export function InviteView({ token, email, home, invite }: { token: string; email: string; home: string; invite: Shown }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,9 +42,7 @@ export function InviteView({
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(
-          ERRORS[body?.error as InviteError] ?? `Could not accept the invite (${res.status})`,
-        );
+        throw new Error(ERRORS[body?.error as InviteError] ?? `Could not accept the invite (${res.status})`);
       }
       if (!body.applied) {
         setUnchanged(true);
@@ -115,8 +102,7 @@ export function InviteView({
             {invite.alreadyHasAccess || unchanged ? (
               <div className="grid gap-3">
                 <p className="text-muted-foreground">
-                  You already have access, so this invite doesn&apos;t change your
-                  roles. An administrator can change them on Manage users.
+                  You already have access, so this invite doesn&apos;t change your roles. An administrator can change them on Manage users.
                 </p>
                 <div>
                   <Button asChild variant="outline">

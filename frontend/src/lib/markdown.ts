@@ -8,14 +8,7 @@ import "server-only";
 import GithubSlugger from "github-slugger";
 import type { Element, ElementContent, Root, RootContent } from "hast";
 import { toString } from "hast-util-to-string";
-import type {
-  BlockContent,
-  DefinitionContent,
-  Image,
-  ImageReference,
-  Paragraph,
-  Root as MdastRoot,
-} from "mdast";
+import type { BlockContent, DefinitionContent, Image, ImageReference, Paragraph, Root as MdastRoot } from "mdast";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
 import remarkDirective from "remark-directive";
@@ -25,13 +18,7 @@ import remarkRehype from "remark-rehype";
 import { bundledLanguagesInfo, createHighlighter, type Highlighter } from "shiki";
 import { unified } from "unified";
 import { SKIP, visit } from "unist-util-visit";
-import {
-  fillGuideVariables,
-  newTally,
-  tallied,
-  type GuideValues,
-  type GuideVariableReport,
-} from "@/lib/guide-variables";
+import { fillGuideVariables, newTally, tallied, type GuideValues, type GuideVariableReport } from "@/lib/guide-variables";
 import { isUuid } from "@/lib/utils";
 
 export type TocEntry = { id: string; text: string; depth: 2 | 3 };
@@ -134,8 +121,7 @@ function getHighlighter(): Promise<Highlighter> {
   return highlighterPromise;
 }
 
-const isElement = (node: RootContent, tagName: string): node is Element =>
-  node.type === "element" && node.tagName === tagName;
+const isElement = (node: RootContent, tagName: string): node is Element => node.type === "element" && node.tagName === tagName;
 
 function rehypeCarryCodeTitle() {
   return (tree: Root) => {
@@ -149,28 +135,18 @@ function rehypeCarryCodeTitle() {
       const value = title?.[1] ?? title?.[2] ?? title?.[3];
       if (!value) return;
 
-      const classes = Array.isArray(node.properties.className)
-        ? node.properties.className
-        : [];
-      const lang = classes.find(
-        (c) => typeof c === "string" && c.startsWith("language-"),
-      );
+      const classes = Array.isArray(node.properties.className) ? node.properties.className : [];
+      const lang = classes.find((c) => typeof c === "string" && c.startsWith("language-"));
       if (typeof lang !== "string") return;
 
-      node.properties.className = classes.map((c) =>
-        c === lang ? `${lang}:${encodeURIComponent(value)}` : c,
-      );
+      node.properties.className = classes.map((c) => (c === lang ? `${lang}:${encodeURIComponent(value)}` : c));
     });
   };
 }
 
 function parseInfo(code: Element): { lang: string; title: string | null } {
-  const classes = Array.isArray(code.properties.className)
-    ? code.properties.className
-    : [];
-  const marker = classes.find(
-    (c): c is string => typeof c === "string" && c.startsWith("language-"),
-  );
+  const classes = Array.isArray(code.properties.className) ? code.properties.className : [];
+  const marker = classes.find((c): c is string => typeof c === "string" && c.startsWith("language-"));
   if (!marker) return { lang: "text", title: null };
 
   const [lang, encoded] = marker.slice("language-".length).split(":", 2);
@@ -201,8 +177,7 @@ function indentWidth(line: string): number {
   return width;
 }
 
-const shiftLine = (line: string, by: number): string =>
-  by > 0 && line.trim().length > 0 ? " ".repeat(by) + line : line;
+const shiftLine = (line: string, by: number): string => (by > 0 && line.trim().length > 0 ? " ".repeat(by) + line : line);
 
 function normaliseListIndents(markdown: string): string {
   const lines = markdown.split("\n");
@@ -213,17 +188,10 @@ function normaliseListIndents(markdown: string): string {
 
   for (const line of lines) {
     if (fence) {
-      out.push(
-        shiftLine(line, Math.max(fence.by, fence.floor - indentWidth(line))),
-      );
+      out.push(shiftLine(line, Math.max(fence.by, fence.floor - indentWidth(line))));
 
       const close = line.trim().match(FENCE);
-      if (
-        close &&
-        close[1][0] === fence.marker[0] &&
-        close[1].length >= fence.marker.length &&
-        close[2].trim().length === 0
-      ) {
+      if (close && close[1][0] === fence.marker[0] && close[1].length >= fence.marker.length && close[2].trim().length === 0) {
         fence = null;
       }
       continue;
@@ -236,10 +204,7 @@ function normaliseListIndents(markdown: string): string {
 
     const width = indentWidth(line);
 
-    while (
-      open.length > 0 &&
-      width < open[open.length - 1].srcIndent + CONTINUATION
-    ) {
+    while (open.length > 0 && width < open[open.length - 1].srcIndent + CONTINUATION) {
       open.pop();
     }
 
@@ -283,13 +248,9 @@ const CALLOUT_ALIASES: Record<string, CalloutKind> = {
   check: "success",
 };
 
-const calloutKind = (name: string): CalloutKind | null =>
-  name in CALLOUTS
-    ? (name as CalloutKind)
-    : (CALLOUT_ALIASES[name] ?? null);
+const calloutKind = (name: string): CalloutKind | null => (name in CALLOUTS ? (name as CalloutKind) : (CALLOUT_ALIASES[name] ?? null));
 
-const hasTitle = (name: string): boolean =>
-  name === "details" || calloutKind(name) !== null;
+const hasTitle = (name: string): boolean => name === "details" || calloutKind(name) !== null;
 
 const DIRECTIVE_OPEN = /^([ \t]*):{3,}([A-Za-z][A-Za-z\d-]*)[ \t]+(\S.*?)[ \t]*$/;
 
@@ -301,12 +262,7 @@ function normaliseDirectiveTitles(markdown: string): string {
     .map((line) => {
       const marker = line.trim().match(FENCE);
       if (fence) {
-        if (
-          marker &&
-          marker[1][0] === fence[0] &&
-          marker[1].length >= fence.length &&
-          marker[2].trim().length === 0
-        ) {
+        if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && marker[2].trim().length === 0) {
           fence = null;
         }
         return line;
@@ -333,15 +289,9 @@ const DEFAULT_SUMMARY = "Details";
 
 type DirectiveContent = BlockContent | DefinitionContent;
 
-function directiveTitle(
-  children: DirectiveContent[],
-  fallback: string,
-): { title: Paragraph; body: DirectiveContent[] } {
+function directiveTitle(children: DirectiveContent[], fallback: string): { title: Paragraph; body: DirectiveContent[] } {
   const [first] = children;
-  const labelled =
-    first?.type === "paragraph" &&
-    (first.data as { directiveLabel?: boolean } | undefined)
-      ?.directiveLabel === true;
+  const labelled = first?.type === "paragraph" && (first.data as { directiveLabel?: boolean } | undefined)?.directiveLabel === true;
 
   return labelled
     ? { title: first, body: children.slice(1) }
@@ -359,21 +309,13 @@ function remarkBlockDirectives() {
     const source = String(file.value);
 
     visit(tree, (node, index, parent) => {
-      if (
-        node.type !== "containerDirective" &&
-        node.type !== "leafDirective" &&
-        node.type !== "textDirective"
-      ) {
+      if (node.type !== "containerDirective" && node.type !== "leafDirective" && node.type !== "textDirective") {
         return;
       }
 
-      const kind =
-        node.type === "containerDirective" ? calloutKind(node.name) : null;
+      const kind = node.type === "containerDirective" ? calloutKind(node.name) : null;
 
-      if (
-        node.type !== "containerDirective" ||
-        (node.name !== "details" && kind === null)
-      ) {
+      if (node.type !== "containerDirective" || (node.name !== "details" && kind === null)) {
         const start = node.position?.start.offset;
         const end = node.position?.end.offset;
         if (!parent || index === undefined || start === undefined || end === undefined) {
@@ -400,10 +342,7 @@ function remarkBlockDirectives() {
         return;
       }
 
-      const { title: summary, body } = directiveTitle(
-        node.children,
-        DEFAULT_SUMMARY,
-      );
+      const { title: summary, body } = directiveTitle(node.children, DEFAULT_SUMMARY);
       summary.data = { ...summary.data, hName: "summary" };
 
       node.children = [summary, ...body];
@@ -451,19 +390,17 @@ function remarkGuideVariables() {
   };
 }
 
-const el = (
-  tagName: string,
-  properties: Element["properties"],
-  children: ElementContent[] = [],
-): Element => ({ type: "element", tagName, properties, children });
+const el = (tagName: string, properties: Element["properties"], children: ElementContent[] = []): Element => ({
+  type: "element",
+  tagName,
+  properties,
+  children,
+});
 
 function icon(kind: "clipboard" | "check"): Element {
   const paths =
     kind === "clipboard"
-      ? [
-          "M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z",
-          "M8 6H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2",
-        ]
+      ? ["M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z", "M8 6H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2"]
       : ["M5 13l4 4L19 7"];
 
   return el(
@@ -495,12 +432,8 @@ function blockCopyButton(): Element {
     [
       icon("clipboard"),
       icon("check"),
-      el("span", { className: ["code-copy-label"] }, [
-        { type: "text", value: "Copy" },
-      ]),
-      el("span", { className: ["code-copy-done"] }, [
-        { type: "text", value: "Copied" },
-      ]),
+      el("span", { className: ["code-copy-label"] }, [{ type: "text", value: "Copy" }]),
+      el("span", { className: ["code-copy-done"] }, [{ type: "text", value: "Copied" }]),
     ],
   );
 }
@@ -517,13 +450,7 @@ function lineCopyButton(lineNumber: number): Element {
       "aria-label": `Copy line ${lineNumber}`,
       title: `Copy line ${lineNumber}`,
     },
-    [
-      el("span", { className: ["code-line-no"] }, [
-        { type: "text", value: String(lineNumber) },
-      ]),
-      icon("clipboard"),
-      icon("check"),
-    ],
+    [el("span", { className: ["code-line-no"] }, [{ type: "text", value: String(lineNumber) }]), icon("clipboard"), icon("check")],
   );
 }
 
@@ -547,27 +474,19 @@ function rehypeHighlight(highlighter: Highlighter) {
         defaultColor: false,
       });
 
-      const pre = highlighted.children.find(
-        (c): c is Element => c.type === "element" && c.tagName === "pre",
-      );
+      const pre = highlighted.children.find((c): c is Element => c.type === "element" && c.tagName === "pre");
       if (!pre) return;
 
-      const codeEl = pre.children.find(
-        (c): c is Element => c.type === "element" && c.tagName === "code",
-      );
+      const codeEl = pre.children.find((c): c is Element => c.type === "element" && c.tagName === "code");
 
       if (codeEl) {
-        codeEl.children = codeEl.children.filter(
-          (c) => !(c.type === "text" && c.value.trim().length === 0),
-        );
+        codeEl.children = codeEl.children.filter((c) => !(c.type === "text" && c.value.trim().length === 0));
       }
 
       const lines =
         codeEl?.children.filter(
           (c): c is Element =>
-            c.type === "element" &&
-            typeof c.properties?.class === "string" &&
-            c.properties.class.split(" ").includes("line"),
+            c.type === "element" && typeof c.properties?.class === "string" && c.properties.class.split(" ").includes("line"),
         ) ?? [];
 
       if (lines.length > 1) {
@@ -582,11 +501,7 @@ function rehypeHighlight(highlighter: Highlighter) {
                     "data-nocopy": "true",
                     "aria-hidden": "true",
                   },
-                  [
-                    el("span", { className: ["code-line-no"] }, [
-                      { type: "text", value: String(i + 1) },
-                    ]),
-                  ],
+                  [el("span", { className: ["code-line-no"] }, [{ type: "text", value: String(i + 1) }])],
                 )
               : lineCopyButton(i + 1),
           );
@@ -596,26 +511,14 @@ function rehypeHighlight(highlighter: Highlighter) {
 
       const label = LANG_LABELS[LANG_ALIASES[language] ?? language] ?? language;
 
-      const figure = el(
-        "figure",
-        { className: ["lab-code"], "data-lang": language },
-        [
-          el("figcaption", { className: ["lab-code-head"] }, [
-            el("span", { className: ["lab-code-title"] }, [
-              { type: "text", value: title ?? label },
-            ]),
-            ...(title
-              ? [
-                  el("span", { className: ["lab-code-lang"] }, [
-                    { type: "text", value: label },
-                  ]),
-                ]
-              : []),
-            blockCopyButton(),
-          ]),
-          pre,
-        ],
-      );
+      const figure = el("figure", { className: ["lab-code"], "data-lang": language }, [
+        el("figcaption", { className: ["lab-code-head"] }, [
+          el("span", { className: ["lab-code-title"] }, [{ type: "text", value: title ?? label }]),
+          ...(title ? [el("span", { className: ["lab-code-lang"] }, [{ type: "text", value: label }])] : []),
+          blockCopyButton(),
+        ]),
+        pre,
+      ]);
 
       figure.position = node.position;
       parent.children[index] = figure;
@@ -629,13 +532,9 @@ function addClass(node: Element, name: string): void {
   const key = "className" in node.properties ? "className" : "class";
   const current = node.properties[key];
 
-  const existing: string[] = (
-    Array.isArray(current)
-      ? current.map(String)
-      : typeof current === "string"
-        ? current.split(" ")
-        : []
-  ).filter(Boolean);
+  const existing: string[] = (Array.isArray(current) ? current.map(String) : typeof current === "string" ? current.split(" ") : []).filter(
+    Boolean,
+  );
 
   if (existing.includes(name)) return;
 
@@ -665,25 +564,15 @@ function rehypeDetails() {
     visit(tree, "element", (node: Element) => {
       if (node.tagName !== "details") return;
 
-      const summary = node.children.find((c): c is Element =>
-        isElement(c, "summary"),
-      );
+      const summary = node.children.find((c): c is Element => isElement(c, "summary"));
       if (!summary) return;
 
       addClass(node, "lab-details");
       addClass(summary, "lab-details-summary");
-      summary.children = [
-        chevron(),
-        el("span", { className: ["lab-details-title"] }, summary.children),
-      ];
+      summary.children = [chevron(), el("span", { className: ["lab-details-title"] }, summary.children)];
 
       const body = node.children.filter((c) => c !== summary);
-      node.children = [
-        summary,
-        ...(body.length > 0
-          ? [el("div", { className: ["lab-details-body"] }, body)]
-          : []),
-      ];
+      node.children = [summary, ...(body.length > 0 ? [el("div", { className: ["lab-details-body"] }, body)] : [])];
     });
   };
 }
@@ -695,15 +584,8 @@ const CALLOUT_ICONS: Record<CalloutKind, () => ElementContent[]> = {
     }),
     el("path", { d: "m15 5 4 4" }),
   ],
-  tip: () => [
-    el("circle", { cx: "12", cy: "12", r: "10" }),
-    el("path", { d: "M12 16v-4" }),
-    el("path", { d: "M12 8h.01" }),
-  ],
-  success: () => [
-    el("circle", { cx: "12", cy: "12", r: "10" }),
-    el("path", { d: "m9 12 2 2 4-4" }),
-  ],
+  tip: () => [el("circle", { cx: "12", cy: "12", r: "10" }), el("path", { d: "M12 16v-4" }), el("path", { d: "M12 8h.01" })],
+  success: () => [el("circle", { cx: "12", cy: "12", r: "10" }), el("path", { d: "m9 12 2 2 4-4" })],
   warning: () => [
     el("path", {
       d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3",
@@ -750,17 +632,12 @@ function rehypeCallouts() {
 
       addClass(node, "lab-callout");
       addClass(head, "lab-callout-head");
-      head.children = [
-        calloutIcon(kind as CalloutKind),
-        el("span", { className: ["lab-callout-title"] }, head.children),
-      ];
+      head.children = [calloutIcon(kind as CalloutKind), el("span", { className: ["lab-callout-title"] }, head.children)];
 
       const body = node.children.filter((c) => c !== head);
       node.children = [
         head,
-        ...(body.some((c) => c.type !== "text" || c.value.trim().length > 0)
-          ? [el("div", { className: ["lab-callout-body"] }, body)]
-          : []),
+        ...(body.some((c) => c.type !== "text" || c.value.trim().length > 0) ? [el("div", { className: ["lab-callout-body"] }, body)] : []),
       ];
     });
   };
@@ -776,14 +653,10 @@ function rehypeHeadings() {
 
       const text = toString(node);
       const id =
-        typeof node.properties.id === "string" && node.properties.id.length > 0
-          ? node.properties.id
-          : slugger.slug(text || "section");
+        typeof node.properties.id === "string" && node.properties.id.length > 0 ? node.properties.id : slugger.slug(text || "section");
 
       node.properties.id = id;
-      node.children = [
-        el("a", { href: `#${id}`, className: ["heading-anchor"] }, node.children),
-      ];
+      node.children = [el("a", { href: `#${id}`, className: ["heading-anchor"] }, node.children)];
 
       toc.push({ id, text, depth: node.tagName === "h2" ? 2 : 3 });
     });
@@ -857,16 +730,10 @@ function rehypeLabImages() {
       // element, and the note is the half that says what has gone wrong. The
       // image stays inside it, so one that is only briefly unreachable still
       // appears once it comes back.
-      parent.children[index] = el(
-        "span",
-        { className: ["lab-image-missing"], "data-image-id": id },
-        [
-          node,
-          el("span", { className: ["lab-image-missing-note"] }, [
-            { type: "text", value: "Not in the image library" },
-          ]),
-        ],
-      );
+      parent.children[index] = el("span", { className: ["lab-image-missing"], "data-image-id": id }, [
+        node,
+        el("span", { className: ["lab-image-missing-note"] }, [{ type: "text", value: "Not in the image library" }]),
+      ]);
 
       return SKIP;
     });
@@ -913,24 +780,16 @@ function rehypeSourceLines() {
 // hast-util-sanitize matches protocols case-sensitively, but a URL scheme
 // isn't case-sensitive (RFC 3986), so every allowed protocol needs its
 // upper-case form listed too or `HTTPS://…` links get dropped.
-const withUpperCaseProtocols = (
-  protocols: Record<string, string[] | null | undefined> | null | undefined,
-): Record<string, string[]> =>
+const withUpperCaseProtocols = (protocols: Record<string, string[] | null | undefined> | null | undefined): Record<string, string[]> =>
   Object.fromEntries(
-    Object.entries(protocols ?? {}).map(([key, list]) => [
-      key,
-      [...new Set((list ?? []).flatMap((p) => [p, p.toUpperCase()]))],
-    ]),
+    Object.entries(protocols ?? {}).map(([key, list]) => [key, [...new Set((list ?? []).flatMap((p) => [p, p.toUpperCase()]))]]),
   );
 
 const SANITIZE_SCHEMA = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
-    div: [
-      ...(defaultSchema.attributes?.div ?? []),
-      ["data-callout", ...Object.keys(CALLOUTS)] as [string, ...string[]],
-    ],
+    div: [...(defaultSchema.attributes?.div ?? []), ["data-callout", ...Object.keys(CALLOUTS)] as [string, ...string[]]],
     // `:::details{open}` starts a section unfolded, which is dropped otherwise.
     details: [...(defaultSchema.attributes?.details ?? []), "open"],
   },
@@ -960,10 +819,7 @@ const buildProcessor = (highlighter: Highlighter, sourceLines: boolean) => {
   return processor.use(rehypeStringify);
 };
 
-const processors = new Map<
-  boolean,
-  Promise<ReturnType<typeof buildProcessor>>
->();
+const processors = new Map<boolean, Promise<ReturnType<typeof buildProcessor>>>();
 
 function getProcessor(sourceLines: boolean) {
   let processor = processors.get(sourceLines);
@@ -989,9 +845,7 @@ const refProcessor = unified().use(remarkParse).use(remarkGfm);
 
 export function labImageRefs(markdown: string): LabImageRef[] {
   const refs = new Map<string, LabImageRef>();
-  const tree = refProcessor.parse(
-    normaliseListIndents(normaliseDirectiveTitles(markdown)),
-  ) as MdastRoot;
+  const tree = refProcessor.parse(normaliseListIndents(normaliseDirectiveTitles(markdown))) as MdastRoot;
 
   const definitions = new Map<string, string>();
   visit(tree, "definition", (node) => {

@@ -8,12 +8,7 @@
  */
 
 import { createContext, useState, type ReactNode } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 /** The spot in the title bar where a `VideoWithFeedback` inside the dialog puts its buttons. */
 export const FeedbackSlotContext = createContext<HTMLElement | null>(null);
@@ -46,9 +41,7 @@ export function VideoPlayerDialog({
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 pr-8">
           <div className="min-w-0 space-y-1">
             <DialogTitle>{title}</DialogTitle>
-            {description && (
-              <DialogDescription>{description}</DialogDescription>
-            )}
+            {description && <DialogDescription>{description}</DialogDescription>}
           </div>
           <div ref={setSlot} className="relative z-10 flex items-center" />
           <div />

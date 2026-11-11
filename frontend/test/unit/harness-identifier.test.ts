@@ -103,9 +103,31 @@ describe("harnessIdentifier", () => {
 
   test("suffixes reserved words, whatever their case", () => {
     for (const reserved of [
-      "or", "and", "eq", "ne", "lt", "gt", "le", "ge", "div", "mod", "not",
-      "null", "true", "false", "new", "var", "return", "step", "parallel",
-      "stepgroup", "org", "account", "status", "liteenginetask", "notification",
+      "or",
+      "and",
+      "eq",
+      "ne",
+      "lt",
+      "gt",
+      "le",
+      "ge",
+      "div",
+      "mod",
+      "not",
+      "null",
+      "true",
+      "false",
+      "new",
+      "var",
+      "return",
+      "step",
+      "parallel",
+      "stepgroup",
+      "org",
+      "account",
+      "status",
+      "liteenginetask",
+      "notification",
     ]) {
       assert.equal(harnessIdentifier(reserved), `${reserved}_`, reserved);
     }

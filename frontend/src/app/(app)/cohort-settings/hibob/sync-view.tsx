@@ -102,14 +102,14 @@ export function HibobSyncView({
       <motion.p variants={riseChild} className="text-sm text-muted-foreground">
         {serviceUser ? (
           <>
-            Service user <span className="font-mono font-medium text-foreground">{serviceUser}</span>, from{" "}
-            <code>hibob_userid</code> and <code>hibob_token</code> in the deployment.
+            Service user <span className="font-mono font-medium text-foreground">{serviceUser}</span>, from <code>hibob_userid</code> and{" "}
+            <code>hibob_token</code> in the deployment.
           </>
         ) : (
           <span className="flex items-center gap-1.5 text-destructive">
             <AlertTriangle className="size-3.5 shrink-0" />
-            No HiBob credentials are configured. Set <code>hibob_userid</code> and <code>hibob_token</code> in
-            terraform.tfvars and the Harness workspace, then redeploy.
+            No HiBob credentials are configured. Set <code>hibob_userid</code> and <code>hibob_token</code> in terraform.tfvars and the
+            Harness workspace, then redeploy.
           </span>
         )}
       </motion.p>
@@ -175,11 +175,7 @@ export function HibobSyncView({
                       <span className="flex items-center gap-1.5">
                         <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                         {(run.employeeCount ?? 0).toLocaleString()} employees
-                        {!!run.skipped && (
-                          <span className="text-muted-foreground">
-                            , {run.skipped.toLocaleString()} skipped
-                          </span>
-                        )}
+                        {!!run.skipped && <span className="text-muted-foreground">, {run.skipped.toLocaleString()} skipped</span>}
                       </span>
                     ) : (
                       <span className="flex items-start gap-1.5 text-destructive">
@@ -188,9 +184,7 @@ export function HibobSyncView({
                       </span>
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-5 py-2.5 text-right tabular-nums text-muted-foreground">
-                    {duration(run)}
-                  </td>
+                  <td className="whitespace-nowrap px-5 py-2.5 text-right tabular-nums text-muted-foreground">{duration(run)}</td>
                 </tr>
               ))}
               {runs.length === 0 && (

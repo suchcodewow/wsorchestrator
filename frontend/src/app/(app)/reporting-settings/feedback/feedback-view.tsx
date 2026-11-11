@@ -120,9 +120,7 @@ export function FeedbackView({
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild} className="space-y-1">
         <h2 className="text-xl font-medium tracking-tight">Feedback Management</h2>
-        {bootcamp && (
-          <p className="text-sm text-muted-foreground">For the bootcamp starting {formatDate(bootcamp.startDate)}</p>
-        )}
+        {bootcamp && <p className="text-sm text-muted-foreground">For the bootcamp starting {formatDate(bootcamp.startDate)}</p>}
       </motion.div>
 
       <motion.div variants={riseChild}>
@@ -185,9 +183,7 @@ export function FeedbackView({
                     <td className="px-5 py-2.5">
                       <NoticeResult run={run} />
                     </td>
-                    <td className="whitespace-nowrap px-5 py-2.5 text-right">
-                      {run.dryRun && <Badge variant="secondary">Dry run</Badge>}
-                    </td>
+                    <td className="whitespace-nowrap px-5 py-2.5 text-right">{run.dryRun && <Badge variant="secondary">Dry run</Badge>}</td>
                   </tr>
                 );
               })}

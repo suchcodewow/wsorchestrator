@@ -5,15 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  Columns2,
-  Eye,
-  Loader2,
-  Pencil,
-  Save,
-  Trash2,
-  type LucideIcon,
-} from "lucide-react";
+import { Columns2, Eye, Loader2, Pencil, Save, Trash2, type LucideIcon } from "lucide-react";
 import { LabGuideBody } from "@/components/lab-guide-body";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,12 +32,7 @@ export function GuideEditor({
   const router = useRouter();
   const editing = guide !== undefined;
 
-  const exitTo = (slug: string) =>
-    addTo
-      ? `/labs/${addTo.slug}/edit`
-      : within
-        ? `/labs/${within.slug}/${slug}`
-        : `/labs/guides/${slug}`;
+  const exitTo = (slug: string) => (addTo ? `/labs/${addTo.slug}/edit` : within ? `/labs/${within.slug}/${slug}` : `/labs/guides/${slug}`);
 
   const [title, setTitle] = useState(guide?.title ?? "");
   const [summary, setSummary] = useState(guide?.summary ?? "");
@@ -134,14 +121,12 @@ export function GuideEditor({
   const previewPane = useRef<HTMLDivElement>(null);
   const editedLine = useRef<number | null>(null);
 
-  const lineAt = (text: string, index: number) =>
-    text.slice(0, index).split("\n").length;
+  const lineAt = (text: string, index: number) => text.slice(0, index).split("\n").length;
 
   useEffect(() => {
     const pane = previewPane.current;
     const line = editedLine.current;
-    if (tab !== "split" || preview === null || pane === null || line === null)
-      return;
+    if (tab !== "split" || preview === null || pane === null || line === null) return;
 
     editedLine.current = null;
 
@@ -152,11 +137,7 @@ export function GuideEditor({
     }
     if (!target) return;
 
-    for (
-      let section = target.closest("details");
-      section;
-      section = section.parentElement?.closest("details") ?? null
-    ) {
+    for (let section = target.closest("details"); section; section = section.parentElement?.closest("details") ?? null) {
       section.open = true;
     }
 
@@ -164,19 +145,14 @@ export function GuideEditor({
     const box = target.getBoundingClientRect();
     const margin = 24;
 
-    if (box.top >= view.top + margin && box.bottom <= view.bottom - margin)
-      return;
+    if (box.top >= view.top + margin && box.bottom <= view.bottom - margin) return;
 
     const above = box.top < view.top || box.height > view.height - margin * 2;
-    const top =
-      pane.scrollTop +
-      (above ? box.top - view.top - margin : box.bottom - view.bottom + margin);
+    const top = pane.scrollTop + (above ? box.top - view.top - margin : box.bottom - view.bottom + margin);
 
     pane.scrollTo({
       top,
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
     });
   }, [tab, preview]);
 
@@ -191,12 +167,7 @@ export function GuideEditor({
    * itself still — the textarea is already on screen, since that is where the
    * caret was.
    */
-  function restoreCaret(
-    field: HTMLTextAreaElement,
-    from: number,
-    to: number,
-    scrollTop: number,
-  ) {
+  function restoreCaret(field: HTMLTextAreaElement, from: number, to: number, scrollTop: number) {
     requestAnimationFrame(() => {
       field.focus({ preventScroll: true });
       field.setSelectionRange(from, to);
@@ -217,10 +188,8 @@ export function GuideEditor({
     const indent = listIndentAt(before);
     const block = indent ? snippet.replace(/^(?=.)/gm, indent) : snippet;
 
-    const leading =
-      before.length === 0 ? "" : "\n\n".slice(before.match(/\n*$/)![0].length);
-    const trailing =
-      after.length === 0 ? "" : "\n\n".slice(after.match(/^\n*/)![0].length);
+    const leading = before.length === 0 ? "" : "\n\n".slice(before.match(/\n*$/)![0].length);
+    const trailing = after.length === 0 ? "" : "\n\n".slice(after.match(/^\n*/)![0].length);
 
     const text = `${leading}${block}${trailing}`;
     const next = `${before}${text}${after}`;
@@ -251,8 +220,7 @@ export function GuideEditor({
     restoreCaret(field, at, at, scrollTop);
   }
 
-  const insert = ({ snippet, select, inline }: ToolInsert) =>
-    inline ? insertInline(snippet) : insertBlock(snippet, select);
+  const insert = ({ snippet, select, inline }: ToolInsert) => (inline ? insertInline(snippet) : insertBlock(snippet, select));
 
   const imageMarkdown = (image: { id: string; alt: string; name: string }) =>
     `![${(image.alt || image.name).replace(/[[\]]/g, "")}](/api/lab-images/${image.id})`;
@@ -269,9 +237,7 @@ export function GuideEditor({
       });
       insertBlock(imageMarkdown(image));
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "That image could not be uploaded",
-      );
+      setError(err instanceof Error ? err.message : "That image could not be uploaded");
     } finally {
       setUploadingImage(false);
     }
@@ -327,14 +293,11 @@ export function GuideEditor({
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(
-        editing ? `/api/lab-guides/${guide.id}` : "/api/lab-guides",
-        {
-          method: editing ? "PATCH" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, summary, body }),
-        },
-      );
+      const res = await fetch(editing ? `/api/lab-guides/${guide.id}` : "/api/lab-guides", {
+        method: editing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, summary, body }),
+      });
       if (!res.ok) throw new Error(`Could not save the guide (${res.status})`);
 
       const { guide: saved } = await res.json();
@@ -350,9 +313,7 @@ export function GuideEditor({
           const { slug } = await added.json();
           backTo = `/labs/${slug}/edit`;
         } else {
-          setError(
-            "The guide was saved, but adding it to the workshop failed — add it from the workshop editor.",
-          );
+          setError("The guide was saved, but adding it to the workshop failed — add it from the workshop editor.");
           setSaving(false);
           return;
         }
@@ -371,9 +332,7 @@ export function GuideEditor({
 
     const where =
       usedIn.length > 0
-        ? `It comes out of ${usedIn.length === 1 ? "1 workshop" : `${usedIn.length} workshops`}: ${usedIn
-            .map((w) => w.title)
-            .join(", ")}.`
+        ? `It comes out of ${usedIn.length === 1 ? "1 workshop" : `${usedIn.length} workshops`}: ${usedIn.map((w) => w.title).join(", ")}.`
         : undefined;
 
     if (
@@ -392,9 +351,7 @@ export function GuideEditor({
       router.push(within ? `/labs/${within.slug}` : "/labs/guides");
       router.refresh();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not delete the guide",
-      );
+      setError(err instanceof Error ? err.message : "Could not delete the guide");
       setDeleting(false);
     }
   }
@@ -426,12 +383,8 @@ export function GuideEditor({
         {editing && (
           <p className="text-xs leading-relaxed text-muted-foreground">
             Renaming this moves its address,{" "}
-            <code className="text-foreground">
-              {within
-                ? `/labs/${within.slug}/${guide.slug}`
-                : `/labs/guides/${guide.slug}`}
-            </code>
-            , and every link follows it.
+            <code className="text-foreground">{within ? `/labs/${within.slug}/${guide.slug}` : `/labs/guides/${guide.slug}`}</code>, and
+            every link follows it.
           </p>
         )}
       </div>
@@ -453,34 +406,23 @@ export function GuideEditor({
         <div className="rounded-lg border border-brand-border/60 bg-brand/5 p-3 text-xs leading-relaxed">
           <p className="font-medium">
             Writing for{" "}
-            <Link
-              href={`/labs/${addTo.slug}/edit`}
-              className="text-brand underline underline-offset-2"
-            >
+            <Link href={`/labs/${addTo.slug}/edit`} className="text-brand underline underline-offset-2">
               {addTo.title}
             </Link>
           </p>
-          <p className="mt-1 text-muted-foreground">
-            That workshop is saved, and this guide joins the end of it when you
-            save here.
-          </p>
+          <p className="mt-1 text-muted-foreground">That workshop is saved, and this guide joins the end of it when you save here.</p>
         </div>
       )}
 
       {usedIn.length > 0 && (
         <div className="rounded-lg border border-brand-border/60 bg-brand/5 p-3 text-xs leading-relaxed">
-          <p className="font-medium">
-            In {usedIn.length === 1 ? "1 workshop" : `${usedIn.length} workshops`}
-          </p>
+          <p className="font-medium">In {usedIn.length === 1 ? "1 workshop" : `${usedIn.length} workshops`}</p>
           <p className="mt-1 text-muted-foreground">
             Changes here apply everywhere it appears:{" "}
             {usedIn.map((workshop, i) => (
               <span key={workshop.slug}>
                 {i > 0 && ", "}
-                <Link
-                  href={`/labs/${workshop.slug}`}
-                  className="text-brand underline underline-offset-2"
-                >
+                <Link href={`/labs/${workshop.slug}`} className="text-brand underline underline-offset-2">
                   {workshop.title}
                 </Link>
               </span>
@@ -501,28 +443,17 @@ export function GuideEditor({
 
             <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
 
-            <ImagePickerDialog
-              onInsert={(image) =>
-                insertBlock(imageMarkdown(image))
-              }
-            />
+            <ImagePickerDialog onInsert={(image) => insertBlock(imageMarkdown(image))} />
 
             {uploadingImage && (
-              <span
-                role="status"
-                className="flex items-center gap-1.5 pl-1 text-xs text-muted-foreground"
-              >
+              <span role="status" className="flex items-center gap-1.5 pl-1 text-xs text-muted-foreground">
                 <Loader2 className="size-3.5 animate-spin" />
                 Uploading image…
               </span>
             )}
           </div>
 
-          <div
-            role="tablist"
-            aria-label="Editor view"
-            className="flex items-center gap-1"
-          >
+          <div role="tablist" aria-label="Editor view" className="flex items-center gap-1">
             {VIEWS.map(({ value, label, icon: Icon }) => (
               <button
                 key={value}
@@ -532,9 +463,7 @@ export function GuideEditor({
                 onClick={() => setTab(value)}
                 className={cn(
                   "flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                  tab === value
-                    ? "bg-secondary text-secondary-foreground"
-                    : "text-muted-foreground hover:text-foreground",
+                  tab === value ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <Icon className="size-3.5" />
@@ -552,10 +481,7 @@ export function GuideEditor({
               value={body}
               onChange={(e) => {
                 setBody(e.target.value);
-                editedLine.current = lineAt(
-                  e.target.value,
-                  e.target.selectionStart,
-                );
+                editedLine.current = lineAt(e.target.value, e.target.selectionStart);
               }}
               onKeyDown={onBodyKeyDown}
               onPaste={onBodyPaste}
@@ -572,27 +498,15 @@ export function GuideEditor({
           )}
 
           {tab !== "write" && (
-            <div
-              ref={previewPane}
-              className={cn(
-                "rounded-md border p-5",
-                split
-                  ? "h-[40vh] overflow-y-auto lg:h-[70vh]"
-                  : "min-h-112",
-              )}
-            >
-              {previewError !== null && (
-                <p className="mb-3 text-sm text-destructive">{previewError}</p>
-              )}
+            <div ref={previewPane} className={cn("rounded-md border p-5", split ? "h-[40vh] overflow-y-auto lg:h-[70vh]" : "min-h-112")}>
+              {previewError !== null && <p className="mb-3 text-sm text-destructive">{previewError}</p>}
               {preview === null ? (
                 <p className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
                   Rendering…
                 </p>
               ) : preview.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Nothing to preview yet.
-                </p>
+                <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>
               ) : (
                 <LabGuideBody html={preview} />
               )}
@@ -602,21 +516,17 @@ export function GuideEditor({
 
         {tab !== "preview" && (
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Markdown, with fenced code (
-            <code className="text-foreground">```bash</code>), callouts (
-            <code className="text-foreground">:::tip</code>) and collapsible
-            sections (<code className="text-foreground">:::details</code>) — each
-            toolbar menu shows what it renders as before inserting an example.
+            Markdown, with fenced code (<code className="text-foreground">```bash</code>), callouts (
+            <code className="text-foreground">:::tip</code>) and collapsible sections (<code className="text-foreground">:::details</code>)
+            — each toolbar menu shows what it renders as before inserting an example.
           </p>
         )}
 
         {tab !== "preview" && (
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Write <code className="text-foreground">{"{{project}}"}</code> in a
-            sentence, a command or a link and each reader sees their own, taken
-            from the row they claimed on their event page. The{" "}
-            <span className="text-foreground">Placeholder</span> menu lists every
-            one; the preview leaves them as written.
+            Write <code className="text-foreground">{"{{project}}"}</code> in a sentence, a command or a link and each reader sees their
+            own, taken from the row they claimed on their event page. The <span className="text-foreground">Placeholder</span> menu lists
+            every one; the preview leaves them as written.
           </p>
         )}
 
@@ -629,16 +539,14 @@ export function GuideEditor({
                 <code>{`{{${name}}}`}</code>
               </span>
             ))}{" "}
-            — readers will see that written out. Check the spelling against the
-            Placeholder menu.
+            — readers will see that written out. Check the spelling against the Placeholder menu.
           </p>
         )}
 
         {missingImages.length > 0 && (
           <p className="text-xs leading-relaxed text-destructive">
-            {missingImages.length === 1 ? "An image" : `${missingImages.length} images`}{" "}
-            in this guide {missingImages.length === 1 ? "is" : "are"} no longer in
-            the library
+            {missingImages.length === 1 ? "An image" : `${missingImages.length} images`} in this guide{" "}
+            {missingImages.length === 1 ? "is" : "are"} no longer in the library
             {missingImages.some((image) => image.alt.trim().length > 0) && (
               <>
                 {" — "}
@@ -650,8 +558,8 @@ export function GuideEditor({
                 ))}
               </>
             )}
-            . Readers will see a gap. Insert {missingImages.length === 1 ? "it" : "them"}{" "}
-            again from the Image menu, or delete the reference.
+            . Readers will see a gap. Insert {missingImages.length === 1 ? "it" : "them"} again from the Image menu, or delete the
+            reference.
           </p>
         )}
       </div>
@@ -665,15 +573,7 @@ export function GuideEditor({
         </Button>
 
         <Button asChild variant="ghost">
-          <Link
-            href={
-              addTo
-                ? `/labs/${addTo.slug}/edit`
-                : editing
-                  ? exitTo(guide.slug)
-                  : "/labs/guides"
-            }
-          >
+          <Link href={addTo ? `/labs/${addTo.slug}/edit` : editing ? exitTo(guide.slug) : "/labs/guides"}>
             {addTo ? "Back to the workshop" : "Cancel"}
           </Link>
         </Button>

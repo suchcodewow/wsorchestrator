@@ -22,11 +22,7 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function IntakePage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function IntakePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
 
@@ -46,8 +42,8 @@ export default async function IntakePage({
     <IntakeShell session={session}>
       {forms.length === 0 ? (
         <IntakeNotice heading="My forms">
-          There is nothing for {session.user.email ?? "this account"} to fill in. Registration forms are for people in the
-          current bootcamp or intermediate cohort, and surveys arrive here as the training team sends them.
+          There is nothing for {session.user.email ?? "this account"} to fill in. Registration forms are for people in the current bootcamp
+          or intermediate cohort, and surveys arrive here as the training team sends them.
         </IntakeNotice>
       ) : (
         <div className="space-y-8">

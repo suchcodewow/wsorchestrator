@@ -94,16 +94,8 @@ export type DestroyDecision =
  * mid-close would otherwise be waved through as self-clearing on the strength of
  * a message it never got to print.
  */
-export function decideDestroyFailure(
-  kind: DestroyFailureKind,
-  message: string,
-  attempts: number,
-): DestroyDecision {
-  if (
-    kind === "failed" &&
-    isSelfClearingDestroyFailure(message) &&
-    attempts < MAX_DESTROY_ATTEMPTS
-  ) {
+export function decideDestroyFailure(kind: DestroyFailureKind, message: string, attempts: number): DestroyDecision {
+  if (kind === "failed" && isSelfClearingDestroyFailure(message) && attempts < MAX_DESTROY_ATTEMPTS) {
     return { action: "retry", note: describeDestroyRetry(message, attempts) };
   }
   return { action: "flag", reason: describeDestroyFailure(kind, message) };
@@ -138,10 +130,7 @@ export function describeDestroyRetry(message: string, attempts: number): string 
  * this text does not let someone work out what to do, the terminal state is just a
  * tidier dead end than the loop it replaced.
  */
-export function describeDestroyFailure(
-  kind: DestroyFailureKind,
-  message: string,
-): string {
+export function describeDestroyFailure(kind: DestroyFailureKind, message: string): string {
   const head =
     kind === "died"
       ? "Teardown stopped: the previous attempt was killed before it could " +

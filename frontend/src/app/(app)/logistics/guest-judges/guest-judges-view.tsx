@@ -91,8 +91,7 @@ export function GuestJudgesView({
   const prospectSort = { sort: prospectQuery.sort, dir: prospectQuery.dir, prefix: PROSPECTS };
   // A search, a sort or a page turn means someone is looking: show what they asked for.
   const judgesAsked = judgeQuery.q !== "" || judgeQuery.page > 1 || judgeQuery.sort !== "cohort";
-  const prospectsAsked =
-    prospectQuery.q !== "" || prospectQuery.page > 1 || prospectQuery.sort !== "name" || prospectGroup !== null;
+  const prospectsAsked = prospectQuery.q !== "" || prospectQuery.page > 1 || prospectQuery.sort !== "name" || prospectGroup !== null;
 
   const groups = groupByCohort(judges.rows, emptyCohorts, {
     first: judges.page === 1,
@@ -122,7 +121,8 @@ export function GuestJudgesView({
   }
 
   async function removeCohort(month: string) {
-    if (!(await confirmDialog({ title: `Take ${formatMonth(month)} off the list of cohorts?`, confirmLabel: "Remove", destructive: true }))) return;
+    if (!(await confirmDialog({ title: `Take ${formatMonth(month)} off the list of cohorts?`, confirmLabel: "Remove", destructive: true })))
+      return;
     setBusy(month);
     setError(null);
     try {
@@ -139,7 +139,11 @@ export function GuestJudgesView({
   }
 
   async function remove(j: GuestJudgeRow) {
-    if (!j.person || !(await confirmDialog({ title: `Remove ${j.fullName} from ${formatMonth(j.cohort)}?`, confirmLabel: "Remove", destructive: true }))) return;
+    if (
+      !j.person ||
+      !(await confirmDialog({ title: `Remove ${j.fullName} from ${formatMonth(j.cohort)}?`, confirmLabel: "Remove", destructive: true }))
+    )
+      return;
     setBusy(j.id);
     setError(null);
     try {
@@ -339,8 +343,7 @@ export function GuestJudgesView({
         title="Leaders who have not judged"
         summary={
           <>
-            <span className="font-medium text-foreground">{counts.prospects.toLocaleString()}</span> with direct
-            reports in {departments}
+            <span className="font-medium text-foreground">{counts.prospects.toLocaleString()}</span> with direct reports in {departments}
             {syncedAt ? <>, as of the HiBob sync on {formatWhen(syncedAt)}</> : <>; HiBob has not been synced yet</>}
           </>
         }

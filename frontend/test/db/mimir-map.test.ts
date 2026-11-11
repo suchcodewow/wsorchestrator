@@ -16,7 +16,14 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { mimirCoachConversations, mimirCoachMessages, mimirCoachStats, mimirConceptProgress, mimirConceptVideos, mimirMapVersions } from "@/db/schema";
+import {
+  mimirCoachConversations,
+  mimirCoachMessages,
+  mimirCoachStats,
+  mimirConceptProgress,
+  mimirConceptVideos,
+  mimirMapVersions,
+} from "@/db/schema";
 import { MIMIR_CONTEXT_LIMIT, type Complete, type CompletionRequest } from "@/lib/mimir/chat";
 import { editMap, getMap, getMapVersion, importMap, listMapVersions, replaceMap } from "@/lib/mimir/map/content";
 import { GREET_AFTER_MS, beginCoachTurn, getCoachChat, resetCoachChat, sendCoachMessage } from "@/lib/mimir/map/coach";
@@ -47,7 +54,10 @@ function coach(reply: string, stopReason = "end_turn") {
     sent.push(structuredClone(req));
     for (const word of reply.split(/(?<= )/)) stream?.text(word);
     return {
-      content: [{ type: "thinking", thinking: "", signature: "sig" }, { type: "text", text: reply }],
+      content: [
+        { type: "thinking", thinking: "", signature: "sig" },
+        { type: "text", text: reply },
+      ],
       text: reply,
       stopReason,
       usage: { input_tokens: 10, output_tokens: 5 },
@@ -56,7 +66,8 @@ function coach(reply: string, stopReason = "end_turn") {
   return { complete, sent };
 }
 
-const messagesOf = (userId: string) => db.select().from(mimirCoachMessages).where(eq(mimirCoachMessages.userId, userId)).orderBy(mimirCoachMessages.seq);
+const messagesOf = (userId: string) =>
+  db.select().from(mimirCoachMessages).where(eq(mimirCoachMessages.userId, userId)).orderBy(mimirCoachMessages.seq);
 const lastUserContent = (c: CompletionRequest) => String(c.messages.filter((m) => m.role === "user").at(-1)!.content);
 
 const savedKey = process.env.ANTHROPIC_API_KEY;
@@ -88,7 +99,10 @@ describe("the map's content", () => {
 
   test("a stored map that no longer fits the schema reads as no map, rather than reaching the page", async () => {
     const live = (await getMap())!.version;
-    await db.update(mimirMapVersions).set({ content: { version: 1, nonsense: true } }).where(eq(mimirMapVersions.version, live));
+    await db
+      .update(mimirMapVersions)
+      .set({ content: { version: 1, nonsense: true } })
+      .where(eq(mimirMapVersions.version, live));
     assert.equal(await getMap(), null);
     await importMap(admin.id, mapFixture());
     assert.ok(await getMap());
@@ -100,7 +114,13 @@ describe("the map's content", () => {
     const after = (await getMap())!;
     assert.equal(after.version, before + 1);
     const page = await listMapVersions({ page: 1, q: "", sort: "version", dir: "desc" });
-    assert.deepEqual(page.rows.slice(0, 2).map((r) => [r.version, r.live, r.source]), [[before + 1, true, "import"], [before, false, "import"]]);
+    assert.deepEqual(
+      page.rows.slice(0, 2).map((r) => [r.version, r.live, r.source]),
+      [
+        [before + 1, true, "import"],
+        [before, false, "import"],
+      ],
+    );
     assert.equal(page.rows[0]!.createdBy?.id, admin.id);
     assert.equal((await getMapVersion(before))!.content.title, "Test map");
     await importMap(admin.id, mapFixture());
@@ -118,7 +138,10 @@ describe("the map's content", () => {
     assert.equal(now.content.sections[0]!.name, "Renamed section");
     // The edit carried no videos of its own, and the concepts keep theirs.
     assert.equal(now.content.concepts.find((c) => c.id === "alpha")!.video?.object, "mimir/videos/test-alpha.mp4");
-    assert.equal(stored(await getMapVersion(now.version)).some((c) => c.video), false);
+    assert.equal(
+      stored(await getMapVersion(now.version)).some((c) => c.video),
+      false,
+    );
     await importMap(admin.id, mapFixture());
   });
 
@@ -211,15 +234,20 @@ describe("the coach", () => {
     }
   });
 
-
   test("opening it greets them: the course is the system prompt, and they are handed where they stand", async () => {
     const view = await getCoachChat(rep.id);
-    assert.deepEqual([view.hasMap, view.conversation, view.needsGreeting, view.progress.mastered, view.progress.next?.id], [true, null, true, 0, "alpha"]);
+    assert.deepEqual(
+      [view.hasMap, view.conversation, view.needsGreeting, view.progress.mastered, view.progress.next?.id],
+      [true, null, true, 0, "alpha"],
+    );
 
     const c = coach("Hello Pat, shall we start with Alpha?");
     const result = await sendCoachMessage(rep.id, { open: true }, { complete: c.complete });
     assert.ok(result.ok);
-    assert.deepEqual(result.messages.map((m) => m.role), ["assistant"]);
+    assert.deepEqual(
+      result.messages.map((m) => m.role),
+      ["assistant"],
+    );
 
     const req = c.sent[0]!;
     assert.match(req.system, /\[alpha\] Alpha/);
@@ -246,11 +274,17 @@ describe("the coach", () => {
     await setProfile(rep.id, { role: null, coachStyle: "socratic", coachPersonality: "taylor" });
     const result = await sendCoachMessage(rep.id, { introduce: true }, { complete: c.complete });
     assert.ok(result.ok);
-    assert.deepEqual(result.messages.map((m) => [m.role, m.text]), [["assistant", "Coach Taylor here."]]);
+    assert.deepEqual(
+      result.messages.map((m) => [m.role, m.text]),
+      [["assistant", "Coach Taylor here."]],
+    );
     assert.match(lastUserContent(c.sent[1]!), /I just picked Coach Taylor as my coach\. Introduce yourself in that voice/);
     assert.match(c.sent[1]!.system, /You are Coach Taylor/);
     const view = await getCoachChat(rep.id);
-    assert.deepEqual(view.conversation!.messages.map((m) => m.role), ["assistant", "assistant"]);
+    assert.deepEqual(
+      view.conversation!.messages.map((m) => m.role),
+      ["assistant", "assistant"],
+    );
 
     // The next opening is the second, not the third: it does not ask for an introduction.
     const again = coach("Hello.");
@@ -262,9 +296,18 @@ describe("the coach", () => {
   test("the greeting is not shown as something they said", async () => {
     await sendCoachMessage(rep.id, { open: true }, { complete: coach("Hello.").complete });
     const stored = await messagesOf(rep.id);
-    assert.deepEqual(stored.map((m) => [m.role, m.shown]), [["user", false], ["assistant", true]]);
+    assert.deepEqual(
+      stored.map((m) => [m.role, m.shown]),
+      [
+        ["user", false],
+        ["assistant", true],
+      ],
+    );
     const view = await getCoachChat(rep.id);
-    assert.deepEqual(view.conversation!.messages.map((m) => m.role), ["assistant"]);
+    assert.deepEqual(
+      view.conversation!.messages.map((m) => m.role),
+      ["assistant"],
+    );
     assert.equal(view.needsGreeting, false);
   });
 
@@ -281,7 +324,11 @@ describe("the coach", () => {
   });
 
   test("a recommendation flags the concept, a later mastery clears it, and the coach is not re-greeted for its own changes", async () => {
-    const rec = await sendCoachMessage(rep.id, { message: "No idea." }, { complete: coach("Watch it: [Watch: Gamma](/coach-canary/map?play=gamma)\n[RECOMMEND: gamma]").complete });
+    const rec = await sendCoachMessage(
+      rep.id,
+      { message: "No idea." },
+      { complete: coach("Watch it: [Watch: Gamma](/coach-canary/map?play=gamma)\n[RECOMMEND: gamma]").complete },
+    );
     assert.ok(rec.ok && rec.recommended[0] === "gamma");
     assert.equal((await getConceptState(rep.id, "gamma")).recommended, true);
     assert.equal((await getCoachChat(rep.id)).needsGreeting, false);
@@ -312,7 +359,10 @@ describe("the coach", () => {
     assert.equal((await getCoachChat(rep.id)).needsGreeting, true);
     await sendCoachMessage(rep.id, { open: true }, { complete: coach("Welcome back.").complete });
     assert.equal((await getCoachChat(rep.id)).needsGreeting, false);
-    await db.update(mimirCoachConversations).set({ updatedAt: new Date(Date.now() - GREET_AFTER_MS - 60_000) }).where(eq(mimirCoachConversations.userId, rep.id));
+    await db
+      .update(mimirCoachConversations)
+      .set({ updatedAt: new Date(Date.now() - GREET_AFTER_MS - 60_000) })
+      .where(eq(mimirCoachConversations.userId, rep.id));
     assert.equal((await getCoachChat(rep.id)).needsGreeting, true);
   });
 
@@ -323,8 +373,14 @@ describe("the coach", () => {
       throw new Error("down");
     };
     assert.deepEqual(await sendCoachMessage(rep.id, { message: "Lost?" }, { complete: broke }), { ok: false, error: "upstream" });
-    assert.deepEqual(await sendCoachMessage(rep.id, { message: "Declined?" }, { complete: coach("no", "refusal").complete }), { ok: false, error: "refused" });
-    assert.deepEqual(await sendCoachMessage(rep.id, { message: "Only a marker?" }, { complete: coach("[MASTERED: alpha]").complete }), { ok: false, error: "upstream" });
+    assert.deepEqual(await sendCoachMessage(rep.id, { message: "Declined?" }, { complete: coach("no", "refusal").complete }), {
+      ok: false,
+      error: "refused",
+    });
+    assert.deepEqual(await sendCoachMessage(rep.id, { message: "Only a marker?" }, { complete: coach("[MASTERED: alpha]").complete }), {
+      ok: false,
+      error: "upstream",
+    });
     assert.equal((await messagesOf(rep.id)).length, before);
     assert.deepEqual(await listConceptStates(rep.id), {});
   });
@@ -338,7 +394,10 @@ describe("the coach", () => {
     };
     const first = sendCoachMessage(rep.id, { message: "First." }, { complete: slow });
     for (let i = 0; i < 50 && (await messagesOf(rep.id)).at(-1)?.text !== "First."; i++) await new Promise((r) => setTimeout(r, 20));
-    assert.deepEqual(await sendCoachMessage(rep.id, { message: "Second." }, { complete: coach("x").complete }), { ok: false, error: "busy" });
+    assert.deepEqual(await sendCoachMessage(rep.id, { message: "Second." }, { complete: coach("x").complete }), {
+      ok: false,
+      error: "busy",
+    });
     release();
     assert.ok((await first).ok);
   });
@@ -346,7 +405,10 @@ describe("the coach", () => {
   test("a conversation as long as the model can read is full, and a new one starts afresh", async () => {
     await sendCoachMessage(rep.id, { open: true }, { complete: coach("Hi.").complete });
     const last = (await messagesOf(rep.id)).at(-1)!;
-    await db.update(mimirCoachMessages).set({ usage: { input_tokens: MIMIR_CONTEXT_LIMIT } }).where(eq(mimirCoachMessages.userId, rep.id));
+    await db
+      .update(mimirCoachMessages)
+      .set({ usage: { input_tokens: MIMIR_CONTEXT_LIMIT } })
+      .where(eq(mimirCoachMessages.userId, rep.id));
     assert.equal(last.role, "assistant");
     assert.deepEqual(await sendCoachMessage(rep.id, { message: "More?" }, { complete: coach("x").complete }), { ok: false, error: "full" });
     assert.equal(await resetCoachChat(rep.id), true);
@@ -427,12 +489,18 @@ describe("the coach", () => {
     for (let i = 0; i < 3; i++) await sendCoachMessage(rep.id, { message: `Message ${i}` }, { complete: c.complete });
     const view = await getCoachChat(rep.id);
     const shown = view.conversation!.messages;
-    assert.deepEqual(shown.map((m) => m.role), ["user", "assistant", "user", "assistant", "user", "assistant"]);
+    assert.deepEqual(
+      shown.map((m) => m.role),
+      ["user", "assistant", "user", "assistant", "user", "assistant"],
+    );
     assert.ok(shown.every((m, i) => i === 0 || m.seq > shown[i - 1]!.seq));
     assert.ok(shown.filter((m) => m.role === "assistant").every((m) => typeof m.html === "string"));
     assert.equal(view.conversation!.earlier, false);
     const older = await getCoachChat(rep.id, shown[3]!.seq);
-    assert.deepEqual(older.conversation!.messages.map((m) => m.seq), shown.slice(0, 3).map((m) => m.seq));
+    assert.deepEqual(
+      older.conversation!.messages.map((m) => m.seq),
+      shown.slice(0, 3).map((m) => m.seq),
+    );
   });
 
   test("without a map there is nothing to coach on", async () => {
@@ -471,7 +539,10 @@ describe("the coach's checklists", () => {
   };
 
   test("the coach sets out a checklist once and ticks it a point at a time, and the last tick masters the concept", async () => {
-    const first = await say(rep.id, "Good start. What does alpha do for the bakery?\n[POINTS: alpha | Alpha comes first | Alpha is a bakery | Alpha saves time]\n[COVERED: alpha 1]");
+    const first = await say(
+      rep.id,
+      "Good start. What does alpha do for the bakery?\n[POINTS: alpha | Alpha comes first | Alpha is a bakery | Alpha saves time]\n[COVERED: alpha 1]",
+    );
     assert.deepEqual(first.covered, [{ id: "alpha", points: ["Alpha comes first"], covered: 1, total: 3 }]);
     assert.deepEqual(first.mastered, []);
     assert.deepEqual(first.progress.next?.points, [
@@ -487,12 +558,18 @@ describe("the coach's checklists", () => {
     assert.ok(second.ok);
     // A second checklist does not replace the first: the target never moves, and the next turn shows the coach the one that stands.
     assert.deepEqual(second.covered, [{ id: "alpha", points: ["Alpha is a bakery"], covered: 2, total: 3 }]);
-    assert.deepEqual((await getConceptState(rep.id, "alpha")).points?.map((p) => p.text), ["Alpha comes first", "Alpha is a bakery", "Alpha saves time"]);
+    assert.deepEqual(
+      (await getConceptState(rep.id, "alpha")).points?.map((p) => p.text),
+      ["Alpha comes first", "Alpha is a bakery", "Alpha saves time"],
+    );
 
     // The coach is told which points are still open.
     const c = coach("That's it.\n[COVERED: alpha 3 1]");
     const last = await sendCoachMessage(rep.id, { message: "It saves time." }, { complete: c.complete });
-    assert.match(lastUserContent(c.sent[0]!), /1\. \[covered\] Alpha comes first\n {2}2\. \[covered\] Alpha is a bakery\n {2}3\. \[open\] Alpha saves time/);
+    assert.match(
+      lastUserContent(c.sent[0]!),
+      /1\. \[covered\] Alpha comes first\n {2}2\. \[covered\] Alpha is a bakery\n {2}3\. \[open\] Alpha saves time/,
+    );
     assert.ok(last.ok);
     assert.deepEqual(last.covered, [{ id: "alpha", points: ["Alpha saves time"], covered: 3, total: 3 }]);
     assert.deepEqual(last.mastered, ["alpha"]);
@@ -515,7 +592,10 @@ describe("the coach's checklists", () => {
     assert.equal((await getConceptState(rep.id, "beta")).points, null);
     await say(rep.id, "Ok.\n[POINTS: beta | Beta one | Beta two]");
     assert.deepEqual((await say(rep.id, "Ok.\n[COVERED: beta 5]")).covered, []);
-    assert.deepEqual((await say(rep.id, "Again.\n[COVERED: beta 1]\n")).covered.map((c) => c.covered), [1]);
+    assert.deepEqual(
+      (await say(rep.id, "Again.\n[COVERED: beta 1]\n")).covered.map((c) => c.covered),
+      [1],
+    );
     // A point already ticked is not news.
     assert.deepEqual((await say(rep.id, "Still.\n[COVERED: beta 1]")).covered, []);
   });
@@ -532,20 +612,31 @@ describe("the coach's checklists", () => {
 
   test("a concept's own points are its checklist: the coach cannot replace them, and a tick survives a re-import that keeps the wording", async () => {
     const authored = () =>
-      mapFixture({ concepts: mapFixture().concepts.map((c) => (c.id === "alpha" ? { ...c, points: ["Alpha comes first", "Alpha is a bakery"] } : c)) });
+      mapFixture({
+        concepts: mapFixture().concepts.map((c) => (c.id === "alpha" ? { ...c, points: ["Alpha comes first", "Alpha is a bakery"] } : c)),
+      });
     await importMap(admin.id, authored());
     try {
       const view = await getCoachChat(rep.id);
-      assert.deepEqual(view.progress.next?.points?.map((p) => p.covered), [false, false]);
+      assert.deepEqual(
+        view.progress.next?.points?.map((p) => p.covered),
+        [false, false],
+      );
       const r = await say(rep.id, "Good.\n[POINTS: alpha | Mine | Yours]\n[COVERED: alpha 2]");
       assert.deepEqual(r.covered, [{ id: "alpha", points: ["Alpha is a bakery"], covered: 1, total: 2 }]);
 
       const reworded = authored();
       reworded.concepts[0]!.points = ["Alpha comes first", "Alpha bakes bread"];
       await importMap(admin.id, reworded);
-      assert.deepEqual((await getCoachChat(rep.id)).progress.next?.points?.map((p) => p.covered), [false, false]);
+      assert.deepEqual(
+        (await getCoachChat(rep.id)).progress.next?.points?.map((p) => p.covered),
+        [false, false],
+      );
       await importMap(admin.id, authored());
-      assert.deepEqual((await getCoachChat(rep.id)).progress.next?.points?.map((p) => p.covered), [false, true]);
+      assert.deepEqual(
+        (await getCoachChat(rep.id)).progress.next?.points?.map((p) => p.covered),
+        [false, true],
+      );
     } finally {
       await importMap(admin.id, mapFixture());
     }
@@ -553,7 +644,10 @@ describe("the coach's checklists", () => {
 
   test("a conversation from before checklists reads as none and is replaced on the next turn, keeping progress", async () => {
     await say(rep.id, "Good.\n[MASTERED: alpha]");
-    await db.update(mimirCoachConversations).set({ systemPrompt: "An old coach that only knew [MASTERED: concept-id]." }).where(eq(mimirCoachConversations.userId, rep.id));
+    await db
+      .update(mimirCoachConversations)
+      .set({ systemPrompt: "An old coach that only knew [MASTERED: concept-id]." })
+      .where(eq(mimirCoachConversations.userId, rep.id));
 
     const view = await getCoachChat(rep.id);
     assert.deepEqual([view.conversation, view.needsGreeting, view.progress.mastered], [null, true, 1]);

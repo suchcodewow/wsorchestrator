@@ -13,12 +13,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  mergeDeployed,
-  nothingDeployed,
-  nothingSelected,
-  type DeployedContent,
-} from "@/lib/harness-deploy-selection";
+import { mergeDeployed, nothingDeployed, nothingSelected, type DeployedContent } from "@/lib/harness-deploy-selection";
 
 const none: DeployedContent = { official: false, mySecrets: false, myTemplates: [] };
 
@@ -64,10 +59,7 @@ describe("mergeDeployed", () => {
   });
 
   test("lists template sources from both runs once each, earlier ones first", () => {
-    const merged = mergeDeployed(
-      { ...none, myTemplates: ["A", "B"] },
-      { ...none, myTemplates: ["B", "C", "A", "D"] },
-    );
+    const merged = mergeDeployed({ ...none, myTemplates: ["A", "B"] }, { ...none, myTemplates: ["B", "C", "A", "D"] });
     assert.deepEqual(merged.myTemplates, ["A", "B", "C", "D"]);
   });
 
@@ -78,10 +70,7 @@ describe("mergeDeployed", () => {
   test("treats names as exact strings, so differently cased names stay distinct", () => {
     // They are recorded as they read at the time; two sources can differ only
     // in case, and folding them would lose one.
-    assert.deepEqual(
-      mergeDeployed({ ...none, myTemplates: ["Demo"] }, { ...none, myTemplates: ["demo"] }).myTemplates,
-      ["Demo", "demo"],
-    );
+    assert.deepEqual(mergeDeployed({ ...none, myTemplates: ["Demo"] }, { ...none, myTemplates: ["demo"] }).myTemplates, ["Demo", "demo"]);
   });
 
   test("does not modify either record", () => {

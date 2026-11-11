@@ -17,12 +17,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  MAX_SET_COMPONENTS,
-  validateComponent,
-  validateSet,
-  type SubmittedComponent,
-} from "@/lib/components/validate";
+import { MAX_SET_COMPONENTS, validateComponent, validateSet, type SubmittedComponent } from "@/lib/components/validate";
 
 const RESERVED_IN_SKILL_MD =
   "or and eq ne lt gt le ge div mod not null true false new var return step parallel stepgroup org account status liteenginetask notification".split(
@@ -38,8 +33,7 @@ const connector = (over: SubmittedComponent = {}): SubmittedComponent => ({
   ...over,
 });
 
-const fields = (c: SubmittedComponent) =>
-  validateComponent(c, 0).issues.map((i) => i.field);
+const fields = (c: SubmittedComponent) => validateComponent(c, 0).issues.map((i) => i.field);
 
 describe("validateComponent: a well-formed component", () => {
   test("is accepted with defaults filled in", () => {
@@ -119,42 +113,34 @@ describe("validateComponent: identifier", () => {
   test("rejects a leading digit or dollar, hyphens, dots, spaces, and anything over 128", () => {
     for (const id of ["9lives", "$x", "my-connector", "a.b", "a b", "x".repeat(129), "café"]) {
       const { issues } = validateComponent(connector({ identifier: id }), 0);
-      assert.deepEqual(issues.map((i) => i.field), ["identifier"], id);
+      assert.deepEqual(
+        issues.map((i) => i.field),
+        ["identifier"],
+        id,
+      );
       assert.match(issues[0]!.message, /is not a legal Harness identifier/);
     }
   });
 
   test("secrets may contain hyphens; nothing else may", () => {
-    assert.deepEqual(
-      fields({ identifier: "gcp-key", kind: "secret_text", scope: "org", name: "k", spec: { value: "v" } }),
-      [],
-    );
-    assert.deepEqual(
-      fields({ identifier: "gcp-key", kind: "secret_file", scope: "org", name: "k", spec: { content: "v" } }),
-      [],
-    );
+    assert.deepEqual(fields({ identifier: "gcp-key", kind: "secret_text", scope: "org", name: "k", spec: { value: "v" } }), []);
+    assert.deepEqual(fields({ identifier: "gcp-key", kind: "secret_file", scope: "org", name: "k", spec: { content: "v" } }), []);
     assert.deepEqual(fields(connector({ identifier: "gcp-key" })), ["identifier"]);
-    assert.deepEqual(
-      fields({ identifier: "gcp-key", kind: "template", scope: "org", name: "t", spec: { yaml: "template:" } }),
-      ["identifier"],
-    );
+    assert.deepEqual(fields({ identifier: "gcp-key", kind: "template", scope: "org", name: "t", spec: { yaml: "template:" } }), [
+      "identifier",
+    ]);
   });
 
   test("the rejection message mentions hyphens only where they are allowed", () => {
-    const secret = validateComponent(
-      { identifier: "1x", kind: "secret_text", scope: "org", name: "k", spec: { value: "v" } },
-      0,
-    ).issues[0]!.message;
+    const secret = validateComponent({ identifier: "1x", kind: "secret_text", scope: "org", name: "k", spec: { value: "v" } }, 0).issues[0]!
+      .message;
     const other = validateComponent(connector({ identifier: "1x" }), 0).issues[0]!.message;
     assert.match(secret, /hyphens/);
     assert.doesNotMatch(other, /hyphens/);
   });
 
   test("a secret still cannot start with a hyphen", () => {
-    assert.deepEqual(
-      fields({ identifier: "-key", kind: "secret_text", scope: "org", name: "k", spec: { value: "v" } }),
-      ["identifier"],
-    );
+    assert.deepEqual(fields({ identifier: "-key", kind: "secret_text", scope: "org", name: "k", spec: { value: "v" } }), ["identifier"]);
   });
 
   test("every word the contributor guide calls reserved is refused, in any case", () => {
@@ -220,7 +206,11 @@ describe("validateComponent: spec", () => {
     for (const [kind, field] of cases) {
       for (const spec of [{}, { [field.slice(5)]: "" }, { [field.slice(5)]: 42 }]) {
         const { issues } = validateComponent(connector({ kind, spec }), 0);
-        assert.deepEqual(issues.map((i) => i.field), [field], `${kind} ${JSON.stringify(spec)}`);
+        assert.deepEqual(
+          issues.map((i) => i.field),
+          [field],
+          `${kind} ${JSON.stringify(spec)}`,
+        );
         assert.match(issues[0]!.message, new RegExp(`a ${kind} needs ${field.replace(".", "\\.")}`));
       }
     }
@@ -292,15 +282,17 @@ describe("validateSet", () => {
   });
 
   test(`accepts exactly ${MAX_SET_COMPONENTS} components and refuses one more`, () => {
-    const many = (n: number) =>
-      Array.from({ length: n }, (_, i) => connector({ identifier: `c${i}` }));
+    const many = (n: number) => Array.from({ length: n }, (_, i) => connector({ identifier: `c${i}` }));
     const atLimit = validateSet(many(MAX_SET_COMPONENTS));
     assert.deepEqual(atLimit.issues, []);
     assert.equal(atLimit.valid.length, MAX_SET_COMPONENTS);
 
     const over = validateSet(many(MAX_SET_COMPONENTS + 1));
     assert.deepEqual(over.valid, []);
-    assert.deepEqual(over.issues.map((i) => [i.index, i.field]), [[-1, "components"]]);
+    assert.deepEqual(
+      over.issues.map((i) => [i.index, i.field]),
+      [[-1, "components"]],
+    );
     assert.match(over.issues[0]!.message, new RegExp(`at most ${MAX_SET_COMPONENTS}`));
   });
 
@@ -310,8 +302,14 @@ describe("validateSet", () => {
       connector({ identifier: "b-bad" }),
       connector({ identifier: "c" }),
     ]);
-    assert.deepEqual(valid.map((c) => c.identifier), ["a", "c"]);
-    assert.deepEqual(issues.map((i) => [i.index, i.field]), [[1, "identifier"]]);
+    assert.deepEqual(
+      valid.map((c) => c.identifier),
+      ["a", "c"],
+    );
+    assert.deepEqual(
+      issues.map((i) => [i.index, i.field]),
+      [[1, "identifier"]],
+    );
   });
 
   test("a second component with the same identifier is refused, pointing at the first", () => {
@@ -320,8 +318,14 @@ describe("validateSet", () => {
       connector({ identifier: "other" }),
       connector({ identifier: "gcp", name: "Second GCP" }),
     ]);
-    assert.deepEqual(valid.map((c) => c.name), ["GCP", "GCP"]);
-    assert.deepEqual(valid.map((c) => c.identifier), ["gcp", "other"]);
+    assert.deepEqual(
+      valid.map((c) => c.name),
+      ["GCP", "GCP"],
+    );
+    assert.deepEqual(
+      valid.map((c) => c.identifier),
+      ["gcp", "other"],
+    );
     assert.equal(issues.length, 1);
     assert.equal(issues[0]!.index, 2);
     assert.equal(issues[0]!.identifier, "gcp");
@@ -329,17 +333,23 @@ describe("validateSet", () => {
   });
 
   test("an invalid entry does not claim its identifier", () => {
-    const { issues, valid } = validateSet([
-      connector({ identifier: "gcp", name: "" }),
-      connector({ identifier: "gcp" }),
-    ]);
-    assert.deepEqual(valid.map((c) => c.identifier), ["gcp"]);
-    assert.deepEqual(issues.map((i) => [i.index, i.field]), [[0, "name"]]);
+    const { issues, valid } = validateSet([connector({ identifier: "gcp", name: "" }), connector({ identifier: "gcp" })]);
+    assert.deepEqual(
+      valid.map((c) => c.identifier),
+      ["gcp"],
+    );
+    assert.deepEqual(
+      issues.map((i) => [i.index, i.field]),
+      [[0, "name"]],
+    );
   });
 
   test("null and non-object entries are reported, not thrown on", () => {
     const { issues, valid } = validateSet([null, 5, "x", connector()]);
-    assert.deepEqual(valid.map((c) => c.identifier), ["gcp"]);
+    assert.deepEqual(
+      valid.map((c) => c.identifier),
+      ["gcp"],
+    );
     assert.deepEqual([...new Set(issues.map((i) => i.index))], [0, 1, 2]);
   });
 });

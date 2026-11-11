@@ -38,9 +38,6 @@ export async function GET(req: Request) {
 
   const reader = readerOf(user);
   const query = parseListQuery(params, BOOTCAMP_COHORT_LIST);
-  const [{ rows, page, hasMore }, counts] = await Promise.all([
-    listCohort(reader, bootcamp, query, stage),
-    cohortCounts(reader, bootcamp),
-  ]);
+  const [{ rows, page, hasMore }, counts] = await Promise.all([listCohort(reader, bootcamp, query, stage), cohortCounts(reader, bootcamp)]);
   return NextResponse.json({ bootcamp, stages: visibleStages(reader, bootcamp), stage, counts, cohort: rows, page, hasMore });
 }

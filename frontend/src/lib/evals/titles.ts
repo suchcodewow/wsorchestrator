@@ -5,13 +5,7 @@ import "server-only";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import {
-  EVALS_TITLE_LIMITS,
-  EVALS_TITLE_LISTS,
-  evalsTitles,
-  users,
-  type EvalsTitleList,
-} from "@/db/schema";
+import { EVALS_TITLE_LIMITS, EVALS_TITLE_LISTS, evalsTitles, users, type EvalsTitleList } from "@/db/schema";
 import { cleanTitle, titleKey } from "@/lib/evals/title-lists";
 import type { TitleSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
@@ -35,9 +29,7 @@ const TITLE_SORT_COLUMNS = {
  * One page of titles: one list's when `list` is given, every list's
  * otherwise. The search matches the title or who added it.
  */
-export async function listTitles(
-  query: ListQuery<TitleSort> & { list?: EvalsTitleList },
-): Promise<Page<TitleRow>> {
+export async function listTitles(query: ListQuery<TitleSort> & { list?: EvalsTitleList }): Promise<Page<TitleRow>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({
@@ -50,15 +42,8 @@ export async function listTitles(
     })
     .from(evalsTitles)
     .leftJoin(users, eq(users.id, evalsTitles.createdBy))
-    .where(
-      and(
-        query.list ? eq(evalsTitles.list, query.list) : undefined,
-        searchAny(query.q, [evalsTitles.title, users.name, users.email]),
-      ),
-    )
-    .orderBy(
-      ...orderFor(TITLE_SORT_COLUMNS[query.sort], query.dir, sql`lower(${evalsTitles.title})`, evalsTitles.id),
-    )
+    .where(and(query.list ? eq(evalsTitles.list, query.list) : undefined, searchAny(query.q, [evalsTitles.title, users.name, users.email])))
+    .orderBy(...orderFor(TITLE_SORT_COLUMNS[query.sort], query.dir, sql`lower(${evalsTitles.title})`, evalsTitles.id))
     .limit(limit)
     .offset(offset);
 
@@ -116,11 +101,7 @@ export type AddResult = {
 };
 
 /** Adds each title not already on some list; the rest are reported, not moved. */
-export async function addTitles(
-  actorId: string,
-  list: EvalsTitleList,
-  titles: string[],
-): Promise<AddResult> {
+export async function addTitles(actorId: string, list: EvalsTitleList, titles: string[]): Promise<AddResult> {
   const wanted = new Map<string, string>();
   for (const t of titles.map(cleanTitle)) {
     if (t && !wanted.has(t.toLowerCase())) wanted.set(t.toLowerCase(), t);

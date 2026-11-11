@@ -31,7 +31,13 @@ const LOCK = sql`select pg_advisory_xact_lock(hashtext('mimir_map_versions'))`;
 async function videosFor(conceptIds: string[]): Promise<VideoRow[]> {
   if (conceptIds.length === 0) return [];
   const rows = await db.select().from(mimirConceptVideos).where(inArray(mimirConceptVideos.conceptId, conceptIds));
-  return rows.map((r) => ({ conceptId: r.conceptId, language: r.language, object: r.object, seconds: r.seconds, transcript: r.transcript }));
+  return rows.map((r) => ({
+    conceptId: r.conceptId,
+    language: r.language,
+    object: r.object,
+    seconds: r.seconds,
+    transcript: r.transcript,
+  }));
 }
 
 const conceptIdsOf = (structure: unknown): string[] =>
@@ -55,7 +61,9 @@ async function liveVersion(tx: Tx): Promise<number> {
 }
 
 async function insertVersion(tx: Tx, version: number, content: MapContent, source: MimirMapSource, summary: string, userId: string | null) {
-  await tx.insert(mimirMapVersions).values({ version, content: withoutVideos(content), source, summary: summary.slice(0, MAP_SUMMARY_MAX), createdBy: userId });
+  await tx
+    .insert(mimirMapVersions)
+    .values({ version, content: withoutVideos(content), source, summary: summary.slice(0, MAP_SUMMARY_MAX), createdBy: userId });
 }
 
 /**
@@ -177,4 +185,3 @@ export async function getMapVersion(version: number): Promise<{ content: MapCont
   const parsed = mapContentSchema.safeParse(row.content);
   return parsed.success ? { content: parsed.data, createdAt: row.createdAt, source: row.source } : null;
 }
-

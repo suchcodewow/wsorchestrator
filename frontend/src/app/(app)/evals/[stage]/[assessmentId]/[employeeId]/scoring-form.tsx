@@ -152,10 +152,7 @@ export function ScoringFormView({
   const transcriptFailed = Object.values(transcripts.jobs).some((j) => j.status === "failed");
 
   const canSubmit =
-    bootcamp !== null &&
-    complete &&
-    !(needed === "positive" && !positive.trim()) &&
-    !(needed === "constructive" && !constructive.trim());
+    bootcamp !== null && complete && !(needed === "positive" && !positive.trim()) && !(needed === "constructive" && !constructive.trim());
 
   function set(id: string, patch: Partial<Entry>) {
     setEntries((all) => ({ ...all, [id]: { ...all[id]!, ...patch } }));
@@ -303,8 +300,8 @@ export function ScoringFormView({
         >
           <Info className="mt-0.5 size-4 shrink-0 text-brand" />
           <span>
-            <span className="font-medium">{submission.ownerName ?? "Someone who has since left"}</span> wrote this
-            assessment. Saving your changes makes you its owner.
+            <span className="font-medium">{submission.ownerName ?? "Someone who has since left"}</span> wrote this assessment. Saving your
+            changes makes you its owner.
           </span>
         </motion.div>
       )}
@@ -429,9 +426,7 @@ export function ScoringFormView({
                       onClick={() => set(c.id, { score: n })}
                       className={cn(
                         "flex size-10 items-center justify-center rounded-md border text-sm font-medium transition-colors",
-                        entry.score === n
-                          ? "border-brand bg-brand text-brand-foreground"
-                          : "border-input bg-field hover:bg-muted/50",
+                        entry.score === n ? "border-brand bg-brand text-brand-foreground" : "border-input bg-field hover:bg-muted/50",
                       )}
                     >
                       {n}

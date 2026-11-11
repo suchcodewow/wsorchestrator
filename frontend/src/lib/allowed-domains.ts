@@ -6,11 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { ALLOWED_DOMAIN_LIMITS, allowedEmailDomains, users } from "@/db/schema";
-import {
-  emailAllowedBy,
-  normalizeDomain,
-  parseDomainList,
-} from "@/lib/email-domains";
+import { emailAllowedBy, normalizeDomain, parseDomainList } from "@/lib/email-domains";
 import type { DomainSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
@@ -21,16 +17,12 @@ export function envAllowedDomains(): string[] {
 }
 
 export async function effectiveAllowedDomains(): Promise<string[]> {
-  const rows = await db
-    .select({ domain: allowedEmailDomains.domain })
-    .from(allowedEmailDomains);
+  const rows = await db.select({ domain: allowedEmailDomains.domain }).from(allowedEmailDomains);
 
   return [...new Set([...envAllowedDomains(), ...rows.map((r) => r.domain)])];
 }
 
-export async function isEmailAllowed(
-  email: string | null | undefined,
-): Promise<boolean> {
+export async function isEmailAllowed(email: string | null | undefined): Promise<boolean> {
   if (isBootstrapAdmin(email)) return true;
   return emailAllowedBy(email, await effectiveAllowedDomains());
 }
@@ -63,9 +55,7 @@ export async function listAllowedDomains(query: ListQuery<DomainSort>): Promise<
     })
     .from(allowedEmailDomains)
     .leftJoin(users, eq(users.id, allowedEmailDomains.createdBy))
-    .where(
-      searchAny(query.q, [allowedEmailDomains.domain, allowedEmailDomains.note, users.name, users.email]),
-    )
+    .where(searchAny(query.q, [allowedEmailDomains.domain, allowedEmailDomains.note, users.name, users.email]))
     .orderBy(...orderFor(DOMAIN_SORT_COLUMNS[query.sort], query.dir, allowedEmailDomains.domain))
     .limit(limit)
     .offset(offset);
@@ -79,11 +69,7 @@ export async function listAllowedDomains(query: ListQuery<DomainSort>): Promise<
   );
 }
 
-export type DomainError =
-  | "invalid"
-  | "duplicate"
-  | "not_found"
-  | "self_lockout";
+export type DomainError = "invalid" | "duplicate" | "not_found" | "self_lockout";
 
 type Result = { ok: true } | { ok: false; error: DomainError };
 
@@ -103,22 +89,15 @@ export type Actor = { id: string; email: string | null | undefined };
 
 function wouldLockOut(actor: Actor, nextDomains: string[]): boolean {
   if (isBootstrapAdmin(actor.email)) return false;
-  return !emailAllowedBy(actor.email, [
-    ...new Set([...envAllowedDomains(), ...nextDomains]),
-  ]);
+  return !emailAllowedBy(actor.email, [...new Set([...envAllowedDomains(), ...nextDomains])]);
 }
 
 async function currentDomains(): Promise<Map<string, string>> {
-  const rows = await db
-    .select({ id: allowedEmailDomains.id, domain: allowedEmailDomains.domain })
-    .from(allowedEmailDomains);
+  const rows = await db.select({ id: allowedEmailDomains.id, domain: allowedEmailDomains.domain }).from(allowedEmailDomains);
   return new Map(rows.map((r) => [r.id, r.domain]));
 }
 
-export async function addAllowedDomain(
-  actor: Actor,
-  input: { domain: string; note?: string },
-): Promise<Result> {
+export async function addAllowedDomain(actor: Actor, input: { domain: string; note?: string }): Promise<Result> {
   const domain = normalizeDomain(input.domain);
   if (!domain) return { ok: false, error: "invalid" };
 
@@ -138,11 +117,7 @@ export async function addAllowedDomain(
   return { ok: true };
 }
 
-export async function updateAllowedDomain(
-  actor: Actor,
-  id: string,
-  input: { domain: string; note?: string },
-): Promise<Result> {
+export async function updateAllowedDomain(actor: Actor, id: string, input: { domain: string; note?: string }): Promise<Result> {
   const domain = normalizeDomain(input.domain);
   if (!domain) return { ok: false, error: "invalid" };
 
@@ -166,10 +141,7 @@ export async function updateAllowedDomain(
   return { ok: true };
 }
 
-export async function deleteAllowedDomain(
-  actor: Actor,
-  id: string,
-): Promise<Result> {
+export async function deleteAllowedDomain(actor: Actor, id: string): Promise<Result> {
   const current = await currentDomains();
   if (!current.has(id)) return { ok: false, error: "not_found" };
 

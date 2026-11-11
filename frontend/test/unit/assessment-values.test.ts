@@ -6,13 +6,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  averageScore,
-  isCriterionScore,
-  requiredFeedback,
-  tracksFor,
-  wholeScore,
-} from "@/lib/evals/assessment-values";
+import { averageScore, isCriterionScore, requiredFeedback, tracksFor, wholeScore } from "@/lib/evals/assessment-values";
 
 describe("averageScore", () => {
   test("is null with nothing scored", () => {

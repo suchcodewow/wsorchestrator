@@ -3,11 +3,7 @@
 import { NextResponse } from "next/server";
 import { requireAdministrator } from "@/lib/api-auth";
 import { STATUS_FOR } from "@/lib/harness-template-errors";
-import {
-  checkTemplateSources,
-  listTemplateSources,
-  saveTemplateSource,
-} from "@/lib/harness-templates";
+import { checkTemplateSources, listTemplateSources, saveTemplateSource } from "@/lib/harness-templates";
 import { secretsConfigured } from "@/lib/secret-box";
 import { audited } from "@/lib/audit";
 
@@ -16,9 +12,7 @@ export async function GET(req: Request) {
   if (error) return error;
   const sources = await listTemplateSources(null);
   // ?status=1 adds the live check the page shows; it asks Harness, so it is slow.
-  const status = new URL(req.url).searchParams.get("status") === "1"
-    ? await checkTemplateSources(sources)
-    : undefined;
+  const status = new URL(req.url).searchParams.get("status") === "1" ? await checkTemplateSources(sources) : undefined;
   return NextResponse.json({ sources, status, configured: secretsConfigured() });
 }
 
@@ -36,19 +30,10 @@ export const POST = audited(async function POST(req: Request) {
     return NextResponse.json({ error: "malformed" }, { status: 400 });
   }
 
-  const result = await saveTemplateSource(
-    null,
-    body.token,
-    body.org,
-    typeof body.project === "string" ? body.project : null,
-    user.id,
-  );
+  const result = await saveTemplateSource(null, body.token, body.org, typeof body.project === "string" ? body.project : null, user.id);
 
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, detail: result.detail },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error, detail: result.detail }, { status: STATUS_FOR[result.error] });
   }
   return NextResponse.json({ source: result.source }, { status: 201 });
 });

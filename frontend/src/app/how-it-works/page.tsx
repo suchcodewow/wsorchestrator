@@ -24,8 +24,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "How it works — Harness Events",
-  description:
-    "How a workshop provisions attendee accounts and cloud environments at its start time, and tears them down when it ends.",
+  description: "How a workshop provisions attendee accounts and cloud environments at its start time, and tears them down when it ends.",
 };
 
 const STAGES: {
@@ -80,34 +79,19 @@ const CLOUDS: {
     name: "Google Cloud",
     dot: "#4285F4",
     k8s: "GKE",
-    builds: [
-      "Ephemeral project",
-      "Billing linked, APIs enabled",
-      "GKE cluster",
-      "Attendees granted Editor",
-    ],
+    builds: ["Ephemeral project", "Billing linked, APIs enabled", "GKE cluster", "Attendees granted Editor"],
   },
   {
     name: "AWS",
     dot: "#FF9900",
     k8s: "EKS",
-    builds: [
-      "Member account",
-      "An IAM user each",
-      "EKS cluster",
-      "PowerUser access",
-    ],
+    builds: ["Member account", "An IAM user each", "EKS cluster", "PowerUser access"],
   },
   {
     name: "Azure",
     dot: "#0078D4",
     k8s: "AKS",
-    builds: [
-      "Resource group",
-      "An Entra user each",
-      "AKS cluster",
-      "Contributor access",
-    ],
+    builds: ["Resource group", "An Entra user each", "AKS cluster", "Contributor access"],
   },
 ];
 
@@ -176,12 +160,8 @@ const LIFECYCLE: LifeNode[] = [
 function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
     <div className="text-center">
-      <span className="text-xs font-semibold tracking-[0.18em] text-brand uppercase">
-        {eyebrow}
-      </span>
-      <h2 className="mt-3 text-2xl font-medium tracking-tight text-balance sm:text-3xl">
-        {title}
-      </h2>
+      <span className="text-xs font-semibold tracking-[0.18em] text-brand uppercase">{eyebrow}</span>
+      <h2 className="mt-3 text-2xl font-medium tracking-tight text-balance sm:text-3xl">{title}</h2>
     </div>
   );
 }
@@ -213,21 +193,14 @@ export default async function HowItWorks() {
             From a calendar invite to three clouds — and back to nothing.
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-pretty text-muted-foreground">
-            Book a workshop or a challenge, and its attendee accounts and cloud
-            environments build and clean themselves up on schedule.
+            Book a workshop or a challenge, and its attendee accounts and cloud environments build and clean themselves up on schedule.
           </p>
         </section>
 
         <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {STAGES.map(({ n, Icon, tag, auto, title, body }) => (
-            <div
-              key={n}
-              className="relative overflow-hidden rounded-2xl border bg-card/60 dark:bg-card p-6 backdrop-blur-sm"
-            >
-              <span
-                aria-hidden
-                className="pointer-events-none absolute -top-2 right-3 text-6xl font-extrabold text-brand/8 select-none"
-              >
+            <div key={n} className="relative overflow-hidden rounded-2xl border bg-card/60 dark:bg-card p-6 backdrop-blur-sm">
+              <span aria-hidden className="pointer-events-none absolute -top-2 right-3 text-6xl font-extrabold text-brand/8 select-none">
                 {n}
               </span>
               <span className="flex size-11 items-center justify-center rounded-xl bg-brand/10 text-brand ring-1 ring-brand/15">
@@ -236,40 +209,27 @@ export default async function HowItWorks() {
               <span
                 className={
                   "mt-5 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide uppercase " +
-                  (auto
-                    ? "bg-brand text-brand-foreground"
-                    : "bg-muted text-muted-foreground")
+                  (auto ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground")
                 }
               >
                 {tag}
               </span>
               <h3 className="mt-3 text-lg font-medium">{title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {body}
-              </p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
             </div>
           ))}
         </section>
 
         <section className="mt-24">
-          <SectionHeading
-            eyebrow="Under the hood"
-            title="A run's lifecycle, build-up to teardown"
-          />
+          <SectionHeading eyebrow="Under the hood" title="A run's lifecycle, build-up to teardown" />
 
           <ol className="relative mx-auto mt-14 max-w-3xl space-y-9">
-            <span
-              aria-hidden
-              className="absolute top-3 bottom-3 left-5.25 w-px bg-linear-to-b from-brand/50 via-border to-border"
-            />
+            <span aria-hidden className="absolute top-3 bottom-3 left-5.25 w-px bg-linear-to-b from-brand/50 via-border to-border" />
 
             {LIFECYCLE.map((node) => (
               <li key={node.title} className="relative flex gap-5">
                 <span
-                  className={
-                    "relative z-10 flex size-11 shrink-0 items-center justify-center rounded-full border " +
-                    MARKER[node.kind]
-                  }
+                  className={"relative z-10 flex size-11 shrink-0 items-center justify-center rounded-full border " + MARKER[node.kind]}
                 >
                   <node.Icon className="size-5" />
                 </span>
@@ -283,14 +243,10 @@ export default async function HowItWorks() {
                       </span>
                     )}
                     {node.pill && (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        {node.pill}
-                      </span>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{node.pill}</span>
                     )}
                   </div>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                    {node.desc}
-                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{node.desc}</p>
 
                   {node.fanout && (
                     <div className="mt-4">
@@ -301,16 +257,10 @@ export default async function HowItWorks() {
                       </div>
                       <div className="grid gap-3 sm:grid-cols-3">
                         {CLOUDS.map((c) => (
-                          <div
-                            key={c.name}
-                            className="rounded-xl border bg-card/70 p-4 backdrop-blur-sm"
-                          >
+                          <div key={c.name} className="rounded-xl border bg-card/70 p-4 backdrop-blur-sm">
                             <div className="flex items-center justify-between gap-2">
                               <span className="flex items-center gap-2 text-sm font-medium">
-                                <span
-                                  className="size-2.5 rounded-full"
-                                  style={{ backgroundColor: c.dot }}
-                                />
+                                <span className="size-2.5 rounded-full" style={{ backgroundColor: c.dot }} />
                                 {c.name}
                               </span>
                               <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
@@ -319,10 +269,7 @@ export default async function HowItWorks() {
                             </div>
                             <ul className="mt-3 space-y-1.5">
                               {c.builds.map((b) => (
-                                <li
-                                  key={b}
-                                  className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"
-                                >
+                                <li key={b} className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
                                   <Check className="mt-0.5 size-3.5 shrink-0 text-brand" />
                                   {b}
                                 </li>
@@ -332,9 +279,8 @@ export default async function HowItWorks() {
                         ))}
                       </div>
                       <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                        A workshop can also request{" "}
-                        <span className="font-medium text-foreground">no cloud</span>{" "}
-                        and share a long-lived sandbox project instead.
+                        A workshop can also request <span className="font-medium text-foreground">no cloud</span> and share a long-lived
+                        sandbox project instead.
                       </p>
                     </div>
                   )}
@@ -344,20 +290,16 @@ export default async function HowItWorks() {
           </ol>
 
           <p className="mx-auto mt-10 max-w-3xl border-t pt-6 text-center text-xs leading-relaxed text-muted-foreground">
-            Any step can end in{" "}
-            <span className="font-medium text-foreground">failed</span>, where the
-            run stops and stays flagged on the calendar to be retried or reaped.
+            Any step can end in <span className="font-medium text-foreground">failed</span>, where the run stops and stays flagged on the
+            calendar to be retried or reaped.
           </p>
         </section>
 
         <section className="mt-24">
           <div className="mx-auto max-w-3xl rounded-3xl border bg-card/60 dark:bg-card px-8 py-12 text-center backdrop-blur-sm">
-            <h2 className="text-2xl font-medium tracking-tight text-balance">
-              Ready to run one?
-            </h2>
+            <h2 className="text-2xl font-medium tracking-tight text-balance">Ready to run one?</h2>
             <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
-              Pick a date, a size and the clouds, and the orchestrator takes it
-              from there.
+              Pick a date, a size and the clouds, and the orchestrator takes it from there.
             </p>
             <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
               <Button asChild variant="brand" size="lg" className="group">

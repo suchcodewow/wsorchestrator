@@ -88,8 +88,7 @@ const OUTPUT_RESOURCES: OutputResource[] = [
   { from: "eks_cluster_name", kind: "eks_cluster", label: "EKS cluster" },
 ];
 
-const str = (v: unknown): string | undefined =>
-  typeof v === "string" && v.length > 0 ? v : undefined;
+const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined);
 
 /** How many entries a per-competitor output map has, if it is one. */
 function mapSize(v: unknown): number | undefined {
@@ -104,10 +103,7 @@ function mapSize(v: unknown): number | undefined {
  * building three clouds shows the first one's cluster while the second is
  * still being applied.
  */
-export async function recordOutputResources(
-  runId: string,
-  outputs: Record<string, unknown>,
-): Promise<void> {
+export async function recordOutputResources(runId: string, outputs: Record<string, unknown>): Promise<void> {
   for (const spec of OUTPUT_RESOURCES) {
     const value = outputs[spec.from];
 

@@ -5,10 +5,7 @@ import { auth } from "@/auth";
 import { revokeToken } from "@/lib/api-tokens";
 import { audited } from "@/lib/audit";
 
-export const DELETE = audited(async function DELETE(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

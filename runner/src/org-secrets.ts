@@ -24,10 +24,7 @@ import { openSecret, secretsConfigured } from "./secret-box.js";
  * Nothing here has a teardown: `deleteOrg` removes the organization with its
  * contents, and these secrets exist nowhere else in a run.
  */
-export async function applyOrgSecrets(
-  run: RunRow,
-  orgId: string,
-): Promise<void> {
+export async function applyOrgSecrets(run: RunRow, orgId: string): Promise<void> {
   const secrets = await loadOrgSecrets();
   if (secrets.length === 0) return;
 
@@ -39,17 +36,12 @@ export async function applyOrgSecrets(
     await log(
       run.id,
       "system",
-      `${secrets.length} org secret(s) skipped — this runner has no ` +
-        `HARNESS_TOKEN_ENC_KEY or AUTH_SECRET, so nothing can be decrypted`,
+      `${secrets.length} org secret(s) skipped — this runner has no ` + `HARNESS_TOKEN_ENC_KEY or AUTH_SECRET, so nothing can be decrypted`,
     );
     return;
   }
 
-  await log(
-    run.id,
-    "system",
-    `Applying ${secrets.length} organization secret(s) from site settings`,
-  );
+  await log(run.id, "system", `Applying ${secrets.length} organization secret(s) from site settings`);
 
   let applied = 0;
   for (const secret of secrets) {
@@ -77,12 +69,7 @@ export async function applyOrgSecrets(
     }
 
     applied += 1;
-    await log(
-      run.id,
-      "stdout",
-      `org secret ${secret.identifier} applied` +
-        (secret.fileName ? ` (${secret.fileName})` : ""),
-    );
+    await log(run.id, "stdout", `org secret ${secret.identifier} applied` + (secret.fileName ? ` (${secret.fileName})` : ""));
   }
 
   // One counted row rather than one per secret, the same shape the catalog's
@@ -91,10 +78,7 @@ export async function applyOrgSecrets(
   await recordResource(run.id, {
     kind: "harness_org_secrets",
     label: "Site org secrets",
-    detail:
-      applied === secrets.length
-        ? `all applied to org ${orgId}`
-        : `${secrets.length - applied} could not be decrypted`,
+    detail: applied === secrets.length ? `all applied to org ${orgId}` : `${secrets.length - applied} could not be decrypted`,
     done: applied,
     total: secrets.length,
   });

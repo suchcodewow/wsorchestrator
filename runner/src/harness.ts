@@ -24,9 +24,31 @@ const MAX_IDENTIFIER = 128;
  * "Status" would otherwise produce an identifier the platform rejects.
  */
 const RESERVED = new Set([
-  "or", "and", "eq", "ne", "lt", "gt", "le", "ge", "div", "mod", "not",
-  "null", "true", "false", "new", "var", "return", "step", "parallel",
-  "stepgroup", "org", "account", "status", "liteenginetask", "notification",
+  "or",
+  "and",
+  "eq",
+  "ne",
+  "lt",
+  "gt",
+  "le",
+  "ge",
+  "div",
+  "mod",
+  "not",
+  "null",
+  "true",
+  "false",
+  "new",
+  "var",
+  "return",
+  "step",
+  "parallel",
+  "stepgroup",
+  "org",
+  "account",
+  "status",
+  "liteenginetask",
+  "notification",
 ]);
 
 /**
@@ -110,9 +132,7 @@ function messageOf(body: string): string {
       correlationId?: string;
     };
     const message = parsed.message ?? body;
-    return parsed.correlationId
-      ? `${message} [correlationId ${parsed.correlationId}]`
-      : message;
+    return parsed.correlationId ? `${message} [correlationId ${parsed.correlationId}]` : message;
   } catch {
     return body;
   }
@@ -143,9 +163,7 @@ function messageOf(body: string): string {
  * hunch is how a real refusal gets swallowed, so each one belongs to a run that
  * failed on it, and `harness-errors.test.ts` pins the verbatim string.
  */
-const ALREADY_SATISFIED = [
-  /already part of user group/i,
-];
+const ALREADY_SATISFIED = [/already part of user group/i];
 
 /**
  * Harness reports "already exists" inconsistently — sometimes 409, sometimes
@@ -153,11 +171,7 @@ const ALREADY_SATISFIED = [
  * are the `ALREADY_SATISFIED` refusals that mean the same thing in other words.
  */
 export function isDuplicate(status: number, body: string): boolean {
-  return (
-    status === 409 ||
-    /DUPLICATE_FIELD|already exists|duplicate/i.test(body) ||
-    ALREADY_SATISFIED.some((sig) => sig.test(body))
-  );
+  return status === 409 || /DUPLICATE_FIELD|already exists|duplicate/i.test(body) || ALREADY_SATISFIED.some((sig) => sig.test(body));
 }
 
 /** Attempts for a request that fails with something retryable. */
@@ -223,13 +237,7 @@ async function rawRequest(
         "x-api-key": cfg.apiKey,
         ...(multipart ? {} : { "Content-Type": "application/json" }),
       },
-      body: multipart
-        ? (body as FormData)
-        : raw
-          ? (body as string)
-          : body
-            ? JSON.stringify(body)
-            : undefined,
+      body: multipart ? (body as FormData) : raw ? (body as string) : body ? JSON.stringify(body) : undefined,
     });
 
     status = res.status;
@@ -267,25 +275,24 @@ async function api(
     return { ok: true, duplicate: false };
   }
 
-  throw new Error(
-    `Harness ${method} ${path} failed (${status}): ${messageOf(text)} ` +
-      `(after up to ${MAX_ATTEMPTS} attempts)`,
-  );
+  throw new Error(`Harness ${method} ${path} failed (${status}): ${messageOf(text)} ` + `(after up to ${MAX_ATTEMPTS} attempts)`);
 }
 
 /** Create the workshop's organization. Returns whether it already existed. */
-export async function createOrg(
-  identifier: string,
-  name: string,
-): Promise<boolean> {
-  const { duplicate } = await api("POST", "/ng/api/organizations", {}, {
-    organization: {
-      identifier,
-      name,
-      description: "Created by Workshop Orchestrator.",
-      tags: { managed_by: "workshop-orchestrator" },
+export async function createOrg(identifier: string, name: string): Promise<boolean> {
+  const { duplicate } = await api(
+    "POST",
+    "/ng/api/organizations",
+    {},
+    {
+      organization: {
+        identifier,
+        name,
+        description: "Created by Workshop Orchestrator.",
+        tags: { managed_by: "workshop-orchestrator" },
+      },
     },
-  });
+  );
   return duplicate;
 }
 
@@ -384,10 +391,7 @@ export async function createProject(
   return duplicate;
 }
 
-export async function deleteProject(
-  orgId: string,
-  identifier: string,
-): Promise<void> {
+export async function deleteProject(orgId: string, identifier: string): Promise<void> {
   await api("DELETE", `/ng/api/projects/${identifier}`, {
     orgIdentifier: orgId,
   });
@@ -412,9 +416,7 @@ export async function listOrgProjects(orgId: string): Promise<string[]> {
       pageSize: String(pageSize),
     });
     if (status < 200 || status >= 300) {
-      throw new Error(
-        `could not list projects in org ${orgId} (${status}): ${messageOf(text)}`,
-      );
+      throw new Error(`could not list projects in org ${orgId} (${status}): ${messageOf(text)}`);
     }
     const body = JSON.parse(text) as {
       data?: {
@@ -495,11 +497,7 @@ export async function grantAccountAdmin(email: string): Promise<boolean> {
 }
 
 /** Make an attendee an administrator of their own project. */
-export async function grantProjectAdmin(
-  orgId: string,
-  projectId: string,
-  email: string,
-): Promise<boolean> {
+export async function grantProjectAdmin(orgId: string, projectId: string, email: string): Promise<boolean> {
   const cfg = harnessCfg();
   return assignRole(
     email,
@@ -521,11 +519,7 @@ export async function grantProjectAdmin(
  * projects — so without this the content copied into a template source's project
  * would be visible to nobody who needs it.
  */
-export async function grantProjectViewer(
-  orgId: string,
-  projectId: string,
-  email: string,
-): Promise<boolean> {
+export async function grantProjectViewer(orgId: string, projectId: string, email: string): Promise<boolean> {
   const cfg = harnessCfg();
   return assignRole(
     email,
@@ -544,10 +538,7 @@ export async function grantProjectViewer(
  * so they can view and use everyone's work (see `createAttendeeRole` for the
  * permissions). Replaces the earlier managed org-viewer binding.
  */
-export async function grantOrgAttendee(
-  orgId: string,
-  email: string,
-): Promise<boolean> {
+export async function grantOrgAttendee(orgId: string, email: string): Promise<boolean> {
   const cfg = harnessCfg();
   return assignRole(
     email,
@@ -582,16 +573,9 @@ const USER_SEARCH_PATH = "/ng/api/user/batch";
  * undone from here.
  */
 async function accountUserId(email: string): Promise<string | null> {
-  const { status, text } = await rawRequest(
-    "POST",
-    USER_SEARCH_PATH,
-    { pageIndex: "0", pageSize: "100" },
-    { searchTerm: email },
-  );
+  const { status, text } = await rawRequest("POST", USER_SEARCH_PATH, { pageIndex: "0", pageSize: "100" }, { searchTerm: email });
   if (status < 200 || status >= 300) {
-    throw new Error(
-      `could not look up Harness user ${email} (${status}): ${messageOf(text)}`,
-    );
+    throw new Error(`could not look up Harness user ${email} (${status}): ${messageOf(text)}`);
   }
 
   const content =
@@ -648,37 +632,16 @@ const SECRET_FILE_PATH = "/ng/api/v2/secrets/files";
  * `make` is called per request rather than once because the multipart form the
  * file endpoint takes is consumed by the request that sends it.
  */
-async function upsertSecret(
-  path: string,
-  orgId: string,
-  identifier: string,
-  make: () => Json | FormData,
-): Promise<boolean> {
-  const created = await rawRequest(
-    "POST",
-    path,
-    { orgIdentifier: orgId },
-    make(),
-  );
+async function upsertSecret(path: string, orgId: string, identifier: string, make: () => Json | FormData): Promise<boolean> {
+  const created = await rawRequest("POST", path, { orgIdentifier: orgId }, make());
   if (created.status >= 200 && created.status < 300) return false;
   if (!isDuplicate(created.status, created.text)) {
-    throw new Error(
-      `Harness POST ${path} failed (${created.status}): ` +
-        `${messageOf(created.text)}`,
-    );
+    throw new Error(`Harness POST ${path} failed (${created.status}): ` + `${messageOf(created.text)}`);
   }
 
-  const updated = await rawRequest(
-    "PUT",
-    `${path}/${identifier}`,
-    { orgIdentifier: orgId },
-    make(),
-  );
+  const updated = await rawRequest("PUT", `${path}/${identifier}`, { orgIdentifier: orgId }, make());
   if (updated.status < 200 || updated.status >= 300) {
-    throw new Error(
-      `Harness PUT ${path}/${identifier} failed (${updated.status}): ` +
-        `${messageOf(updated.text)}`,
-    );
+    throw new Error(`Harness PUT ${path}/${identifier} failed (${updated.status}): ` + `${messageOf(updated.text)}`);
   }
   return true;
 }
@@ -688,12 +651,7 @@ async function upsertSecret(
  * client secret and the AWS secret access key take. See `upsertSecret` for why
  * an existing secret is overwritten.
  */
-export async function upsertSecretText(
-  orgId: string,
-  identifier: string,
-  name: string,
-  value: string,
-): Promise<boolean> {
+export async function upsertSecretText(orgId: string, identifier: string, name: string, value: string): Promise<boolean> {
   return upsertSecret(SECRET_PATH, orgId, identifier, () => ({
     secret: {
       type: "SecretText",
@@ -720,12 +678,7 @@ export async function upsertSecretText(
  * Rebuilt per request rather than shared, so the create and the update that may
  * follow it each send their own.
  */
-function secretFileForm(
-  orgId: string,
-  identifier: string,
-  name: string,
-  content: string,
-): FormData {
+function secretFileForm(orgId: string, identifier: string, name: string, content: string): FormData {
   const form = new FormData();
   form.append(
     "spec",
@@ -751,15 +704,8 @@ function secretFileForm(
  * file secret. Multipart, which is why the secret endpoints are the one place
  * this client does not go through `api`.
  */
-export async function upsertSecretFile(
-  orgId: string,
-  identifier: string,
-  name: string,
-  content: string,
-): Promise<boolean> {
-  return upsertSecret(SECRET_FILE_PATH, orgId, identifier, () =>
-    secretFileForm(orgId, identifier, name, content),
-  );
+export async function upsertSecretFile(orgId: string, identifier: string, name: string, content: string): Promise<boolean> {
+  return upsertSecret(SECRET_FILE_PATH, orgId, identifier, () => secretFileForm(orgId, identifier, name, content));
 }
 
 /**
@@ -767,10 +713,7 @@ export async function upsertSecretFile(
  * kinds are deleted through the same path — the file endpoint only exists for
  * writing the content.
  */
-export async function deleteSecret(
-  orgId: string,
-  identifier: string,
-): Promise<void> {
+export async function deleteSecret(orgId: string, identifier: string): Promise<void> {
   await api("DELETE", `${SECRET_PATH}/${identifier}`, {
     orgIdentifier: orgId,
   });
@@ -794,13 +737,7 @@ export async function deleteSecret(
  * best-effort and may not exist at all, which would otherwise leave the
  * connector permanently failing its test.
  */
-export async function createConnector(
-  orgId: string,
-  identifier: string,
-  name: string,
-  type: string,
-  spec: Json,
-): Promise<boolean> {
+export async function createConnector(orgId: string, identifier: string, name: string, type: string, spec: Json): Promise<boolean> {
   const { duplicate } = await api(
     "POST",
     "/ng/api/connectors",
@@ -839,13 +776,7 @@ export async function createConnector(
  * carrying one would be created into a project rather than the org, which is
  * not what an org-scoped component means.
  */
-const TEMPLATE_OWNED_KEYS = [
-  "name",
-  "identifier",
-  "versionLabel",
-  "orgIdentifier",
-  "projectIdentifier",
-];
+const TEMPLATE_OWNED_KEYS = ["name", "identifier", "versionLabel", "orgIdentifier", "projectIdentifier"];
 
 /**
  * The YAML to send: the author's, with the identifying keys replaced by ours.
@@ -857,21 +788,11 @@ const TEMPLATE_OWNED_KEYS = [
  * indent directly under `template:`, so the edit is exact without understanding
  * the rest, which is why no YAML library is needed here at all.
  */
-export function templateYaml(
-  orgId: string,
-  identifier: string,
-  name: string,
-  versionLabel: string,
-  yaml: string,
-): string {
+export function templateYaml(orgId: string, identifier: string, name: string, versionLabel: string, yaml: string): string {
   const lines = yaml.replace(/\r\n/g, "\n").split("\n");
   const first = lines[0]?.trim();
   if (first !== "template:") {
-    throw new Error(
-      `template "${identifier}" must start with "template:" (found ${
-        first ? `"${first}"` : "an empty first line"
-      })`,
-    );
+    throw new Error(`template "${identifier}" must start with "template:" (found ${first ? `"${first}"` : "an empty first line"})`);
   }
 
   const owned = new RegExp(`^ {2}(${TEMPLATE_OWNED_KEYS.join("|")}):`);
@@ -925,10 +846,7 @@ export async function createTemplate(
 }
 
 /** Remove an org connector at teardown. One already gone is not an error. */
-export async function deleteConnector(
-  orgId: string,
-  identifier: string,
-): Promise<void> {
+export async function deleteConnector(orgId: string, identifier: string): Promise<void> {
   await api("DELETE", `/ng/api/connectors/${identifier}`, {
     orgIdentifier: orgId,
   });
@@ -964,12 +882,7 @@ const REPO_IMPORT_PATH = "/code/api/v1/repos/import";
  * repository as plain files. Converting them would create pipelines in the
  * attendee's project that the labs never asked for.
  */
-export async function importRepo(
-  orgId: string,
-  projectId: string | undefined,
-  identifier: string,
-  providerRepo: string,
-): Promise<boolean> {
+export async function importRepo(orgId: string, projectId: string | undefined, identifier: string, providerRepo: string): Promise<boolean> {
   const { duplicate } = await api(
     "POST",
     REPO_IMPORT_PATH,
@@ -1012,9 +925,11 @@ export async function ensureOrgDelegateToken(orgId: string): Promise<string> {
   });
   if (list.status >= 200 && list.status < 300) {
     const tokens =
-      (JSON.parse(list.text) as {
-        resource?: Array<{ name?: string; value?: string }>;
-      }).resource ?? [];
+      (
+        JSON.parse(list.text) as {
+          resource?: Array<{ name?: string; value?: string }>;
+        }
+      ).resource ?? [];
     const found = tokens.find((t) => t.name === name && t.value);
     if (found?.value) return found.value;
   }
@@ -1025,14 +940,9 @@ export async function ensureOrgDelegateToken(orgId: string): Promise<string> {
     tokenName: name,
   });
   if (created.status < 200 || created.status >= 300) {
-    throw new Error(
-      `could not create org delegate token for ${orgId} ` +
-        `(${created.status}): ${messageOf(created.text)}`,
-    );
+    throw new Error(`could not create org delegate token for ${orgId} ` + `(${created.status}): ${messageOf(created.text)}`);
   }
-  const value = (
-    JSON.parse(created.text) as { resource?: { value?: string } }
-  ).resource?.value;
+  const value = (JSON.parse(created.text) as { resource?: { value?: string } }).resource?.value;
   if (!value) {
     throw new Error(`delegate token created for ${orgId} but no value returned`);
   }
@@ -1048,8 +958,7 @@ const DELEGATE_VERSION_PATH = "/ng/api/delegate-setup/latest-supported-version";
  * chart itself uses, since that is the registry Harness publishes every
  * delegate tag to.
  */
-const DELEGATE_IMAGE_REPO =
-  "us-docker.pkg.dev/gar-prod-setup/harness-public/harness/delegate";
+const DELEGATE_IMAGE_REPO = "us-docker.pkg.dev/gar-prod-setup/harness-public/harness/delegate";
 
 /** Delegate versions are `yy.mm.build`, e.g. 26.08.89802. */
 const DELEGATE_VERSION_RE = /^\d{2}\.\d{2}\.\d+$/;
@@ -1088,9 +997,7 @@ export async function latestDelegateImage(): Promise<string> {
       resource?: { latestSupportedVersion?: unknown };
       data?: { latestSupportedVersion?: unknown };
     };
-    version =
-      parsed.resource?.latestSupportedVersion ??
-      parsed.data?.latestSupportedVersion;
+    version = parsed.resource?.latestSupportedVersion ?? parsed.data?.latestSupportedVersion;
   } catch {
     return "";
   }
@@ -1111,10 +1018,5 @@ export async function latestDelegateImage(): Promise<string> {
  * shape must not block org deletion, so callers wrap this and ignore failures.
  */
 export async function revokeOrgDelegateToken(orgId: string): Promise<void> {
-  await api(
-    "PUT",
-    DELEGATE_TOKEN_PATH,
-    { orgIdentifier: orgId, tokenName: harnessCfg().delegateTokenName },
-    { status: "REVOKED" },
-  );
+  await api("PUT", DELEGATE_TOKEN_PATH, { orgIdentifier: orgId, tokenName: harnessCfg().delegateTokenName }, { status: "REVOKED" });
 }

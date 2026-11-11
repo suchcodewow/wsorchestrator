@@ -24,15 +24,7 @@ async function signedInHere(): Promise<boolean> {
   return Boolean(body?.user);
 }
 
-export function FramedSignIn({
-  target,
-  className,
-  children,
-}: {
-  target: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
+export function FramedSignIn({ target, className, children }: { target: string; className?: string; children: React.ReactNode }) {
   const framed = useSyncExternalStore(subscribeNothing, isFramed, () => false);
   const popupRef = useRef<Window | null>(null);
   const [state, setState] = useState<State>("idle");
@@ -83,14 +75,7 @@ export function FramedSignIn({
 
   return (
     <div data-anim className={className}>
-      <Button
-        type="button"
-        variant="brand"
-        size="lg"
-        className="group w-full"
-        disabled={state === "claiming"}
-        onClick={openPopup}
-      >
+      <Button type="button" variant="brand" size="lg" className="group w-full" disabled={state === "claiming"} onClick={openPopup}>
         Continue with Google
         <ArrowRight className="transition-transform duration-200 group-hover:translate-x-0.5" />
       </Button>

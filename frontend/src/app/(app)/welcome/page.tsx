@@ -64,8 +64,8 @@ export default async function WelcomePage() {
             <p className="text-muted-foreground">Learn Harness with Coach Canary.</p>
             {summary && summary.mastered + summary.watched > 0 && (
               <p className="text-sm text-muted-foreground tnum">
-                <span className="font-medium text-foreground">{summary.mastered}</span> of {summary.total} concepts mastered · {summary.watched} of{" "}
-                {summary.withVideo} videos watched
+                <span className="font-medium text-foreground">{summary.mastered}</span> of {summary.total} concepts mastered ·{" "}
+                {summary.watched} of {summary.withVideo} videos watched
               </p>
             )}
             <div className="flex flex-wrap gap-2">

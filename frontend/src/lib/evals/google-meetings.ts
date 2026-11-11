@@ -146,9 +146,10 @@ export async function listMeetingSelections(query: ListQuery<MeetingSelectionSor
       allOccurrences: s.allOccurrences,
       syncedAt: s.syncedAt,
       createdAt: s.createdAt,
-      nextStartsAt: sql<Date | null>`(select min(${o.startsAt}) from ${o} where ${o.meetingId} = ${s.id} and ${o.startsAt} > now())`.mapWith(
-        (v: string | Date | null) => (v === null ? null : new Date(v)),
-      ),
+      nextStartsAt:
+        sql<Date | null>`(select min(${o.startsAt}) from ${o} where ${o.meetingId} = ${s.id} and ${o.startsAt} > now())`.mapWith(
+          (v: string | Date | null) => (v === null ? null : new Date(v)),
+        ),
       upcoming: sql<number>`(select count(*) from ${o} where ${o.meetingId} = ${s.id} and ${o.startsAt} > now())::int`,
       invited: sql<number>`(select count(distinct ${i.email}) from ${i} join ${o} on ${o.id} = ${i.occurrenceId}
         where ${o.meetingId} = ${s.id} and ${o.startsAt} > now() and ${i.role} = 'member' and not ${i.test})::int`,
@@ -285,7 +286,14 @@ export async function createMeetingSelection(actorId: string, input: MeetingSele
   try {
     const [row] = await db
       .insert(s)
-      .values({ ...input, timezoneFrom: input.timezoneFrom ?? null, timezoneTo: input.timezoneTo ?? null, minDaysAfterStart: input.minDaysAfterStart ?? 0, allOccurrences: input.allOccurrences ?? false, createdBy: actorId })
+      .values({
+        ...input,
+        timezoneFrom: input.timezoneFrom ?? null,
+        timezoneTo: input.timezoneTo ?? null,
+        minDaysAfterStart: input.minDaysAfterStart ?? 0,
+        allOccurrences: input.allOccurrences ?? false,
+        createdBy: actorId,
+      })
       .returning({ id: s.id, name: s.name });
     return { ok: true, meeting: row! };
   } catch (err) {
@@ -383,6 +391,26 @@ export async function setMeetingSyncLive(actorId: string, live: boolean): Promis
   await db
     .insert(evalsSettings)
     .values({ key: EVALS_SETTINGS_KEYS.meetingSyncLive, value, updatedBy: actorId })
+    .onConflictDoUpdate({
+      target: evalsSettings.key,
+      set: { value, updatedBy: actorId, updatedAt: new Date() },
+    });
+}
+
+/** Whether Google emails every guest about the sync's changes to an invite; false, silent, until someone says otherwise. */
+export async function getMeetingEmailInvites(): Promise<boolean> {
+  const [row] = await db
+    .select({ value: evalsSettings.value })
+    .from(evalsSettings)
+    .where(eq(evalsSettings.key, EVALS_SETTINGS_KEYS.meetingEmailInvites));
+  return row?.value === "true";
+}
+
+export async function setMeetingEmailInvites(actorId: string, email: boolean): Promise<void> {
+  const value = email ? "true" : "false";
+  await db
+    .insert(evalsSettings)
+    .values({ key: EVALS_SETTINGS_KEYS.meetingEmailInvites, value, updatedBy: actorId })
     .onConflictDoUpdate({
       target: evalsSettings.key,
       set: { value, updatedBy: actorId, updatedAt: new Date() },
@@ -552,7 +580,8 @@ export async function meetingStatusesFor(
   // The two windows anyone can have: before the bootcamp, and after it until the next intermediate class.
   const before = bootcamp ? inviteWindow("bootcamp", { stage: "bootcamp" }, bootcamp) : null;
   const after = bootcamp ? inviteWindow("intermediate", { stage: "bootcamp" }, bootcamp) : null;
-  const windowSql = (w: NonNullable<typeof before>) => sql`(${o.startDate} < ${w.cutoff} ${w.notBefore ? sql`and ${o.startDate} >= ${w.notBefore}` : sql``})`;
+  const windowSql = (w: NonNullable<typeof before>) =>
+    sql`(${o.startDate} < ${w.cutoff} ${w.notBefore ? sql`and ${o.startDate} >= ${w.notBefore}` : sql``})`;
   const [upcoming, held, marks] = await Promise.all([
     // With no bootcamp, no window, so nothing is offered to anyone.
     before && after
@@ -610,7 +639,10 @@ export async function meetingStatusesFor(
               occurrences: [
                 ...new Map<string, PlanOccurrence>([
                   ...(upcomingOf.get(meeting.id) ?? []).map((occ): [string, PlanOccurrence] => [occ.id, { ...occ, attendanceRead: false }]),
-                  ...heldInvites.map((x): [string, PlanOccurrence] => [x.id, { id: x.id, startsAt: new Date(x.startsAt), startDate: x.startDate, attendanceRead: x.read }]),
+                  ...heldInvites.map((x): [string, PlanOccurrence] => [
+                    x.id,
+                    { id: x.id, startsAt: new Date(x.startsAt), startDate: x.startDate, attendanceRead: x.read },
+                  ]),
                 ]).values(),
               ],
               invites: heldInvites.map((x) => ({
@@ -640,7 +672,9 @@ export async function meetingStatusesFor(
         response: current?.response ?? null,
         invited: current !== undefined,
         // A meeting no sync has read has no occurrences stored yet, which is not the same as none being left.
-        anyLeft: plan?.outcomes.get(member.email)?.kind !== "none_left" && ((meeting.syncedAt === null && !upcomingOf.has(meeting.id)) || offered.length > 0),
+        anyLeft:
+          plan?.outcomes.get(member.email)?.kind !== "none_left" &&
+          ((meeting.syncedAt === null && !upcomingOf.has(meeting.id)) || offered.length > 0),
         allOccurrences: meeting.allOccurrences,
         leaving: takenOff.size > 0 && takenOff.size === holding.length && !plan?.invite.length,
       });
@@ -784,7 +818,10 @@ export async function listMeetingSyncRuns(query: ListQuery<MeetingSyncSort>): Pr
     .limit(limit)
     .offset(offset);
   const staleBefore = Date.now() - SYNC_STALE_MS;
-  return toPage(rows.map((row) => summarize(row, staleBefore)), query.page);
+  return toPage(
+    rows.map((row) => summarize(row, staleBefore)),
+    query.page,
+  );
 }
 
 export async function getMeetingSyncRun(id: string): Promise<MeetingSyncRunSummary | null> {
@@ -882,7 +919,9 @@ export async function listMeetingSyncChanges(
       at: c.at,
     })
     .from(c)
-    .where(and(eq(c.runId, runId), kind ? OF_KIND[kind] : undefined, searchAny(query.q, [c.meetingName, c.action, c.email, c.detail, fullName])))
+    .where(
+      and(eq(c.runId, runId), kind ? OF_KIND[kind] : undefined, searchAny(query.q, [c.meetingName, c.action, c.email, c.detail, fullName])),
+    )
     .orderBy(...orderFor(CHANGE_SORT_COLUMNS[query.sort], query.dir, c.at, c.id))
     .limit(limit)
     .offset(offset);
@@ -911,12 +950,17 @@ function cleanFacilitators(list: readonly MeetingFacilitator[]): MeetingFacilita
  * Administrator role neither puts anyone here nor keeps them here.
  */
 export async function getMeetingFacilitators(): Promise<MeetingFacilitator[]> {
-  const [row] = await db.select({ value: evalsSettings.value }).from(evalsSettings).where(eq(evalsSettings.key, EVALS_SETTINGS_KEYS.meetingFacilitators));
+  const [row] = await db
+    .select({ value: evalsSettings.value })
+    .from(evalsSettings)
+    .where(eq(evalsSettings.key, EVALS_SETTINGS_KEYS.meetingFacilitators));
   try {
     const parsed: unknown = JSON.parse(row?.value ?? "[]");
     if (!Array.isArray(parsed)) return [];
     return cleanFacilitators(
-      parsed.flatMap((a) => (a && typeof a.email === "string" ? [{ email: a.email, fullName: typeof a.fullName === "string" ? a.fullName : "" }] : [])),
+      parsed.flatMap((a) =>
+        a && typeof a.email === "string" ? [{ email: a.email, fullName: typeof a.fullName === "string" ? a.fullName : "" }] : [],
+      ),
     );
   } catch {
     return [];

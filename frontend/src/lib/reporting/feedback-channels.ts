@@ -19,12 +19,7 @@ import "server-only";
 
 import { and, eq, inArray, like, sql } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  employees,
-  feedbackChannels,
-  slackChannelMembers,
-  users,
-} from "@/db/schema";
+import { employees, feedbackChannels, slackChannelMembers, users } from "@/db/schema";
 import { planMembership } from "@/lib/cohorts/slack-plan";
 import { slackContactEmails } from "@/lib/evals/slack-contacts";
 import { channelMembers, getSlackSyncLive, isFatal, resolveSlackUsers } from "@/lib/cohorts/slack-sync";
@@ -63,11 +58,7 @@ async function managersOf(email: string): Promise<string[]> {
 type Found = { id: string; name: string; created: boolean; unarchived: boolean };
 
 /** The attendee's channel, the bot in it: the one on record, unarchived if it must be, else a new one. */
-async function ensureChannel(
-  slack: SlackClient,
-  attendee: { email: string; fullName: string | null },
-  actorId: string,
-): Promise<Found> {
+async function ensureChannel(slack: SlackClient, attendee: { email: string; fullName: string | null }, actorId: string): Promise<Found> {
   const [row] = await db.select().from(feedbackChannels).where(eq(feedbackChannels.attendeeEmail, attendee.email));
   if (row) {
     try {
@@ -87,9 +78,12 @@ async function ensureChannel(
   // Names other attendees' channels already have are skipped without asking Slack.
   const base = feedbackChannelName(attendee.fullName, attendee.email);
   const taken = new Set(
-    (await db.select({ name: feedbackChannels.name }).from(feedbackChannels).where(like(feedbackChannels.name, `${base}%`))).map(
-      (r) => r.name,
-    ),
+    (
+      await db
+        .select({ name: feedbackChannels.name })
+        .from(feedbackChannels)
+        .where(like(feedbackChannels.name, `${base}%`))
+    ).map((r) => r.name),
   );
   for (let n = 1, tries = 0; tries < NAME_TRIES; n++) {
     const name = feedbackChannelName(attendee.fullName, attendee.email, n);
@@ -97,7 +91,9 @@ async function ensureChannel(
     tries++;
     let id: string;
     try {
-      ({ channel: { id } } = await slack.call<{ channel: { id: string } }>("conversations.create", {
+      ({
+        channel: { id },
+      } = await slack.call<{ channel: { id: string } }>("conversations.create", {
         name,
         is_private: "true",
       }));
@@ -177,9 +173,9 @@ export async function openFeedbackChannel(
   const callerEmail = caller.email?.trim().toLowerCase() || null;
 
   const contacts = await slackContactEmails();
-  const wantedEmails = [
-    ...new Set([...(await managersOf(email)), ...(callerEmail ? [callerEmail] : []), ...contacts]),
-  ].filter((e) => e !== email);
+  const wantedEmails = [...new Set([...(await managersOf(email)), ...(callerEmail ? [callerEmail] : []), ...contacts])].filter(
+    (e) => e !== email,
+  );
 
   try {
     // Whoever pressed is looked up too, to say whether they can open the channel.

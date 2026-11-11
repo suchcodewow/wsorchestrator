@@ -18,9 +18,7 @@ import { containsPattern } from "@/lib/paging-sql";
 import { API_DIR, routeFiles, urlPath } from "../support/routes";
 
 const documented = GROUPS.flatMap((g) => g.endpoints);
-const quiet = new Set(
-  documented.filter((e) => e.changesNothing).map((e) => `${e.method} ${e.path}`),
-);
+const quiet = new Set(documented.filter((e) => e.changesNothing).map((e) => `${e.method} ${e.path}`));
 
 describe("audit coverage", () => {
   const handlers: { key: string; wrapped: boolean }[] = [];
@@ -92,10 +90,11 @@ describe("endpointFor", () => {
 
 describe("redact", () => {
   test("blanks secret-looking keys at any depth", () => {
-    assert.deepEqual(
-      redact({ name: "ci", token: "pat.abc", nested: { clientSecret: "s", password: "p" } }),
-      { name: "ci", token: "[redacted]", nested: { clientSecret: "[redacted]", password: "[redacted]" } },
-    );
+    assert.deepEqual(redact({ name: "ci", token: "pat.abc", nested: { clientSecret: "s", password: "p" } }), {
+      name: "ci",
+      token: "[redacted]",
+      nested: { clientSecret: "[redacted]", password: "[redacted]" },
+    });
   });
 
   test("blanks an org secret's value but keeps a boolean value", () => {
@@ -132,10 +131,7 @@ describe("paging", () => {
 
   test("falls back to the default for anything missing or unrecognised", () => {
     assert.deepEqual(parseListQuery(undefined, spec), { q: "", sort: "at", dir: "desc", page: 1 });
-    assert.deepEqual(
-      parseListQuery(new URLSearchParams("sort=nope&dir=up&page=-3"), spec),
-      { q: "", sort: "at", dir: "desc", page: 1 },
-    );
+    assert.deepEqual(parseListQuery(new URLSearchParams("sort=nope&dir=up&page=-3"), spec), { q: "", sort: "at", dir: "desc", page: 1 });
   });
 
   test("reads a page's searchParams and a route's URL alike", () => {
@@ -162,7 +158,10 @@ describe("paging", () => {
   });
 
   test("turns the extra row into hasMore, and drops it", () => {
-    const full = toPage(Array.from({ length: PAGE_SIZE + 1 }, (_, i) => i), 2);
+    const full = toPage(
+      Array.from({ length: PAGE_SIZE + 1 }, (_, i) => i),
+      2,
+    );
     assert.equal(full.rows.length, PAGE_SIZE);
     assert.equal(full.hasMore, true);
     assert.deepEqual(pageRange(full), { from: PAGE_SIZE + 1, to: 2 * PAGE_SIZE });

@@ -1,10 +1,5 @@
 import { loadCatalog, log, recordResource, type Component, type RunRow } from "./db.js";
-import {
-  createConnector,
-  createTemplate,
-  upsertSecretFile,
-  upsertSecretText,
-} from "./harness.js";
+import { createConnector, createTemplate, upsertSecretFile, upsertSecretText } from "./harness.js";
 
 /**
  * The Harness component catalog: the secrets, connectors, and templates every
@@ -104,9 +99,7 @@ export function resolveBindings<T>(spec: T, b: Bindings, identifier: string): T 
     }
     if (Array.isArray(value)) return value.map(walk);
     if (value !== null && typeof value === "object") {
-      return Object.fromEntries(
-        Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, walk(v)]),
-      );
+      return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, walk(v)]));
     }
     return value;
   };
@@ -181,22 +174,16 @@ export function buildGraph(components: Component[]): Graph {
     if (absent.length) missing.set(id, absent);
   }
   if (missing.size) {
-    const detail = [...missing]
-      .map(([id, absent]) => `${id} -> ${absent.join(", ")}`)
-      .join("; ");
+    const detail = [...missing].map(([id, absent]) => `${id} -> ${absent.join(", ")}`).join("; ");
     throw new Error(`component catalog has unresolvable dependencies: ${detail}`);
   }
 
   const remaining = new Set(known);
   const order: Component[] = [];
   while (remaining.size) {
-    const ready = [...remaining]
-      .filter((id) => deps.get(id)!.every((d) => !remaining.has(d)))
-      .sort();
+    const ready = [...remaining].filter((id) => deps.get(id)!.every((d) => !remaining.has(d))).sort();
     if (ready.length === 0) {
-      throw new Error(
-        `component catalog has a dependency cycle among: ${[...remaining].sort().join(", ")}`,
-      );
+      throw new Error(`component catalog has a dependency cycle among: ${[...remaining].sort().join(", ")}`);
     }
     for (const id of ready) {
       order.push(byId.get(id)!);
@@ -248,15 +235,9 @@ const RESOURCE_KIND: Record<Component["kind"], string> = {
 };
 
 /** Create one component in the workshop's org. */
-async function applyComponent(
-  c: Component,
-  orgId: string,
-  b: Bindings,
-): Promise<boolean> {
+async function applyComponent(c: Component, orgId: string, b: Bindings): Promise<boolean> {
   if (c.scope !== "org") {
-    throw new Error(
-      `component "${c.identifier}" has scope "${c.scope}"; only org scope is supported so far`,
-    );
+    throw new Error(`component "${c.identifier}" has scope "${c.scope}"; only org scope is supported so far`);
   }
 
   const spec = resolveBindings(c.spec, b, c.identifier) as Record<string, unknown>;
@@ -267,21 +248,9 @@ async function applyComponent(
     case "secret_file":
       return upsertSecretFile(orgId, c.identifier, c.name, String(spec.content ?? ""));
     case "connector":
-      return createConnector(
-        orgId,
-        c.identifier,
-        c.name,
-        String(spec.type ?? ""),
-        (spec.spec ?? {}) as Record<string, unknown>,
-      );
+      return createConnector(orgId, c.identifier, c.name, String(spec.type ?? ""), (spec.spec ?? {}) as Record<string, unknown>);
     case "template":
-      return createTemplate(
-        orgId,
-        c.identifier,
-        c.name,
-        c.versionLabel,
-        String(spec.yaml ?? ""),
-      );
+      return createTemplate(orgId, c.identifier, c.name, c.versionLabel, String(spec.yaml ?? ""));
     default: {
       // Exhaustive today; the guard is what turns a future kind added to the
       // schema but not here into a clear error instead of a silent skip.
@@ -318,11 +287,7 @@ async function applyComponent(
  * So a whole cloud being absent goes quiet, and a cloud that half-arrived is
  * loud, which is exactly the behaviour the two branches used to encode.
  */
-export async function applyCatalog(
-  run: RunRow,
-  orgId: string,
-  outputs: Record<string, unknown>,
-): Promise<ApplyResult> {
+export async function applyCatalog(run: RunRow, orgId: string, outputs: Record<string, unknown>): Promise<ApplyResult> {
   // A sandbox run overlays the contributor's candidate set on the baseline;
   // every other run deploys the baseline alone.
   const components = await loadCatalog(run.component_set_id ?? undefined);
@@ -375,8 +340,7 @@ export async function applyCatalog(
     await log(
       run.id,
       "stdout",
-      `${c.kind} ${c.identifier} ${existed ? "updated" : "created"}` +
-        (dependencies.length ? ` -> ${dependencies.join(", ")}` : ""),
+      `${c.kind} ${c.identifier} ${existed ? "updated" : "created"}` + (dependencies.length ? ` -> ${dependencies.join(", ")}` : ""),
     );
     await recordResource(run.id, {
       kind: RESOURCE_KIND[c.kind],
@@ -401,10 +365,7 @@ export async function applyCatalog(
   await recordResource(run.id, {
     kind: "harness_components",
     label: "Harness components",
-    detail:
-      pending.length === 0
-        ? "all applied"
-        : `${pending.join(", ")} not applicable to this workshop`,
+    detail: pending.length === 0 ? "all applied" : `${pending.join(", ")} not applicable to this workshop`,
     done: applied.length,
     total: applied.length + pending.length,
   });

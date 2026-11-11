@@ -72,10 +72,7 @@ function awsCommonVars(runId: string) {
 }
 
 function write(workDir: string, vars: Record<string, unknown>) {
-  fs.writeFileSync(
-    path.join(workDir, "terraform.tfvars.json"),
-    JSON.stringify(vars, null, 2),
-  );
+  fs.writeFileSync(path.join(workDir, "terraform.tfvars.json"), JSON.stringify(vars, null, 2));
 }
 
 /**
@@ -84,10 +81,7 @@ function write(workDir: string, vars: Record<string, unknown>) {
  * shared cloud config, so — unlike the workshop roots — this is a thin pass-
  * through with no `commonVars`.
  */
-export function writeDelegateTfvars(
-  workDir: string,
-  vars: Record<string, unknown>,
-) {
+export function writeDelegateTfvars(workDir: string, vars: Record<string, unknown>) {
   write(workDir, vars);
 }
 
@@ -234,11 +228,7 @@ export function writeScenarioTfvars(
  * provider reaches all of them and Terraform builds the clusters concurrently
  * inside one apply.
  */
-export function writeAzureClusterTfvars(
-  workDir: string,
-  runId: string,
-  attendeeResourceGroups: Record<string, string>,
-) {
+export function writeAzureClusterTfvars(workDir: string, runId: string, attendeeResourceGroups: Record<string, string>) {
   write(workDir, {
     ...azureCommonVars(runId),
     attendee_resource_groups: attendeeResourceGroups,
@@ -251,13 +241,7 @@ export function writeAzureClusterTfvars(
  * Per competitor, like everything else on AWS: the cluster is built inside that
  * competitor's own member account, which needs its own assumed-role provider.
  */
-export function writeAwsClusterTfvars(
-  workDir: string,
-  runId: string,
-  attendeeEmail: string,
-  accountId: string,
-  clusterName: string,
-) {
+export function writeAwsClusterTfvars(workDir: string, runId: string, attendeeEmail: string, accountId: string, clusterName: string) {
   write(workDir, {
     ...awsCommonVars(runId),
     attendee_email: attendeeEmail,
@@ -445,13 +429,7 @@ export function writeAwsTfvars(
  * with a per-competitor state prefix — Terraform can't create a dynamic number
  * of cross-account providers in one apply.
  */
-export function writeAwsChallengeTfvars(
-  workDir: string,
-  runId: string,
-  accountName: string,
-  accountEmail: string,
-  attendeeEmail: string,
-) {
+export function writeAwsChallengeTfvars(workDir: string, runId: string, accountName: string, accountEmail: string, attendeeEmail: string) {
   write(workDir, {
     ...awsCommonVars(runId),
     account_name: accountName,

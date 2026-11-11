@@ -6,14 +6,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  isTimeZone,
-  timeZoneChoices,
-  timeZoneLabel,
-  timeZoneNames,
-  utcOffsetLabel,
-  utcOffsetMinutes,
-} from "../../src/lib/timezones";
+import { isTimeZone, timeZoneChoices, timeZoneLabel, timeZoneNames, utcOffsetLabel, utcOffsetMinutes } from "../../src/lib/timezones";
 
 describe("isTimeZone", () => {
   test("accepts IANA names", () => {
@@ -53,7 +46,10 @@ describe("timeZoneChoices", () => {
 
   test("lists every zone, in offset order and then name order", () => {
     assert.equal(choices.length, timeZoneNames().length);
-    assert.deepEqual(offsets, [...offsets].sort((a, b) => a - b));
+    assert.deepEqual(
+      offsets,
+      [...offsets].sort((a, b) => a - b),
+    );
   });
 
   test("keeps zones that share an offset today apart, so a no-DST zone stays choosable", () => {

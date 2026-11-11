@@ -16,11 +16,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function EvalsSettingsLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function EvalsSettingsLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   if (!canManageEvalsSettings(session.user.access)) notFound();

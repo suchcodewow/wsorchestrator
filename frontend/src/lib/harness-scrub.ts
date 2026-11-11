@@ -3,12 +3,7 @@
 import "server-only";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  harnessDeployedSecrets,
-  harnessTokens,
-  type HarnessDeployedSecret,
-  type ScrubStatus,
-} from "@/db/schema";
+import { harnessDeployedSecrets, harnessTokens, type HarnessDeployedSecret, type ScrubStatus } from "@/db/schema";
 import { harnessBaseUrl } from "@/lib/harness-platform";
 import { openSecret } from "@/lib/secret-box";
 
@@ -44,9 +39,7 @@ export type DeployedSecret = {
   harnessUpdatedAt: Date | null;
 };
 
-export async function recordDeployedSecret(
-  secret: DeployedSecret,
-): Promise<void> {
+export async function recordDeployedSecret(secret: DeployedSecret): Promise<void> {
   const now = new Date();
   await db
     .insert(harnessDeployedSecrets)
@@ -62,11 +55,7 @@ export async function recordDeployedSecret(
       status: "pending",
     })
     .onConflictDoUpdate({
-      target: [
-        harnessDeployedSecrets.accountId,
-        harnessDeployedSecrets.orgIdentifier,
-        harnessDeployedSecrets.secretIdentifier,
-      ],
+      target: [harnessDeployedSecrets.accountId, harnessDeployedSecrets.orgIdentifier, harnessDeployedSecrets.secretIdentifier],
       set: {
         tokenId: secret.tokenId,
         kind: secret.kind,
@@ -81,9 +70,7 @@ export async function recordDeployedSecret(
 }
 
 export const harnessTimestamp = (value: unknown): Date | null =>
-  typeof value === "number" && Number.isFinite(value) && value > 0
-    ? new Date(value)
-    : null;
+  typeof value === "number" && Number.isFinite(value) && value > 0 ? new Date(value) : null;
 
 export type ScrubSummary = {
   pending: number;
@@ -112,9 +99,7 @@ export const EMPTY_SCRUB: ScrubSummary = {
   problems: [],
 };
 
-export async function scrubSummaries(
-  tokenIds: string[],
-): Promise<Map<string, ScrubSummary>> {
+export async function scrubSummaries(tokenIds: string[]): Promise<Map<string, ScrubSummary>> {
   const summaries = new Map<string, ScrubSummary>();
   if (tokenIds.length === 0) return summaries;
 
@@ -126,8 +111,7 @@ export async function scrubSummaries(
 
   for (const row of rows) {
     if (row.tokenId === null) continue;
-    const summary =
-      summaries.get(row.tokenId) ?? { ...EMPTY_SCRUB, orgs: [], problems: [] };
+    const summary = summaries.get(row.tokenId) ?? { ...EMPTY_SCRUB, orgs: [], problems: [] };
 
     if (!summary.orgs.includes(row.orgIdentifier)) {
       summary.orgs.push(row.orgIdentifier);
@@ -164,13 +148,7 @@ const TIMEOUT_MS = 20_000;
 
 type Reply = { status: number; text: string };
 
-async function request(
-  token: string,
-  method: "GET" | "PUT",
-  path: string,
-  query: Record<string, string>,
-  body?: unknown,
-): Promise<Reply> {
+async function request(token: string, method: "GET" | "PUT", path: string, query: Record<string, string>, body?: unknown): Promise<Reply> {
   const url = `${harnessBaseUrl()}${path}?${new URLSearchParams(query)}`;
   const multipart = body instanceof FormData;
   try {
@@ -178,16 +156,9 @@ async function request(
       method,
       headers: {
         "x-api-key": token,
-        ...(body !== undefined && !multipart
-          ? { "Content-Type": "application/json" }
-          : {}),
+        ...(body !== undefined && !multipart ? { "Content-Type": "application/json" } : {}),
       },
-      body:
-        body === undefined
-          ? undefined
-          : multipart
-            ? body
-            : JSON.stringify(body),
+      body: body === undefined ? undefined : multipart ? body : JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
       cache: "no-store",
     });
@@ -252,10 +223,7 @@ function modifiedSince(row: HarnessDeployedSecret, live: Date | null): boolean {
 
 export type ScrubVerdict = { status: ScrubStatus; note: string | null };
 
-export async function scrubSecret(
-  row: HarnessDeployedSecret,
-  token: string,
-): Promise<ScrubVerdict> {
+export async function scrubSecret(row: HarnessDeployedSecret, token: string): Promise<ScrubVerdict> {
   const query = {
     accountIdentifier: row.accountId,
     orgIdentifier: row.orgIdentifier,
@@ -274,9 +242,7 @@ export async function scrubSecret(
     if (current.status === 401 || current.status === 403) {
       return {
         status: "failed",
-        note:
-          "The token that deployed this can no longer read it in Harness, so " +
-          `remove the value by hand: ${message}`,
+        note: "The token that deployed this can no longer read it in Harness, so " + `remove the value by hand: ${message}`,
       };
     }
     return {
@@ -292,9 +258,7 @@ export async function scrubSecret(
   if (modifiedSince(row, live.updatedAt)) {
     return {
       status: "skipped",
-      note:
-        "Somebody changed this secret in Harness after it was deployed, so the " +
-        "value there is theirs now and has been left alone.",
+      note: "Somebody changed this secret in Harness after it was deployed, so the " + "value there is theirs now and has been left alone.",
     };
   }
 
@@ -319,18 +283,8 @@ export async function scrubSecret(
         },
       }),
     );
-    form.append(
-      "file",
-      new Blob([SCRUB_VALUE], { type: "text/plain" }),
-      `${row.secretIdentifier}.txt`,
-    );
-    reply = await request(
-      token,
-      "PUT",
-      `/ng/api/v2/secrets/files/${id}`,
-      query,
-      form,
-    );
+    form.append("file", new Blob([SCRUB_VALUE], { type: "text/plain" }), `${row.secretIdentifier}.txt`);
+    reply = await request(token, "PUT", `/ng/api/v2/secrets/files/${id}`, query, form);
   } else {
     reply = await request(token, "PUT", `/ng/api/v2/secrets/${id}`, query, {
       secret: {
@@ -361,9 +315,7 @@ export async function scrubSecret(
   return {
     status: "failed",
     note:
-      reply.status === 0
-        ? `Could not reach Harness: ${reply.text}`
-        : `Harness refused the overwrite: ${message} (HTTP ${reply.status})`,
+      reply.status === 0 ? `Could not reach Harness: ${reply.text}` : `Harness refused the overwrite: ${message} (HTTP ${reply.status})`,
   };
 }
 
@@ -383,10 +335,7 @@ export type ScrubRun = {
 
 const EMPTY_RUN: ScrubRun = { scrubbed: 0, skipped: 0, failed: 0, problems: [] };
 
-export async function scrubDeployedSecrets(
-  userId: string,
-  tokenId: string,
-): Promise<ScrubRun | { error: "not_found" | "unreadable" }> {
+export async function scrubDeployedSecrets(userId: string, tokenId: string): Promise<ScrubRun | { error: "not_found" | "unreadable" }> {
   const [token] = await db
     .select({ id: harnessTokens.id, secret: harnessTokens.secret })
     .from(harnessTokens)
@@ -399,10 +348,7 @@ export async function scrubDeployedSecrets(
   return scrubWithToken(tokenId, raw);
 }
 
-export async function scrubWithToken(
-  tokenId: string,
-  token: string,
-): Promise<ScrubRun> {
+export async function scrubWithToken(tokenId: string, token: string): Promise<ScrubRun> {
   const rows = await db
     .select()
     .from(harnessDeployedSecrets)

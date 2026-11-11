@@ -1,14 +1,6 @@
 /** The tabs across the top of My settings. */
 
-import {
-  FileCode2,
-  KeyRound,
-  KeySquare,
-  MonitorCheck,
-  SlidersHorizontal,
-  Terminal,
-  type LucideIcon,
-} from "lucide-react";
+import { FileCode2, KeyRound, KeySquare, MonitorCheck, SlidersHorizontal, Terminal, type LucideIcon } from "lucide-react";
 import { canUseEvents, type Access } from "@/lib/roles";
 
 export type SettingsTab = {

@@ -35,8 +35,7 @@ async function sweep(b: string, prefix: string, keep: (name: string) => boolean 
 }
 
 export type PublishOutcome =
-  | { ok: true; job: StudioJob; diff: MapDiff }
-  | { ok: false; error: "not_found" | "not_ready" | "not_configured" | "invalid" };
+  { ok: true; job: StudioJob; diff: MapDiff } | { ok: false; error: "not_found" | "not_ready" | "not_configured" | "invalid" };
 
 export async function publishDeck(userId: string, jobId: string): Promise<PublishOutcome> {
   const job = await getJob(jobId);

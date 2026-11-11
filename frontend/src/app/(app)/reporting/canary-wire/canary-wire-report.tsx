@@ -86,12 +86,7 @@ export function CanaryWireReport({
       </motion.div>
 
       <motion.div variants={riseChild} className="flex flex-wrap items-center gap-2">
-        <select
-          aria-label="Month"
-          value={view.month}
-          onChange={(e) => go(e.target.value)}
-          className={SELECT_PILL}
-        >
+        <select aria-label="Month" value={view.month} onChange={(e) => go(e.target.value)} className={SELECT_PILL}>
           {view.months.map((m) => (
             <option key={m} value={m}>
               {withData.has(m) ? m : `${m} (no data)`}
@@ -120,7 +115,12 @@ export function CanaryWireReport({
           Export {view.month}
         </a>
         {trends.months.length > 0 && (
-          <a href={historyCsv} download className={PILL} title={`Every rep's completion in every month since ${HISTORY_FIRST_MONTH}, not just the months on their dots`}>
+          <a
+            href={historyCsv}
+            download
+            className={PILL}
+            title={`Every rep's completion in every month since ${HISTORY_FIRST_MONTH}, not just the months on their dots`}
+          >
             <Download />
             Export history since {HISTORY_FIRST_MONTH}
           </a>
@@ -256,7 +256,14 @@ function Roles({ view }: { view: CanaryWireView }) {
                 <td className="px-5 py-3">
                   <Meter value={r.pct} />
                 </td>
-                <td className="px-5 py-3" title={r.icLearners ? `${r.icFinished} of ${r.icLearners} ICs finished` : "No individual contributors owe anything in this role this month"}>
+                <td
+                  className="px-5 py-3"
+                  title={
+                    r.icLearners
+                      ? `${r.icFinished} of ${r.icLearners} ICs finished`
+                      : "No individual contributors owe anything in this role this month"
+                  }
+                >
                   <Meter value={r.icPct} />
                 </td>
                 <td className="px-5 py-3 text-xs text-muted-foreground">{r.modules.join(" · ")}</td>

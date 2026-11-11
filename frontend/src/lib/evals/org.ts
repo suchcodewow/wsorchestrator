@@ -11,10 +11,7 @@ export type OrgPerson = { email: string; reportsToEmail: string };
  * them. A chain that loops or runs into someone not in `people` ends there,
  * and anyone on it is left out.
  */
-export function orgUnder<T extends OrgPerson>(
-  people: readonly T[],
-  rootEmail: string = ORG_ROOT_EMAIL,
-): (T & { chain: string[] })[] {
+export function orgUnder<T extends OrgPerson>(people: readonly T[], rootEmail: string = ORG_ROOT_EMAIL): (T & { chain: string[] })[] {
   const root = rootEmail.toLowerCase();
   const managerOf = new Map(people.map((p) => [p.email.toLowerCase(), p.reportsToEmail.toLowerCase()]));
 

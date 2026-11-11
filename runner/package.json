@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
+    "format": "prettier --write",
+    "format:check": "prettier --check",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "test:watch": "tsx --test --watch test/*.test.ts",
@@ -19,6 +21,7 @@
   "devDependencies": {
     "@types/node": "^22.10.5",
     "@types/pg": "^8.11.10",
+    "prettier": "3.10.0",
     "typescript": "^5.7.3"
   }
 }

@@ -32,27 +32,18 @@ export async function AppShell({
 
         <SiteHeader session={session} />
 
-        <main className="relative mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
-          {children}
-        </main>
+        <main className="relative mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">{children}</main>
       </div>
     );
   }
 
   const { themePreference, favoriteTabs } = await getUserPreferences();
-  const collapsed =
-    parseSidebarState((await cookies()).get(SIDEBAR_COOKIE)?.value) ===
-    "collapsed";
+  const collapsed = parseSidebarState((await cookies()).get(SIDEBAR_COOKIE)?.value) === "collapsed";
 
   const pane = scroll === "pane";
 
   return (
-    <div
-      className={cn(
-        "relative flex min-h-screen flex-col",
-        pane && "lg:h-screen lg:min-h-0 lg:overflow-hidden",
-      )}
-    >
+    <div className={cn("relative flex min-h-screen flex-col", pane && "lg:h-screen lg:min-h-0 lg:overflow-hidden")}>
       <AmbientBackdrop className="fixed inset-0 -z-10" />
 
       <TourProvider autoPlay={!session.impersonator}>
@@ -76,12 +67,7 @@ export async function AppShell({
               }}
             />
 
-            <main
-              className={cn(
-                "@container relative min-w-0 flex-1",
-                pane && "lg:overflow-y-auto",
-              )}
-            >
+            <main className={cn("@container relative min-w-0 flex-1", pane && "lg:overflow-y-auto")}>
               <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
                 <NavigationPending>{children}</NavigationPending>
               </div>

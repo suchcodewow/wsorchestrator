@@ -16,11 +16,7 @@ import { dietaryCounts, listUnregistered, listWriteIns } from "@/lib/logistics/r
 import { parseListQuery } from "@/lib/paging";
 import { DietaryView } from "./dietary-view";
 
-export default async function DietaryPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function DietaryPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   const stage = dietaryStageOf(params.stage);
   const criticalQuery = parseListQuery(params, WRITE_IN_LIST, CRITICAL_WRITE_IN_PREFIX);

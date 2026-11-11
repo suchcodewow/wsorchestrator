@@ -19,7 +19,10 @@ const AM = [card("a", 0), card("b", 1), card("c", 2), card("d", 3)];
 
 test("cards are in place order, and by when they were added where two share a place", () => {
   const tied = [card("late", 0), { ...card("early", 0), createdAt: "2026-09-01T00:00:00.000Z" }];
-  assert.deepEqual([...tied].sort(byPlace).map((i) => i.id), ["early", "late"]);
+  assert.deepEqual(
+    [...tied].sort(byPlace).map((i) => i.id),
+    ["early", "late"],
+  );
 });
 
 test("a card dragged up its half lands there, and the half is numbered again from 0", () => {
@@ -49,9 +52,21 @@ test("an unknown card changes nothing", () => {
 test("while dragged, a card shows where it would land, leaves the half it is not over, and is back home over no half", () => {
   const dragged = AM[3]!;
   const here = { day: 1, period: "am" } as const;
-  assert.deepEqual(previewHalf(AM, here, dragged, { day: 1, period: "am", index: 0 }).map((i) => i.id), ["d", "a", "b", "c"]);
-  assert.deepEqual(previewHalf(AM, here, dragged, { day: 1, period: "pm", index: 0 }).map((i) => i.id), ["a", "b", "c"]);
-  assert.deepEqual(previewHalf(AM, here, dragged, null).map((i) => i.id), ["a", "b", "c", "d"]);
+  assert.deepEqual(
+    previewHalf(AM, here, dragged, { day: 1, period: "am", index: 0 }).map((i) => i.id),
+    ["d", "a", "b", "c"],
+  );
+  assert.deepEqual(
+    previewHalf(AM, here, dragged, { day: 1, period: "pm", index: 0 }).map((i) => i.id),
+    ["a", "b", "c"],
+  );
+  assert.deepEqual(
+    previewHalf(AM, here, dragged, null).map((i) => i.id),
+    ["a", "b", "c", "d"],
+  );
   const pm = { day: 1, period: "pm" } as const;
-  assert.deepEqual(previewHalf([card("x", 0, "pm")], pm, dragged, { day: 1, period: "pm", index: 1 }).map((i) => i.id), ["x", "d"]);
+  assert.deepEqual(
+    previewHalf([card("x", 0, "pm")], pm, dragged, { day: 1, period: "pm", index: 1 }).map((i) => i.id),
+    ["x", "d"],
+  );
 });

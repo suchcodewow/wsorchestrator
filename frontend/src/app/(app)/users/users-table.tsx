@@ -17,14 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  ASSESSMENTS_ROLES,
-  EVENT_ROLES,
-  TRAINING_ROLES,
-  type AssessmentsRole,
-  type EventRole,
-  type TrainingRole,
-} from "@/db/schema";
+import { ASSESSMENTS_ROLES, EVENT_ROLES, TRAINING_ROLES, type AssessmentsRole, type EventRole, type TrainingRole } from "@/db/schema";
 import {
   ASSESSMENTS_ROLE_DESCRIPTIONS,
   ASSESSMENTS_ROLE_LABELS,
@@ -78,8 +71,7 @@ const ERRORS: Record<string, string> = {
   not_found: "That account no longer exists.",
   forbidden: "Your own role changed — reload the page.",
   platform_target: "Only a platform administrator can change another platform administrator.",
-  bootstrap:
-    "That address is in SITE_ADMIN_EMAILS, which makes it a platform administrator on every sign-in.",
+  bootstrap: "That address is in SITE_ADMIN_EMAILS, which makes it a platform administrator on every sign-in.",
 };
 
 /** The training and assessments areas' radio value for "no role", which a radio group can't hold as null. */
@@ -167,9 +159,7 @@ export function UsersTable({
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(
-          ERRORS[body?.error] ?? `Could not save (${res.status})`,
-        );
+        throw new Error(ERRORS[body?.error] ?? `Could not save (${res.status})`);
       }
       router.refresh();
     } catch (err) {
@@ -181,16 +171,8 @@ export function UsersTable({
   }
 
   return (
-    <motion.div
-      variants={staggerParent(0.05)}
-      initial="hidden"
-      animate="show"
-      className="space-y-8"
-    >
-      <motion.div
-        variants={riseChild}
-        className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between"
-      >
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-8">
+      <motion.div variants={riseChild} className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-medium tracking-tight">Manage users</h1>
         <div className="flex flex-wrap gap-2">
           {managesTestAccounts && <CreateTestAccountDialog />}
@@ -203,10 +185,8 @@ export function UsersTable({
         <motion.div variants={riseChild}>
           <Card className="border-amber-500/40 bg-amber-500/5">
             <CardContent className="py-4 text-sm">
-              <span className="font-medium">Waiting on a first sign-in:</span>{" "}
-              <span className="font-mono">{pendingAdmins.join(", ")}</span> —
-              listed in <code>SITE_ADMIN_EMAILS</code> and made platform
-              administrators once they sign in.
+              <span className="font-medium">Waiting on a first sign-in:</span> <span className="font-mono">{pendingAdmins.join(", ")}</span>{" "}
+              — listed in <code>SITE_ADMIN_EMAILS</code> and made platform administrators once they sign in.
             </CardContent>
           </Card>
         </motion.div>
@@ -219,22 +199,28 @@ export function UsersTable({
       )}
 
       <motion.div variants={riseChild} className="space-y-3">
-        <TableSearch
-          value={query.q}
-          placeholder="Search by name or email"
-          label="Search users by name or email"
-        />
+        <TableSearch value={query.q} placeholder="Search by name or email" label="Search users by name or email" />
 
         <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
           <div className="relative overflow-x-auto">
             <table className="w-full min-w-200 text-sm">
               <thead>
                 <tr className={HEADER_ROW}>
-                  <SortHeader column="user" {...sortProps}>User</SortHeader>
-                  <SortHeader column="eventRole" {...sortProps}>Event role</SortHeader>
-                  <SortHeader column="trainingRole" {...sortProps}>Training role</SortHeader>
-                  <SortHeader column="assessmentsRole" {...sortProps}>Assessments role</SortHeader>
-                  <SortHeader column="platform" {...sortProps}>Platform admin</SortHeader>
+                  <SortHeader column="user" {...sortProps}>
+                    User
+                  </SortHeader>
+                  <SortHeader column="eventRole" {...sortProps}>
+                    Event role
+                  </SortHeader>
+                  <SortHeader column="trainingRole" {...sortProps}>
+                    Training role
+                  </SortHeader>
+                  <SortHeader column="assessmentsRole" {...sortProps}>
+                    Assessments role
+                  </SortHeader>
+                  <SortHeader column="platform" {...sortProps}>
+                    Platform admin
+                  </SortHeader>
                   {viewerDeletes && (
                     <PlainHeader className="w-px">
                       <span className="sr-only">Delete</span>
@@ -245,10 +231,7 @@ export function UsersTable({
               <tbody>
                 {shown.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={viewerDeletes ? 6 : 5}
-                      className="px-5 py-8 text-center text-muted-foreground"
-                    >
+                    <td colSpan={viewerDeletes ? 6 : 5} className="px-5 py-8 text-center text-muted-foreground">
                       {query.q ? <>No one matches “{query.q}”.</> : "No one on this page."}
                     </td>
                   </tr>
@@ -263,29 +246,18 @@ export function UsersTable({
                       : "You don't administer this area";
 
                   return (
-                    <tr
-                      key={u.id}
-                      className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
-                    >
+                    <tr key={u.id} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
                       <td className="px-5 py-3">
                         <span className="block font-medium">
                           {u.name ?? u.email}
-                          {isSelf && (
-                            <span className="ml-2 text-xs font-normal text-muted-foreground">
-                              you
-                            </span>
-                          )}
+                          {isSelf && <span className="ml-2 text-xs font-normal text-muted-foreground">you</span>}
                           {u.isTestAccount && (
                             <span className="ml-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-xs font-normal text-amber-700 dark:text-amber-300">
                               Test account
                             </span>
                           )}
                         </span>
-                        {u.name && (
-                          <span className="block truncate text-xs text-muted-foreground">
-                            {u.email}
-                          </span>
-                        )}
+                        {u.name && <span className="block truncate text-xs text-muted-foreground">{u.email}</span>}
                       </td>
                       <td className="px-5 py-3">
                         {roles.isPlatformAdmin ? (
@@ -310,9 +282,7 @@ export function UsersTable({
                             }}
                           />
                         ) : (
-                          <ReadOnly title={readOnlyTitle}>
-                            {EVENT_ROLE_LABELS[roles.eventRole]}
-                          </ReadOnly>
+                          <ReadOnly title={readOnlyTitle}>{EVENT_ROLE_LABELS[roles.eventRole]}</ReadOnly>
                         )}
                       </td>
 
@@ -323,11 +293,7 @@ export function UsersTable({
                           <RoleMenu
                             heading="Training role"
                             value={roles.trainingRole ?? NO_TRAINING}
-                            label={
-                              roles.trainingRole
-                                ? TRAINING_ROLE_LABELS[roles.trainingRole]
-                                : NO_TRAINING_ACCESS_LABEL
-                            }
+                            label={roles.trainingRole ? TRAINING_ROLE_LABELS[roles.trainingRole] : NO_TRAINING_ACCESS_LABEL}
                             chip={
                               roles.trainingRole === "administrator"
                                 ? "text-brand"
@@ -358,9 +324,7 @@ export function UsersTable({
                           />
                         ) : (
                           <ReadOnly title={readOnlyTitle}>
-                            {roles.trainingRole
-                              ? TRAINING_ROLE_LABELS[roles.trainingRole]
-                              : NO_TRAINING_ACCESS_LABEL}
+                            {roles.trainingRole ? TRAINING_ROLE_LABELS[roles.trainingRole] : NO_TRAINING_ACCESS_LABEL}
                           </ReadOnly>
                         )}
                       </td>
@@ -372,11 +336,7 @@ export function UsersTable({
                           <RoleMenu
                             heading="Assessments role"
                             value={roles.assessmentsRole ?? NO_ASSESSMENTS}
-                            label={
-                              roles.assessmentsRole
-                                ? ASSESSMENTS_ROLE_LABELS[roles.assessmentsRole]
-                                : NO_ASSESSMENTS_ACCESS_LABEL
-                            }
+                            label={roles.assessmentsRole ? ASSESSMENTS_ROLE_LABELS[roles.assessmentsRole] : NO_ASSESSMENTS_ACCESS_LABEL}
                             chip={
                               roles.assessmentsRole === "administrator"
                                 ? "text-brand"
@@ -407,9 +367,7 @@ export function UsersTable({
                           />
                         ) : (
                           <ReadOnly title={readOnlyTitle}>
-                            {roles.assessmentsRole
-                              ? ASSESSMENTS_ROLE_LABELS[roles.assessmentsRole]
-                              : NO_ASSESSMENTS_ACCESS_LABEL}
+                            {roles.assessmentsRole ? ASSESSMENTS_ROLE_LABELS[roles.assessmentsRole] : NO_ASSESSMENTS_ACCESS_LABEL}
                           </ReadOnly>
                         )}
                       </td>
@@ -418,10 +376,7 @@ export function UsersTable({
                         <PlatformCheckbox
                           checked={roles.isPlatformAdmin}
                           saving={saving === `${u.id}:platform`}
-                          disabled={
-                            !editable(u, "platform") ||
-                            (roles.isPlatformAdmin && u.isBootstrapAdmin)
-                          }
+                          disabled={!editable(u, "platform") || (roles.isPlatformAdmin && u.isBootstrapAdmin)}
                           title={
                             u.isBootstrapAdmin && roles.isPlatformAdmin
                               ? "Listed in SITE_ADMIN_EMAILS"
@@ -437,16 +392,12 @@ export function UsersTable({
 
                       {viewerDeletes && (
                         <td className="px-3 py-3 text-right whitespace-nowrap">
-                          {managesTestAccounts && u.isTestAccount && (
-                            <ViewAsTestAccountButton user={u} onError={setError} />
-                          )}
+                          {managesTestAccounts && u.isTestAccount && <ViewAsTestAccountButton user={u} onError={setError} />}
                           {managesTestAccounts && u.isTestAccount && (
                             <ResetTestAccountButton
                               user={u}
                               blockedBy={
-                                u.eventCount > 0
-                                  ? `Owns ${u.eventCount} event${u.eventCount === 1 ? "" : "s"} — delete those first`
-                                  : null
+                                u.eventCount > 0 ? `Owns ${u.eventCount} event${u.eventCount === 1 ? "" : "s"} — delete those first` : null
                               }
                             />
                           )}
@@ -470,10 +421,7 @@ export function UsersTable({
 
 function ReadOnly({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <span
-      className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
-      title={title}
-    >
+    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground" title={title}>
       <ShieldCheck className="size-3.5" />
       {children}
     </span>
@@ -482,10 +430,7 @@ function ReadOnly({ title, children }: { title: string; children: React.ReactNod
 
 function ViaPlatform() {
   return (
-    <span
-      className="text-sm font-medium text-brand"
-      title="A platform administrator is an administrator in every area"
-    >
+    <span className="text-sm font-medium text-brand" title="A platform administrator is an administrator in every area">
       Administrator
     </span>
   );
@@ -515,16 +460,10 @@ function RoleMenu({
         className="flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60"
       >
         <span className={cn("font-medium", chip)}>{label}</span>
-        {saving ? (
-          <Loader2 className="size-3.5 animate-spin" />
-        ) : (
-          <ChevronDown className="size-3.5 text-muted-foreground" />
-        )}
+        {saving ? <Loader2 className="size-3.5 animate-spin" /> : <ChevronDown className="size-3.5 text-muted-foreground" />}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
-        <DropdownMenuLabel className="text-xs text-muted-foreground">
-          {heading}
-        </DropdownMenuLabel>
+        <DropdownMenuLabel className="text-xs text-muted-foreground">{heading}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
           {options.map((o) => (
@@ -555,13 +494,7 @@ function PlatformCheckbox({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label
-      className={cn(
-        "inline-flex items-center gap-2",
-        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
-      )}
-      title={title}
-    >
+    <label className={cn("inline-flex items-center gap-2", disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer")} title={title}>
       <input
         type="checkbox"
         className="size-4 accent-brand"

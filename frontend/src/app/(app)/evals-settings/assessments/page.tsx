@@ -6,11 +6,7 @@ import { parseListQuery } from "@/lib/paging";
 import { unassignedBreakouts } from "@/lib/scheduler/schedule";
 import { AssessmentsView } from "./assessments-view";
 
-export default async function AssessmentsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function AssessmentsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const query = parseListQuery(await searchParams, ASSESSMENT_LIST);
   const [page, count, unassigned] = await Promise.all([listAssessments(query), assessmentCount(), unassignedBreakouts()]);
   return (

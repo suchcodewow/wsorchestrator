@@ -90,7 +90,7 @@ describe("commit message", () => {
   });
 
   test("survives the characters that motivated encoding it", () => {
-    const subject = "Don't split on commas, `backticks` or $(subshells); \"quotes\" too";
+    const subject = 'Don\'t split on commas, `backticks` or $(subshells); "quotes" too';
     process.env.BUILD_MESSAGE_B64 = b64(subject);
     assert.equal(buildInfo().message, subject);
   });

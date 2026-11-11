@@ -11,14 +11,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
 import type { StagePending } from "@/lib/evals/participation";
 import type { ReleaseStage } from "@/lib/reporting/bootcamp-values";
@@ -105,7 +98,13 @@ export function GenerateButton({
           </>
         }
       >
-        <Button variant="outline" size="sm" disabled={why !== null} aria-label={`${label}: ${plural(comments, "comment", "comments")} to write`} onClick={() => setOpen(true)}>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={why !== null}
+          aria-label={`${label}: ${plural(comments, "comment", "comments")} to write`}
+          onClick={() => setOpen(true)}
+        >
           <Sparkles />
           Generate feedback ({comments.toLocaleString()})
         </Button>
@@ -116,17 +115,15 @@ export function GenerateButton({
           <DialogHeader>
             <DialogTitle>{label}?</DialogTitle>
             <DialogDescription>
-              Claude writes {plural(marks, "blank participation comment", "blank participation comments")}, and{" "}
-              {scores.toLocaleString()} participation {scores === 1 ? "score goes" : "scores go"} into the overall score. Then
-              it sums up each person&apos;s assessment feedback into their blank overall positive and constructive feedback,{" "}
-              {overall.toLocaleString()} so far. Comments and scores already saved stay as they are.
+              Claude writes {plural(marks, "blank participation comment", "blank participation comments")}, and {scores.toLocaleString()}{" "}
+              participation {scores === 1 ? "score goes" : "scores go"} into the overall score. Then it sums up each person&apos;s
+              assessment feedback into their blank overall positive and constructive feedback, {overall.toLocaleString()} so far. Comments
+              and scores already saved stay as they are.
             </DialogDescription>
           </DialogHeader>
           {pending && pending.skipped.length > 0 && (
             <div className="space-y-1 text-sm">
-              <p className="font-medium">
-                Skipped: {pending.skipped.length.toLocaleString()} with no RSVP, marks or assessment
-              </p>
+              <p className="font-medium">Skipped: {pending.skipped.length.toLocaleString()} with no RSVP, marks or assessment</p>
               <p className="text-muted-foreground">{pending.skipped.join(", ")}</p>
             </div>
           )}

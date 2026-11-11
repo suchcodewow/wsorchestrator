@@ -7,11 +7,7 @@ import { canUseEvents } from "@/lib/roles";
 import { getRunForViewer } from "@/lib/runs";
 import { RunView } from "./run-view";
 
-export default async function RunPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   const { id } = await params;
@@ -20,12 +16,5 @@ export default async function RunPage({
   const result = await getRunForViewer(id, viewer);
   if (!result) notFound();
 
-  return (
-    <RunView
-      initial={result}
-      runId={id}
-      viewerId={viewer.id}
-      imported={isImportedRun(result.run)}
-    />
-  );
+  return <RunView initial={result} runId={id} viewerId={viewer.id} imported={isImportedRun(result.run)} />;
 }

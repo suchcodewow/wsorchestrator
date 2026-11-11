@@ -3,13 +3,7 @@
 import { NextResponse } from "next/server";
 import { requireEvalsAdministrator } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
-import {
-  addSlackContact,
-  addSlackContactSchema,
-  listSlackContacts,
-  slackContactCount,
-  STATUS_FOR,
-} from "@/lib/evals/slack-contacts";
+import { addSlackContact, addSlackContactSchema, listSlackContacts, slackContactCount, STATUS_FOR } from "@/lib/evals/slack-contacts";
 import { SLACK_CONTACT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 

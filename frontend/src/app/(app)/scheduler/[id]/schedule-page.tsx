@@ -17,13 +17,7 @@ import { ScheduleView } from "./schedule-view";
 
 const MONTH_YEAR = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 
-export async function SchedulePage({
-  schedule,
-  viewer,
-}: {
-  schedule: Schedule;
-  viewer: { id: string; email: string; access: Access };
-}) {
+export async function SchedulePage({ schedule, viewer }: { schedule: Schedule; viewer: { id: string; email: string; access: Access } }) {
   const canManage = canManageTrainingSettings(viewer.access);
   const [types, sources, checklist, checklistTimed, surveys, facilities, cookieJar] = await Promise.all([
     canManage ? allSessionTypes() : [],
@@ -43,11 +37,14 @@ export async function SchedulePage({
     <div className="space-y-6">
       <div className="space-y-2">
         <BackToScheduler />
-        <h1 className="text-3xl font-medium tracking-tight">
-          {MONTH_YEAR.format(new Date(`${bootcamp.startDate}T00:00:00Z`))} Bootcamp
-        </h1>
+        <h1 className="text-3xl font-medium tracking-tight">{MONTH_YEAR.format(new Date(`${bootcamp.startDate}T00:00:00Z`))} Bootcamp</h1>
       </div>
-      <ScheduleView initial={schedule} types={types} sources={sources} facilities={facilities} canManage={canManage}
+      <ScheduleView
+        initial={schedule}
+        types={types}
+        sources={sources}
+        facilities={facilities}
+        canManage={canManage}
         viewerId={viewer.id}
         viewerEmail={viewer.email}
         checklist={checklist}

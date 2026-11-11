@@ -173,11 +173,7 @@ function classify(r) {
   // silence check below, and measured from the failure rather than from
   // eligibility, because a slow AWS teardown can burn most of SILENT_HOURS before
   // the retry is even due — which would report a working policy as an alarm.
-  if (
-    r.destroy_attempts > 0 &&
-    r.last_failure &&
-    hours(new Date(r.last_failure), now) * 60 < RETRY_MINUTES
-  ) {
+  if (r.destroy_attempts > 0 && r.last_failure && hours(new Date(r.last_failure), now) * 60 < RETRY_MINUTES) {
     return {
       level: "ok",
       kind: "retrying",
@@ -242,21 +238,14 @@ if (rows.length === 0) {
 const ORDER = { alarm: 0, attention: 1, ok: 2 };
 const MARK = { alarm: "!!", attention: " !", ok: "  " };
 
-const seen = rows
-  .map((r) => ({ r, c: classify(r) }))
-  .sort((a, b) => ORDER[a.c.level] - ORDER[b.c.level]);
+const seen = rows.map((r) => ({ r, c: classify(r) })).sort((a, b) => ORDER[a.c.level] - ORDER[b.c.level]);
 
 for (const { r, c } of seen) {
-  console.log(
-    `\n${MARK[c.level]} ${r.slug}  [${c.kind}]  ${r.status}` +
-      `  ${r.mode}/${(r.clouds ?? []).join("+") || "no cloud"}`,
-  );
+  console.log(`\n${MARK[c.level]} ${r.slug}  [${c.kind}]  ${r.status}` + `  ${r.mode}/${(r.clouds ?? []).join("+") || "no cloud"}`);
   console.log(`     ${c.why}`);
   console.log(
     `     attempts: ${r.destroy_attempts} recorded, ${r.failures} failure(s) in the log` +
-      (r.failures > r.destroy_attempts
-        ? "  <- log outruns the counter, so some of this predates the one-attempt policy"
-        : ""),
+      (r.failures > r.destroy_attempts ? "  <- log outruns the counter, so some of this predates the one-attempt policy" : ""),
   );
   console.log(
     `     first failure ${ago(r.first_failure, r.now)}` +
@@ -274,8 +263,5 @@ const alarms = seen.filter((s) => s.c.level === "alarm").length;
 const attention = seen.filter((s) => s.c.level === "attention").length;
 const ok = seen.filter((s) => s.c.level === "ok").length;
 
-console.log(
-  `\n${seen.length} tearing down: ${alarms} not being touched, ` +
-    `${attention} flagged for you, ${ok} healthy`,
-);
+console.log(`\n${seen.length} tearing down: ${alarms} not being touched, ` + `${attention} flagged for you, ${ok} healthy`);
 if (alarms || attention) process.exit(1);

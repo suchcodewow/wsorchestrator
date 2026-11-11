@@ -42,8 +42,8 @@ export function EmployeesTable({
         <p className="text-sm leading-relaxed text-muted-foreground">
           {syncedAt ? (
             <>
-              <span className="font-medium text-foreground">{count.toLocaleString()} active employees</span>,
-              as of the HiBob sync on {formatWhen(syncedAt)}.
+              <span className="font-medium text-foreground">{count.toLocaleString()} active employees</span>, as of the HiBob sync on{" "}
+              {formatWhen(syncedAt)}.
             </>
           ) : (
             <>
@@ -58,11 +58,7 @@ export function EmployeesTable({
       </motion.div>
 
       <motion.div variants={riseChild}>
-        <TableSearch
-          value={query.q}
-          placeholder="Search by name, email, title, department or manager"
-          label="Search employees"
-        />
+        <TableSearch value={query.q} placeholder="Search by name, email, title, department or manager" label="Search employees" />
       </motion.div>
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -96,12 +92,8 @@ export function EmployeesTable({
                   <td className="px-5 py-2.5 text-muted-foreground">{p.department || "—"}</td>
                   <td className="px-5 py-2.5 text-muted-foreground">{p.site || "—"}</td>
                   <td className="px-5 py-2.5 text-muted-foreground">{p.reportsToName || p.reportsToEmail || "—"}</td>
-                  <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">
-                    {formatDate(p.startDate)}
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">
-                    {formatDate(p.activeEffectiveDate)}
-                  </td>
+                  <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">{formatDate(p.startDate)}</td>
+                  <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">{formatDate(p.activeEffectiveDate)}</td>
                 </tr>
               ))}
               {shown.length === 0 && (

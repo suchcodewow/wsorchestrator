@@ -45,7 +45,8 @@ async function fetchSession(date: string, pages: Partial<Record<SessionStage, nu
   const qs = new URLSearchParams();
   for (const [stage, page] of Object.entries(pages)) qs.set(listParam("page", stage), String(page));
   const res = await fetch(`/api/cohorts/previous/${date}${qs.size ? `?${qs}` : ""}`);
-  if (!res.ok) throw new Error(res.status === 404 ? "No one attended on this day any more — reload the page." : `Could not load (${res.status}).`);
+  if (!res.ok)
+    throw new Error(res.status === 404 ? "No one attended on this day any more — reload the page." : `Could not load (${res.status}).`);
   return res.json();
 }
 

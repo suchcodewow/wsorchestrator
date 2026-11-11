@@ -128,7 +128,7 @@ add it to the table above.
 | Account menu → View as an employee | `GET /api/me/impersonation`; the search is `GET /api/evals/employees?match=person` |
 | Users | `GET /api/users` |
 | Admin settings → Allowed Domains | `GET /api/settings/domains`, `GET /api/settings/frame-domains` |
-| Admin settings → External Connectors' Google Meetings and Slack modes | `GET /api/settings/google-meetings-mode`, `GET /api/settings/slack-mode` |
+| Admin settings → External Connectors' Google Meetings and Slack modes | `GET /api/settings/google-meetings-mode`, `GET /api/settings/google-meetings-invites`, `GET /api/settings/slack-mode` |
 | eVals → Bootcamp / Intermediate | `GET /api/evals/scoring?stage=bootcamp\|intermediate` |
 | eVals → an assessment's attendees | `GET /api/evals/scoring/[assessmentId]` |
 | eVals → an attendee's scoring form | `GET /api/evals/scoring/[assessmentId]/[employeeId]` |

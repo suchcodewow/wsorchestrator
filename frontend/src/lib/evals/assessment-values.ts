@@ -55,5 +55,4 @@ export function requiredFeedback(whole: number): FeedbackRequirement {
 export const CONSTRUCTIVE_REQUIRED_NOTE =
   "A score of 1 or 2 means this person needs extra help.  Your constructive feedback is required and will be sent to the manager.";
 
-export const POSITIVE_REQUIRED_NOTE =
-  "A score of 4 is outstanding!  Your positive feedback is required and will be sent to the manager.";
+export const POSITIVE_REQUIRED_NOTE = "A score of 4 is outstanding!  Your positive feedback is required and will be sent to the manager.";

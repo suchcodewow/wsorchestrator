@@ -36,15 +36,11 @@ function sqlFilesIn(dir) {
 
 function filesToApply(args) {
   if (args.length === 0) {
-    return fs.existsSync(DEFAULT_MIGRATIONS_DIR)
-      ? sqlFilesIn(DEFAULT_MIGRATIONS_DIR)
-      : [];
+    return fs.existsSync(DEFAULT_MIGRATIONS_DIR) ? sqlFilesIn(DEFAULT_MIGRATIONS_DIR) : [];
   }
   // Accept directories as well as individual files, so the Makefile can pass
   // the migrations directory explicitly.
-  return args.flatMap((arg) =>
-    fs.existsSync(arg) && fs.statSync(arg).isDirectory() ? sqlFilesIn(arg) : [arg],
-  );
+  return args.flatMap((arg) => (fs.existsSync(arg) && fs.statSync(arg).isDirectory() ? sqlFilesIn(arg) : [arg]));
 }
 
 const files = filesToApply(process.argv.slice(2));

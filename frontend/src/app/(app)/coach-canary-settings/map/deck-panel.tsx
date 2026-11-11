@@ -214,9 +214,10 @@ export function DeckPanel({ configured, job, draft }: { configured: boolean; job
           <DialogHeader>
             <DialogTitle>Publish this deck?</DialogTitle>
             <DialogDescription>
-              Its slides replace the map&apos;s and its concepts replace the map&apos;s concepts. Every concept it keeps keeps its video
-              and everyone&apos;s progress.
-              {draft && draft.diff.removed.length > 0 &&
+              Its slides replace the map&apos;s and its concepts replace the map&apos;s concepts. Every concept it keeps keeps its video and
+              everyone&apos;s progress.
+              {draft &&
+                draft.diff.removed.length > 0 &&
                 ` ${draft.diff.removed.length} ${draft.diff.removed.length === 1 ? "concept leaves" : "concepts leave"} the map${lostVideos ? `, ${lostVideos} with a video` : ""}.`}
             </DialogDescription>
           </DialogHeader>
@@ -258,7 +259,10 @@ function DiffRows({ diff }: { diff: MapDiff }) {
       title: `${diff.changed.length} changed`,
       items: diff.changed.map((c) => ({ id: c.id, text: c.was ? `${c.was} → ${c.name}` : c.name, note: c.what.join(", ") })),
     },
-    { title: `${diff.removed.length} removed`, items: diff.removed.map((c) => ({ id: c.id, text: c.name, note: c.hadVideo ? "has a video" : "" })) },
+    {
+      title: `${diff.removed.length} removed`,
+      items: diff.removed.map((c) => ({ id: c.id, text: c.name, note: c.hadVideo ? "has a video" : "" })),
+    },
   ].filter((g) => g.items.length > 0);
   return (
     <>

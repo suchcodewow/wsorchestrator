@@ -38,12 +38,7 @@ export function DeployReportPanel({ report, onClose }: { report: DeployReport; o
               {counts[outcome]} {OUTCOME[outcome].label}
             </span>
           ))}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Dismiss this report"
-            className="transition-colors hover:text-foreground"
-          >
+          <button type="button" onClick={onClose} aria-label="Dismiss this report" className="transition-colors hover:text-foreground">
             <X className="size-3.5" />
           </button>
         </span>
@@ -56,16 +51,11 @@ export function DeployReportPanel({ report, onClose }: { report: DeployReport; o
 
       <ul className="max-h-72 space-y-0.5 overflow-y-auto text-xs">
         {report.steps.map((step, i) => (
-          <li
-            key={i}
-            className="flex flex-wrap items-baseline gap-x-2 border-b border-border/40 py-1 last:border-b-0"
-          >
+          <li key={i} className="flex flex-wrap items-baseline gap-x-2 border-b border-border/40 py-1 last:border-b-0">
             <span className="w-24 shrink-0 text-muted-foreground">{step.kind}</span>
             <code className="font-mono text-foreground">{step.identifier}</code>
             <span className="text-muted-foreground">in {step.scope}</span>
-            <span className={cn("ml-auto shrink-0", OUTCOME[step.outcome].className)}>
-              {OUTCOME[step.outcome].label}
-            </span>
+            <span className={cn("ml-auto shrink-0", OUTCOME[step.outcome].className)}>{OUTCOME[step.outcome].label}</span>
             {step.detail && <span className="w-full text-muted-foreground">{step.detail}</span>}
           </li>
         ))}

@@ -3,17 +3,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { CLAIM_LIMITS } from "@/db/schema";
-import {
-  getAttendeeView,
-  saveAttendeeFields,
-  type SaveFieldsError,
-} from "@/lib/attendees";
+import { getAttendeeView, saveAttendeeFields, type SaveFieldsError } from "@/lib/attendees";
 import { audited } from "@/lib/audit";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const view = await getAttendeeView(id);
   if (!view) {
@@ -34,10 +27,7 @@ const STATUS_FOR: Record<SaveFieldsError, number> = {
   invalid: 400,
 };
 
-export const PATCH = audited(async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const parsed = saveSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
@@ -47,10 +37,7 @@ export const PATCH = audited(async function PATCH(
   const { accountId, ...input } = parsed.data;
   const result = await saveAttendeeFields(id, accountId, input);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
   return NextResponse.json({ ok: true });
 });

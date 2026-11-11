@@ -17,7 +17,15 @@ import { cn } from "@/lib/utils";
 import { PlayButton } from "../map/play-button";
 import { VideoDialog } from "../map/video-dialog";
 
-export function VideoLibrary({ map, states: initialStates, videos }: { map: PublicMap; states: Record<string, ConceptState>; videos: boolean }) {
+export function VideoLibrary({
+  map,
+  states: initialStates,
+  videos,
+}: {
+  map: PublicMap;
+  states: Record<string, ConceptState>;
+  videos: boolean;
+}) {
   const full = useMemo(() => layoutMap(map), [map]);
   const byId = useMemo(() => new Map(full.concepts.map((c) => [c.id, c])), [full]);
   const [states, setStates] = useState(initialStates);
@@ -56,7 +64,10 @@ export function VideoLibrary({ map, states: initialStates, videos }: { map: Publ
                     return (
                       <article
                         key={c.id}
-                        className={cn("flex flex-col gap-2 rounded-xl border border-l-[5px] bg-card p-4", st.recommended && "border-[var(--flag)]")}
+                        className={cn(
+                          "flex flex-col gap-2 rounded-xl border border-l-[5px] bg-card p-4",
+                          st.recommended && "border-[var(--flag)]",
+                        )}
                         style={{ borderLeftColor: `var(--l${c.level})` }}
                       >
                         <div className="flex items-start justify-between gap-2">

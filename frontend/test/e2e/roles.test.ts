@@ -132,12 +132,7 @@ after(async () => {
 
 type Sent = { status: number; location: string | null; body: string };
 
-async function send(
-  who: Who | { cookie?: string; bearer?: string },
-  method: string,
-  path: string,
-  body?: unknown,
-): Promise<Sent> {
+async function send(who: Who | { cookie?: string; bearer?: string }, method: string, path: string, body?: unknown): Promise<Sent> {
   const headers: Record<string, string> = {};
   const as = typeof who === "string" ? { cookie: cookies[who] } : (who ?? {});
   if (as.cookie) headers.cookie = `authjs.session-token=${as.cookie}`;
@@ -254,12 +249,18 @@ const PAGES: Record<string, PageCase> = {
   "/logistics-settings/pre-bootcamp": { path: () => "/logistics-settings/pre-bootcamp", expect: gated(canManageTrainingSettings) },
   "/logistics-settings/pre-intermediate": { path: () => "/logistics-settings/pre-intermediate", expect: gated(canManageTrainingSettings) },
   "/logistics-settings/responses": { path: () => "/logistics-settings/responses", expect: gated(canManageTrainingSettings) },
-  "/logistics-settings/responses?all": { path: () => "/logistics-settings/responses?form=all&q=x", expect: gated(canManageTrainingSettings) },
+  "/logistics-settings/responses?all": {
+    path: () => "/logistics-settings/responses?form=all&q=x",
+    expect: gated(canManageTrainingSettings),
+  },
   "/logistics-settings/responses?filtered": {
     path: () => "/logistics-settings/responses?form=intermediate&question=dietary&answer=Yes&q=x",
     expect: gated(canManageTrainingSettings),
   },
-  "/logistics/dietary?searched": { path: () => "/logistics/dietary?stage=intermediate&q=x&criticalOther.sort=name&other.sort=email&unregistered.sort=email", expect: gated(canUseTraining) },
+  "/logistics/dietary?searched": {
+    path: () => "/logistics/dietary?stage=intermediate&q=x&criticalOther.sort=name&other.sort=email&unregistered.sort=email",
+    expect: gated(canUseTraining),
+  },
   "/cohorts/previous?open=<a day>": { path: () => "/cohorts/previous?open=2026-09-14", expect: gated(canUseTraining) },
   "/cohort-settings": {
     path: () => "/cohort-settings",
@@ -380,7 +381,10 @@ const PAGES: Record<string, PageCase> = {
     path: () => "/coach-canary-settings",
     expect: (a) => (canManageMimir(a) ? { to: MIMIR_SETTINGS_TABS[0]!.href } : 404),
   },
-  "/coach-canary-settings/reporting": { path: () => "/coach-canary-settings/reporting?sort=slides&dir=desc", expect: gated(canManageMimir) },
+  "/coach-canary-settings/reporting": {
+    path: () => "/coach-canary-settings/reporting?sort=slides&dir=desc",
+    expect: gated(canManageMimir),
+  },
   "/coach-canary-settings/map": { path: () => "/coach-canary-settings/map", expect: gated(canManageMimir) },
   "/coach-canary-settings/map-editor": { path: () => "/coach-canary-settings/map-editor", expect: gated(canManageMimir) },
   "/coach-canary-settings/coaching": { path: () => "/coach-canary-settings/coaching", expect: gated(canManageMimir) },
@@ -492,8 +496,7 @@ describe("pages", () => {
       const wrong: string[] = [];
       for (const [name, page] of Object.entries(PAGES)) {
         const path = page.path().replace(":own", who ? ownRun[who] : MISSING);
-        const want: PageOutcome =
-          who === SIGNED_OUT ? (page.signedOut ?? { to: "/signin" }) : page.expect(PERSONAS[who]);
+        const want: PageOutcome = who === SIGNED_OUT ? (page.signedOut ?? { to: "/signin" }) : page.expect(PERSONAS[who]);
         const got = outcomeOf(await send(who, "GET", path));
         if (JSON.stringify(got) !== JSON.stringify(want)) {
           wrong.push(`${name}: got ${typeof got === "string" ? got : describeOutcome(got)}, want ${describeOutcome(want)}`);
@@ -580,6 +583,8 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/settings/repos/${MISSING}`, allowed: canManageSettings },
   { method: "GET", path: "/api/settings/timed-jobs", allowed: canManageTimedJobs },
   { method: "GET", path: "/api/settings/google-meetings-mode", allowed: canManageConnectors },
+  { method: "GET", path: "/api/settings/google-meetings-invites", allowed: canManageConnectors },
+  { method: "PUT", path: "/api/settings/google-meetings-invites", allowed: canManageConnectors, body: () => ({}) },
   { method: "PUT", path: "/api/settings/google-meetings-mode", allowed: canManageConnectors, body: () => ({}) },
   { method: "GET", path: "/api/settings/slack-mode", allowed: canManageConnectors },
   { method: "PUT", path: "/api/settings/slack-mode", allowed: canManageConnectors, body: () => ({}) },
@@ -732,10 +737,18 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/logistics/intake-forms/bootcamp", allowed: canManageTrainingSettings },
   { method: "GET", path: "/api/logistics/intake-forms/intermediate", allowed: canManageTrainingSettings },
   { method: "PUT", path: "/api/logistics/intake-forms/bootcamp", allowed: canManageTrainingSettings, body: () => ({}) },
-  { method: "GET", path: "/api/logistics/intake-responses?form=intermediate&question=dietary&answer=Yes", allowed: canManageTrainingSettings },
+  {
+    method: "GET",
+    path: "/api/logistics/intake-responses?form=intermediate&question=dietary&answer=Yes",
+    allowed: canManageTrainingSettings,
+  },
   { method: "POST", path: "/api/logistics/intake-responses/import?form=intermediate", allowed: canManageTrainingSettings, body: form },
   { method: "GET", path: "/api/logistics/intake-responses?form=all&sort=name", allowed: canManageTrainingSettings },
-  { method: "GET", path: "/api/logistics/dietary?stage=bootcamp&criticalOther.sort=stage&other.page=2&unregistered.sort=stage&unregistered.page=2", allowed: canUseTraining },
+  {
+    method: "GET",
+    path: "/api/logistics/dietary?stage=bootcamp&criticalOther.sort=stage&other.page=2&unregistered.sort=stage&unregistered.page=2",
+    allowed: canUseTraining,
+  },
   { method: "GET", path: "/api/logistics/guest-judges?sort=sessions", allowed: canUseTraining },
   { method: "GET", path: "/api/logistics/guest-judges/prospects?sort=tenure&group=sales", allowed: canUseTraining },
   { method: "POST", path: "/api/logistics/guest-speakers", allowed: canManageTrainingSettings, body: () => ({}) },
@@ -791,7 +804,12 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: `/api/reporting/bootcamp/participation/${MISSING}`, allowed: canManageBootcampRecords },
   { method: "PATCH", path: `/api/reporting/bootcamp/submissions/${MISSING}`, allowed: canManageBootcampRecords, body: () => ({}) },
   { method: "PUT", path: `/api/reporting/bootcamp/people/${MISSING}/review`, allowed: canManageBootcampRecords, body: () => ({}) },
-  { method: "POST", path: `/api/reporting/bootcamp/people/${MISSING}/review/generate`, allowed: canManageBootcampRecords, body: () => ({}) },
+  {
+    method: "POST",
+    path: `/api/reporting/bootcamp/people/${MISSING}/review/generate`,
+    allowed: canManageBootcampRecords,
+    body: () => ({}),
+  },
   // Anyone who may see a card opens its Slack channel; a key naming no one stops before Slack.
   { method: "POST", path: `/api/reporting/bootcamp/people/${MISSING}/slack`, allowed: canSeeBootcampRecords },
   { method: "GET", path: `/api/reporting/bootcamp/people/${MISSING}/views`, allowed: canSeeBootcampRecords },
@@ -997,32 +1015,33 @@ function refusal(route: RouteCase, who: Who, via: Via): 401 | 403 | null {
 
 // Run once as each persona's session and once as their token: a token stands
 // in for its owner everywhere except the routes marked session-only.
-for (const via of ["session", "token"] as const) describe(`API routes, by ${via}`, () => {
-  const callers = via === "session" ? [SIGNED_OUT, ...PERSONA_NAMES] : PERSONA_NAMES;
-  for (const who of callers as Who[]) {
-    test(label(who), async () => {
-      const wrong: string[] = [];
-      for (const route of ROUTES) {
-        const want = refusal(route, who, via);
-        if (want === null && route.denyOnly) continue;
+for (const via of ["session", "token"] as const)
+  describe(`API routes, by ${via}`, () => {
+    const callers = via === "session" ? [SIGNED_OUT, ...PERSONA_NAMES] : PERSONA_NAMES;
+    for (const who of callers as Who[]) {
+      test(label(who), async () => {
+        const wrong: string[] = [];
+        for (const route of ROUTES) {
+          const want = refusal(route, who, via);
+          if (want === null && route.denyOnly) continue;
 
-        const as = via === "token" && who ? { bearer: tokens[who] } : who;
-        const { status, body } = await send(as, route.method, route.path, route.body?.());
-        const name = `${route.method} ${route.path}`;
-        if (want !== null && status !== want) {
-          wrong.push(`${name}: got ${status}, want ${want}`);
-        } else if (want === null && (status === 401 || status === 403)) {
-          wrong.push(`${name}: refused with ${status}, want it let through`);
-        } else if (status >= 500 && !(route.unconfigured && status === 503)) {
-          // Past the gate, but broken: a route that 500s on a rejected body
-          // has a bug of its own, and would hide a gate that let it through.
-          wrong.push(`${name}: ${status} ${body.slice(0, 200)}`);
+          const as = via === "token" && who ? { bearer: tokens[who] } : who;
+          const { status, body } = await send(as, route.method, route.path, route.body?.());
+          const name = `${route.method} ${route.path}`;
+          if (want !== null && status !== want) {
+            wrong.push(`${name}: got ${status}, want ${want}`);
+          } else if (want === null && (status === 401 || status === 403)) {
+            wrong.push(`${name}: refused with ${status}, want it let through`);
+          } else if (status >= 500 && !(route.unconfigured && status === 503)) {
+            // Past the gate, but broken: a route that 500s on a rejected body
+            // has a bug of its own, and would hide a gate that let it through.
+            wrong.push(`${name}: ${status} ${body.slice(0, 200)}`);
+          }
         }
-      }
-      assert.deepEqual(wrong, []);
-    });
-  }
-});
+        assert.deepEqual(wrong, []);
+      });
+    }
+  });
 
 describe("a guest judge in the Scheduler", () => {
   // The matrix asks about an id that names nothing, which a judge is refused
@@ -1187,8 +1206,7 @@ describe("personal access tokens", () => {
 // ─── Changing roles ─────────────────────────────────────────────────────────
 
 describe("PATCH /api/users/:id", () => {
-  const patch = (who: Persona, id: string, body: unknown) =>
-    send(who, "PATCH", `/api/users/${id}`, body);
+  const patch = (who: Persona, id: string, body: unknown) => send(who, "PATCH", `/api/users/${id}`, body);
 
   test("an event administrator sets event roles, and only event roles", async () => {
     const target = await scope.createUser("u_target1", PERSONAS.operator);
@@ -1335,9 +1353,9 @@ describe("a Diagnostic sitting, over HTTP", () => {
   }
 
   const pipegen = async (who: Persona) =>
-    (JSON.parse((await send(who, "GET", "/api/diagnostic/me")).body).subjects as { key: string; status?: string; placement?: number }[]).find(
-      (s) => s.key === "pipegen",
-    );
+    (
+      JSON.parse((await send(who, "GET", "/api/diagnostic/me")).body).subjects as { key: string; status?: string; placement?: number }[]
+    ).find((s) => s.key === "pipegen");
 
   test("a taker is told the sitting is over, never their level", async () => {
     assert.equal((await send("assessmentsAdmin", "POST", "/api/diagnostic/questions/approve-drafts", { subject: "pipegen" })).status, 200);
@@ -1348,7 +1366,8 @@ describe("a Diagnostic sitting, over HTTP", () => {
 
   test("a Diagnostic administrator added as a Participant sits like anyone, never sees their level, and loses the tests when removed", async () => {
     const email = { email: people.assessmentsAdmin.email };
-    const unassigned = async () => (await send("assessmentsAdmin", "GET", "/diagnostic/tests")).body.includes("No Tests currently assigned to you.");
+    const unassigned = async () =>
+      (await send("assessmentsAdmin", "GET", "/diagnostic/tests")).body.includes("No Tests currently assigned to you.");
     assert.equal(await unassigned(), true, "not a Participant yet");
     assert.equal((await send("assessmentsAdmin", "POST", "/api/diagnostic/participants", email)).status, 201);
     try {
@@ -1366,8 +1385,7 @@ describe("a Diagnostic sitting, over HTTP", () => {
 
 describe("invite links", () => {
   const create = (who: Persona, grant: unknown) => send(who, "POST", "/api/users/invites", grant);
-  const accept = (cookie: string, token: string) =>
-    send({ cookie }, "POST", "/api/invites/accept", { token });
+  const accept = (cookie: string, token: string) => send({ cookie }, "POST", "/api/invites/accept", { token });
 
   async function link(who: Persona, grant: unknown) {
     const res = await create(who, grant);
@@ -1422,14 +1440,8 @@ describe("invite links", () => {
     assert.equal((await create("trainingAdmin", { eventRole: "operator", trainingRole: null })).status, 403);
     assert.equal((await create("eventAdmin", { eventRole: null, trainingRole: "viewer" })).status, 403);
     assert.equal((await create("trainingAdmin", { eventRole: null, trainingRole: "viewer" })).status, 201);
-    assert.equal(
-      (await create("trainingAdmin", { eventRole: null, trainingRole: null, assessmentsRole: "viewer" })).status,
-      403,
-    );
-    assert.equal(
-      (await create("assessmentsAdmin", { eventRole: null, trainingRole: null, assessmentsRole: "viewer" })).status,
-      201,
-    );
+    assert.equal((await create("trainingAdmin", { eventRole: null, trainingRole: null, assessmentsRole: "viewer" })).status, 403);
+    assert.equal((await create("assessmentsAdmin", { eventRole: null, trainingRole: null, assessmentsRole: "viewer" })).status, 201);
   });
 
   test("an eVals link lands its newcomer on eVals", async () => {
@@ -1485,7 +1497,14 @@ describe("the audit trail", () => {
     const res = await send("platform", "GET", `/api/audit?q=${marker}`);
     assert.equal(res.status, 200, res.body);
     return JSON.parse(res.body) as {
-      events: { actorId: string | null; via: string; action: string; outcome: string; status: number; detail: { body?: Record<string, unknown>; error?: string } | null }[];
+      events: {
+        actorId: string | null;
+        via: string;
+        action: string;
+        outcome: string;
+        status: number;
+        detail: { body?: Record<string, unknown>; error?: string } | null;
+      }[];
       page: number;
       hasMore: boolean;
     };
@@ -1502,19 +1521,19 @@ describe("the audit trail", () => {
 
     const { events, page, hasMore } = await find(marker);
     assert.deepEqual([page, hasMore], [1, false]);
-    assert.deepEqual(
-      events.map((e) => [e.via, e.action, e.outcome, e.status]).sort(),
-      [
-        ["session", "POST /api/evals/titles", "denied", 403],
-        ["session", "POST /api/settings/domains", "failed", 400],
-        ["token", "POST /api/evals/titles", "failed", 400],
-      ],
-    );
+    assert.deepEqual(events.map((e) => [e.via, e.action, e.outcome, e.status]).sort(), [
+      ["session", "POST /api/evals/titles", "denied", 403],
+      ["session", "POST /api/settings/domains", "failed", 400],
+      ["token", "POST /api/evals/titles", "failed", 400],
+    ]);
     for (const e of events) {
       assert.equal(e.detail?.body?.password, "[redacted]");
       assert.equal(e.detail?.body?.note, marker);
     }
-    assert.ok(events.every((e) => e.actorId), "every row names its account");
+    assert.ok(
+      events.every((e) => e.actorId),
+      "every row names its account",
+    );
   });
 
   test("a read-only POST and a GET leave nothing behind", async () => {
@@ -1558,10 +1577,10 @@ describe("a session carries the roles as they are now", () => {
 
   test("signing in returns to a page on this site, and never to another", async () => {
     const land = async (callbackUrl: string) => {
-      const res = await fetch(
-        `${server.baseUrl}/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`,
-        { headers: { cookie: `authjs.session-token=${cookies.operator}` }, redirect: "manual" },
-      );
+      const res = await fetch(`${server.baseUrl}/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`, {
+        headers: { cookie: `authjs.session-token=${cookies.operator}` },
+        redirect: "manual",
+      });
       assert.ok(isRedirect(res.status), `${callbackUrl}: ${res.status}`);
       const to = new URL(res.headers.get("location")!, server.baseUrl);
       return to.origin === new URL(server.baseUrl).origin ? to.pathname : to.origin;

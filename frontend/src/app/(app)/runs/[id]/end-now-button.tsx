@@ -5,32 +5,16 @@
 import { useState } from "react";
 import { CalendarX, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { RunStatus, WorkshopRun } from "@/db/schema";
 
 const ERRORS: Record<string, string> = {
   not_found: "This event no longer exists.",
-  not_running:
-    "This event isn't running, so there is no end time left to bring forward.",
+  not_running: "This event isn't running, so there is no end time left to bring forward.",
   unauthorized: "Sign in again to end this event.",
 };
 
-export function EndNowButton({
-  run,
-  owned,
-  onEnded,
-}: {
-  run: WorkshopRun;
-  owned: boolean;
-  onEnded: () => void;
-}) {
+export function EndNowButton({ run, owned, onEnded }: { run: WorkshopRun; owned: boolean; onEnded: () => void }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,14 +60,9 @@ export function EndNowButton({
           <DialogHeader>
             <DialogTitle>End “{run.name}” now?</DialogTitle>
             <DialogDescription>
-              This sets the end time to now, so everything the {run.mode} built
-              is torn down within a few minutes — the same teardown that would
-              have run at{" "}
-              {run.expiresAt
-                ? new Date(run.expiresAt).toLocaleString()
-                : "the scheduled end"}
-              . Attendees lose access, and the event stays on record with its
-              build log.
+              This sets the end time to now, so everything the {run.mode} built is torn down within a few minutes — the same teardown that
+              would have run at {run.expiresAt ? new Date(run.expiresAt).toLocaleString() : "the scheduled end"}. Attendees lose access, and
+              the event stays on record with its build log.
             </DialogDescription>
           </DialogHeader>
 
@@ -96,11 +75,7 @@ export function EndNowButton({
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setOpen(false)}
-              disabled={pending}
-            >
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
               Cancel
             </Button>
             <Button variant="destructive" onClick={submit} disabled={pending}>

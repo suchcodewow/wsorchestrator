@@ -1,11 +1,6 @@
 /** The shape of an entry in the API reference catalog. */
 
-import {
-  ASSESSMENTS_ROLE_LABELS,
-  EVENT_ROLE_LABELS,
-  PLATFORM_ADMIN_LABEL,
-  TRAINING_ROLE_LABELS,
-} from "@/lib/roles";
+import { ASSESSMENTS_ROLE_LABELS, EVENT_ROLE_LABELS, PLATFORM_ADMIN_LABEL, TRAINING_ROLE_LABELS } from "@/lib/roles";
 
 export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 

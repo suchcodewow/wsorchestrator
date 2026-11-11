@@ -40,7 +40,13 @@ import {
   ZOOM_CONNECTION_KEY,
   zoomConnections,
 } from "@/db/schema";
-import { cancelTestMeetingInvites, REVENUE_ENABLEMENT_CALENDAR_ID, runMeetingSync, takeMeetingGuestsOff, upcomingMeetingNames } from "@/lib/evals/meeting-sync";
+import {
+  cancelTestMeetingInvites,
+  REVENUE_ENABLEMENT_CALENDAR_ID,
+  runMeetingSync,
+  takeMeetingGuestsOff,
+  upcomingMeetingNames,
+} from "@/lib/evals/meeting-sync";
 import {
   createMeetingSelection,
   googleConnectionStatus,
@@ -51,6 +57,7 @@ import {
   setAttendanceMark,
   getMeetingFacilitators,
   setMeetingFacilitators,
+  setMeetingEmailInvites,
   setMeetingSyncLive,
   updateMeetingSelection,
   type GoogleConnection,
@@ -141,7 +148,8 @@ async function fakeFetch(input: string | URL | Request, init?: RequestInit): Pro
       access_token: "zoom-access",
       refresh_token: "zoom-refresh",
       expires_in: 3600,
-      scope: "meeting:read:list_past_instances meeting:read:list_past_participants meeting:delete:meeting meeting:write:meeting meeting:read:meeting meeting:update:meeting user:read:user",
+      scope:
+        "meeting:read:list_past_instances meeting:read:list_past_participants meeting:delete:meeting meeting:write:meeting meeting:read:meeting meeting:update:meeting user:read:user",
     });
   }
   if (url.host === "api.zoom.us") {
@@ -241,17 +249,31 @@ async function candidate(key: string, track: "sales" | "engineer") {
 }
 
 async function connect({ zoom = true }: { zoom?: boolean } = {}) {
-  const result = await saveGoogleConnection(admin.id, { email: ORGANIZER, refreshToken: sealSecret("refresh"), scope: "openid email https://www.googleapis.com/auth/calendar" });
+  const result = await saveGoogleConnection(admin.id, {
+    email: ORGANIZER,
+    refreshToken: sealSecret("refresh"),
+    scope: "openid email https://www.googleapis.com/auth/calendar",
+  });
   assert.ok(result.ok);
   if (zoom) {
     await saveZoomConnection(admin.id, {
       email: ZOOM_USER,
-      tokens: { accessToken: "zoom-access", refreshToken: "zoom-refresh", expiresAt: new Date(Date.now() + 3_600_000), scope: "meeting:read:list_past_instances" },
+      tokens: {
+        accessToken: "zoom-access",
+        refreshToken: "zoom-refresh",
+        expiresAt: new Date(Date.now() + 3_600_000),
+        scope: "meeting:read:list_past_instances",
+      },
     });
   }
 }
 
-async function pick(stage: "bootcamp" | "intermediate" = "bootcamp", track: "sales" | "engineer" | "both" = "sales", name = NAME, allOccurrences = false) {
+async function pick(
+  stage: "bootcamp" | "intermediate" = "bootcamp",
+  track: "sales" | "engineer" | "both" = "sales",
+  name = NAME,
+  allOccurrences = false,
+) {
   const made = await createMeetingSelection(admin.id, { name, stage, track, allOccurrences });
   assert.ok(made.ok);
   return made.meeting.id;
@@ -267,7 +289,13 @@ async function sync_ok(preview = false) {
 
 async function invitesOf(meetingId: string) {
   return db
-    .select({ eventId: meetingOccurrences.eventId, email: meetingInvites.email, role: meetingInvites.role, test: meetingInvites.test, attendance: meetingInvites.attendance })
+    .select({
+      eventId: meetingOccurrences.eventId,
+      email: meetingInvites.email,
+      role: meetingInvites.role,
+      test: meetingInvites.test,
+      attendance: meetingInvites.attendance,
+    })
     .from(meetingInvites)
     .innerJoin(meetingOccurrences, eq(meetingOccurrences.id, meetingInvites.occurrenceId))
     .where(eq(meetingOccurrences.meetingId, meetingId));
@@ -309,7 +337,13 @@ before(async () => {
   await scope.setUp();
   [saved] = await db.select().from(googleConnections).where(eq(googleConnections.key, GOOGLE_CONNECTION_KEY));
   [savedZoom] = await db.select().from(zoomConnections).where(eq(zoomConnections.key, ZOOM_CONNECTION_KEY));
-  const keys = [EVALS_SETTINGS_KEYS.meetingSyncLive, EVALS_SETTINGS_KEYS.meetingFacilitators, EVALS_SETTINGS_KEYS.testGroupOn, EVALS_SETTINGS_KEYS.testGroupMembers, EVALS_SETTINGS_KEYS.testGroupSuffix];
+  const keys = [
+    EVALS_SETTINGS_KEYS.meetingSyncLive,
+    EVALS_SETTINGS_KEYS.meetingFacilitators,
+    EVALS_SETTINGS_KEYS.testGroupOn,
+    EVALS_SETTINGS_KEYS.testGroupMembers,
+    EVALS_SETTINGS_KEYS.testGroupSuffix,
+  ];
   savedSettings = await db.select().from(evalsSettings).where(inArray(evalsSettings.key, keys));
   await db.delete(employees).where(like(employees.id, `${TEST_PREFIX}%`));
   admin = await scope.createUser("admin", PERSONAS.assessmentsAdmin);
@@ -350,7 +384,13 @@ after(async () => {
   if (saved) await db.insert(googleConnections).values(saved);
   await db.delete(zoomConnections).where(eq(zoomConnections.key, ZOOM_CONNECTION_KEY));
   if (savedZoom) await db.insert(zoomConnections).values(savedZoom);
-  const keys = [EVALS_SETTINGS_KEYS.meetingSyncLive, EVALS_SETTINGS_KEYS.meetingFacilitators, EVALS_SETTINGS_KEYS.testGroupOn, EVALS_SETTINGS_KEYS.testGroupMembers, EVALS_SETTINGS_KEYS.testGroupSuffix];
+  const keys = [
+    EVALS_SETTINGS_KEYS.meetingSyncLive,
+    EVALS_SETTINGS_KEYS.meetingFacilitators,
+    EVALS_SETTINGS_KEYS.testGroupOn,
+    EVALS_SETTINGS_KEYS.testGroupMembers,
+    EVALS_SETTINGS_KEYS.testGroupSuffix,
+  ];
   await db.delete(evalsSettings).where(inArray(evalsSettings.key, keys));
   if (savedSettings.length > 0) await db.insert(evalsSettings).values(savedSettings);
   if (bootcamp?.movedFrom) await db.update(bootcamps).set({ startDate: bootcamp.movedFrom }).where(eq(bootcamps.id, bootcamp.id));
@@ -363,7 +403,10 @@ after(async () => {
 describe("picked meetings", () => {
   test("are listed by name, and a name already picked is refused whatever its case", async () => {
     await pick("intermediate", "engineer");
-    assert.deepEqual(await createMeetingSelection(admin.id, { name: NAME.toUpperCase(), stage: "bootcamp", track: "sales" }), { ok: false, error: "duplicate" });
+    assert.deepEqual(await createMeetingSelection(admin.id, { name: NAME.toUpperCase(), stage: "bootcamp", track: "sales" }), {
+      ok: false,
+      error: "duplicate",
+    });
     const page = await listMeetingSelections({ ...MEETING_SELECTION_LIST, q: TEST_PREFIX, page: 1 });
     assert.deepEqual(
       page.rows.map((r) => [r.name, r.stage, r.track, r.syncedAt]),
@@ -402,7 +445,13 @@ describe("the connection", () => {
     const other = { email: `other@${TEST_EMAIL_DOMAIN}`, refreshToken: sealSecret("r"), scope: "" };
     const [legacy] = await db
       .insert(googleMeetings)
-      .values({ title: `${TEST_PREFIX}Old`, startsAt: new Date(Date.now() + DAY), durationMinutes: 30, googleEventId: "old1", createdBy: admin.id })
+      .values({
+        title: `${TEST_PREFIX}Old`,
+        startsAt: new Date(Date.now() + DAY),
+        durationMinutes: 30,
+        googleEventId: "old1",
+        createdBy: admin.id,
+      })
       .returning({ id: googleMeetings.id });
     assert.deepEqual(await saveGoogleConnection(admin.id, other), { ok: false, error: "different_account", current: ORGANIZER });
     await db.delete(googleMeetings).where(eq(googleMeetings.id, legacy!.id));
@@ -451,7 +500,10 @@ describe("Sync Now", () => {
     const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
     assert.equal(status!.mark, "uninvited");
     assert.equal(status!.predicted, true);
-    assert.deepEqual(status!.instances?.map((x) => x.mark), ["uninvited", "uninvited", "uninvited"]);
+    assert.deepEqual(
+      status!.instances?.map((x) => x.mark),
+      ["uninvited", "uninvited", "uninvited"],
+    );
     assert.deepEqual(fake.writes(), []);
 
     await sync_ok();
@@ -474,7 +526,10 @@ describe("Sync Now", () => {
   test("after a dry run, someone with no occurrence in their window has none left", async (t) => {
     await connect();
     const id = await pick();
-    const [row] = await db.select({ btcDays: bootcamps.btcDays, intDays: bootcamps.intDays }).from(bootcamps).where(eq(bootcamps.id, bootcamp.id));
+    const [row] = await db
+      .select({ btcDays: bootcamps.btcDays, intDays: bootcamps.intDays })
+      .from(bootcamps)
+      .where(eq(bootcamps.id, bootcamp.id));
     const lastDay = new Date(`${bootcamp.startDate}T00:00:00Z`).getTime() + (Math.max(row!.btcDays, row!.intDays ?? 0, 1) - 1) * DAY;
     const afterDays = Math.ceil((lastDay - Date.now()) / DAY) + 2;
     if (afterDays > 55) return t.skip("the active bootcamp ends past the calendar's 60 days");
@@ -500,7 +555,10 @@ describe("Sync Now", () => {
     const patch = fake.calls.find((c) => c.method === "PATCH")!;
     assert.equal(patch.url.searchParams.get("sendUpdates"), "none", "Google emails no one");
     assert.deepEqual(
-      (await invitesOf(id)).filter((i) => i.email === salesEmail || i.email === admin.email).map((i) => [i.eventId, i.email, i.role]).sort(),
+      (await invitesOf(id))
+        .filter((i) => i.email === salesEmail || i.email === admin.email)
+        .map((i) => [i.eventId, i.email, i.role])
+        .sort(),
       [
         ["e1", admin.email, "administrator"],
         ["e1", salesEmail, "member"],
@@ -528,7 +586,10 @@ describe("Sync Now", () => {
   });
 
   test("an intermediate meeting invites a bootcamp candidate only once they RSVP, and only after the bootcamp", async (t) => {
-    const [row] = await db.select({ btcDays: bootcamps.btcDays, intDays: bootcamps.intDays }).from(bootcamps).where(eq(bootcamps.id, bootcamp.id));
+    const [row] = await db
+      .select({ btcDays: bootcamps.btcDays, intDays: bootcamps.intDays })
+      .from(bootcamps)
+      .where(eq(bootcamps.id, bootcamp.id));
     const lastDay = new Date(`${bootcamp.startDate}T00:00:00Z`).getTime() + (Math.max(row!.btcDays, row!.intDays ?? 0, 1) - 1) * DAY;
     const afterDays = Math.ceil((lastDay - Date.now()) / DAY) + 2;
     if (afterDays > 55) return t.skip("the active bootcamp ends past the calendar's 60 days");
@@ -560,7 +621,9 @@ describe("Sync Now", () => {
     let [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
     assert.deepEqual([status!.meetingId, status!.mark], [id, "pending"]);
 
-    fake.events.get("e1")!.attendees = fake.events.get("e1")!.attendees!.map((a) => (a.email === salesEmail ? { ...a, responseStatus: "accepted" } : a));
+    fake.events.get("e1")!.attendees = fake.events
+      .get("e1")!
+      .attendees!.map((a) => (a.email === salesEmail ? { ...a, responseStatus: "accepted" } : a));
     await sync_ok();
     [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
     assert.equal(status!.mark, "accepted");
@@ -573,10 +636,16 @@ describe("Sync Now", () => {
     const second = event("e2", 2);
     await sync_ok();
     const reply = (responseStatus: string) => {
-      fake.events.get("e1")!.attendees = fake.events.get("e1")!.attendees!.map((a) => (a.email === salesEmail ? { ...a, responseStatus } : a));
+      fake.events.get("e1")!.attendees = fake.events
+        .get("e1")!
+        .attendees!.map((a) => (a.email === salesEmail ? { ...a, responseStatus } : a));
     };
     const status = async () => (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)![0]!;
-    const mine = async () => (await invitesOf(id)).filter((inv) => inv.email === salesEmail).map((inv) => inv.eventId).sort();
+    const mine = async () =>
+      (await invitesOf(id))
+        .filter((inv) => inv.email === salesEmail)
+        .map((inv) => inv.eventId)
+        .sort();
 
     reply("declined");
     const preview = await sync_ok(true);
@@ -610,7 +679,9 @@ describe("Sync Now", () => {
     await pick();
     event("e1", 1);
     await sync_ok();
-    fake.events.get("e1")!.attendees = fake.events.get("e1")!.attendees!.map((a) => (a.email === salesEmail ? { ...a, responseStatus: "declined" } : a));
+    fake.events.get("e1")!.attendees = fake.events
+      .get("e1")!
+      .attendees!.map((a) => (a.email === salesEmail ? { ...a, responseStatus: "declined" } : a));
     await sync_ok();
     assert.ok(fake.guests("e1").includes(salesEmail));
     const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
@@ -627,13 +698,19 @@ describe("Sync Now", () => {
     event("e2", 5);
     await sync_ok();
     // As if they joined the cohort after this sync: on no invite yet.
-    const [occ] = await db.select({ id: meetingOccurrences.id }).from(meetingOccurrences).where(and(eq(meetingOccurrences.meetingId, id), eq(meetingOccurrences.eventId, "e1")));
+    const [occ] = await db
+      .select({ id: meetingOccurrences.id })
+      .from(meetingOccurrences)
+      .where(and(eq(meetingOccurrences.meetingId, id), eq(meetingOccurrences.eventId, "e1")));
     await db.delete(meetingInvites).where(and(eq(meetingInvites.occurrenceId, occ!.id), eq(meetingInvites.email, salesEmail)));
     const status = async () => (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)![0]!;
     try {
       await db.update(employees).set({ timezone: "America/Chicago" }).where(eq(employees.email, salesEmail));
       const chicago = await status();
-      assert.deepEqual([chicago.mark, chicago.predicted, chicago.startsAt?.toISOString(), chicago.timezone, chicago.outOfHours], ["uninvited", true, startsAt, "America/Chicago", true]);
+      assert.deepEqual(
+        [chicago.mark, chicago.predicted, chicago.startsAt?.toISOString(), chicago.timezone, chicago.outOfHours],
+        ["uninvited", true, startsAt, "America/Chicago", true],
+      );
 
       await db.update(employees).set({ timezone: "Europe/London" }).where(eq(employees.email, salesEmail));
       assert.equal((await status()).outOfHours, false);
@@ -644,7 +721,11 @@ describe("Sync Now", () => {
 
       await sync_ok();
       const invited = await status();
-      assert.deepEqual([invited.mark, invited.predicted, invited.startsAt?.toISOString()], ["pending", false, startsAt], "the sync invites them to the one predicted");
+      assert.deepEqual(
+        [invited.mark, invited.predicted, invited.startsAt?.toISOString()],
+        ["pending", false, startsAt],
+        "the sync invites them to the one predicted",
+      );
     } finally {
       await db.update(employees).set({ timezone: null }).where(eq(employees.email, salesEmail));
     }
@@ -659,13 +740,23 @@ describe("Sync Now", () => {
     event("e2", 5);
     await sync_ok();
     // As if the sync had not reached e2 for them yet: the next one adds it.
-    const [occ] = await db.select({ id: meetingOccurrences.id }).from(meetingOccurrences).where(and(eq(meetingOccurrences.meetingId, id), eq(meetingOccurrences.eventId, "e2")));
+    const [occ] = await db
+      .select({ id: meetingOccurrences.id })
+      .from(meetingOccurrences)
+      .where(and(eq(meetingOccurrences.meetingId, id), eq(meetingOccurrences.eventId, "e2")));
     await db.delete(meetingInvites).where(and(eq(meetingInvites.occurrenceId, occ!.id), eq(meetingInvites.email, salesEmail)));
     const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
     assert.equal(status!.mark, "pending");
-    assert.deepEqual(status!.instances?.map((x) => x.mark), ["missed", "pending", "uninvited"]);
+    assert.deepEqual(
+      status!.instances?.map((x) => x.mark),
+      ["missed", "pending", "uninvited"],
+    );
     const starts = status!.instances!.map((x) => x.startsAt.getTime());
-    assert.deepEqual(starts, [...starts].sort((a, b) => a - b), "soonest first");
+    assert.deepEqual(
+      starts,
+      [...starts].sort((a, b) => a - b),
+      "soonest first",
+    );
 
     assert.ok((await updateMeetingSelection(id, { allOccurrences: false })).ok);
     const [single] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
@@ -769,7 +860,9 @@ describe("Sync Now", () => {
     assert.ok((await updateMeetingSelection(id, { track: "sales" })).ok);
 
     const status = async () =>
-      (await meetingStatusesFor([{ email: engineerEmail, stage: "bootcamp", track: "engineer" }])).get(engineerEmail)!.find((x) => x.meetingId === id);
+      (await meetingStatusesFor([{ email: engineerEmail, stage: "bootcamp", track: "engineer" }]))
+        .get(engineerEmail)!
+        .find((x) => x.meetingId === id);
     const leaving = await status();
     assert.equal(leaving?.mark, "leaving");
     assert.deepEqual([leaving?.leaving?.why, leaving?.leaving?.dryRun, leaving?.leaving?.occurrences.length], ["not_for_them", false, 1]);
@@ -826,7 +919,10 @@ describe("Sync Now", () => {
 
     const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
     assert.equal(status!.mark, "leaving");
-    assert.deepEqual(status!.instances?.map((x) => x.mark), ["leaving", "leaving"]);
+    assert.deepEqual(
+      status!.instances?.map((x) => x.mark),
+      ["leaving", "leaving"],
+    );
     assert.equal(status!.leaving?.occurrences.length, 2);
   });
 
@@ -885,7 +981,10 @@ describe("Sync Now", () => {
     const move = fake.calls.filter((c) => c.method === "PATCH" && c.url.host === "www.googleapis.com").at(-1)!;
     assert.equal(move.url.searchParams.get("sendUpdates"), "none");
     assert.equal(move.url.searchParams.get("conferenceDataVersion"), "1");
-    const [occ] = await db.select({ zoom: meetingOccurrences.zoomMeetingId }).from(meetingOccurrences).where(eq(meetingOccurrences.meetingId, id));
+    const [occ] = await db
+      .select({ zoom: meetingOccurrences.zoomMeetingId })
+      .from(meetingOccurrences)
+      .where(eq(meetingOccurrences.meetingId, id));
     assert.equal(occ!.zoom, String(made[0]!.id));
     assert.ok(fake.guests("e1").includes(salesEmail), "the guests are untouched");
 
@@ -939,6 +1038,25 @@ describe("Sync Now", () => {
     assert.equal(fake.zoomMeetings.size, before);
   });
 
+  for (const [email, sendUpdates] of [
+    [false, "none"],
+    [true, "all"],
+  ] as const) {
+    test(`an invite change is ${email ? "emailed by Google once Email Invites is chosen" : "silent by default"}`, async (t) => {
+      await connect();
+      await pick("bootcamp", "both");
+      event("e1", 1);
+      t.after(() => setMeetingEmailInvites(admin.id, false));
+      await setMeetingEmailInvites(admin.id, email);
+      await sync_ok();
+      const sent = fake.calls
+        .filter((c) => c.method === "PATCH" && c.url.pathname.endsWith("/events/e1"))
+        .map((c) => c.url.searchParams.get("sendUpdates"));
+      assert.ok(sent.length > 0);
+      assert.deepEqual([...new Set(sent)], [sendUpdates]);
+    });
+  }
+
   test("the facilitators are lowercased, listed once and in order", async () => {
     await setMeetingFacilitators(admin.id, [
       { email: "Zed@Harness.io", fullName: "Zed" },
@@ -985,7 +1103,10 @@ describe("Sync Now", () => {
 
     await sync_ok();
     const attendance = async () => new Map((await invitesOf(id)).filter((i) => i.eventId === "past2").map((i) => [i.email, i.attendance]));
-    const readAt = async () => (await db.select({ at: meetingOccurrences.attendanceReadAt }).from(meetingOccurrences).where(eq(meetingOccurrences.id, occurrenceId)))[0]!.at;
+    const readAt = async () =>
+      (
+        await db.select({ at: meetingOccurrences.attendanceReadAt }).from(meetingOccurrences).where(eq(meetingOccurrences.id, occurrenceId))
+      )[0]!.at;
     assert.equal((await attendance()).get(tester), "attended");
     assert.equal((await attendance()).get(salesEmail), null, "the cohort's invite is not the test group's to read");
     assert.equal(await readAt(), null, "so the occurrence is not marked read");
@@ -994,6 +1115,46 @@ describe("Sync Now", () => {
     await sync_ok();
     assert.equal((await attendance()).get(salesEmail), "missed", "read from Zoom once the group is off");
     assert.notEqual(await readAt(), null);
+  });
+
+  test("attendance is credited from 15 minutes on, and a member Zoom does not list is missed only after six hours", async () => {
+    await connect();
+    const id = await pick("bootcamp", "both");
+    const occurrenceId = await pastOccurrence(id, salesEmail);
+    await db.insert(meetingInvites).values({ occurrenceId, email: engineerEmail, role: "member" });
+    fake.participants.set("/abc//def==", [{ name: "Sales", user_email: salesEmail }]);
+    const endAt = async (minutesAgo: number) => {
+      const endsAt = new Date(Date.now() - minutesAgo * 60_000);
+      await db
+        .update(meetingOccurrences)
+        .set({ startsAt: new Date(endsAt.getTime() - 60 * 60_000), endsAt })
+        .where(eq(meetingOccurrences.id, occurrenceId));
+      fake.instances.set(ZOOM_ID, [{ uuid: "/abc//def==", start_time: new Date(endsAt.getTime() - 60 * 60_000).toISOString() }]);
+    };
+    const state = async () => ({
+      marks: new Map((await invitesOf(id)).filter((i) => i.eventId === "past2").map((i) => [i.email, i.attendance])),
+      readAt: (
+        await db.select({ at: meetingOccurrences.attendanceReadAt }).from(meetingOccurrences).where(eq(meetingOccurrences.id, occurrenceId))
+      )[0]!.at,
+    });
+
+    await endAt(10);
+    await sync_ok();
+    assert.equal((await state()).marks.get(salesEmail), null, "too early to ask");
+
+    await endAt(20);
+    await sync_ok();
+    let now = await state();
+    assert.equal(now.marks.get(salesEmail), "attended", "credited as soon as Zoom lists them");
+    assert.equal(now.marks.get(engineerEmail), null, "not listed yet, so not counted as missing");
+    assert.equal(now.readAt, null);
+
+    await endAt(7 * 60);
+    await sync_ok();
+    now = await state();
+    assert.equal(now.marks.get(salesEmail), "attended");
+    assert.equal(now.marks.get(engineerEmail), "missed", "still not listed after six hours");
+    assert.notEqual(now.readAt, null);
   });
 
   test("deleting a meeting first takes back only the invites the sync sent", async () => {
@@ -1013,17 +1174,32 @@ describe("Sync Now", () => {
   test("a live run cancels the old create-a-meeting flow's upcoming invites, once", async () => {
     await connect();
     await db.update(googleConnections).set({ calendarId: "old-calendar" }).where(eq(googleConnections.key, GOOGLE_CONNECTION_KEY));
-    await db
-      .insert(googleMeetings)
-      .values({ title: `${TEST_PREFIX}Old`, startsAt: new Date(Date.now() + DAY), durationMinutes: 30, googleEventId: "old1", zoomMeetingId: "555", createdBy: admin.id });
+    await db.insert(googleMeetings).values({
+      title: `${TEST_PREFIX}Old`,
+      startsAt: new Date(Date.now() + DAY),
+      durationMinutes: 30,
+      googleEventId: "old1",
+      zoomMeetingId: "555",
+      createdBy: admin.id,
+    });
     const result = await sync_ok();
-    assert.ok(fake.calls.some((c) => c.method === "DELETE" && c.url.pathname.endsWith("/events/old1") && c.url.searchParams.get("sendUpdates") === "none"));
+    assert.ok(
+      fake.calls.some(
+        (c) => c.method === "DELETE" && c.url.pathname.endsWith("/events/old1") && c.url.searchParams.get("sendUpdates") === "none",
+      ),
+    );
     assert.ok(fake.calls.some((c) => c.method === "DELETE" && c.url.pathname === "/v2/meetings/555"));
     const changes = await listMeetingSyncChanges(result.runId, { ...MEETING_SYNC_CHANGE_LIST, q: `${TEST_PREFIX}Old`, page: 1 });
     assert.deepEqual(
       changes.rows.map((c) => c.action),
       ["cancelled"],
     );
-    assert.deepEqual(await db.select().from(googleMeetings).where(and(like(googleMeetings.title, `${TEST_PREFIX}%`))), []);
+    assert.deepEqual(
+      await db
+        .select()
+        .from(googleMeetings)
+        .where(and(like(googleMeetings.title, `${TEST_PREFIX}%`))),
+      [],
+    );
   });
 });

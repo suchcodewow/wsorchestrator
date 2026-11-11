@@ -18,9 +18,6 @@ export async function GET(req: Request) {
   if (!isCandidateStage(stage)) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
   const query = parseListQuery(params, ASSESSMENT_LIST);
-  const [{ rows, page, hasMore }, bootcamp] = await Promise.all([
-    listAssessments(query, { stage, active: true }),
-    scoringBootcamp(stage),
-  ]);
+  const [{ rows, page, hasMore }, bootcamp] = await Promise.all([listAssessments(query, { stage, active: true }), scoringBootcamp(stage)]);
   return NextResponse.json({ stage, bootcamp, assessments: rows, page, hasMore });
 }

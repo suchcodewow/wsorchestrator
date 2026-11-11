@@ -4,11 +4,5 @@ import { getEditableIntakeForm } from "@/lib/logistics/intake";
 import { IntakeEditor } from "../intake-editor";
 
 export default async function PreIntermediateSettingsPage() {
-  return (
-    <IntakeEditor
-      key="intermediate"
-      id="intermediate"
-      form={await getEditableIntakeForm("intermediate")}
-    />
-  );
+  return <IntakeEditor key="intermediate" id="intermediate" form={await getEditableIntakeForm("intermediate")} />;
 }

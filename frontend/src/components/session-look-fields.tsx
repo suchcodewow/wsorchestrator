@@ -119,13 +119,22 @@ export function SessionLookFields({
         <div className="min-w-32 flex-1">
           <DropdownMenu>
             <DropdownMenuTrigger aria-label="Icon" className={TRIGGER}>
-              {value.emoji ? <span className="text-base leading-none">{value.emoji}</span> : <span className="text-muted-foreground">No icon</span>}
+              {value.emoji ? (
+                <span className="text-base leading-none">{value.emoji}</span>
+              ) : (
+                <span className="text-muted-foreground">No icon</span>
+              )}
               <ChevronDown className="ml-auto size-4 text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-64">
               <DropdownMenuRadioGroup value={value.emoji} onValueChange={(e) => set("emoji", e)} className="grid grid-cols-8 gap-0.5">
                 {SESSION_EMOJI.map((e) => (
-                  <DropdownMenuRadioIconItem key={e} value={e} aria-label={`Icon ${e}`} className="size-8 text-base data-[state=checked]:bg-brand/10 data-[state=checked]:ring-1 data-[state=checked]:ring-brand-border">
+                  <DropdownMenuRadioIconItem
+                    key={e}
+                    value={e}
+                    aria-label={`Icon ${e}`}
+                    className="size-8 text-base data-[state=checked]:bg-brand/10 data-[state=checked]:ring-1 data-[state=checked]:ring-brand-border"
+                  >
                     {e}
                   </DropdownMenuRadioIconItem>
                 ))}

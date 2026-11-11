@@ -48,7 +48,14 @@ const NO_SETTINGS = { platformContext: "", namingGuard: "" };
 const REP: Rep = { name: null, role: null, coachStyle: "socratic", coachPersonality: "canary" };
 
 const idsOf = (c: ReturnType<typeof mapFixture>) => new Set(c.concepts.map((k) => k.id));
-const state = (over: Partial<SnapshotState> = {}): SnapshotState => ({ videoFurthest: 0, videoDuration: 0, completed: false, mastered: false, recommended: false, ...over });
+const state = (over: Partial<SnapshotState> = {}): SnapshotState => ({
+  videoFurthest: 0,
+  videoDuration: 0,
+  completed: false,
+  mastered: false,
+  recommended: false,
+  ...over,
+});
 
 describe("what an import must satisfy", () => {
   const issue = (over: Record<string, unknown>) => {
@@ -63,14 +70,23 @@ describe("what an import must satisfy", () => {
   test("a concept id may not repeat, nor sit in two groups, nor in none", () => {
     const f = mapFixture();
     assert.match(issue({ concepts: [...f.concepts, f.concepts[0]] })!.message, /duplicate concept alpha/);
-    assert.match(issue({ buckets: [...f.buckets, { id: "g4", level: 1, name: "Again", blurb: "", concepts: ["alpha"] }] })!.message, /alpha is in two groups/);
+    assert.match(
+      issue({ buckets: [...f.buckets, { id: "g4", level: 1, name: "Again", blurb: "", concepts: ["alpha"] }] })!.message,
+      /alpha is in two groups/,
+    );
     assert.match(issue({ buckets: f.buckets.slice(0, 2) })!.message, /delta is in no group/);
   });
 
   test("a group may only hold concepts that exist, and a concept only slides that exist", () => {
     const f = mapFixture();
-    assert.match(issue({ buckets: [{ ...f.buckets[0], concepts: ["alpha", "beta", "nope"] }, ...f.buckets.slice(1)] })!.message, /unknown concept nope/);
-    assert.match(issue({ concepts: [{ ...f.concepts[1], slides: [99] }, ...f.concepts.filter((c) => c.id !== "beta")] })!.message, /slide 99 does not exist/);
+    assert.match(
+      issue({ buckets: [{ ...f.buckets[0], concepts: ["alpha", "beta", "nope"] }, ...f.buckets.slice(1)] })!.message,
+      /unknown concept nope/,
+    );
+    assert.match(
+      issue({ concepts: [{ ...f.concepts[1], slides: [99] }, ...f.concepts.filter((c) => c.id !== "beta")] })!.message,
+      /slide 99 does not exist/,
+    );
   });
 
   test("a concept may only require other concepts, at a lower level, once each", () => {
@@ -85,7 +101,8 @@ describe("what an import must satisfy", () => {
 
   test("a video must live under the mimir/videos/ prefix, once", () => {
     const f = mapFixture();
-    const withVideo = (object: string, id = "beta") => f.concepts.map((c) => (c.id === id ? { ...c, video: { object, seconds: 10, transcript: "t" } } : c));
+    const withVideo = (object: string, id = "beta") =>
+      f.concepts.map((c) => (c.id === id ? { ...c, video: { object, seconds: 10, transcript: "t" } } : c));
     assert.ok(issue({ concepts: withVideo("files/x.mp4") }));
     assert.match(issue({ concepts: withVideo("mimir/videos/test-alpha.mp4") })!.message, /two videos at/);
     assert.equal(issue({ concepts: withVideo("mimir/videos/test-beta.mp4") }), null);
@@ -110,17 +127,31 @@ describe("what an import must satisfy", () => {
 describe("order and levels", () => {
   test("concepts are numbered in group order, each taking its group's level", () => {
     const order = conceptsInOrder(mapFixture());
-    assert.deepEqual(order.map((c) => [c.id, c.study, c.level, c.bucket]), [
-      ["alpha", 1, 1, "g1"],
-      ["beta", 2, 1, "g1"],
-      ["gamma", 3, 1, "g2"],
-      ["delta", 4, 2, "g3"],
-      ["omega", 5, 2, "g3"],
-    ]);
+    assert.deepEqual(
+      order.map((c) => [c.id, c.study, c.level, c.bucket]),
+      [
+        ["alpha", 1, 1, "g1"],
+        ["beta", 2, 1, "g1"],
+        ["gamma", 3, 1, "g2"],
+        ["delta", 4, 2, "g3"],
+        ["omega", 5, 2, "g3"],
+      ],
+    );
   });
 
   test("a slide needs the highest level of any concept that uses it, and a slide none uses needs none", () => {
-    const need = slideLevels(conceptsInOrder(mapFixture({ concepts: mapFixture().concepts.filter((c) => c.id !== "omega"), buckets: [{ id: "g1", level: 1, name: "G", blurb: "", concepts: ["alpha", "beta"] }, { id: "g2", level: 1, name: "G2", blurb: "", concepts: ["gamma"] }, { id: "g3", level: 2, name: "G3", blurb: "", concepts: ["delta"] }] })));
+    const need = slideLevels(
+      conceptsInOrder(
+        mapFixture({
+          concepts: mapFixture().concepts.filter((c) => c.id !== "omega"),
+          buckets: [
+            { id: "g1", level: 1, name: "G", blurb: "", concepts: ["alpha", "beta"] },
+            { id: "g2", level: 1, name: "G2", blurb: "", concepts: ["gamma"] },
+            { id: "g3", level: 2, name: "G3", blurb: "", concepts: ["delta"] },
+          ],
+        }),
+      ),
+    );
     assert.deepEqual(need, { 1: 1, 2: 1, 3: 2, 4: 2, 5: 2 });
     assert.equal(need[6], undefined);
   });
@@ -162,7 +193,10 @@ describe("the canvas", () => {
     assert.equal(x("alpha"), x("gamma"));
     assert.equal(x("delta"), x("omega"));
     assert.ok(x("alpha") < x("delta"));
-    assert.deepEqual(layout.levels.map((l) => l.level), [1, 2]);
+    assert.deepEqual(
+      layout.levels.map((l) => l.level),
+      [1, 2],
+    );
     assert.ok(layout.slides.every((n) => layout.slideX(n) === layout.slideX(1)));
     assert.ok(layout.slideX(1) + layout.slideW / 2 < x("alpha") - layout.conceptW / 2, "the slides sit left of Level 100");
     const tops = layout.slides.map((n) => layout.slideY(n));
@@ -173,14 +207,26 @@ describe("the canvas", () => {
   test("within a column, concepts run top to bottom in study order, with a wider gap between groups than within one", () => {
     const col = layout.concepts.filter((c) => c.level === 1);
     const gap = (i: number) => col[i + 1]!.y - col[i]!.y - CONCEPT_H;
-    assert.deepEqual(col.map((c) => c.id), ["alpha", "beta", "gamma"]);
+    assert.deepEqual(
+      col.map((c) => c.id),
+      ["alpha", "beta", "gamma"],
+    );
     assert.equal(gap(0), 6 + 24 * 0); // same group
     assert.ok(gap(1) > gap(0), "the next group is further off");
   });
 
   test("the slides are headed EMD like a level, with each section's name over its slides like a group's", () => {
-    assert.deepEqual([layout.heading!.label, layout.heading!.top, layout.heading!.left, layout.heading!.width], ["EMD", layout.levels[0]!.y, PAD, layout.slideW]);
-    assert.deepEqual(layout.bands.map((b) => [b.name, b.count]), [["First half", 3], ["Second half", 3]]);
+    assert.deepEqual(
+      [layout.heading!.label, layout.heading!.top, layout.heading!.left, layout.heading!.width],
+      ["EMD", layout.levels[0]!.y, PAD, layout.slideW],
+    );
+    assert.deepEqual(
+      layout.bands.map((b) => [b.name, b.count]),
+      [
+        ["First half", 3],
+        ["Second half", 3],
+      ],
+    );
     assert.ok(layout.bands[0]!.top > layout.heading!.top);
     assert.ok(layout.bands[0]!.top + layout.bands[0]!.height <= layout.slideY(1));
     assert.ok(layout.bands[1]!.top > layout.slideY(3) + SLIDE_H, "the second section starts below the first's last slide");
@@ -234,8 +280,19 @@ describe("the canvas filtered to one section of slides", () => {
   const more = layoutMap(pub, "Second half");
 
   test("only the concepts the section's slides rely on are laid out, numbered as in the whole course", () => {
-    assert.deepEqual(basics.concepts.map((c) => [c.id, c.study]).sort(), [["alpha", 1], ["beta", 2], ["delta", 4], ["gamma", 3]]);
-    assert.deepEqual(more.concepts.map((c) => [c.id, c.study]), [["delta", 4], ["omega", 5]]);
+    assert.deepEqual(basics.concepts.map((c) => [c.id, c.study]).sort(), [
+      ["alpha", 1],
+      ["beta", 2],
+      ["delta", 4],
+      ["gamma", 3],
+    ]);
+    assert.deepEqual(
+      more.concepts.map((c) => [c.id, c.study]),
+      [
+        ["delta", 4],
+        ["omega", 5],
+      ],
+    );
   });
 
   test("only that section's slides are shown, in order", () => {
@@ -273,8 +330,14 @@ describe("the canvas filtered to one section of slides", () => {
   });
 
   test("the bands cover only the chosen section, counted among those shown", () => {
-    assert.deepEqual(basics.bands.map((b) => [b.name, b.count]), [["First half", 3]]);
-    assert.deepEqual(more.bands.map((b) => [b.name, b.count]), [["Second half", 3]]);
+    assert.deepEqual(
+      basics.bands.map((b) => [b.name, b.count]),
+      [["First half", 3]],
+    );
+    assert.deepEqual(
+      more.bands.map((b) => [b.name, b.count]),
+      [["Second half", 3]],
+    );
   });
 
   test("a section that does not exist leaves an empty map rather than failing", () => {
@@ -291,7 +354,10 @@ describe("the canvas narrowed to one slide", () => {
   const one = layoutMap(pub, null, 0, slide);
 
   test("only the concepts that slide needs remain, and every slide stays", () => {
-    const needs = everything.edges.filter((e) => e.slide === slide).map((e) => e.concept).sort();
+    const needs = everything.edges
+      .filter((e) => e.slide === slide)
+      .map((e) => e.concept)
+      .sort();
     assert.deepEqual(one.concepts.map((c) => c.id).sort(), needs);
     assert.deepEqual(one.slides, everything.slides);
   });
@@ -355,7 +421,9 @@ describe("what the map coach is told", () => {
   });
 
   test("a concept's own main points are in the prompt as its checklist", () => {
-    const authored = mapFixture({ concepts: mapFixture().concepts.map((c) => (c.id === "beta" ? { ...c, points: ["Beta saves time", "Beta needs alpha"] } : c)) });
+    const authored = mapFixture({
+      concepts: mapFixture().concepts.map((c) => (c.id === "beta" ? { ...c, points: ["Beta saves time", "Beta needs alpha"] } : c)),
+    });
     const p = buildCoachSystem(authored, NO_SETTINGS);
     assert.match(p, /Main points \(its checklist\):\n1\. Beta saves time\n2\. Beta needs alpha/);
     assert.equal((p.match(/Main points \(its checklist\)/g) ?? []).length, 1);
@@ -414,7 +482,10 @@ describe("what the map coach is told", () => {
   });
 
   test("the snapshot says what is mastered, what is next, and only what has any progress", () => {
-    const s = progressSnapshot(content, { alpha: state({ mastered: true, completed: true }), gamma: state({ recommended: true, videoFurthest: 30, videoDuration: 60 }) });
+    const s = progressSnapshot(content, {
+      alpha: state({ mastered: true, completed: true }),
+      gamma: state({ recommended: true, videoFurthest: 30, videoDuration: 60 }),
+    });
     assert.match(s.text, /Mastered: 1 of 5\./);
     assert.match(s.text, /Next concept to cover: \[beta\] Beta/);
     assert.match(s.text, /\[alpha\] Alpha: mastered; video watched to the end/);
@@ -428,7 +499,10 @@ describe("what the map coach is told", () => {
     assert.equal(progressSnapshot(content, {}).hash, base.hash);
     assert.notEqual(progressSnapshot(content, { alpha: state({ videoFurthest: 10, videoDuration: 100 }) }).hash, base.hash);
     assert.notEqual(progressSnapshot(content, { alpha: state({ mastered: true }) }).hash, base.hash);
-    assert.match(progressSnapshot(content, Object.fromEntries(conceptsInOrder(content).map((c) => [c.id, state({ mastered: true })]))).text, /Every concept is mastered\./);
+    assert.match(
+      progressSnapshot(content, Object.fromEntries(conceptsInOrder(content).map((c) => [c.id, state({ mastered: true })]))).text,
+      /Every concept is mastered\./,
+    );
   });
 
   test("the snapshot lists the next concept's checklist, which points are covered and which are open", () => {
@@ -439,12 +513,23 @@ describe("what the map coach is told", () => {
     ];
     const s = progressSnapshot(content, { alpha: state({ points }) });
     assert.match(s.text, /\[alpha\] Alpha: 1 of 2 points covered/);
-    assert.match(s.text, /Checklist for \[alpha\] Alpha \(1 of 2 covered; ask only about open points\):\n  1\. \[covered\] Alpha is first\n  2\. \[open\] Alpha is a bakery/);
+    assert.match(
+      s.text,
+      /Checklist for \[alpha\] Alpha \(1 of 2 covered; ask only about open points\):\n  1\. \[covered\] Alpha is first\n  2\. \[open\] Alpha is a bakery/,
+    );
     assert.doesNotMatch(s.text, /Checklist for \[beta\]/);
   });
 
   test("a concept started on keeps its checklist in the snapshot after the rep moves past it", () => {
-    const s = progressSnapshot(content, { alpha: state({ mastered: true }), gamma: state({ points: [{ text: "G one", covered: true }, { text: "G two", covered: false }] }) });
+    const s = progressSnapshot(content, {
+      alpha: state({ mastered: true }),
+      gamma: state({
+        points: [
+          { text: "G one", covered: true },
+          { text: "G two", covered: false },
+        ],
+      }),
+    });
     assert.match(s.text, /Checklist for \[beta\] Beta: none yet/);
     assert.match(s.text, /Checklist for \[gamma\] Gamma \(1 of 2 covered/);
     assert.doesNotMatch(s.text, /Checklist for \[alpha\]/);
@@ -477,7 +562,15 @@ describe("what the map coach is told", () => {
 
   test("a concept picked on the map goes after the snapshot and before the rep's words, with its checklist", () => {
     const gamma = conceptsInOrder(content).find((c) => c.id === "gamma")!;
-    const note = focusNote(gamma, state({ points: [{ text: "G one", covered: true }, { text: "G two", covered: false }] }));
+    const note = focusNote(
+      gamma,
+      state({
+        points: [
+          { text: "G one", covered: true },
+          { text: "G two", covered: false },
+        ],
+      }),
+    );
     assert.match(note, /picked \[gamma\] Gamma on the map/);
     assert.match(note, /Checklist for \[gamma\] Gamma \(1 of 2 covered/);
     assert.match(focusNote(gamma, undefined), /Checklist for \[gamma\] Gamma: none yet/);
@@ -530,11 +623,20 @@ describe("what a reply asks the app to do", () => {
   });
 
   test("a reply with no marker is just its text", () => {
-    assert.deepEqual(readCoachReply("Tell me more.", ids), { text: "Tell me more.", mastered: [], recommended: [], checklists: [], covered: [] });
+    assert.deepEqual(readCoachReply("Tell me more.", ids), {
+      text: "Tell me more.",
+      mastered: [],
+      recommended: [],
+      checklists: [],
+      covered: [],
+    });
   });
 
   test("a checklist and a tick are read together and neither is shown", () => {
-    const r = readCoachReply("Good, that's the first one. What does beta need?\n[POINTS: beta | Beta saves time | Beta needs alpha |  ]\n[COVERED: beta 1]", ids);
+    const r = readCoachReply(
+      "Good, that's the first one. What does beta need?\n[POINTS: beta | Beta saves time | Beta needs alpha |  ]\n[COVERED: beta 1]",
+      ids,
+    );
     assert.deepEqual(r.checklists, [{ id: "beta", points: ["Beta saves time", "Beta needs alpha"] }]);
     assert.deepEqual(r.covered, [{ id: "beta", points: [1] }]);
     assert.equal(r.text, "Good, that's the first one. What does beta need?");
@@ -542,7 +644,8 @@ describe("what a reply asks the app to do", () => {
 
   test("a checklist of one point does not count, a long one is cut to six, and a long point is cut short", () => {
     assert.deepEqual(readCoachReply("Ok.\n[POINTS: beta | Just one]", ids).checklists, []);
-    const many = readCoachReply(`Ok.\n[POINTS: beta | ${Array.from({ length: 8 }, (_, i) => `P${i + 1}`).join(" | ")}]`, ids).checklists[0]!;
+    const many = readCoachReply(`Ok.\n[POINTS: beta | ${Array.from({ length: 8 }, (_, i) => `P${i + 1}`).join(" | ")}]`, ids)
+      .checklists[0]!;
     assert.deepEqual(many.points, ["P1", "P2", "P3", "P4", "P5", "P6"]);
     const long = readCoachReply(`Ok.\n[POINTS: beta | ${"y".repeat(400)} | Short]`, ids).checklists[0]!;
     assert.equal(long.points[0]!.length, POINT_CHARS);
@@ -613,6 +716,7 @@ describe("a slide's picture", () => {
     assert.equal(parseSlideNumber("1"), 1);
     assert.equal(parseSlideNumber("46"), 46);
     assert.equal(parseSlideNumber("200"), 200);
-    for (const bad of ["0", "201", "-1", "01", "1.5", "1e2", "abc", "", "../1", "1%2F2", "99999"]) assert.equal(parseSlideNumber(bad), null, bad);
+    for (const bad of ["0", "201", "-1", "01", "1.5", "1e2", "abc", "", "../1", "1%2F2", "99999"])
+      assert.equal(parseSlideNumber(bad), null, bad);
   });
 });

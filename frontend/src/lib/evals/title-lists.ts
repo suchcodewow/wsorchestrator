@@ -46,10 +46,7 @@ export function splitTitles(text: string): string[] {
 }
 
 /** Which list, if any, holds `title`, from a map of `titleKey` to list. */
-export function listForTitle(
-  title: string,
-  lists: ReadonlyMap<string, EvalsTitleList>,
-): EvalsTitleList | null {
+export function listForTitle(title: string, lists: ReadonlyMap<string, EvalsTitleList>): EvalsTitleList | null {
   const key = titleKey(title);
   return key ? (lists.get(key) ?? null) : null;
 }

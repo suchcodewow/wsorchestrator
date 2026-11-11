@@ -102,15 +102,8 @@ export async function reapableRuns(): Promise<RunRow[]> {
   return rows;
 }
 
-export async function log(
-  runId: string,
-  stream: "stdout" | "stderr" | "system",
-  message: string,
-): Promise<void> {
-  await pool.query(
-    `insert into run_logs (run_id, stream, message) values ($1, $2, $3)`,
-    [runId, stream, message],
-  );
+export async function log(runId: string, stream: "stdout" | "stderr" | "system", message: string): Promise<void> {
+  await pool.query(`insert into run_logs (run_id, stream, message) values ($1, $2, $3)`, [runId, stream, message]);
 }
 
 /* ------------------------------------------------------------------ *
@@ -168,32 +161,19 @@ function errorDetail(error: string): Record<string, unknown> {
  * would otherwise sit at `ready` still showing the error it no longer has.
  */
 export async function setProvisioning(runId: string) {
-  await pool.query(
-    `update workshop_runs set status = 'provisioning', error = null where id = $1`,
-    [runId],
-  );
+  await pool.query(`update workshop_runs set status = 'provisioning', error = null where id = $1`, [runId]);
   await recordRunAudit(runId, "runner.provision.start", "Started provisioning the event.");
 }
 
 export async function setOrgUnitPath(runId: string, orgUnitPath: string) {
-  await pool.query(`update workshop_runs set org_unit_path = $2 where id = $1`, [
-    runId,
-    orgUnitPath,
-  ]);
+  await pool.query(`update workshop_runs set org_unit_path = $2 where id = $1`, [runId, orgUnitPath]);
 }
 
 export async function setApplying(runId: string, projectId: string | null) {
-  await pool.query(
-    `update workshop_runs set status = 'applying', gcp_project_id = $2 where id = $1`,
-    [runId, projectId],
-  );
+  await pool.query(`update workshop_runs set status = 'applying', gcp_project_id = $2 where id = $1`, [runId, projectId]);
 }
 
-export async function setReady(
-  runId: string,
-  outputs: Record<string, unknown>,
-  expiresAt: Date,
-) {
+export async function setReady(runId: string, outputs: Record<string, unknown>, expiresAt: Date) {
   await pool.query(
     `update workshop_runs
         set status = 'ready', outputs = $2::jsonb, expires_at = $3
@@ -212,10 +192,7 @@ export async function setReady(
  * is what then triggers cleanup of whatever partial resources it created.
  */
 export async function setFailed(runId: string, error: string) {
-  await pool.query(
-    `update workshop_runs set status = 'failed', error = $2 where id = $1`,
-    [runId, error],
-  );
+  await pool.query(`update workshop_runs set status = 'failed', error = $2 where id = $1`, [runId, error]);
   await recordRunAudit(runId, "runner.provision.failed", "Provisioning failed.", "failed", errorDetail(error));
 }
 
@@ -228,10 +205,7 @@ export async function setFailed(runId: string, error: string) {
  * fine. The attempted change simply did not take; what already existed stays.
  */
 export async function setLiveError(runId: string, error: string) {
-  await pool.query(
-    `update workshop_runs set status = 'ready', error = $2 where id = $1`,
-    [runId, error],
-  );
+  await pool.query(`update workshop_runs set status = 'ready', error = $2 where id = $1`, [runId, error]);
   await recordRunAudit(
     runId,
     "runner.update.failed",
@@ -259,11 +233,7 @@ export async function setLiveError(runId: string, error: string) {
  * The update is a single statement rather than a read then a write, so two reapers
  * racing the same run cannot both come away thinking they claimed it.
  */
-export async function claimDestroy(
-  runId: string,
-): Promise<
-  { outcome: "claimed"; attempt: number } | { outcome: "abandoned" }
-> {
+export async function claimDestroy(runId: string): Promise<{ outcome: "claimed"; attempt: number } | { outcome: "abandoned" }> {
   const { rows } = await pool.query<{ destroy_attempts: number }>(
     `update workshop_runs
         set status = 'destroying',
@@ -304,10 +274,7 @@ export async function claimDestroy(
  * clears it when the retry works, and `setDestroyFailed` overwrites it when the
  * attempts run out.
  */
-export async function setDestroyRetry(
-  runId: string,
-  note: string,
-): Promise<void> {
+export async function setDestroyRetry(runId: string, note: string): Promise<void> {
   await pool.query(
     `update workshop_runs
         set status = 'destroying',
@@ -339,10 +306,7 @@ export async function setDestroyRetry(
  * not reset — it counts how many times this teardown has been attempted in total,
  * which is the number worth seeing next to a run that has failed twice.
  */
-export async function setDestroyFailed(
-  runId: string,
-  error: string,
-): Promise<void> {
+export async function setDestroyFailed(runId: string, error: string): Promise<void> {
   await pool.query(
     `update workshop_runs
         set status = 'destroy_failed',
@@ -351,13 +315,7 @@ export async function setDestroyFailed(
       where id = $1`,
     [runId, error],
   );
-  await recordRunAudit(
-    runId,
-    "runner.teardown.failed",
-    "Teardown failed and was left for a person.",
-    "failed",
-    errorDetail(error),
-  );
+  await recordRunAudit(runId, "runner.teardown.failed", "Teardown failed and was left for a person.", "failed", errorDetail(error));
 }
 
 /**
@@ -375,10 +333,7 @@ export async function setDestroyFailed(
 export async function setDestroyed(runId: string) {
   // Before the delete: the row is where the audit entry gets the run's name.
   await recordRunAudit(runId, "runner.teardown.done", "Finished tearing down the event.");
-  const { rowCount } = await pool.query(
-    `delete from workshop_runs where id = $1 and delete_requested`,
-    [runId],
-  );
+  const { rowCount } = await pool.query(`delete from workshop_runs where id = $1 and delete_requested`, [runId]);
   if (rowCount && rowCount > 0) return;
 
   // The claim is released and the error a previous attempt may have left is
@@ -401,11 +356,7 @@ export async function setDestroyed(runId: string) {
  * ------------------------------------------------------------------ */
 
 /** Mirrors `COMPONENT_KINDS` in the frontend's Drizzle schema. */
-export type ComponentKind =
-  | "secret_text"
-  | "secret_file"
-  | "connector"
-  | "template";
+export type ComponentKind = "secret_text" | "secret_file" | "connector" | "template";
 
 /**
  * One secret, connector, or template the runner creates in a workshop's org.
@@ -427,8 +378,7 @@ export type Component = {
 };
 
 /** A `jsonb` column that should hold an array of strings, defensively read. */
-const stringArray = (v: unknown): string[] =>
-  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+const stringArray = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
 /**
  * The component catalog to deploy: the published baseline, optionally overlaid
@@ -684,16 +634,7 @@ export async function recordResource(runId: string, r: Resource) {
             done = excluded.done,
             total = excluded.total,
             updated_at = now()`,
-    [
-      runId,
-      r.kind,
-      r.key ?? "",
-      r.label,
-      r.detail ?? null,
-      r.url ?? null,
-      r.done ?? null,
-      r.total ?? null,
-    ],
+    [runId, r.kind, r.key ?? "", r.label, r.detail ?? null, r.url ?? null, r.done ?? null, r.total ?? null],
   );
 }
 
@@ -707,11 +648,7 @@ export async function deleteResources(runId: string) {
 }
 
 /** Record an attendee account so the organizer can hand out its credentials. */
-export async function addAccount(
-  runId: string,
-  email: string,
-  tempPassword: string,
-) {
+export async function addAccount(runId: string, email: string, tempPassword: string) {
   await pool.query(
     `insert into workshop_accounts (run_id, email, temp_password)
      values ($1, $2, $3)`,
@@ -726,9 +663,7 @@ export async function addAccount(
  * The `users.email` column is nullable, so a creator without a recorded address
  * comes back undefined and the caller skips the grant rather than failing.
  */
-export async function runCreatorEmail(
-  runId: string,
-): Promise<string | undefined> {
+export async function runCreatorEmail(runId: string): Promise<string | undefined> {
   const { rows } = await pool.query<{ email: string | null }>(
     `select u.email
        from workshop_runs r
@@ -740,10 +675,7 @@ export async function runCreatorEmail(
 }
 
 export async function accountsFor(runId: string): Promise<{ email: string }[]> {
-  const { rows } = await pool.query<{ email: string }>(
-    `select email from workshop_accounts where run_id = $1 order by id`,
-    [runId],
-  );
+  const { rows } = await pool.query<{ email: string }>(`select email from workshop_accounts where run_id = $1 order by id`, [runId]);
   return rows;
 }
 
@@ -753,9 +685,7 @@ export async function accountsFor(runId: string): Promise<{ email: string }[]> {
  * account already has. GCP does not need this — its authorization binds the
  * Google identity directly rather than minting a parallel account.
  */
-export async function accountsWithPasswordsFor(
-  runId: string,
-): Promise<{ email: string; tempPassword: string }[]> {
+export async function accountsWithPasswordsFor(runId: string): Promise<{ email: string; tempPassword: string }[]> {
   const { rows } = await pool.query<{ email: string; temp_password: string }>(
     `select email, temp_password from workshop_accounts where run_id = $1 order by id`,
     [runId],
@@ -771,12 +701,7 @@ export async function accountsWithPasswordsFor(
  * portal with. Matched on address rather than id because the caller is working
  * from the roster Terraform was given, which is a list of addresses.
  */
-export async function setAzureAccessPass(
-  runId: string,
-  email: string,
-  pass: string,
-  expiresAt: Date,
-) {
+export async function setAzureAccessPass(runId: string, email: string, pass: string, expiresAt: Date) {
   await pool.query(
     `update workshop_accounts
         set azure_access_pass = $3, azure_access_pass_expires_at = $4
@@ -815,10 +740,7 @@ export async function claimDueScheduledRuns(): Promise<{ id: string }[]> {
 
 /** Put a run back to scheduled so the next tick retries triggering it. */
 export async function setScheduledBack(runId: string) {
-  await pool.query(
-    `update workshop_runs set status = 'scheduled' where id = $1`,
-    [runId],
-  );
+  await pool.query(`update workshop_runs set status = 'scheduled' where id = $1`, [runId]);
 }
 
 /* ------------------------------------------------------------------ *
@@ -893,11 +815,7 @@ export async function dueScrubs(): Promise<DueScrub[]> {
 }
 
 /** Write down what became of one deployed secret. */
-export async function recordScrub(
-  id: string,
-  status: "scrubbed" | "skipped" | "failed",
-  note: string | null,
-): Promise<void> {
+export async function recordScrub(id: string, status: "scrubbed" | "skipped" | "failed", note: string | null): Promise<void> {
   await pool.query(
     `update harness_deployed_secrets
         set status = $2, note = $3, checked_at = now()
@@ -966,19 +884,16 @@ const LOCK_KEEPALIVE_MS = 60_000;
  * lock is still working the run, and whatever it doesn't finish is retried on
  * the next tick.
  */
-export async function withRunLock(
-  runId: string,
-  fn: () => Promise<void>,
-): Promise<boolean> {
+export async function withRunLock(runId: string, fn: () => Promise<void>): Promise<boolean> {
   const client = await pool.connect();
   let locked = false;
   let keepalive: NodeJS.Timeout | undefined;
 
   try {
-    const { rows } = await client.query<{ locked: boolean }>(
-      `select pg_try_advisory_lock($1::int, hashtext($2)) as locked`,
-      [REAP_LOCK_NAMESPACE, runId],
-    );
+    const { rows } = await client.query<{ locked: boolean }>(`select pg_try_advisory_lock($1::int, hashtext($2)) as locked`, [
+      REAP_LOCK_NAMESPACE,
+      runId,
+    ]);
     locked = rows[0]?.locked ?? false;
     if (!locked) return false;
 
@@ -994,12 +909,7 @@ export async function withRunLock(
   } finally {
     if (keepalive) clearInterval(keepalive);
     if (locked) {
-      await client
-        .query(`select pg_advisory_unlock($1::int, hashtext($2))`, [
-          REAP_LOCK_NAMESPACE,
-          runId,
-        ])
-        .catch(() => {});
+      await client.query(`select pg_advisory_unlock($1::int, hashtext($2))`, [REAP_LOCK_NAMESPACE, runId]).catch(() => {});
     }
     client.release();
   }
@@ -1025,18 +935,15 @@ export async function withRunLock(
  * exact row, and the cost is one misleading note on a secret whose value is
  * nonetheless `123` — worth knowing about, not worth a second locking scheme.
  */
-export async function withScrubLock(
-  fn: () => Promise<void>,
-): Promise<boolean> {
+export async function withScrubLock(fn: () => Promise<void>): Promise<boolean> {
   const client = await pool.connect();
   let locked = false;
   let keepalive: NodeJS.Timeout | undefined;
 
   try {
-    const { rows } = await client.query<{ locked: boolean }>(
-      `select pg_try_advisory_lock($1::int, hashtext('scrub')) as locked`,
-      [SCRUB_LOCK_NAMESPACE],
-    );
+    const { rows } = await client.query<{ locked: boolean }>(`select pg_try_advisory_lock($1::int, hashtext('scrub')) as locked`, [
+      SCRUB_LOCK_NAMESPACE,
+    ]);
     locked = rows[0]?.locked ?? false;
     if (!locked) return false;
 
@@ -1049,11 +956,7 @@ export async function withScrubLock(
   } finally {
     if (keepalive) clearInterval(keepalive);
     if (locked) {
-      await client
-        .query(`select pg_advisory_unlock($1::int, hashtext('scrub'))`, [
-          SCRUB_LOCK_NAMESPACE,
-        ])
-        .catch(() => {});
+      await client.query(`select pg_advisory_unlock($1::int, hashtext('scrub'))`, [SCRUB_LOCK_NAMESPACE]).catch(() => {});
     }
     client.release();
   }
@@ -1073,9 +976,7 @@ export async function withScrubLock(
  * built nothing yet and `destroyed` has nothing left. Every other status may
  * hold something, `failed` included, which can be a partial build.
  */
-export async function runsHoldingResources(): Promise<
-  { id: string; name: string; status: string }[]
-> {
+export async function runsHoldingResources(): Promise<{ id: string; name: string; status: string }[]> {
   const { rows } = await pool.query<{ id: string; name: string; status: string }>(
     `select id, name, status
        from workshop_runs
@@ -1227,9 +1128,7 @@ export async function slackInstallationToken(): Promise<Buffer | null> {
  * shares production's workspace.
  */
 export async function slackLive(): Promise<boolean> {
-  const { rows } = await pool.query<{ value: string }>(
-    "select value from evals_settings where key = 'slack_sync_live'",
-  );
+  const { rows } = await pool.query<{ value: string }>("select value from evals_settings where key = 'slack_sync_live'");
   return rows[0]?.value === "true";
 }
 
@@ -1247,10 +1146,7 @@ export async function adminContacts(): Promise<{ email: string; name: string | n
 }
 
 export async function cachedSlackChannel(name: string): Promise<string | undefined> {
-  const { rows } = await pool.query<{ slack_channel_id: string }>(
-    "select slack_channel_id from slack_channels where name = $1",
-    [name],
-  );
+  const { rows } = await pool.query<{ slack_channel_id: string }>("select slack_channel_id from slack_channels where name = $1", [name]);
   return rows[0]?.slack_channel_id;
 }
 

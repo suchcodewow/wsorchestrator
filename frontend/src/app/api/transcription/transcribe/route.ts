@@ -25,10 +25,7 @@ export const POST = audited(async function POST(req: Request) {
   const got = await transcribe(audio);
   if ("error" in got) {
     if (got.detail) noteAudit({ detail: { upstream: got.detail } });
-    return NextResponse.json(
-      { error: got.error },
-      { status: got.error === "unconfigured" ? 503 : 502 },
-    );
+    return NextResponse.json({ error: got.error }, { status: got.error === "unconfigured" ? 503 : 502 });
   }
   return NextResponse.json({ transcript: got.transcript });
 });

@@ -62,10 +62,7 @@ describe("harnessOrgUrl", () => {
       `https://app.harness.io/ng/account/${ACCOUNT}/settings/organizations/aws_cardinal/details`,
     );
     process.env.HARNESS_BASE_URL = "https://app3.harness.io/";
-    assert.equal(
-      harnessOrgUrl("acc", "org"),
-      "https://app3.harness.io/ng/account/acc/settings/organizations/org/details",
-    );
+    assert.equal(harnessOrgUrl("acc", "org"), "https://app3.harness.io/ng/account/acc/settings/organizations/org/details");
   });
 });
 
@@ -108,8 +105,7 @@ describe("parseHarnessToken", () => {
   });
 
   test("enforces the account and token id lengths (6 to 64)", () => {
-    const at = (account: string, tokenId: string) =>
-      parseHarnessToken(`pat.${account}.${tokenId}.${SECRET}`);
+    const at = (account: string, tokenId: string) => parseHarnessToken(`pat.${account}.${tokenId}.${SECRET}`);
     assert.notEqual(at("a".repeat(6), TOKEN_ID), null);
     assert.notEqual(at("a".repeat(64), TOKEN_ID), null);
     assert.equal(at("a".repeat(5), TOKEN_ID), null);
@@ -140,10 +136,7 @@ describe("parseHarnessToken", () => {
 
 describe("fingerprint", () => {
   test("is the SHA-256 of the trimmed token, in hex", () => {
-    assert.equal(
-      fingerprint("abc"),
-      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
-    );
+    assert.equal(fingerprint("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     assert.equal(fingerprint("  abc\n"), fingerprint("abc"));
   });
 

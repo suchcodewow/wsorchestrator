@@ -161,7 +161,10 @@ export async function getSlackInstallation(): Promise<SlackInstallationSummary |
     .from(slackInstallation)
     .leftJoin(users, eq(users.id, slackInstallation.installedBy));
   if (!row) return null;
-  const scopes = row.scopes.split(",").map((s) => s.trim()).filter(Boolean);
+  const scopes = row.scopes
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   return {
     teamId: row.teamId,
     teamName: row.teamName,

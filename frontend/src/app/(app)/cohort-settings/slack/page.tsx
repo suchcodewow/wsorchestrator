@@ -5,12 +5,7 @@
  * log a page at a time.
  */
 
-import {
-  activeCohortChannels,
-  getSlackSyncLive,
-  listSlackSyncRuns,
-  slackSyncInProgress,
-} from "@/lib/cohorts/slack-sync";
+import { activeCohortChannels, getSlackSyncLive, listSlackSyncRuns, slackSyncInProgress } from "@/lib/cohorts/slack-sync";
 import { SLACK_SYNC_LIST } from "@/lib/list-specs";
 import { getIntakeRemindersOn, intakeRemindersSentToday, outstandingIntake } from "@/lib/logistics/intake-reminders";
 import { parseListQuery } from "@/lib/paging";
@@ -18,11 +13,7 @@ import { envSlackToken } from "@/lib/slack";
 import { getSlackInstallation, slackApp } from "@/lib/slack-app";
 import { SlackSyncView } from "./slack-view";
 
-export default async function SlackPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function SlackPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   const query = parseListQuery(params, SLACK_SYNC_LIST);
   const [page, running, live, active, installation, remindersOn, sentToday, { counts }] = await Promise.all([

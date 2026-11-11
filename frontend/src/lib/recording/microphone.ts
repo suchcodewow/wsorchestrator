@@ -67,8 +67,7 @@ export async function listMicrophones(): Promise<MediaDeviceInfo[]> {
 }
 
 export type OpenedMicrophone =
-  | { ok: true; stream: MediaStream; deviceId: string | null; label: string }
-  | { ok: false; problem: MicrophoneProblem; detail: string };
+  { ok: true; stream: MediaStream; deviceId: string | null; label: string } | { ok: false; problem: MicrophoneProblem; detail: string };
 
 /**
  * Opens `deviceId`, or the saved microphone, or the default. A saved one that

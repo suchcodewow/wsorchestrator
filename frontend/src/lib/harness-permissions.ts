@@ -66,11 +66,9 @@ export const PERMISSION_PROBES: PermissionProbe[] = [
 
 export const ACCOUNT_ADMIN = "core_account_edit";
 
-export const administersAccount = (
-  permissions: { permission: string; permitted: boolean }[],
-) => permissions.some((p) => p.permission === ACCOUNT_ADMIN && p.permitted);
+export const administersAccount = (permissions: { permission: string; permitted: boolean }[]) =>
+  permissions.some((p) => p.permission === ACCOUNT_ADMIN && p.permitted);
 
 const LABELS = new Map(PERMISSION_PROBES.map((p) => [p.permission, p.label]));
 
-export const permissionLabel = (permission: string) =>
-  LABELS.get(permission) ?? permission;
+export const permissionLabel = (permission: string) => LABELS.get(permission) ?? permission;

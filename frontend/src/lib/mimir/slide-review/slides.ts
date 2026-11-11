@@ -154,15 +154,18 @@ export type SlideResult = { found: number; wrongClicks: number; missed: number }
 /** The best a slide allows: every mistake found and nothing else clicked. */
 export const maxPointsFor = (slide: Slide) => slide.flaws.length * POINTS.found;
 
-export const pointsFor = (r: SlideResult) =>
-  r.found * POINTS.found + r.wrongClicks * POINTS.wrongClick + r.missed * POINTS.missed;
+export const pointsFor = (r: SlideResult) => r.found * POINTS.found + r.wrongClicks * POINTS.wrongClick + r.missed * POINTS.missed;
 
 export type Verdict = { from: number; title: string; verdict: string };
 
 /** Read top down: the first whose `from` the share of the maximum reaches. */
 export const VERDICTS: Verdict[] = [
   { from: 0.9, title: "Ready for the customer", verdict: "Hardly anything got past you. These slides would go out crisp and clean." },
-  { from: 0.7, title: "Nearly there", verdict: "You caught most of it. Slow down on the last pass: the small things are what a customer notices." },
+  {
+    from: 0.7,
+    title: "Nearly there",
+    verdict: "You caught most of it. Slow down on the last pass: the small things are what a customer notices.",
+  },
   {
     from: 0.4,
     title: "Needs another pass",

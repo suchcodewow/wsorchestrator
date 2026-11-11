@@ -2,18 +2,11 @@
 
 import { NextResponse } from "next/server";
 import { sessionOrToken } from "@/lib/api-auth";
-import {
-  deleteLabImage,
-  getLabImageData,
-  renameLabImage,
-} from "@/lib/lab-images";
+import { deleteLabImage, getLabImageData, renameLabImage } from "@/lib/lab-images";
 import { canManageLabGuides } from "@/lib/roles";
 import { audited } from "@/lib/audit";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   const image = await getLabImageData(id);
@@ -43,10 +36,7 @@ async function requireEditor(req: Request) {
   return null;
 }
 
-export const PATCH = audited(async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const denied = await requireEditor(req);
   if (denied) return denied;
 
@@ -65,10 +55,7 @@ export const PATCH = audited(async function PATCH(
   return NextResponse.json({ image });
 });
 
-export const DELETE = audited(async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const denied = await requireEditor(req);
   if (denied) return denied;
 

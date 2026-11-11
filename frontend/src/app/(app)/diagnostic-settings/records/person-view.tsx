@@ -29,13 +29,7 @@ export function PersonView({ detail, summary, closeHref }: { detail: Detail; sum
   const finished = detail.sittings.filter((s) => s.finishedAt).length;
 
   return (
-    <motion.div
-      key={detail.userId}
-      variants={staggerParent(0.05)}
-      initial="hidden"
-      animate="show"
-      className="space-y-6"
-    >
+    <motion.div key={detail.userId} variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild} className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1.5">
           <h2 className="text-xl font-medium tracking-tight">{who}</h2>
@@ -89,9 +83,7 @@ export function ShapeCard({
   detail: { name: string | null; sittings: { subject: SubjectKey; placement: Level | null; finishedAt: string | null }[] };
   summary: CohortSummary;
 }) {
-  const placed = new Map(
-    detail.sittings.filter((s) => s.finishedAt && s.placement).map((s) => [s.subject, s.placement as Level]),
-  );
+  const placed = new Map(detail.sittings.filter((s) => s.finishedAt && s.placement).map((s) => [s.subject, s.placement as Level]));
   const values = OPEN_SUBJECT_KEYS.map((k) => placed.get(k) ?? null);
   const medians = OPEN_SUBJECT_KEYS.map((k) => summary.subjects[k].median);
 
@@ -167,9 +159,7 @@ function SittingCard({ sitting, userId, form, who }: { sitting: Sitting; userId:
 
       {sitting.placement && sitting.finishedAt && TRAINING[sitting.subject] && (
         <div className="px-5 py-4">
-          <p className="text-xs font-medium text-muted-foreground">
-            Routes to · {LEVEL_LABELS[sitting.placement as Level]} tier
-          </p>
+          <p className="text-xs font-medium text-muted-foreground">Routes to · {LEVEL_LABELS[sitting.placement as Level]} tier</p>
           <p className="mt-1">{TRAINING[sitting.subject]![sitting.placement as Level]}</p>
         </div>
       )}
@@ -326,8 +316,7 @@ function AnswerTable({ answers }: { answers: DetailAnswer[] }) {
               <td className="max-w-xs px-5 py-3">
                 {a.chosen ? (
                   <>
-                    <span className="font-mono text-xs text-muted-foreground">{LETTERS[a.chosen.index]}.</span>{" "}
-                    {a.chosen.text ?? ""}
+                    <span className="font-mono text-xs text-muted-foreground">{LETTERS[a.chosen.index]}.</span> {a.chosen.text ?? ""}
                   </>
                 ) : (
                   <span className="text-muted-foreground">I don&apos;t know</span>
@@ -336,7 +325,11 @@ function AnswerTable({ answers }: { answers: DetailAnswer[] }) {
               <td
                 className={cn(
                   "px-5 py-3 whitespace-nowrap",
-                  a.correct ? "text-emerald-700 dark:text-emerald-400" : a.chosen ? "text-rose-700 dark:text-rose-400" : "text-muted-foreground",
+                  a.correct
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : a.chosen
+                      ? "text-rose-700 dark:text-rose-400"
+                      : "text-muted-foreground",
                 )}
               >
                 {a.correct ? "Right" : a.chosen ? "Missed" : "Didn't know"}

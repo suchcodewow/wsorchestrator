@@ -20,12 +20,7 @@ import {
   type ScenarioId,
   type WorkshopRun,
 } from "@/db/schema";
-import {
-  canManageAnyEvent,
-  canSeeAllEvents,
-  canUseEvents,
-  type Access,
-} from "@/lib/roles";
+import { canManageAnyEvent, canSeeAllEvents, canUseEvents, type Access } from "@/lib/roles";
 import { deploymentEnvironment, localRun } from "@/lib/deployment";
 import { withClusterScenario } from "@/lib/scenario-catalog";
 import { noteAudit } from "@/lib/audit-context";
@@ -37,11 +32,7 @@ export type Viewer = { id: string; access: Access };
  * still owns the events they booked, but loses them along with the area.
  */
 export const ownedBy = (viewer: Viewer) =>
-  !canUseEvents(viewer.access)
-    ? sql`false`
-    : canManageAnyEvent(viewer.access)
-      ? undefined
-      : eq(workshopRuns.userId, viewer.id);
+  !canUseEvents(viewer.access) ? sql`false` : canManageAnyEvent(viewer.access) ? undefined : eq(workshopRuns.userId, viewer.id);
 
 /**
  * The runs `viewer` may change: theirs, and created by this deployment. A run
@@ -111,38 +102,26 @@ export async function createScheduledRun(input: {
       ? input.clouds.map((c) => CLOUD_LABELS[c]).join(", ")
       : "no clouds";
 
-  const when = input.startNow
-    ? "to start now"
-    : `for ${input.scheduledStart.toISOString()}`;
+  const when = input.startNow ? "to start now" : `for ${input.scheduledStart.toISOString()}`;
 
   const lifetime = `runs ${humanDuration(input.ttlSeconds)} before teardown`;
 
   await db.insert(runLogs).values({
     runId,
     stream: "system",
-    message:
-      `Scheduled ${input.mode} "${input.name}" ${when} — ` +
-      `${input.userCount} user(s), ${clouds}, ${lifetime}.`,
+    message: `Scheduled ${input.mode} "${input.name}" ${when} — ` + `${input.userCount} user(s), ${clouds}, ${lifetime}.`,
   });
 
   return { run };
 }
 
-export type UpdateRunError =
-  | "not_found"
-  | "locked"
-  | "shrink_not_allowed"
-  | "cloud_removal_not_allowed"
-  | "exceeds_mode_limits";
+export type UpdateRunError = "not_found" | "locked" | "shrink_not_allowed" | "cloud_removal_not_allowed" | "exceeds_mode_limits";
 
 export async function updateRunConfig(
   runId: string,
   viewer: Viewer,
   input: { userCount: number; clouds: Cloud[]; scenarios?: ScenarioId[] },
-): Promise<
-  | { ok: true; run: WorkshopRun; needsReprovision: boolean }
-  | { ok: false; error: UpdateRunError }
-> {
+): Promise<{ ok: true; run: WorkshopRun; needsReprovision: boolean } | { ok: false; error: UpdateRunError }> {
   const run = await db.query.workshopRuns.findFirst({
     where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
@@ -162,19 +141,12 @@ export async function updateRunConfig(
   // UI does this on click; doing it here too means an API caller cannot store a
   // challenge that could never be provisioned.
   const scenarios = withClusterScenario(
-    [...new Set(input.scenarios ?? run.scenarios)].filter((id) =>
-      SCENARIOS.some((s) => s.id === id && clouds.includes(s.cloud)),
-    ),
+    [...new Set(input.scenarios ?? run.scenarios)].filter((id) => SCENARIOS.some((s) => s.id === id && clouds.includes(s.cloud))),
     clouds,
   );
 
   const limits = limitsFor(run.mode);
-  if (
-    input.userCount < 1 ||
-    input.userCount > limits.maxUsers ||
-    clouds.length < limits.minClouds ||
-    clouds.length > limits.maxClouds
-  ) {
+  if (input.userCount < 1 || input.userCount > limits.maxUsers || clouds.length < limits.minClouds || clouds.length > limits.maxClouds) {
     return { ok: false, error: "exceeds_mode_limits" };
   }
 
@@ -199,11 +171,7 @@ export async function updateRunConfig(
   const addedScenarios = scenarios.filter((s) => !run.scenarios.includes(s));
   const removedScenarios = run.scenarios.filter((s) => !scenarios.includes(s));
   const changed =
-    addedUsers !== 0 ||
-    addedClouds.length > 0 ||
-    removedClouds.length > 0 ||
-    addedScenarios.length > 0 ||
-    removedScenarios.length > 0;
+    addedUsers !== 0 || addedClouds.length > 0 || removedClouds.length > 0 || addedScenarios.length > 0 || removedScenarios.length > 0;
 
   if (!changed) return { ok: true, run, needsReprovision: false };
 
@@ -213,8 +181,7 @@ export async function updateRunConfig(
     .where(eq(workshopRuns.id, runId))
     .returning();
 
-  const label = (id: string) =>
-    SCENARIOS.find((s) => s.id === id)?.label ?? id;
+  const label = (id: string) => SCENARIOS.find((s) => s.id === id)?.label ?? id;
 
   const parts: string[] = [];
   if (addedUsers > 0) parts.push(`+${addedUsers} user(s)`);
@@ -248,9 +215,7 @@ export type ExtendRunError = "not_found" | "not_extendable";
 export async function extendRun(
   runId: string,
   viewer: Viewer,
-): Promise<
-  { ok: true; run: WorkshopRun } | { ok: false; error: ExtendRunError }
-> {
+): Promise<{ ok: true; run: WorkshopRun } | { ok: false; error: ExtendRunError }> {
   const run = await db.query.workshopRuns.findFirst({
     where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
@@ -281,9 +246,7 @@ export async function extendRun(
     stream: "system",
     message: updated.expiresAt
       ? `Extended by ${extraDays} day — now auto-destroys at ${updated.expiresAt.toISOString()}.`
-      : `Extended by ${extraDays} day — lifetime is now ${humanDuration(
-          updated.ttlSeconds,
-        )} once it starts.`,
+      : `Extended by ${extraDays} day — lifetime is now ${humanDuration(updated.ttlSeconds)} once it starts.`,
   });
 
   return { ok: true, run: updated };
@@ -314,18 +277,13 @@ export async function endRunNow(
     return { ok: false, error: "not_running" };
   }
 
-  const [updated] = await db
-    .update(workshopRuns)
-    .set({ expiresAt: new Date() })
-    .where(eq(workshopRuns.id, runId))
-    .returning();
+  const [updated] = await db.update(workshopRuns).set({ expiresAt: new Date() }).where(eq(workshopRuns.id, runId)).returning();
 
   await db.insert(runLogs).values({
     runId,
     stream: "system",
     message:
-      "Ended early — the end time is now, so teardown starts within a few " +
-      "minutes and runs as it would have at the scheduled end.",
+      "Ended early — the end time is now, so teardown starts within a few " + "minutes and runs as it would have at the scheduled end.",
   });
 
   return { ok: true, run: updated };
@@ -338,10 +296,7 @@ export async function listRunsForUser(userId: string) {
   });
 }
 
-export async function listCalendarRuns(
-  viewer: Viewer,
-  scope: CalendarScope = "own",
-) {
+export async function listCalendarRuns(viewer: Viewer, scope: CalendarScope = "own") {
   const showAll = scope === "all" && canSeeAllEvents(viewer.access);
 
   return db
@@ -412,9 +367,7 @@ const DESTROY_RESET = {
 export async function deleteRun(
   runId: string,
   viewer: Viewer,
-): Promise<
-  { ok: true; outcome: DeleteRunOutcome } | { ok: false; error: DeleteRunError }
-> {
+): Promise<{ ok: true; outcome: DeleteRunOutcome } | { ok: false; error: DeleteRunError }> {
   const run = await db.query.workshopRuns.findFirst({
     where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
@@ -439,8 +392,7 @@ export async function deleteRun(
     message:
       run.status === "destroy_failed"
         ? "Deletion requested — the teardown is being retried from the start."
-        : "Deletion requested — tearing down accounts, org unit, and cloud " +
-          "resources first.",
+        : "Deletion requested — tearing down accounts, org unit, and cloud " + "resources first.",
   });
 
   return { ok: true, outcome: "teardown_requested" };
@@ -451,9 +403,7 @@ export type RetryTeardownError = "not_found" | "not_retryable";
 export async function retryTeardown(
   runId: string,
   viewer: Viewer,
-): Promise<
-  { ok: true; run: WorkshopRun } | { ok: false; error: RetryTeardownError }
-> {
+): Promise<{ ok: true; run: WorkshopRun } | { ok: false; error: RetryTeardownError }> {
   const run = await db.query.workshopRuns.findFirst({
     where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
@@ -463,18 +413,12 @@ export async function retryTeardown(
     return { ok: false, error: "not_retryable" };
   }
 
-  const [updated] = await db
-    .update(workshopRuns)
-    .set(DESTROY_RESET)
-    .where(eq(workshopRuns.id, runId))
-    .returning();
+  const [updated] = await db.update(workshopRuns).set(DESTROY_RESET).where(eq(workshopRuns.id, runId)).returning();
 
   await db.insert(runLogs).values({
     runId,
     stream: "system",
-    message:
-      "Teardown retry requested — this starts again from the top within a " +
-      "few minutes.",
+    message: "Teardown retry requested — this starts again from the top within a " + "few minutes.",
   });
 
   return { ok: true, run: updated };

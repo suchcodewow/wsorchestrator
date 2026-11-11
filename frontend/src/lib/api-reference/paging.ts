@@ -10,11 +10,7 @@ import type { Field } from "./types";
  * `q`, `sort`, `dir` and `page` for a list whose sorts are `sorts` and whose
  * default is the first, in `defaultDir`. `searches` says what `q` matches.
  */
-export function listQuery(
-  sorts: readonly string[],
-  searches: string,
-  defaultDir: "asc" | "desc" = "asc",
-): Field[] {
+export function listQuery(sorts: readonly string[], searches: string, defaultDir: "asc" | "desc" = "asc"): Field[] {
   return [
     { name: "q", type: "string", note: `Matches any part of ${searches}, ignoring case.` },
     {

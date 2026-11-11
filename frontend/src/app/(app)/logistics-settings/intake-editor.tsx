@@ -11,33 +11,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  ArrowDown,
-  ArrowUp,
-  Copy,
-  ExternalLink,
-  Loader2,
-  Plus,
-  Save,
-  Trash2,
-  X,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, ExternalLink, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 import { AutoGrowTextarea } from "@/components/auto-grow-textarea";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  INTAKE_LIMITS,
-  INTAKE_QUESTION_KINDS,
-  type IntakeFormId,
-  type IntakeQuestion,
-  type IntakeQuestionKind,
-} from "@/db/schema";
-import {
-  HAS_OPTIONS,
-  HAS_OTHER,
-  INTAKE_FORM_LABELS,
-  KIND_LABELS,
-} from "@/lib/logistics/intake-values";
+import { INTAKE_LIMITS, INTAKE_QUESTION_KINDS, type IntakeFormId, type IntakeQuestion, type IntakeQuestionKind } from "@/db/schema";
+import { HAS_OPTIONS, HAS_OTHER, INTAKE_FORM_LABELS, KIND_LABELS } from "@/lib/logistics/intake-values";
 import type { IntakeFormView } from "@/lib/logistics/intake";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -48,8 +27,7 @@ const SELECT = cn(
 );
 
 const ERRORS: Record<string, string> = {
-  invalid:
-    "Give every question a title, and every list question at least one option, with none repeated.",
+  invalid: "Give every question a title, and every list question at least one option, with none repeated.",
   forbidden: "Your own role changed — reload the page.",
 };
 
@@ -65,13 +43,7 @@ const blank = (): IntakeQuestion => ({
   other: false,
 });
 
-export function IntakeEditor({
-  id,
-  form,
-}: {
-  id: IntakeFormId;
-  form: IntakeFormView;
-}) {
+export function IntakeEditor({ id, form }: { id: IntakeFormId; form: IntakeFormView }) {
   const router = useRouter();
   const [introduction, setIntroduction] = useState(form.introduction);
   const [questions, setQuestions] = useState<IntakeQuestion[]>(form.questions);
@@ -80,24 +52,16 @@ export function IntakeEditor({
   const [savedAt, setSavedAt] = useState(form.updatedAt);
 
   const listsComplete = questions.every(
-    (q) =>
-      !HAS_OPTIONS.has(q.kind) ||
-      (q.options.length > 0 && q.options.every((o) => o.trim().length > 0)),
+    (q) => !HAS_OPTIONS.has(q.kind) || (q.options.length > 0 && q.options.every((o) => o.trim().length > 0)),
   );
-  const canSave =
-    questions.every((q) => q.title.trim().length > 0) && listsComplete;
+  const canSave = questions.every((q) => q.title.trim().length > 0) && listsComplete;
 
   function change(id: string, patch: Partial<IntakeQuestion>) {
-    setQuestions((list) =>
-      list.map((q) => (q.id === id ? { ...q, ...patch } : q)),
-    );
+    setQuestions((list) => list.map((q) => (q.id === id ? { ...q, ...patch } : q)));
   }
 
   function setKind(q: IntakeQuestion, kind: IntakeQuestionKind) {
-    const options =
-      HAS_OPTIONS.has(kind) && q.options.length === 0
-        ? ["Option 1"]
-        : q.options;
+    const options = HAS_OPTIONS.has(kind) && q.options.length === 0 ? ["Option 1"] : q.options;
     change(q.id, { kind, options, other: HAS_OTHER.has(kind) && q.other });
   }
 
@@ -133,9 +97,7 @@ export function IntakeEditor({
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(
-          ERRORS[body?.error ?? ""] ?? `Could not save (${res.status}).`,
-        );
+        setError(ERRORS[body?.error ?? ""] ?? `Could not save (${res.status}).`);
         return;
       }
       setSavedAt(body.updatedAt);
@@ -148,29 +110,15 @@ export function IntakeEditor({
   }
 
   return (
-    <motion.div
-      variants={staggerParent(0.05)}
-      initial="hidden"
-      animate="show"
-      className="max-w-3xl space-y-6"
-    >
-      <motion.div
-        variants={riseChild}
-        className="flex flex-wrap items-end justify-between gap-3"
-      >
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-3xl space-y-6">
+      <motion.div variants={riseChild} className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1.5">
-          <h2 className="text-xl font-medium tracking-tight">
-            {INTAKE_FORM_LABELS[id]} form
-          </h2>
+          <h2 className="text-xl font-medium tracking-tight">{INTAKE_FORM_LABELS[id]} form</h2>
           <p className="text-sm text-muted-foreground">
-            {questions.length}{" "}
-            {questions.length === 1 ? "question" : "questions"}
+            {questions.length} {questions.length === 1 ? "question" : "questions"}
             {savedAt ? (
               <>
-                , last saved{" "}
-                <span className="font-medium text-foreground">
-                  {new Date(savedAt).toLocaleString()}
-                </span>
+                , last saved <span className="font-medium text-foreground">{new Date(savedAt).toLocaleString()}</span>
               </>
             ) : (
               ", not saved yet"
@@ -185,10 +133,7 @@ export function IntakeEditor({
         </Button>
       </motion.div>
 
-      <motion.div
-        variants={staggerParent(0.04)}
-        className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm"
-      >
+      <motion.div variants={staggerParent(0.04)} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
         <motion.section variants={riseChild} className="space-y-1.5 px-5 py-4">
           <label htmlFor={`${id}-introduction`} className="text-sm font-medium">
             Introduction
@@ -201,42 +146,25 @@ export function IntakeEditor({
             onChange={(e) => setIntroduction(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            {introduction.length.toLocaleString()} of{" "}
-            {INTAKE_LIMITS.introduction.toLocaleString()} characters. Line
-            breaks show as written; wrap words in **double asterisks** for bold.
+            {introduction.length.toLocaleString()} of {INTAKE_LIMITS.introduction.toLocaleString()} characters. Line breaks show as written;
+            wrap words in **double asterisks** for bold.
           </p>
         </motion.section>
-        <motion.p
-          variants={riseChild}
-          className="px-5 py-4 text-sm text-muted-foreground"
-        >
-          The form always opens with the dates of the next{" "}
-          {id === "bootcamp" ? "Bootcamp" : "Intermediate"} class and this
-          introduction, then the Sign-Up and Defer buttons. Once someone signs
-          up, it asks their preferred first name (optional), to confirm their time
-          zone and about dietary restrictions and allergies, then the questions
-          below. Those three are automatic and are not edited here.
+        <motion.p variants={riseChild} className="px-5 py-4 text-sm text-muted-foreground">
+          The form always opens with the dates of the next {id === "bootcamp" ? "Bootcamp" : "Intermediate"} class and this introduction,
+          then the Sign-Up and Defer buttons. Once someone signs up, it asks their preferred first name (optional), to confirm their time
+          zone and about dietary restrictions and allergies, then the questions below. Those three are automatic and are not edited here.
         </motion.p>
         {questions.length === 0 && (
-          <motion.p
-            variants={riseChild}
-            className="px-5 py-8 text-center text-sm text-muted-foreground"
-          >
-            No questions of its own yet. Everyone is still asked their preferred
-            name, time zone and dietary needs.
+          <motion.p variants={riseChild} className="px-5 py-8 text-center text-sm text-muted-foreground">
+            No questions of its own yet. Everyone is still asked their preferred name, time zone and dietary needs.
           </motion.p>
         )}
 
         {questions.map((q, i) => (
-          <motion.section
-            key={q.id}
-            variants={riseChild}
-            className="space-y-3 px-5 py-4"
-          >
+          <motion.section key={q.id} variants={riseChild} className="space-y-3 px-5 py-4">
             <div className="flex items-start gap-2">
-              <span className="mt-2 w-6 shrink-0 text-sm text-muted-foreground">
-                {i + 1}.
-              </span>
+              <span className="mt-2 w-6 shrink-0 text-sm text-muted-foreground">{i + 1}.</span>
               <div className="grid flex-1 items-start gap-3 sm:grid-cols-[1fr_11rem]">
                 <AutoGrowTextarea
                   aria-label={`Question ${i + 1}`}
@@ -248,9 +176,7 @@ export function IntakeEditor({
                 <select
                   aria-label={`Question ${i + 1} kind`}
                   value={q.kind}
-                  onChange={(e) =>
-                    setKind(q, e.target.value as IntakeQuestionKind)
-                  }
+                  onChange={(e) => setKind(q, e.target.value as IntakeQuestionKind)}
                   className={SELECT}
                 >
                   {INTAKE_QUESTION_KINDS.map((k) => (
@@ -272,16 +198,10 @@ export function IntakeEditor({
               />
 
               {HAS_OPTIONS.has(q.kind) ? (
-                <OptionsEditor
-                  question={q}
-                  index={i}
-                  onChange={(patch) => change(q.id, patch)}
-                />
+                <OptionsEditor question={q} index={i} onChange={(patch) => change(q.id, patch)} />
               ) : (
                 <p className="border-b border-dashed pb-1 text-sm text-muted-foreground">
-                  {q.kind === "short"
-                    ? "Short answer text"
-                    : "Long answer text"}
+                  {q.kind === "short" ? "Short answer text" : "Long answer text"}
                 </p>
               )}
 
@@ -290,9 +210,7 @@ export function IntakeEditor({
                   <input
                     type="checkbox"
                     checked={q.required}
-                    onChange={(e) =>
-                      change(q.id, { required: e.target.checked })
-                    }
+                    onChange={(e) => change(q.id, { required: e.target.checked })}
                     className="size-3.5 shrink-0 accent-brand"
                   />
                   Required
@@ -330,9 +248,7 @@ export function IntakeEditor({
                     size="icon"
                     aria-label={`Remove question ${i + 1}`}
                     className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() =>
-                      setQuestions((list) => list.filter((x) => x.id !== q.id))
-                    }
+                    onClick={() => setQuestions((list) => list.filter((x) => x.id !== q.id))}
                   >
                     <Trash2 className="size-3.5" />
                   </Button>
@@ -342,10 +258,7 @@ export function IntakeEditor({
           </motion.section>
         ))}
 
-        <motion.div
-          variants={riseChild}
-          className="flex flex-wrap items-center gap-3 px-5 py-4"
-        >
+        <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3 px-5 py-4">
           <Button
             variant="outline"
             disabled={questions.length >= INTAKE_LIMITS.questions}
@@ -356,19 +269,14 @@ export function IntakeEditor({
           </Button>
           {questions.length > 0 && (
             <span className="text-sm text-muted-foreground">
-              {questions.filter((q) => q.required).length} of {questions.length}{" "}
-              required
+              {questions.filter((q) => q.required).length} of {questions.length} required
             </span>
           )}
         </motion.div>
       </motion.div>
 
       {error && (
-        <motion.p
-          variants={riseChild}
-          role="alert"
-          className="text-sm text-destructive"
-        >
+        <motion.p variants={riseChild} role="alert" className="text-sm text-destructive">
           {error}
         </motion.p>
       )}
@@ -395,16 +303,9 @@ function OptionsEditor({
 }) {
   const marker = (n: number) =>
     q.kind === "dropdown" ? (
-      <span className="w-4 shrink-0 text-right text-sm text-muted-foreground">
-        {n}.
-      </span>
+      <span className="w-4 shrink-0 text-right text-sm text-muted-foreground">{n}.</span>
     ) : (
-      <span
-        className={cn(
-          "size-4 shrink-0 border border-muted-foreground/50",
-          q.kind === "choice" ? "rounded-full" : "rounded-sm",
-        )}
-      />
+      <span className={cn("size-4 shrink-0 border border-muted-foreground/50", q.kind === "choice" ? "rounded-full" : "rounded-sm")} />
     );
 
   function setOption(n: number, value: string) {
@@ -427,9 +328,7 @@ function OptionsEditor({
             size="icon"
             aria-label={`Remove option ${n + 1}`}
             disabled={q.options.length === 1}
-            onClick={() =>
-              onChange({ options: q.options.filter((_, j) => j !== n) })
-            }
+            onClick={() => onChange({ options: q.options.filter((_, j) => j !== n) })}
           >
             <X className="size-3.5" />
           </Button>
@@ -438,15 +337,8 @@ function OptionsEditor({
       {q.other && (
         <div className="flex items-center gap-2">
           {marker(q.options.length + 1)}
-          <span className="flex-1 border-b border-dashed pb-1 text-sm text-muted-foreground">
-            Other: their own answer
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Remove Other"
-            onClick={() => onChange({ other: false })}
-          >
+          <span className="flex-1 border-b border-dashed pb-1 text-sm text-muted-foreground">Other: their own answer</span>
+          <Button variant="ghost" size="icon" aria-label="Remove Other" onClick={() => onChange({ other: false })}>
             <X className="size-3.5" />
           </Button>
         </div>
@@ -466,11 +358,7 @@ function OptionsEditor({
           Add option
         </Button>
         {HAS_OTHER.has(q.kind) && !q.other && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onChange({ other: true })}
-          >
+          <Button variant="ghost" size="sm" onClick={() => onChange({ other: true })}>
             Add &ldquo;Other&rdquo;
           </Button>
         )}

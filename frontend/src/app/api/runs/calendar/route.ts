@@ -24,8 +24,7 @@ export async function GET(req: Request) {
   }
 
   const saved = (await preferencesOf(user.id)).calendarScope;
-  const scope: CalendarScope =
-    (asked as CalendarScope | null) ?? (canSeeAllEvents(user.access) ? saved : "own");
+  const scope: CalendarScope = (asked as CalendarScope | null) ?? (canSeeAllEvents(user.access) ? saved : "own");
 
   return NextResponse.json({ scope, runs: await listCalendarRuns(user, scope) });
 }

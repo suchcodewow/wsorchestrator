@@ -64,7 +64,10 @@ const HEADERS = [
 
 describe("lining a responses sheet up with a form", () => {
   test("matches every question of the intermediate form, the long one by the title it ends with", () => {
-    const plan = planImport([HEADERS, ["10/5/2026 14:03:22", "pat@example.test", "Yes - I'm there!", "Yes", "Vegan", "4", ""]], INTERMEDIATE);
+    const plan = planImport(
+      [HEADERS, ["10/5/2026 14:03:22", "pat@example.test", "Yes - I'm there!", "Yes", "Vegan", "4", ""]],
+      INTERMEDIATE,
+    );
     assert.ok(!("error" in plan));
     assert.deepEqual(
       plan.columns.map((c) => c.questionId),
@@ -86,7 +89,10 @@ describe("lining a responses sheet up with a form", () => {
       INTERMEDIATE,
     );
     assert.ok(!("error" in plan));
-    assert.deepEqual(plan.entries.map((e) => e.email), ["pat@example.test"]);
+    assert.deepEqual(
+      plan.entries.map((e) => e.email),
+      ["pat@example.test"],
+    );
     assert.deepEqual(plan.problems, [
       { row: 4, problem: "no_email" },
       { row: 5, problem: "not_an_email" },
@@ -94,12 +100,27 @@ describe("lining a responses sheet up with a form", () => {
   });
 
   test("needs an email column and at least one row", () => {
-    assert.deepEqual(planImport([["Timestamp", "Name"], ["x", "y"]], INTERMEDIATE), { error: "no_email_column" });
+    assert.deepEqual(
+      planImport(
+        [
+          ["Timestamp", "Name"],
+          ["x", "y"],
+        ],
+        INTERMEDIATE,
+      ),
+      { error: "no_email_column" },
+    );
     assert.deepEqual(planImport([HEADERS], INTERMEDIATE), { error: "empty" });
   });
 
   test("leaves a column that answers no question out", () => {
-    const plan = planImport([["Email", "Shirt size"], ["pat@example.test", "M"]], INTERMEDIATE);
+    const plan = planImport(
+      [
+        ["Email", "Shirt size"],
+        ["pat@example.test", "M"],
+      ],
+      INTERMEDIATE,
+    );
     assert.ok(!("error" in plan));
     assert.deepEqual(plan.columns, [
       { header: "Email", questionId: null },
@@ -118,7 +139,13 @@ describe("lining a responses sheet up with a form", () => {
       options: ["Sunday, Nov 15", "Monday", "Tuesday"],
       other: false,
     };
-    const plan = planImport([["Email", "Which nights do you need a hotel?"], ["pat@example.test", "Sunday, Nov 15, Tuesday"]], [nights]);
+    const plan = planImport(
+      [
+        ["Email", "Which nights do you need a hotel?"],
+        ["pat@example.test", "Sunday, Nov 15, Tuesday"],
+      ],
+      [nights],
+    );
     assert.ok(!("error" in plan));
     assert.deepEqual(plan.entries[0]!.answers, { nights: ["Sunday, Nov 15", "Tuesday"] });
   });

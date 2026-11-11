@@ -18,8 +18,7 @@ export const FRAME_TICKET_SECONDS = 60;
 
 const IDENTIFIER = "frame-signin:";
 
-const sha256 = (value: string) =>
-  createHash("sha256").update(value, "utf8").digest("hex");
+const sha256 = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
 
 /** A ticket for `userId`, to be claimed within a minute. */
 export async function mintFrameTicket(userId: string): Promise<string> {
@@ -58,10 +57,7 @@ export async function claimFrameTicket(ticket: string): Promise<FrameSession | n
   if (!used) return null;
 
   const userId = used.identifier.slice(IDENTIFIER.length);
-  const [user] = await db
-    .select({ id: users.id, email: users.email, name: users.name })
-    .from(users)
-    .where(eq(users.id, userId));
+  const [user] = await db.select({ id: users.id, email: users.email, name: users.name }).from(users).where(eq(users.id, userId));
   if (!user) return null;
 
   const sessionToken = randomUUID();

@@ -53,10 +53,7 @@ if (!mainRoot || fs.realpathSync(mainRoot) === fs.realpathSync(root)) {
 function setDatabaseUrl(url) {
   const env = fs.readFileSync(envFile, "utf8");
   const line = `DATABASE_URL="${url}"`;
-  fs.writeFileSync(
-    envFile,
-    /^DATABASE_URL\s*=/m.test(env) ? env.replace(/^DATABASE_URL\s*=.*$/m, line) : `${env.trimEnd()}\n${line}\n`,
-  );
+  fs.writeFileSync(envFile, /^DATABASE_URL\s*=/m.test(env) ? env.replace(/^DATABASE_URL\s*=.*$/m, line) : `${env.trimEnd()}\n${line}\n`);
 }
 
 async function assertLocal(url) {
@@ -75,9 +72,7 @@ async function exists(url, name) {
 async function dropDatabase(url, name) {
   if (!name.startsWith(PREFIX)) fail(`${name} is not a worktree database (${PREFIX}*). Refusing to drop it.`);
   // FORCE ends this worktree's own dev server's connections, which are the only ones it should have.
-  await withClient(urlFor(url, "postgres"), (client) =>
-    client.query(`drop database if exists ${quoteIdent(name)} with (force)`),
-  );
+  await withClient(urlFor(url, "postgres"), (client) => client.query(`drop database if exists ${quoteIdent(name)} with (force)`));
 }
 
 /**
@@ -105,7 +100,8 @@ async function create() {
   const fresh = flags.includes("--fresh");
   if (!fs.existsSync(envFile)) {
     const mainEnv = path.join(mainRoot, "frontend", ".env");
-    if (!fs.existsSync(mainEnv)) fail("Neither this worktree nor the main checkout has frontend/.env. Run npm run dev:setup in the main checkout first.");
+    if (!fs.existsSync(mainEnv))
+      fail("Neither this worktree nor the main checkout has frontend/.env. Run npm run dev:setup in the main checkout first.");
     fs.copyFileSync(mainEnv, envFile);
     console.log("copied frontend/.env from the main checkout");
   }
@@ -116,7 +112,10 @@ async function create() {
   await assertLocal(sourceUrl);
   const source = databaseName(sourceUrl);
 
-  const slug = git("rev-parse", "--abbrev-ref", "HEAD").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  const slug = git("rev-parse", "--abbrev-ref", "HEAD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
   const name = `${PREFIX}${slug || "detached"}`.slice(0, 63);
   if (name === source) fail(`The worktree database would be ${source} itself. Refusing.`);
   const url = urlFor(sourceUrl, name);
@@ -130,9 +129,7 @@ async function create() {
     }
   }
   if (!(await exists(sourceUrl, name))) {
-    await withClient(urlFor(sourceUrl, "postgres"), (client) =>
-      client.query(`create database ${quoteIdent(name)}`),
-    );
+    await withClient(urlFor(sourceUrl, "postgres"), (client) => client.query(`create database ${quoteIdent(name)}`));
     try {
       copy(decodeURIComponent(new URL(sourceUrl).username) || "postgres", source, name);
     } catch (err) {

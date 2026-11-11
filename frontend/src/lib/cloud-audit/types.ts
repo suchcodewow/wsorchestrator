@@ -16,12 +16,7 @@ export type ResourceOwner = {
 
 export type Classification = "untracked" | "infra" | "tracked" | "unmanaged";
 
-export const CLASSIFICATIONS: Classification[] = [
-  "untracked",
-  "infra",
-  "tracked",
-  "unmanaged",
-];
+export const CLASSIFICATIONS: Classification[] = ["untracked", "infra", "tracked", "unmanaged"];
 
 export type AuditedResource = {
   id: string;
@@ -43,14 +38,9 @@ export type CloudAudit = {
   counts: Record<Classification | "total", number>;
 };
 
-export type AuditUnavailable =
-  | "not_configured"
-  | "permission_denied"
-  | "unavailable";
+export type AuditUnavailable = "not_configured" | "permission_denied" | "unavailable";
 
-export type CloudAuditResult =
-  | { ok: true; audit: CloudAudit }
-  | { ok: false; error: AuditUnavailable };
+export type CloudAuditResult = { ok: true; audit: CloudAudit } | { ok: false; error: AuditUnavailable };
 
 export type CloudStatusReport = Record<AuditTarget, CloudAuditResult>;
 
@@ -65,10 +55,7 @@ export function summarize(resources: AuditedResource[]): {
   resources: AuditedResource[];
   counts: Record<Classification | "total", number>;
 } {
-  const sorted = [...resources].sort(
-    (a, b) =>
-      RANK[a.classification] - RANK[b.classification] || a.id.localeCompare(b.id),
-  );
+  const sorted = [...resources].sort((a, b) => RANK[a.classification] - RANK[b.classification] || a.id.localeCompare(b.id));
   const counts = {
     total: sorted.length,
     untracked: 0,

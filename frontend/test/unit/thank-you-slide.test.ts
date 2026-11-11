@@ -28,11 +28,17 @@ describe("gridFor", () => {
 
 describe("thankYouRequests", () => {
   test("keeps the order given and flames only those who helped twice", () => {
-    const reqs = thankYouRequests("starter", [judge(0), judge(1, 2), judge(2)]) as Record<string, { objectId?: string; text?: string } | undefined>[];
+    const reqs = thankYouRequests("starter", [judge(0), judge(1, 2), judge(2)]) as Record<
+      string,
+      { objectId?: string; text?: string } | undefined
+    >[];
     const ids = reqs.map((r) => r.createImage?.objectId).filter(Boolean);
     assert.deepEqual(ids, ["photo_0", "photo_1", "photo_2"]);
     const flames = reqs.filter((r) => r.createShape?.objectId?.startsWith("flame_"));
-    assert.deepEqual(flames.map((r) => r.createShape?.objectId), ["flame_1"]);
+    assert.deepEqual(
+      flames.map((r) => r.createShape?.objectId),
+      ["flame_1"],
+    );
     assert.ok(reqs.some((r) => r.insertText?.text === "🔥2X"));
   });
 });

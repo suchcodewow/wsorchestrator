@@ -81,7 +81,8 @@ export const TIMED_JOBS: readonly TimedJobDef[] = [
   {
     key: "diagnostic-reminders",
     name: "Diagnostic reminders",
-    summary: "Sends each Diagnostic Participant with tests left a Slack message with where they stand; a dry run until it is put live on Diagnostic Settings → Slack.",
+    summary:
+      "Sends each Diagnostic Participant with tests left a Slack message with where they stand; a dry run until it is put live on Diagnostic Settings → Slack.",
     cron: "0 10 * * *",
     timeZone: "America/New_York",
     schedule: "Daily at 10:00 AM Eastern",
@@ -91,7 +92,8 @@ export const TIMED_JOBS: readonly TimedJobDef[] = [
   {
     key: "canary-wire-pull",
     name: "Canary Wire pull",
-    summary: "Pulls completions from Mindtickle, a step at a time: a pull takes three or four runs five minutes apart, so a schedule needs a burst like the default's.",
+    summary:
+      "Pulls completions from Mindtickle, a step at a time: a pull takes three or four runs five minutes apart, so a schedule needs a burst like the default's.",
     cron: "0,5,10,15,20,25,30 */2 * * *",
     timeZone: "America/New_York",
     schedule: "Every 5 minutes for the first half hour of every second hour, Eastern",

@@ -70,10 +70,7 @@ describe("messageFor", () => {
   });
 
   test("appends what Harness said, trimmed", () => {
-    assert.equal(
-      messageFor("org_failed", 502, "  Quota exceeded \n"),
-      `${MESSAGES.org_failed} Harness said: Quota exceeded`,
-    );
+    assert.equal(messageFor("org_failed", 502, "  Quota exceeded \n"), `${MESSAGES.org_failed} Harness said: Quota exceeded`);
   });
 
   test("ignores a detail that is blank or not a string", () => {

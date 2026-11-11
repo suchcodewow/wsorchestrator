@@ -12,14 +12,7 @@ import { motion } from "framer-motion";
 import { AlertTriangle, DatabaseZap, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { StatusChip, format, type BackupRun } from "./backups-table";
@@ -62,9 +55,8 @@ export function ProductionBackups({
           <code className="text-foreground">
             {source.project}/{source.instance}
           </code>
-          &apos;s backups to see production&apos;s workshops, guides and settings
-          here. Imported events are read-only, and this deployment&apos;s runner
-          never acts on them.
+          &apos;s backups to see production&apos;s workshops, guides and settings here. Imported events are read-only, and this
+          deployment&apos;s runner never acts on them.
         </p>
       </div>
 
@@ -72,17 +64,15 @@ export function ProductionBackups({
         <div className="px-5 py-2.5">
           <span className="font-medium">Removed: </span>
           <span className="text-muted-foreground">
-            sessions, invites and API tokens; Harness tokens, secrets and
-            template sources; the Slack installation; OAuth tokens on accounts;
-            Google and Zoom connections, synced meetings and the live-sync
-            switch; attendee temp passwords.
+            sessions, invites and API tokens; Harness tokens, secrets and template sources; the Slack installation; OAuth tokens on
+            accounts; Google and Zoom connections, synced meetings and the live-sync switch; attendee temp passwords.
           </span>
         </div>
         <div className="px-5 py-2.5">
           <span className="font-medium">Changed: </span>
           <span className="text-muted-foreground">
-            every imported event is marked production&apos;s and read-only;
-            roles are reset to what they are here now; migrations are applied.
+            every imported event is marked production&apos;s and read-only; roles are reset to what they are here now; migrations are
+            applied.
           </span>
         </div>
       </div>
@@ -96,12 +86,7 @@ export function ProductionBackups({
           Production has no backups listed.
         </p>
       ) : (
-        <motion.ul
-          variants={staggerParent()}
-          initial="hidden"
-          animate="show"
-          className="mt-6 grid gap-2"
-        >
+        <motion.ul variants={staggerParent()} initial="hidden" animate="show" className="mt-6 grid gap-2">
           {initial.map((backup) => (
             <motion.li
               key={backup.id}
@@ -110,20 +95,12 @@ export function ProductionBackups({
             >
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2.5">
-                  <span className="tnum text-sm font-medium">
-                    {format(backup.startTime)}
-                  </span>
-                  <Badge variant="secondary">
-                    {backup.type === "AUTOMATED" ? "Daily" : "On demand"}
-                  </Badge>
+                  <span className="tnum text-sm font-medium">{format(backup.startTime)}</span>
+                  <Badge variant="secondary">{backup.type === "AUTOMATED" ? "Daily" : "On demand"}</Badge>
                 </span>
                 <span className="mt-1 flex items-center gap-3">
                   <StatusChip status={backup.status} />
-                  {backup.description && (
-                    <span className="truncate text-xs text-muted-foreground">
-                      {backup.description}
-                    </span>
-                  )}
+                  {backup.description && <span className="truncate text-xs text-muted-foreground">{backup.description}</span>}
                 </span>
               </span>
 
@@ -227,8 +204,7 @@ function ImportDialog({
             <DialogHeader>
               <DialogTitle>Import started</DialogTitle>
               <DialogDescription className="leading-relaxed">
-                It takes a while: a backup of this deployment first, then the
-                restore. The app goes offline partway through and everyone is
+                It takes a while: a backup of this deployment first, then the restore. The app goes offline partway through and everyone is
                 signed out.
               </DialogDescription>
             </DialogHeader>
@@ -244,8 +220,8 @@ function ImportDialog({
                   <code className="text-foreground">{execution.split("/").pop()}</code>
                 </>
               )}
-              . If it fails after the restore, restore the backup it took first,
-              listed above as &ldquo;Before importing production backup&rdquo;.
+              . If it fails after the restore, restore the backup it took first, listed above as &ldquo;Before importing production
+              backup&rdquo;.
             </p>
 
             <DialogFooter>
@@ -262,46 +238,29 @@ function ImportDialog({
                 Replace this deployment&apos;s database with production&apos;s
               </DialogTitle>
               <DialogDescription className="leading-relaxed">
-                Everything on <code>{instance}</code> is replaced by
-                production&apos;s backup from{" "}
+                Everything on <code>{instance}</code> is replaced by production&apos;s backup from{" "}
                 <strong>{format(backup?.startTime ?? null)}</strong>.
               </DialogDescription>
             </DialogHeader>
 
             <ul className="grid gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm leading-relaxed">
+              <li>A backup of this deployment is taken first. Restoring it undoes the import.</li>
+              <li>The reaper and the scheduler are paused while it runs. Scheduled events here are lost.</li>
+              <li>Production&apos;s events arrive read-only, with their attendee passwords removed.</li>
               <li>
-                A backup of this deployment is taken first. Restoring it undoes
-                the import.
-              </li>
-              <li>
-                The reaper and the scheduler are paused while it runs. Scheduled
-                events here are lost.
-              </li>
-              <li>
-                Production&apos;s events arrive read-only, with their attendee
-                passwords removed.
-              </li>
-              <li>
-                Production&apos;s saved Harness tokens, org secrets, template
-                sources and API tokens are removed. Re-add this
+                Production&apos;s saved Harness tokens, org secrets, template sources and API tokens are removed. Re-add this
                 deployment&apos;s own afterwards.
               </li>
-              <li>
-                Roles become what they are here now. Everyone is signed out,
-                you included.
-              </li>
+              <li>Roles become what they are here now. Everyone is signed out, you included.</li>
             </ul>
 
             {blocked && (
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
                 <p className="text-sm font-medium text-destructive">
-                  {holding.length === 1
-                    ? "1 event here still holds resources"
-                    : `${holding.length} events here still hold resources`}
+                  {holding.length === 1 ? "1 event here still holds resources" : `${holding.length} events here still hold resources`}
                 </p>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  The import would erase the only record of them. End and tear
-                  them down, or delete them, first.
+                  The import would erase the only record of them. End and tear them down, or delete them, first.
                 </p>
                 <ul className="mt-2 grid gap-1 text-xs">
                   {holding.map((run) => (
@@ -318,8 +277,7 @@ function ImportDialog({
 
             <div className="grid gap-1.5">
               <label htmlFor="import-confirm" className="text-sm font-medium">
-                Type <code className="text-foreground">{instance}</code> to
-                confirm
+                Type <code className="text-foreground">{instance}</code> to confirm
               </label>
               <Input
                 id="import-confirm"
@@ -338,11 +296,7 @@ function ImportDialog({
               <Button variant="ghost" onClick={onClose} disabled={pending}>
                 Cancel
               </Button>
-              <Button
-                variant="destructive"
-                disabled={!armed}
-                onClick={() => void start()}
-              >
+              <Button variant="destructive" disabled={!armed} onClick={() => void start()}>
                 {pending ? <Loader2 className="animate-spin" /> : <DatabaseZap />}
                 {pending ? "Starting…" : "Import production"}
               </Button>

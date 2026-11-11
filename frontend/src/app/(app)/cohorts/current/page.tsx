@@ -52,12 +52,7 @@ export default async function CurrentCohortPage({
   const intakes = await latestIntakesOf(page.rows.map((m) => m.email));
   return (
     <div className="space-y-4">
-      <TestGroupPanel
-        group={testGroup}
-        canManage={
-          session?.user ? canManageTestGroup(session.user.access) : false
-        }
-      />
+      <TestGroupPanel group={testGroup} canManage={session?.user ? canManageTestGroup(session.user.access) : false} />
       <CurrentCohortView
         tab="current"
         query={query}
@@ -67,13 +62,9 @@ export default async function CurrentCohortPage({
         unanswered={summary.unanswered}
         deferral={summary.deferral}
         activeBootcamp={active}
-        canSetTrack={
-          session?.user ? canManageTrainingSettings(session.user.access) : false
-        }
+        canSetTrack={session?.user ? canManageTrainingSettings(session.user.access) : false}
         meetings={meetings}
-        canMarkAttendance={
-          session?.user ? canManageTrainingSettings(session.user.access) : false
-        }
+        canMarkAttendance={session?.user ? canManageTrainingSettings(session.user.access) : false}
         intakes={intakes}
         intakeQuestions={intakeQuestions}
       />

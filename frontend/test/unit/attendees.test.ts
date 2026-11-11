@@ -34,13 +34,7 @@ before(async () => {
 const RUN = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
 const blank = { name: "", from: "", vacation: "" };
 
-const NOT_UUIDS = [
-  "",
-  "not-a-run",
-  "3f2504e04f8911d39a0c0305e82c3301",
-  `${RUN}'; drop table workshop_runs; --`,
-  ` ${RUN}`,
-];
+const NOT_UUIDS = ["", "not-a-run", "3f2504e04f8911d39a0c0305e82c3301", `${RUN}'; drop table workshop_runs; --`, ` ${RUN}`];
 
 describe("getAttendeeView", () => {
   test("a run id that is not a uuid is null without a query", async () => {
@@ -58,10 +52,7 @@ describe("saveAttendeeFields", () => {
   });
 
   test("the uuid check comes before the length check", async () => {
-    assert.deepEqual(
-      await saveAttendeeFields("nope", 1, { ...blank, name: "x".repeat(1000) }),
-      { ok: false, error: "not_found" },
-    );
+    assert.deepEqual(await saveAttendeeFields("nope", 1, { ...blank, name: "x".repeat(1000) }), { ok: false, error: "not_found" });
   });
 
   for (const field of ["name", "from", "vacation"] as const) {

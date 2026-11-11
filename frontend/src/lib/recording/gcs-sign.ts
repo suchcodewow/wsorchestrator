@@ -36,7 +36,10 @@ export type SignRequest = {
  * hex-encoded, goes on the end as `X-Goog-Signature`.
  */
 export function signingParts(req: SignRequest): { stringToSign: string; unsignedUrl: string } {
-  const stamp = req.now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, ""); // 20261009T153000Z
+  const stamp = req.now
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, ""); // 20261009T153000Z
   const date = stamp.slice(0, 8);
   const scope = `${date}/auto/storage/goog4_request`;
   const params: Record<string, string> = {
@@ -53,11 +56,6 @@ export function signingParts(req: SignRequest): { stringToSign: string; unsigned
     .join("&");
   const path = `/${req.bucket}/${encodeObjectPath(req.object)}`;
   const canonicalRequest = [req.method, path, query, `host:${req.host}`, "", "host", "UNSIGNED-PAYLOAD"].join("\n");
-  const stringToSign = [
-    "GOOG4-RSA-SHA256",
-    stamp,
-    scope,
-    createHash("sha256").update(canonicalRequest).digest("hex"),
-  ].join("\n");
+  const stringToSign = ["GOOG4-RSA-SHA256", stamp, scope, createHash("sha256").update(canonicalRequest).digest("hex")].join("\n");
   return { stringToSign, unsignedUrl: `${path}?${query}` };
 }

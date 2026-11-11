@@ -12,11 +12,7 @@ async function viewerCanEdit(): Promise<boolean> {
   return session?.user ? canManageLabGuides(session.user.access) : false;
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ guideSlug: string }>;
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ guideSlug: string }> }): Promise<Metadata> {
   const { guideSlug } = await params;
   const guide = await getLabGuideBySlug(guideSlug);
   if (!guide) return { title: "Lab guide" };
@@ -24,11 +20,7 @@ export async function generateMetadata({
   return { title: guide.title, description: guide.summary || undefined };
 }
 
-export default async function GuidePage({
-  params,
-}: {
-  params: Promise<{ guideSlug: string }>;
-}) {
+export default async function GuidePage({ params }: { params: Promise<{ guideSlug: string }> }) {
   const { guideSlug } = await params;
 
   const guide = await getLabGuideBySlug(guideSlug);

@@ -55,11 +55,7 @@ export type CohortMember = { email: string; stage: CohortStage; track: "sales" |
 export type ChannelContact = { email: string; kind: ChannelContactKind };
 
 /** Each channel's emails, lowercased: its stage's cohort on the tracks it takes, then its contacts. */
-export function channelAudience(
-  channel: CohortChannel,
-  cohort: readonly CohortMember[],
-  contacts: readonly ChannelContact[],
-): Set<string> {
+export function channelAudience(channel: CohortChannel, cohort: readonly CohortMember[], contacts: readonly ChannelContact[]): Set<string> {
   const emails = new Set<string>();
   for (const m of cohort) {
     if (m.stage === channel.stage && (channel.prefix === "sales" || m.track === "engineer")) {

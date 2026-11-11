@@ -12,12 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  MICROPHONE_PROBLEM_MESSAGES,
-  RECORDING_BITS_PER_SECOND,
-  RECORDING_CHUNK_MS,
-  pickMimeType,
-} from "@/lib/recording/format";
+import { MICROPHONE_PROBLEM_MESSAGES, RECORDING_BITS_PER_SECOND, RECORDING_CHUNK_MS, pickMimeType } from "@/lib/recording/format";
 import { closeMicrophone, openMicrophone } from "@/lib/recording/microphone";
 import { appendChunk, createRecording, markStopped } from "@/lib/recording/store";
 

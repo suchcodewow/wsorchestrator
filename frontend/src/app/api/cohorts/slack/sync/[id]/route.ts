@@ -3,12 +3,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
-import {
-  countSlackSyncChanges,
-  getSlackSyncRun,
-  isSlackChangeKind,
-  listSlackSyncChanges,
-} from "@/lib/cohorts/slack-sync";
+import { countSlackSyncChanges, getSlackSyncRun, isSlackChangeKind, listSlackSyncChanges } from "@/lib/cohorts/slack-sync";
 import { SLACK_SYNC_CHANGE_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { canManageTrainingSettings } from "@/lib/roles";

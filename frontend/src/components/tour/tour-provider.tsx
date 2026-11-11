@@ -100,7 +100,10 @@ export function TourProvider({ autoPlay, children }: { autoPlay: boolean; childr
         if (takeTourParam() && tour) {
           setBeckonAt({ path: pathname, ms: LINK_TRACE_MS });
           // Unless the question mark was clicked in the meantime and the tour is already going.
-          timer = window.setTimeout(() => setRun((r) => r ?? { path: pathname, steps: tour.steps, start: 0, preview: false }), LINK_TRACE_MS * TRACE_COUNT);
+          timer = window.setTimeout(
+            () => setRun((r) => r ?? { path: pathname, steps: tour.steps, start: 0, preview: false }),
+            LINK_TRACE_MS * TRACE_COUNT,
+          );
         } else if (tour && tour.version > body.seenVersion && autoPlay && !isFramed()) {
           setBeckonAt({ path: pathname, ms: FIRST_VISIT_MS });
           markSeen(tour);

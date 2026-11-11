@@ -19,13 +19,7 @@
 import { afterEach, beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  EMPTY_SCRUB,
-  SCRUB_VALUE,
-  harnessTimestamp,
-  scrubDeadline,
-  scrubWindowDays,
-} from "@/lib/harness-scrub";
+import { EMPTY_SCRUB, SCRUB_VALUE, harnessTimestamp, scrubDeadline, scrubWindowDays } from "@/lib/harness-scrub";
 
 const DAY = 86_400_000;
 

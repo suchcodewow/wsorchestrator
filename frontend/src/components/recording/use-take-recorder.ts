@@ -19,13 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RECORDING_SUBJECT, appendChunk, createRecording, markStopped, requestPersistence } from "@/lib/recording/store";
-import {
-  VIDEO_AUDIO_BITS_PER_SECOND,
-  VIDEO_BITS_PER_SECOND,
-  VIDEO_CHUNK_MS,
-  pickVideoMimeType,
-  pieceRanges,
-} from "@/lib/recording/video";
+import { VIDEO_AUDIO_BITS_PER_SECOND, VIDEO_BITS_PER_SECOND, VIDEO_CHUNK_MS, pickVideoMimeType, pieceRanges } from "@/lib/recording/video";
 
 export type TakeState = "idle" | "starting" | "recording" | "stopping";
 

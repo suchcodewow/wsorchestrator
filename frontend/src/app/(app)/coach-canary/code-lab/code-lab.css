@@ -116,14 +116,31 @@
   background: color-mix(in oklab, var(--brand) 30%, transparent);
 }
 
-.cl-punct { color: var(--cl-punct); }
-.cl-tag { color: var(--cl-tag); }
-.cl-attr { color: var(--cl-attr); }
-.cl-string { color: var(--cl-string); }
-.cl-comment { color: var(--cl-comment); font-style: italic; }
-.cl-selector { color: var(--cl-selector); }
-.cl-prop { color: var(--cl-prop); }
-.cl-value { color: var(--cl-value); }
+.cl-punct {
+  color: var(--cl-punct);
+}
+.cl-tag {
+  color: var(--cl-tag);
+}
+.cl-attr {
+  color: var(--cl-attr);
+}
+.cl-string {
+  color: var(--cl-string);
+}
+.cl-comment {
+  color: var(--cl-comment);
+  font-style: italic;
+}
+.cl-selector {
+  color: var(--cl-selector);
+}
+.cl-prop {
+  color: var(--cl-prop);
+}
+.cl-value {
+  color: var(--cl-value);
+}
 
 .cl-diff-row {
   display: grid;
@@ -143,7 +160,15 @@
   overflow-x: auto;
   padding-right: 12px;
 }
-.cl-diff-row[data-kind="add"] { background: var(--cl-add); }
-.cl-diff-row[data-kind="add"] > span:nth-child(3) { color: var(--cl-add-ink); }
-.cl-diff-row[data-kind="del"] { background: var(--cl-del); }
-.cl-diff-row[data-kind="del"] > span:nth-child(3) { color: var(--cl-del-ink); }
+.cl-diff-row[data-kind="add"] {
+  background: var(--cl-add);
+}
+.cl-diff-row[data-kind="add"] > span:nth-child(3) {
+  color: var(--cl-add-ink);
+}
+.cl-diff-row[data-kind="del"] {
+  background: var(--cl-del);
+}
+.cl-diff-row[data-kind="del"] > span:nth-child(3) {
+  color: var(--cl-del-ink);
+}

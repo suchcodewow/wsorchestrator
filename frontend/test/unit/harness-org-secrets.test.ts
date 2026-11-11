@@ -79,10 +79,11 @@ describe("STATUS_FOR", () => {
 describe("readOrgSecretForm", () => {
   describe("a text secret", () => {
     test("is read as typed, identifier included", async () => {
-      assert.deepEqual(
-        await readOrgSecretForm(form({ identifier: "aws_key", kind: "text", value: "AKIA..." })),
-        { ok: true, identifier: "aws_key", input: { kind: "text", value: "AKIA..." } },
-      );
+      assert.deepEqual(await readOrgSecretForm(form({ identifier: "aws_key", kind: "text", value: "AKIA..." })), {
+        ok: true,
+        identifier: "aws_key",
+        input: { kind: "text", value: "AKIA..." },
+      });
     });
 
     test("keeps the value's whitespace, which may be part of the secret", async () => {
@@ -102,20 +103,21 @@ describe("readOrgSecretForm", () => {
         ok: false,
         error: "malformed",
       });
-      assert.deepEqual(
-        await readOrgSecretForm(form({ identifier: "k", kind: "text", value: file(["x"]) })),
-        { ok: false, error: "malformed" },
-      );
+      assert.deepEqual(await readOrgSecretForm(form({ identifier: "k", kind: "text", value: file(["x"]) })), {
+        ok: false,
+        error: "malformed",
+      });
     });
   });
 
   describe("a file secret", () => {
     test("is read as UTF-8 text with its file name", async () => {
       const pem = "-----BEGIN KEY-----\nabc\n-----END KEY-----\n";
-      assert.deepEqual(
-        await readOrgSecretForm(form({ identifier: "gcp_sa", kind: "file", file: file([pem], "sa.json") })),
-        { ok: true, identifier: "gcp_sa", input: { kind: "file", value: pem, fileName: "sa.json" } },
-      );
+      assert.deepEqual(await readOrgSecretForm(form({ identifier: "gcp_sa", kind: "file", file: file([pem], "sa.json") })), {
+        ok: true,
+        identifier: "gcp_sa",
+        input: { kind: "file", value: pem, fileName: "sa.json" },
+      });
     });
 
     test("accepts multi-byte UTF-8", async () => {
@@ -131,21 +133,15 @@ describe("readOrgSecretForm", () => {
     });
 
     test("accepts a file exactly at the size limit and refuses one byte more", async () => {
-      const at = await readOrgSecretForm(
-        form({ identifier: "k", kind: "file", file: file(["a".repeat(ORG_SECRET_LIMITS.bytes)]) }),
-      );
+      const at = await readOrgSecretForm(form({ identifier: "k", kind: "file", file: file(["a".repeat(ORG_SECRET_LIMITS.bytes)]) }));
       assert.equal(at.ok, true);
-      const over = await readOrgSecretForm(
-        form({ identifier: "k", kind: "file", file: file(["a".repeat(ORG_SECRET_LIMITS.bytes + 1)]) }),
-      );
+      const over = await readOrgSecretForm(form({ identifier: "k", kind: "file", file: file(["a".repeat(ORG_SECRET_LIMITS.bytes + 1)]) }));
       assert.deepEqual(over, { ok: false, error: "too_large" });
     });
 
     test("measures the limit in bytes, not characters", async () => {
       // "é" is two bytes, so half the limit in characters is exactly the limit.
-      const at = await readOrgSecretForm(
-        form({ identifier: "k", kind: "file", file: file(["é".repeat(ORG_SECRET_LIMITS.bytes / 2)]) }),
-      );
+      const at = await readOrgSecretForm(form({ identifier: "k", kind: "file", file: file(["é".repeat(ORG_SECRET_LIMITS.bytes / 2)]) }));
       assert.equal(at.ok, true);
       const over = await readOrgSecretForm(
         form({ identifier: "k", kind: "file", file: file(["é".repeat(ORG_SECRET_LIMITS.bytes / 2), "a"]) }),

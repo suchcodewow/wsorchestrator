@@ -54,9 +54,23 @@ export function LostInSpace({ path }: { path: string }) {
 
       <div className="relative flex flex-col items-center text-center">
         <div aria-hidden className="nf-drift relative mb-4 flex size-56 items-center justify-center sm:size-72">
-          <svg viewBox="0 0 24 24" className="nf-spin size-40 text-brand drop-shadow-[0_0_40px_rgba(45,212,191,0.45)] sm:size-52" style={{ "--nf-duration": "40s" } as React.CSSProperties} fill="none">
+          <svg
+            viewBox="0 0 24 24"
+            className="nf-spin size-40 text-brand drop-shadow-[0_0_40px_rgba(45,212,191,0.45)] sm:size-52"
+            style={{ "--nf-duration": "40s" } as React.CSSProperties}
+            fill="none"
+          >
             {TEETH.map((angle) => (
-              <rect key={angle} x="10.78" y="1.1" width="2.44" height="5.6" rx="0.8" fill="currentColor" transform={`rotate(${angle} 12 12)`} />
+              <rect
+                key={angle}
+                x="10.78"
+                y="1.1"
+                width="2.44"
+                height="5.6"
+                rx="0.8"
+                fill="currentColor"
+                transform={`rotate(${angle} 12 12)`}
+              />
             ))}
             <circle cx="12" cy="12" r="6.95" stroke="currentColor" strokeWidth="2.5" />
             <circle cx="12" cy="12" r="1.85" fill="currentColor" opacity="0.45" />
@@ -76,8 +90,8 @@ export function LostInSpace({ path }: { path: string }) {
         </p>
         <h1 className="mt-3 text-2xl font-medium sm:text-3xl">Houston, we have a 404.</h1>
         <p className="mt-3 max-w-md text-balance text-white/65">
-          The page at <span className="font-mono text-white/90 break-all">{path}</span> has drifted out of orbit. Mission control
-          recommends an immediate return.
+          The page at <span className="font-mono text-white/90 break-all">{path}</span> has drifted out of orbit. Mission control recommends
+          an immediate return.
         </p>
         <ReturnHome className="mt-8" />
       </div>

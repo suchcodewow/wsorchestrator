@@ -191,7 +191,14 @@ export function Comments({
         </ul>
       )}
       {loaded?.hasMore && (
-        <Button type="button" variant="ghost" size="sm" className="justify-self-start" disabled={busy === "load"} onClick={() => older(loaded.page + 1)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="justify-self-start"
+          disabled={busy === "load"}
+          onClick={() => older(loaded.page + 1)}
+        >
           {busy === "load" && <Loader2 className="animate-spin" />}
           Older comments
         </Button>

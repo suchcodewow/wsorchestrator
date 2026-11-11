@@ -67,8 +67,14 @@ function mindtickle(url: string, body: unknown): { status: number; json?: unknow
     };
   }
   const modules: Record<string, unknown[]> = {
-    sAE: [{ id: "m1", name: "September 2026 - Flex Pricing", moduleType: "UPDATE" }, { id: "m9", name: "September 2026 - Feedback Survey" }],
-    sSE: [{ id: "m1", name: "September 2026 - Flex Pricing", moduleType: "UPDATE" }, { id: "m2", name: "September 2026 - Demo Day", moduleType: "ASSESSMENT" }],
+    sAE: [
+      { id: "m1", name: "September 2026 - Flex Pricing", moduleType: "UPDATE" },
+      { id: "m9", name: "September 2026 - Feedback Survey" },
+    ],
+    sSE: [
+      { id: "m1", name: "September 2026 - Flex Pricing", moduleType: "UPDATE" },
+      { id: "m2", name: "September 2026 - Demo Day", moduleType: "ASSESSMENT" },
+    ],
     sSDR: [{ id: "m3", name: "September 2026 - Objections", moduleType: "UPDATE" }],
   };
   const series = /^\/api\/v2\/series\/(\w+)\/list$/.exec(path);
@@ -81,7 +87,11 @@ function mindtickle(url: string, body: unknown): { status: number; json?: unknow
   }
   if (path.startsWith("/services/data/v4.0/mtobjects/Users")) {
     const pages: Record<string, unknown> = {
-      gAE: { users: [user("ada@harness.test"), user("gone@harness.test", "DEACTIVATED")], done: false, nextRecordsUrl: `${GLOBAL}/services/data/v4.0/mtobjects/Users?cursor=2` },
+      gAE: {
+        users: [user("ada@harness.test"), user("gone@harness.test", "DEACTIVATED")],
+        done: false,
+        nextRecordsUrl: `${GLOBAL}/services/data/v4.0/mtobjects/Users?cursor=2`,
+      },
       gSE: { users: [user("bo@harness.test"), user("cy@harness.test")], done: true },
       gSDR: { users: [user("dee@harness.test", "ADDED"), user("err@harness.test")], done: true },
     };
@@ -92,7 +102,10 @@ function mindtickle(url: string, body: unknown): { status: number; json?: unknow
     if (q.get("more") === "ada-2") return { status: 200, json: { statements: [st("m1", "in_progress", "2026-09-20T10:00:00Z")] } };
     const who = (JSON.parse(q.get("agent")!) as { mbox: string }).mbox.slice("mailto:".length);
     const history: Record<string, { statements: unknown[]; more?: string }> = {
-      "ada@harness.test": { statements: [st("m1", "completed", "2026-09-12T10:00:00Z")], more: `${GLOBAL}/services/data/v4.0/xapi/statements?more=ada-2` },
+      "ada@harness.test": {
+        statements: [st("m1", "completed", "2026-09-12T10:00:00Z")],
+        more: `${GLOBAL}/services/data/v4.0/xapi/statements?more=ada-2`,
+      },
       "bo@harness.test": { statements: [st("m2", "completed", "2026-09-15T17:00:00Z")] },
       "cy@harness.test": { statements: [] },
       "dee@harness.test": { statements: [st("m3", "not_started")] },
@@ -188,7 +201,10 @@ describe("a Canary Wire pull", () => {
     const view = (await canaryWireView("September 2026"))!;
     const reps = view.teams.flatMap((t) => t.directs);
     // Departed staff are left out without a word; the survey is no column.
-    assert.deepEqual(reps.map((r) => r.email).sort(), ["ada", "bo", "cy", "dee", "err"].map((n) => `${n}@harness.test`));
+    assert.deepEqual(
+      reps.map((r) => r.email).sort(),
+      ["ada", "bo", "cy", "dee", "err"].map((n) => `${n}@harness.test`),
+    );
     // Shared first, then SE's own, then the one only SDR has.
     assert.deepEqual(view.labels, ["Flex Pricing", "Demo Day", "Objections"]);
     // Ada's second page, reached through the moved continuation, came in too.
@@ -202,7 +218,10 @@ describe("a Canary Wire pull", () => {
   test("a step leaves a pull another step holds alone", async () => {
     useMindtickle();
     const pull = await start();
-    await db.update(canaryWirePulls).set({ leasedUntil: new Date(Date.now() + 60_000) }).where(eq(canaryWirePulls.id, pull.id));
+    await db
+      .update(canaryWirePulls)
+      .set({ leasedUntil: new Date(Date.now() + 60_000) })
+      .where(eq(canaryWirePulls.id, pull.id));
     const after = (await advancePull(0))!;
     assert.deepEqual([after.working, after.done, after.message], [true, 0, "Waiting to start"]);
     assert.deepEqual(requests, []);
@@ -210,7 +229,9 @@ describe("a Canary Wire pull", () => {
   });
 
   test("a sign-in Mindtickle turns down fails the pull with Mindtickle's reason", async () => {
-    useMindtickle((url, body) => (url.endsWith("/auth_token") ? { status: 400, json: { error: "missing parameter ls_url" } } : mindtickle(url, body)));
+    useMindtickle((url, body) =>
+      url.endsWith("/auth_token") ? { status: 400, json: { error: "missing parameter ls_url" } } : mindtickle(url, body),
+    );
     await start();
     const pull = (await advancePull(0))!;
     assert.equal(pull.status, "failed");

@@ -48,12 +48,8 @@ export async function listSlackContacts(query: ListQuery<SlackContactSort>): Pro
     })
     .from(evalsSlackContacts)
     .leftJoin(users, eq(users.id, evalsSlackContacts.createdBy))
-    .where(
-      searchAny(query.q, [contactName, evalsSlackContacts.email, users.name, users.email]),
-    )
-    .orderBy(
-      ...orderFor(SLACK_CONTACT_SORT_COLUMNS[query.sort], query.dir, evalsSlackContacts.email, evalsSlackContacts.id),
-    )
+    .where(searchAny(query.q, [contactName, evalsSlackContacts.email, users.name, users.email]))
+    .orderBy(...orderFor(SLACK_CONTACT_SORT_COLUMNS[query.sort], query.dir, evalsSlackContacts.email, evalsSlackContacts.id))
     .limit(limit)
     .offset(offset);
 
@@ -109,12 +105,7 @@ export async function addSlackContact(
   return row ? { ok: true, contact: { ...row, fullName: employee.fullName } } : { ok: false, error: "duplicate" };
 }
 
-export async function deleteSlackContact(
-  id: string,
-): Promise<{ ok: true; email: string } | { ok: false; error: SlackContactError }> {
-  const [deleted] = await db
-    .delete(evalsSlackContacts)
-    .where(eq(evalsSlackContacts.id, id))
-    .returning({ email: evalsSlackContacts.email });
+export async function deleteSlackContact(id: string): Promise<{ ok: true; email: string } | { ok: false; error: SlackContactError }> {
+  const [deleted] = await db.delete(evalsSlackContacts).where(eq(evalsSlackContacts.id, id)).returning({ email: evalsSlackContacts.email });
   return deleted ? { ok: true, email: deleted.email } : { ok: false, error: "not_found" };
 }

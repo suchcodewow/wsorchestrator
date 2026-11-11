@@ -53,7 +53,17 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   operator: [...HOME, ...EVENTS_USER, ...MIMIR_ONLY, ...ACCOUNT],
   manager: [...HOME, ...EVENTS_MANAGER, ...MIMIR_ONLY, ...ACCOUNT],
   eventAdmin: [...HOME, ...EVENTS_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
-  trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Async Recordings", "Survey Results", ...MIMIR_ONLY, ...ACCOUNT],
+  trainingViewer: [
+    ...HOME,
+    "[Training]",
+    "Scheduler",
+    "Cohorts",
+    "Logistics",
+    "Async Recordings",
+    "Survey Results",
+    ...MIMIR_ONLY,
+    ...ACCOUNT,
+  ],
   trainingAdmin: [...HOME, ...TRAINING_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
   // Diagnostic is part of the assessments area: an administrator runs it, and only a Participant takes it;
   // an administrator still sees Diagnostic, since whoever sees an entry's settings sees the entry.
@@ -79,7 +89,8 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   // HiBob has people reporting to them: the Canary Wire as well as Bootcamp, under the Reporting everyone has.
   peopleManager: [...HOME, "[Assessments]", "Reporting", "Coach Canary", ...ACCOUNT],
   bothAdmins: [...HOME, ...EVENTS_ADMIN, ...TRAINING_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
-  platform: [...HOME, 
+  platform: [
+    ...HOME,
     ...EVENTS_ADMIN,
     ...TRAINING_ADMIN,
     "[Assessments]",
@@ -121,7 +132,8 @@ describe("sidebar", () => {
         if (!entry.settings) continue;
         const settings = navItemAt(entry.settings);
         assert.ok(settings, `${entry.label}'s settings ${entry.settings} is a sidebar entry`);
-        if (labels.has(settings.label)) assert.ok(labels.has(entry.label), `${describeAccess(a)}: ${settings.label} without ${entry.label}`);
+        if (labels.has(settings.label))
+          assert.ok(labels.has(entry.label), `${describeAccess(a)}: ${settings.label} without ${entry.label}`);
       }
     }
   });
@@ -158,8 +170,7 @@ describe("sidebar", () => {
 });
 
 describe("isNavItemActive", () => {
-  const link = (label: string) =>
-    NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.label === label)!;
+  const link = (label: string) => NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.label === label)!;
   const orchestrator = link("Orchestrator");
   const scheduler = link("Scheduler");
   const schedulerSettings = link("Scheduler settings");

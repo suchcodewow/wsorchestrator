@@ -8,17 +8,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  AlertTriangle,
-  Check,
-  FileText,
-  Loader2,
-  Pencil,
-  Plus,
-  Trash2,
-  Type,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Check, FileText, Loader2, Pencil, Plus, Trash2, Type, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,25 +21,20 @@ import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 const ERRORS: Record<string, string> = {
-  invalid_identifier:
-    "A Harness identifier holds letters, digits, underscores and hyphens, starting with a letter or underscore.",
+  invalid_identifier: "A Harness identifier holds letters, digits, underscores and hyphens, starting with a letter or underscore.",
   duplicate: "A secret with that id is already on the list.",
   empty: "There's no value to store.",
   too_large: `Values must be under ${ORG_SECRET_LIMITS.bytes / 1024} KB.`,
-  binary:
-    "A Harness secret file holds text, so an archive or a binary can't be stored as one.",
+  binary: "A Harness secret file holds text, so an archive or a binary can't be stored as one.",
   malformed: "That form was incomplete — reload the page and try again.",
   not_found: "That secret was already removed — reload the page.",
   forbidden: "Your own role changed — reload the page.",
-  no_key:
-    "This deployment has no encryption key, so a value can't be stored.",
+  no_key: "This deployment has no encryption key, so a value can't be stored.",
 };
 
-const message = (error: string | undefined, status: number) =>
-  ERRORS[error ?? ""] ?? `Could not save (${status})`;
+const message = (error: string | undefined, status: number) => ERRORS[error ?? ""] ?? `Could not save (${status})`;
 
-const size = (bytes: number) =>
-  bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+const size = (bytes: number) => (bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`);
 
 const shortDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, {
@@ -80,11 +65,7 @@ export function OrgSecretsView({
   const [editing, setEditing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
-  async function send(
-    key: string,
-    url: string,
-    init: RequestInit,
-  ): Promise<boolean> {
+  async function send(key: string, url: string, init: RequestInit): Promise<boolean> {
     setBusy(key);
     setError(null);
     setSaved(null);
@@ -106,16 +87,9 @@ export function OrgSecretsView({
   }
 
   return (
-    <motion.div
-      variants={staggerParent(0.05)}
-      initial="hidden"
-      animate="show"
-      className="space-y-6"
-    >
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild}>
-        <h2 className="text-xl font-medium tracking-tight">
-          {mine ? "My org secrets" : "Org secrets"}
-        </h2>
+        <h2 className="text-xl font-medium tracking-tight">{mine ? "My org secrets" : "Org secrets"}</h2>
       </motion.div>
 
       {!configured && (
@@ -125,10 +99,7 @@ export function OrgSecretsView({
           className="flex gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm"
         >
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
-          <span>
-            This deployment has no encryption key, so a value cannot be stored
-            safely.
-          </span>
+          <span>This deployment has no encryption key, so a value cannot be stored safely.</span>
         </motion.div>
       )}
 
@@ -161,9 +132,7 @@ export function OrgSecretsView({
                     setAdding(false);
                     setSaved(
                       `Saved. ${String(form.get("identifier"))} will be created in ${
-                        mine
-                          ? "every org you deploy"
-                          : "every new workshop's org"
+                        mine ? "every org you deploy" : "every new workshop's org"
                       }.`,
                     );
                   }
@@ -191,10 +160,7 @@ export function OrgSecretsView({
         <TableSearch value={query.q} placeholder="Search by id, file or who stored it" label="Search org secrets" />
       </motion.div>
 
-      <motion.div
-        variants={riseChild}
-        className="overflow-hidden rounded-2xl border bg-card shadow-sm"
-      >
+      <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-160 text-sm">
             <thead>
@@ -217,15 +183,8 @@ export function OrgSecretsView({
             <tbody>
               {secrets.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={5}
-                    className="px-5 py-8 text-center text-muted-foreground"
-                  >
-                    {query.q
-                      ? "No org secrets match."
-                      : mine
-                        ? "No org secrets of your own yet."
-                        : "No org secrets yet."}
+                  <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
+                    {query.q ? "No org secrets match." : mine ? "No org secrets of your own yet." : "No org secrets yet."}
                   </td>
                 </tr>
               )}
@@ -253,40 +212,22 @@ export function OrgSecretsView({
                     </td>
                   </tr>
                 ) : (
-                  <tr
-                    key={row.id}
-                    className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
-                  >
-                    <td className="px-5 py-3 font-mono font-medium">
-                      {row.identifier}
-                    </td>
+                  <tr key={row.id} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
+                    <td className="px-5 py-3 font-mono font-medium">{row.identifier}</td>
                     <td className="px-5 py-3 text-muted-foreground">
                       <span className="inline-flex items-center gap-1.5">
-                        {row.kind === "file" ? (
-                          <FileText className="size-3.5" />
-                        ) : (
-                          <Type className="size-3.5" />
-                        )}
-                        {row.kind === "file"
-                          ? (row.fileName ?? "file")
-                          : "inline text"}
+                        {row.kind === "file" ? <FileText className="size-3.5" /> : <Type className="size-3.5" />}
+                        {row.kind === "file" ? (row.fileName ?? "file") : "inline text"}
                         <span className="text-xs">({size(row.bytes)})</span>
                       </span>
                       {!row.usable && (
-                        <span
-                          className="ml-2 text-xs text-destructive"
-                          title="The encryption key changed, so store the value again."
-                        >
+                        <span className="ml-2 text-xs text-destructive" title="The encryption key changed, so store the value again.">
                           unreadable
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-muted-foreground">
-                      {shortDate(row.updatedAt)}
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">
-                      {row.updatedBy ?? "—"}
-                    </td>
+                    <td className="px-5 py-3 text-muted-foreground">{shortDate(row.updatedAt)}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{row.updatedBy ?? "—"}</td>
                     <td className="px-5 py-3">
                       <div className="flex justify-end gap-1">
                         <Button
@@ -314,11 +255,7 @@ export function OrgSecretsView({
                             })
                           }
                         >
-                          {busy === row.id ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="size-3.5" />
-                          )}
+                          {busy === row.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
                         </Button>
                       </div>
                     </td>
@@ -336,8 +273,7 @@ export function OrgSecretsView({
   );
 }
 
-const identifierValid = (value: string) =>
-  /^[a-zA-Z_][0-9a-zA-Z_$-]{0,127}$/.test(value.trim());
+const identifierValid = (value: string) => /^[a-zA-Z_][0-9a-zA-Z_$-]{0,127}$/.test(value.trim());
 
 function SecretForm({
   row,
@@ -358,9 +294,7 @@ function SecretForm({
   const [file, setFile] = useState<File | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const ready =
-    identifierValid(identifier) &&
-    (kind === "text" ? value.length > 0 : file !== null);
+  const ready = identifierValid(identifier) && (kind === "text" ? value.length > 0 : file !== null);
 
   function submit() {
     if (!ready || busy || disabled) return;
@@ -404,11 +338,7 @@ function SecretForm({
               )}
               onClick={() => setKind(option)}
             >
-              {option === "text" ? (
-                <Type className="size-3.5" />
-              ) : (
-                <FileText className="size-3.5" />
-              )}
+              {option === "text" ? <Type className="size-3.5" /> : <FileText className="size-3.5" />}
               {option === "text" ? "Text" : "File"}
             </button>
           ))}
@@ -438,40 +368,18 @@ function SecretForm({
               className="hidden"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fileInput.current?.click()}
-            >
+            <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()}>
               Choose file
             </Button>
-            <span className="truncate text-sm text-muted-foreground">
-              {file ? `${file.name} (${size(file.size)})` : "No file chosen"}
-            </span>
+            <span className="truncate text-sm text-muted-foreground">{file ? `${file.name} (${size(file.size)})` : "No file chosen"}</span>
           </div>
         )}
 
         <div className="flex gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Save"
-            disabled={!ready || busy || disabled}
-            onClick={submit}
-          >
-            {busy ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Check className="size-3.5" />
-            )}
+          <Button variant="ghost" size="icon" aria-label="Save" disabled={!ready || busy || disabled} onClick={submit}>
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Cancel"
-            disabled={busy}
-            onClick={onCancel}
-          >
+          <Button variant="ghost" size="icon" aria-label="Cancel" disabled={busy} onClick={onCancel}>
             <X className="size-3.5" />
           </Button>
         </div>

@@ -130,7 +130,10 @@ describe("zip", () => {
   });
 
   test("dates every entry 1980-01-01, so the same input gives the same bytes", () => {
-    const entries = [{ path: "a", content: "1" }, { path: "b", content: "2" }];
+    const entries = [
+      { path: "a", content: "1" },
+      { path: "b", content: "2" },
+    ];
     const a = zip(entries);
     const b = zip(entries);
     assert.ok(a.equals(b));

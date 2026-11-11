@@ -75,8 +75,8 @@ export function MapSettingsView({
         <p className="text-sm text-muted-foreground tnum">
           {summary ? (
             <>
-              <span className="font-medium text-foreground">{summary.concepts}</span> concepts across {summary.slides} slides, {videos.length} with a video. Imported{" "}
-              {formatWhen(summary.importedAt)}.
+              <span className="font-medium text-foreground">{summary.concepts}</span> concepts across {summary.slides} slides,{" "}
+              {videos.length} with a video. Imported {formatWhen(summary.importedAt)}.
             </>
           ) : (
             <>Nothing imported yet.</>
@@ -112,7 +112,11 @@ export function MapSettingsView({
           <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-3">
             <h2 className="font-medium">Videos</h2>
             <p className="text-sm text-muted-foreground tnum">
-              {videos[0]!.present === null ? "This server has no bucket for videos." : missing === 0 ? `All ${videos.length} are in the bucket.` : `${missing} of ${videos.length} are missing from the bucket.`}
+              {videos[0]!.present === null
+                ? "This server has no bucket for videos."
+                : missing === 0
+                  ? `All ${videos.length} are in the bucket.`
+                  : `${missing} of ${videos.length} are missing from the bucket.`}
             </p>
           </div>
           <ul className="divide-y">

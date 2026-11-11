@@ -5,12 +5,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { ASSESSMENTS_ROLES, EVENT_ROLES, TRAINING_ROLES } from "@/db/schema";
 import { canDeleteUsers, canManageUsers } from "@/lib/roles";
-import {
-  deleteUser,
-  setUserRole,
-  type DeleteUserError,
-  type SetRoleError,
-} from "@/lib/site-users";
+import { deleteUser, setUserRole, type DeleteUserError, type SetRoleError } from "@/lib/site-users";
 import { audited } from "@/lib/audit";
 
 const patchSchema = z.discriminatedUnion("area", [
@@ -28,10 +23,7 @@ const STATUS_FOR: Record<SetRoleError, number> = {
   bootstrap: 409,
 };
 
-export const PATCH = audited(async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -46,16 +38,9 @@ export const PATCH = audited(async function PATCH(
   }
 
   const { id } = await params;
-  const result = await setUserRole(
-    { id: session.user.id, access: session.user.access },
-    id,
-    parsed.data,
-  );
+  const result = await setUserRole({ id: session.user.id, access: session.user.access }, id, parsed.data);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
   return NextResponse.json({ ok: true, ...parsed.data });
 });
@@ -68,10 +53,7 @@ const DELETE_STATUS_FOR: Record<DeleteUserError, number> = {
   owns_events: 409,
 };
 
-export const DELETE = audited(async function DELETE(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -81,15 +63,9 @@ export const DELETE = audited(async function DELETE(
   }
 
   const { id } = await params;
-  const result = await deleteUser(
-    { id: session.user.id, access: session.user.access },
-    id,
-  );
+  const result = await deleteUser({ id: session.user.id, access: session.user.access }, id);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: DELETE_STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: DELETE_STATUS_FOR[result.error] });
   }
   return NextResponse.json({ ok: true });
 });

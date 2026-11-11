@@ -47,8 +47,7 @@ export function MentionTextarea({
 
   const tag = people.length > 0 ? mentionQueryAt(value, caret) : null;
   // Only someone with a name can be tagged: the tag is the name.
-  const matches =
-    tag && tag.start !== closedAt ? people.filter((p) => p.fullName && matchesMention(p, tag.query)).slice(0, SHOWN) : [];
+  const matches = tag && tag.start !== closedAt ? people.filter((p) => p.fullName && matchesMention(p, tag.query)).slice(0, SHOWN) : [];
   const open = matches.length > 0;
   const listRef = useAnchoredToParent<HTMLUListElement>(open);
   const current = Math.min(active, matches.length - 1);

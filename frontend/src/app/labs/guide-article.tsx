@@ -42,12 +42,8 @@ export async function GuideArticle({
 
   const showRail = context !== undefined || toc.length >= 3;
 
-  const editHref = context
-    ? `/labs/${context.slug}/${guide.slug}/edit`
-    : `/labs/guides/${guide.slug}/edit`;
-  const back = context
-    ? { href: `/labs/${context.slug}`, label: context.title }
-    : { href: "/labs/guides", label: "All guides" };
+  const editHref = context ? `/labs/${context.slug}/${guide.slug}/edit` : `/labs/guides/${guide.slug}/edit`;
+  const back = context ? { href: `/labs/${context.slug}`, label: context.title } : { href: "/labs/guides", label: "All guides" };
 
   return (
     <div>
@@ -67,15 +63,9 @@ export async function GuideArticle({
             </p>
           )}
 
-          <h1 className="text-3xl font-medium tracking-tight text-balance">
-            {guide.title}
-          </h1>
+          <h1 className="text-3xl font-medium tracking-tight text-balance">{guide.title}</h1>
 
-          {guide.summary && (
-            <p className="mt-3 max-w-2xl text-base leading-relaxed text-pretty text-muted-foreground">
-              {guide.summary}
-            </p>
-          )}
+          {guide.summary && <p className="mt-3 max-w-2xl text-base leading-relaxed text-pretty text-muted-foreground">{guide.summary}</p>}
 
           <p className="mt-4 text-xs text-muted-foreground">
             Updated {updated.format(guide.updatedAt)}
@@ -93,13 +83,7 @@ export async function GuideArticle({
         )}
       </div>
 
-      <div
-        className={
-          showRail
-            ? "mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-start"
-            : "mt-10"
-        }
-      >
+      <div className={showRail ? "mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-start" : "mt-10"}>
         <div>
           <GuideVariablesPanel
             used={variables.used}
@@ -109,19 +93,10 @@ export async function GuideArticle({
             context={reader.context}
           />
 
-          {html.length > 0 ? (
-            <LabGuideBody html={html} />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              This guide has no content yet.
-            </p>
-          )}
+          {html.length > 0 ? <LabGuideBody html={html} /> : <p className="text-sm text-muted-foreground">This guide has no content yet.</p>}
 
           {context && (context.previous || context.next) && (
-            <nav
-              aria-label="Workshop steps"
-              className="mt-14 flex items-stretch justify-between gap-4 border-t pt-6"
-            >
+            <nav aria-label="Workshop steps" className="mt-14 flex items-stretch justify-between gap-4 border-t pt-6">
               {context.previous ? (
                 <Link
                   href={`/labs/${context.slug}/${context.previous.slug}`}
@@ -131,9 +106,7 @@ export async function GuideArticle({
                     <ArrowLeft className="size-3.5" />
                     Previous
                   </span>
-                  <span className="text-sm font-medium group-hover:text-brand">
-                    {context.previous.title}
-                  </span>
+                  <span className="text-sm font-medium group-hover:text-brand">{context.previous.title}</span>
                 </Link>
               ) : (
                 <span />
@@ -148,9 +121,7 @@ export async function GuideArticle({
                     Next
                     <ArrowRight className="size-3.5" />
                   </span>
-                  <span className="text-sm font-medium group-hover:text-brand">
-                    {context.next.title}
-                  </span>
+                  <span className="text-sm font-medium group-hover:text-brand">{context.next.title}</span>
                 </Link>
               )}
             </nav>

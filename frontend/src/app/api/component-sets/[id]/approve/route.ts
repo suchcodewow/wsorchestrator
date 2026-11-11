@@ -6,10 +6,7 @@ import { canPublishComponents } from "@/lib/roles";
 import { approveComponentSet, setStatus } from "@/lib/components/catalog";
 import { audited } from "@/lib/audit";
 
-export const POST = audited(async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const POST = audited(async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const caller = await sessionOrToken(req);
   if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -28,20 +25,14 @@ export const POST = audited(async function POST(
   if (body.approve === false) {
     const moved = await setStatus(id, "submitted", "rejected", notes);
     if (!moved) {
-      return NextResponse.json(
-        { error: "not_reviewable", message: "only a submitted set can be reviewed" },
-        { status: 409 },
-      );
+      return NextResponse.json({ error: "not_reviewable", message: "only a submitted set can be reviewed" }, { status: 409 });
     }
     return NextResponse.json({ setId: id, status: "rejected" });
   }
 
   const approved = await approveComponentSet(id, notes);
   if (!approved) {
-    return NextResponse.json(
-      { error: "not_reviewable", message: "only a submitted set can be reviewed" },
-      { status: 409 },
-    );
+    return NextResponse.json({ error: "not_reviewable", message: "only a submitted set can be reviewed" }, { status: 409 });
   }
 
   return NextResponse.json({ setId: id, status: "approved" });

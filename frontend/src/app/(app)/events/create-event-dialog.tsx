@@ -36,8 +36,7 @@ const COPY: Record<EventMode, { title: string; description: string; noun: string
   },
   challenge: {
     title: "Start a challenge",
-    description:
-      "Each competitor gets their own account and cloud environment at the start time.",
+    description: "Each competitor gets their own account and cloud environment at the start time.",
     noun: "challenge",
     who: "competitor",
   },

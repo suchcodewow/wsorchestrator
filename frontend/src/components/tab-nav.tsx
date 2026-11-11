@@ -16,13 +16,7 @@ export type TabItem = {
   count?: number;
 };
 
-export function TabNav({
-  tabs,
-  label,
-}: {
-  tabs: readonly TabItem[];
-  label: string;
-}) {
+export function TabNav({ tabs, label }: { tabs: readonly TabItem[]; label: string }) {
   const pathname = usePathname();
   const favorites = useFavoriteTabs();
 
@@ -30,11 +24,7 @@ export function TabNav({
   // The tabs sit closer to the heading above (-mt-4) and a little closer to
   // the content below (mb-6); framed, the heading is hidden, so no pull-up.
   return (
-    <nav
-      className="-mt-4 mb-6 flex flex-wrap gap-1 border-b framed:mt-0"
-      aria-label={label}
-      data-tab-nav=""
-    >
+    <nav className="-mt-4 mb-6 flex flex-wrap gap-1 border-b framed:mt-0" aria-label={label} data-tab-nav="">
       {tabs.map(({ href, label: text, Icon, count }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         const starred = favorites?.has(href) ?? false;
@@ -51,10 +41,7 @@ export function TabNav({
             <Link
               href={href}
               aria-current={active ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-2 py-2 pl-3 text-sm",
-                favorites ? "pr-1" : "pr-3",
-              )}
+              className={cn("flex items-center gap-2 py-2 pl-3 text-sm", favorites ? "pr-1" : "pr-3")}
             >
               <Icon className="size-4" />
               {text}
@@ -81,9 +68,7 @@ export function TabNav({
                 <Star
                   className={cn(
                     "size-3.5",
-                    starred
-                      ? "fill-amber-400 text-amber-400"
-                      : "text-muted-foreground/60 hover:text-muted-foreground",
+                    starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground/60 hover:text-muted-foreground",
                   )}
                 />
               </button>

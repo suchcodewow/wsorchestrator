@@ -6,13 +6,7 @@
 import "server-only";
 import { and, asc, eq, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  harnessOrgSecrets,
-  ORG_SECRET_LIMITS,
-  users,
-  type HarnessOrgSecret,
-  type OrgSecretKind,
-} from "@/db/schema";
+import { harnessOrgSecrets, ORG_SECRET_LIMITS, users, type HarnessOrgSecret, type OrgSecretKind } from "@/db/schema";
 import type { OrgSecretSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -21,10 +15,7 @@ import { openSecret, sealSecret } from "@/lib/secret-box";
 /** A user's id for their own secrets, or null for the site's. */
 export type SecretOwner = string | null;
 
-const ownedBy = (owner: SecretOwner): SQL =>
-  owner === null
-    ? isNull(harnessOrgSecrets.userId)
-    : eq(harnessOrgSecrets.userId, owner);
+const ownedBy = (owner: SecretOwner): SQL => (owner === null ? isNull(harnessOrgSecrets.userId) : eq(harnessOrgSecrets.userId, owner));
 
 export type OrgSecretRow = {
   id: string;
@@ -42,15 +33,7 @@ const IDENTIFIER = /^[a-zA-Z_][0-9a-zA-Z_$-]{0,127}$/;
 
 export const identifierValid = (value: string) => IDENTIFIER.test(value.trim());
 
-export type OrgSecretError =
-  | "invalid_identifier"
-  | "duplicate"
-  | "empty"
-  | "too_large"
-  | "binary"
-  | "malformed"
-  | "no_key"
-  | "not_found";
+export type OrgSecretError = "invalid_identifier" | "duplicate" | "empty" | "too_large" | "binary" | "malformed" | "no_key" | "not_found";
 
 export const STATUS_FOR: Record<OrgSecretError, number> = {
   invalid_identifier: 400,
@@ -63,14 +46,9 @@ export const STATUS_FOR: Record<OrgSecretError, number> = {
   no_key: 503,
 };
 
-export type OrgSecretResult =
-  | { ok: true; secret: OrgSecretRow }
-  | { ok: false; error: OrgSecretError };
+export type OrgSecretResult = { ok: true; secret: OrgSecretRow } | { ok: false; error: OrgSecretError };
 
-const summarize = (
-  row: HarnessOrgSecret,
-  updatedBy: string | null,
-): OrgSecretRow => ({
+const summarize = (row: HarnessOrgSecret, updatedBy: string | null): OrgSecretRow => ({
   id: row.id,
   identifier: row.identifier,
   kind: row.kind as OrgSecretKind,
@@ -93,10 +71,7 @@ const SECRET_SORT_COLUMNS = {
  * One page of one owner's secrets, without their values. The search matches
  * the id, the file name, the kind or who last stored it.
  */
-export async function listOrgSecrets(
-  owner: SecretOwner,
-  query: ListQuery<OrgSecretSort>,
-): Promise<Page<OrgSecretRow>> {
+export async function listOrgSecrets(owner: SecretOwner, query: ListQuery<OrgSecretSort>): Promise<Page<OrgSecretRow>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({ secret: harnessOrgSecrets, byName: users.name, byEmail: users.email })
@@ -105,18 +80,10 @@ export async function listOrgSecrets(
     .where(
       and(
         ownedBy(owner),
-        searchAny(query.q, [
-          harnessOrgSecrets.identifier,
-          harnessOrgSecrets.fileName,
-          harnessOrgSecrets.kind,
-          users.name,
-          users.email,
-        ]),
+        searchAny(query.q, [harnessOrgSecrets.identifier, harnessOrgSecrets.fileName, harnessOrgSecrets.kind, users.name, users.email]),
       ),
     )
-    .orderBy(
-      ...orderFor(SECRET_SORT_COLUMNS[query.sort], query.dir, harnessOrgSecrets.identifier, harnessOrgSecrets.id),
-    )
+    .orderBy(...orderFor(SECRET_SORT_COLUMNS[query.sort], query.dir, harnessOrgSecrets.identifier, harnessOrgSecrets.id))
     .limit(limit)
     .offset(offset);
 
@@ -157,10 +124,7 @@ export type SecretChoice = {
  * with the user's own layered over the site's, so one of theirs named the same
  * wins.
  */
-export async function orgSecretValues(
-  userId: string,
-  choice: SecretChoice,
-): Promise<OrgSecretValue[]> {
+export async function orgSecretValues(userId: string, choice: SecretChoice): Promise<OrgSecretValue[]> {
   if (!choice.official && !choice.mine) return [];
 
   const owners = choice.official
@@ -169,11 +133,7 @@ export async function orgSecretValues(
       : isNull(harnessOrgSecrets.userId)
     : eq(harnessOrgSecrets.userId, userId);
 
-  const rows = await db
-    .select()
-    .from(harnessOrgSecrets)
-    .where(owners)
-    .orderBy(asc(harnessOrgSecrets.identifier));
+  const rows = await db.select().from(harnessOrgSecrets).where(owners).orderBy(asc(harnessOrgSecrets.identifier));
 
   const byIdentifier = new Map<string, OrgSecretValue>();
   for (const row of rows) {
@@ -198,9 +158,7 @@ export type OrgSecretInput = {
   fileName?: string | null;
 };
 
-export type OrgSecretForm =
-  | { ok: true; identifier: string; input: OrgSecretInput }
-  | { ok: false; error: OrgSecretError };
+export type OrgSecretForm = { ok: true; identifier: string; input: OrgSecretInput } | { ok: false; error: OrgSecretError };
 
 export async function readOrgSecretForm(form: FormData): Promise<OrgSecretForm> {
   const identifier = String(form.get("identifier") ?? "");
@@ -238,9 +196,7 @@ export async function readOrgSecretForm(form: FormData): Promise<OrgSecretForm> 
   }
 }
 
-function seal(
-  input: OrgSecretInput,
-): { ok: true; secret: Buffer; bytes: number } | { ok: false; error: OrgSecretError } {
+function seal(input: OrgSecretInput): { ok: true; secret: Buffer; bytes: number } | { ok: false; error: OrgSecretError } {
   const bytes = Buffer.byteLength(input.value, "utf8");
   if (bytes === 0) return { ok: false, error: "empty" };
   if (bytes > ORG_SECRET_LIMITS.bytes) return { ok: false, error: "too_large" };
@@ -253,9 +209,7 @@ function seal(
 }
 
 const fileNameFor = (input: OrgSecretInput) =>
-  input.kind === "file" && input.fileName
-    ? input.fileName.slice(0, ORG_SECRET_LIMITS.fileName)
-    : null;
+  input.kind === "file" && input.fileName ? input.fileName.slice(0, ORG_SECRET_LIMITS.fileName) : null;
 
 export async function createOrgSecret(
   owner: SecretOwner,
@@ -307,13 +261,7 @@ export async function updateOrgSecret(
   const [clash] = await db
     .select({ id: harnessOrgSecrets.id })
     .from(harnessOrgSecrets)
-    .where(
-      and(
-        ownedBy(owner),
-        eq(harnessOrgSecrets.identifier, name),
-        ne(harnessOrgSecrets.id, id),
-      ),
-    );
+    .where(and(ownedBy(owner), eq(harnessOrgSecrets.identifier, name), ne(harnessOrgSecrets.id, id)));
   if (clash) return { ok: false, error: "duplicate" };
 
   const [row] = await db
@@ -334,10 +282,7 @@ export async function updateOrgSecret(
   return { ok: true, secret: summarize(row, null) };
 }
 
-export async function deleteOrgSecret(
-  owner: SecretOwner,
-  id: string,
-): Promise<boolean> {
+export async function deleteOrgSecret(owner: SecretOwner, id: string): Promise<boolean> {
   const deleted = await db
     .delete(harnessOrgSecrets)
     .where(and(ownedBy(owner), eq(harnessOrgSecrets.id, id)))

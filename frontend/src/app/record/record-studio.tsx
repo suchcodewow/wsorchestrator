@@ -219,21 +219,20 @@ export function RecordStudio({ userId, accountName }: { userId: string; accountN
     <Page>
       {snapshot.gone && (
         <Banner tone="fail" icon={<AlertTriangle />}>
-          This recording belongs to another account, so it can&apos;t be uploaded from this one. Sign in as whoever
-          recorded it.
+          This recording belongs to another account, so it can&apos;t be uploaded from this one. Sign in as whoever recorded it.
         </Banner>
       )}
       {resuming && (
         <Banner tone="info" icon={<CloudUpload />}>
-          <span className="font-medium">Finishing your earlier upload.</span> Your last recording was saved on this computer
-          and is uploading now, so there&apos;s no need to record it again. Keep this window open until it&apos;s complete.
+          <span className="font-medium">Finishing your earlier upload.</span> Your last recording was saved on this computer and is
+          uploading now, so there&apos;s no need to record it again. Keep this window open until it&apos;s complete.
         </Banner>
       )}
       {lowSpace !== null && (
         <Banner tone="warn" icon={<AlertTriangle />}>
           This browser has about {formatBytes(lowSpace)} of space for recordings, enough for roughly{" "}
-          {Math.max(1, Math.floor(lowSpace / (24_000_000 / 8) / 60))} minutes of camera and screen. Keep takes short, or
-          free up disk space and reload this page.
+          {Math.max(1, Math.floor(lowSpace / (24_000_000 / 8) / 60))} minutes of camera and screen. Keep takes short, or free up disk space
+          and reload this page.
         </Banner>
       )}
 
@@ -370,11 +369,13 @@ function Page({ children }: { children: ReactNode }) {
         <Instruction n={1}>Enter your name and turn on your camera. Share your screen too if you&apos;re showing something.</Instruction>
         <Instruction n={2}>Press Start recording, and Stop when you&apos;re done. You can record more than one take.</Instruction>
         <Instruction n={3}>
-          <span className="font-medium">Keep this window open until the upload says it&apos;s complete.</span> Your
-          recording is saved on this computer as you go. If the window closes early, open this page again in the same
-          browser, signed in as the same person, to finish the upload.
+          <span className="font-medium">Keep this window open until the upload says it&apos;s complete.</span> Your recording is saved on
+          this computer as you go. If the window closes early, open this page again in the same browser, signed in as the same person, to
+          finish the upload.
         </Instruction>
-        <li className="pl-8 text-muted-foreground">Use Chrome or Edge on a computer, in a normal window rather than a private or incognito one.</li>
+        <li className="pl-8 text-muted-foreground">
+          Use Chrome or Edge on a computer, in a normal window rather than a private or incognito one.
+        </li>
       </motion.ul>
 
       {children}
@@ -452,7 +453,10 @@ function RecordBar({
         )}
       </div>
       {message && (
-        <p role={take.error ? "alert" : "status"} className={cn(take.error && take.recording ? "text-destructive" : "text-muted-foreground")}>
+        <p
+          role={take.error ? "alert" : "status"}
+          className={cn(take.error && take.recording ? "text-destructive" : "text-muted-foreground")}
+        >
           {message}
         </p>
       )}
@@ -471,8 +475,8 @@ function UploadStatus({ snapshot, recording, finishedTakes }: { snapshot: Upload
           <CheckCircle2 />
           <p>
             <span className="font-medium">Upload complete.</span>{" "}
-            {finishedTakes === 1 ? "Your recording has" : `All ${finishedTakes} takes have`} been received. Download a copy for
-            yourself below, then close this window or record another take.
+            {finishedTakes === 1 ? "Your recording has" : `All ${finishedTakes} takes have`} been received. Download a copy for yourself
+            below, then close this window or record another take.
           </p>
         </div>
         <CompletedDownloads completed={snapshot.completed} />

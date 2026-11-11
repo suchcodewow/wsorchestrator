@@ -8,10 +8,7 @@ export type ReferencingComponent = {
   dependsOn: string[];
 };
 
-export function dependenciesOf(
-  c: ReferencingComponent,
-  known: Set<string>,
-): string[] {
+export function dependenciesOf(c: ReferencingComponent, known: Set<string>): string[] {
   const deps = new Set<string>();
   for (const declared of c.dependsOn) {
     if (declared !== c.identifier) deps.add(declared);
@@ -28,9 +25,7 @@ export function referenceMap(components: ReferencingComponent[]): {
 } {
   const known = new Set(components.map((c) => c.identifier));
   const dependsOn = new Map<string, string[]>();
-  const usedBy = new Map<string, string[]>(
-    components.map((c) => [c.identifier, [] as string[]]),
-  );
+  const usedBy = new Map<string, string[]>(components.map((c) => [c.identifier, [] as string[]]));
 
   for (const c of components) {
     const deps = dependenciesOf(c, known);

@@ -292,7 +292,11 @@ export async function unassignedBreakouts(): Promise<{ rows: UnassignedBreakout[
       .where(where)
       .orderBy(bootcamps.startDate, bootcamps.id, s.track, s.day, s.start, s.id)
       .limit(100),
-    db.select({ total: sql<number>`count(*)::int` }).from(s).innerJoin(bootcamps, eq(bootcamps.id, s.bootcampId)).where(where),
+    db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(s)
+      .innerJoin(bootcamps, eq(bootcamps.id, s.bootcampId))
+      .where(where),
   ]);
   return { rows, total: count?.total ?? 0 };
 }
@@ -397,24 +401,31 @@ export const sessionInputSchema = z.object({
   track: z.enum(SCHEDULE_TRACKS),
   day: z.number().int().min(1).max(BOOTCAMP_LIMITS.maxDays),
   /** Minutes after midnight; left out, straight after the day's last session. */
-  start: z.number().int().min(SCHEDULE_LIMITS.dayStart).max(SCHEDULE_LIMITS.latestEnd - SCHEDULE_LIMITS.slot).optional(),
+  start: z
+    .number()
+    .int()
+    .min(SCHEDULE_LIMITS.dayStart)
+    .max(SCHEDULE_LIMITS.latestEnd - SCHEDULE_LIMITS.slot)
+    .optional(),
   ...sessionFields,
 });
 
 /** An edit changes only the fields it names. Moving it to another time or day is the layout's job. */
-export const sessionPatchSchema = z.object({
-  kind: sessionLookSchema.kind,
-  audience: z.enum(SESSION_AUDIENCES),
-  name: sessionLookSchema.name,
-  emoji: sessionLookSchema.emoji,
-  color: sessionLookSchema.color,
-  minutes: sessionLookSchema.minutes,
-  description: sessionLookSchema.description,
-  typeId: z.string().uuid().nullable(),
-  roomId: z.string().uuid().nullable(),
-  assessmentId: z.string().uuid().nullable(),
-  staff: z.array(staffSchema).max(SCHEDULE_LIMITS.staff),
-}).partial();
+export const sessionPatchSchema = z
+  .object({
+    kind: sessionLookSchema.kind,
+    audience: z.enum(SESSION_AUDIENCES),
+    name: sessionLookSchema.name,
+    emoji: sessionLookSchema.emoji,
+    color: sessionLookSchema.color,
+    minutes: sessionLookSchema.minutes,
+    description: sessionLookSchema.description,
+    typeId: z.string().uuid().nullable(),
+    roomId: z.string().uuid().nullable(),
+    assessmentId: z.string().uuid().nullable(),
+    staff: z.array(staffSchema).max(SCHEDULE_LIMITS.staff),
+  })
+  .partial();
 
 export type SessionError =
   | "invalid"
@@ -487,7 +498,8 @@ function staffing(
   return { kind, roomId: kind === "main" ? roomId : null, staff: out };
 }
 
-const roomIdsOf = (s: Staffing) => (s.kind === "main" ? (s.roomId ? [s.roomId] : []) : s.staff.flatMap((p) => (p.roomId ? [p.roomId] : [])));
+const roomIdsOf = (s: Staffing) =>
+  s.kind === "main" ? (s.roomId ? [s.roomId] : []) : s.staff.flatMap((p) => (p.roomId ? [p.roomId] : []));
 
 /** Whether every room is one of the bootcamp's facility's. */
 async function roomsKnown(bootcamp: ScheduleBootcamp, ids: string[]): Promise<boolean> {
@@ -547,7 +559,9 @@ async function pruneGroups(tx: Tx, sessionId: string, next: Staffing, audience: 
         kept.length > 0
           ? or(
               notInArray(g.instructorEmail, kept),
-              untaught.length > 0 ? inArray(g.email, tx.select({ email: employees.email }).from(employees).where(inArray(employees.track, untaught))) : undefined,
+              untaught.length > 0
+                ? inArray(g.email, tx.select({ email: employees.email }).from(employees).where(inArray(employees.track, untaught)))
+                : undefined,
             )
           : undefined,
       ),
@@ -602,7 +616,12 @@ export async function createSession(
   let id: string;
   try {
     id = await db.transaction(async (tx) => {
-      await writeStarts(tx, bootcampId, laid.filter((s) => s.id !== NEW), day);
+      await writeStarts(
+        tx,
+        bootcampId,
+        laid.filter((s) => s.id !== NEW),
+        day,
+      );
       const [made] = await tx
         .insert(scheduleSessions)
         .values({
@@ -635,7 +654,12 @@ export async function createSession(
 }
 
 /** Saves the start of each session in `laid` that differs from `before`. */
-async function writeStarts(tx: Tx, bootcampId: string, laid: readonly { id: string; start: number }[], before: readonly SessionRow[]): Promise<void> {
+async function writeStarts(
+  tx: Tx,
+  bootcampId: string,
+  laid: readonly { id: string; start: number }[],
+  before: readonly SessionRow[],
+): Promise<void> {
   const was = new Map(before.map((s) => [s.id, s.start]));
   const moved = laid.filter((s) => was.get(s.id) !== s.start);
   if (moved.length === 0) return;
@@ -669,7 +693,13 @@ export async function updateSession(
   const outsider = next.staff.find((s) => !kept.has(s.email) && !poolEmails.has(s.email));
   if (outsider) return { ok: false, error: "not_instructor", email: outsider.email };
   const oldRooms = new Set(roomIdsOf(before));
-  if (!(await roomsKnown(bootcamp, roomIdsOf(next).filter((r) => !oldRooms.has(r))))) return { ok: false, error: "unknown_room" };
+  if (
+    !(await roomsKnown(
+      bootcamp,
+      roomIdsOf(next).filter((r) => !oldRooms.has(r)),
+    ))
+  )
+    return { ok: false, error: "unknown_room" };
   const assessmentId = next.kind === "breakout" ? (patch.assessmentId !== undefined ? patch.assessmentId : before.assessmentId) : null;
   if (assessmentId && assessmentId !== before.assessmentId && !(await assessmentFits(before.track, assessmentId))) {
     return { ok: false, error: "unknown_assessment" };
@@ -678,7 +708,10 @@ export async function updateSession(
   // Made longer, it pushes whatever it now runs into later.
   const minutes = patch.minutes ?? before.minutes;
   const day = await loadDay(db, bootcampId, before.track, before.day);
-  const laid = settle(day.map((s) => (s.id === sessionId ? { ...s, minutes } : s)), sessionId);
+  const laid = settle(
+    day.map((s) => (s.id === sessionId ? { ...s, minutes } : s)),
+    sessionId,
+  );
   if (!fitsDay(laid)) return { ok: false, error: "past_midnight" };
   const clash = await newClashes(bootcamp, { day: before.day, start: before.start, minutes, excludeId: sessionId }, next, before);
   if (clash) return clash;
@@ -728,7 +761,13 @@ export const layoutSchema = z.object({
         track: z.enum(SCHEDULE_TRACKS),
         day: z.number().int().min(1).max(BOOTCAMP_LIMITS.maxDays),
         sessions: z
-          .array(z.object({ id: z.string().uuid(), start: z.number().int().min(0).max(SCHEDULE_LIMITS.latestEnd), minutes: sessionLookSchema.minutes }))
+          .array(
+            z.object({
+              id: z.string().uuid(),
+              start: z.number().int().min(0).max(SCHEDULE_LIMITS.latestEnd),
+              minutes: sessionLookSchema.minutes,
+            }),
+          )
           .max(SCHEDULE_LIMITS.sessionsPerDay),
       }),
     )
@@ -1074,7 +1113,9 @@ export async function copySchedule(
     notes.push(`Left out ${copied.had} checklist item${copied.had === 1 ? "" : "s"} this bootcamp already has on the same half-day.`);
   }
   if (copied.full > 0) {
-    notes.push(`Left out ${copied.full} checklist item${copied.full === 1 ? "" : "s"}: a day holds at most ${CHECKLIST_LIMITS.itemsPerDay}.`);
+    notes.push(
+      `Left out ${copied.full} checklist item${copied.full === 1 ? "" : "s"}: a day holds at most ${CHECKLIST_LIMITS.itemsPerDay}.`,
+    );
   }
   return { ok: true, summary: { sessions: sessions.length, checklistItems: copied.added, notes } };
 }

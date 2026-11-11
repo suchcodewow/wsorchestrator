@@ -17,11 +17,7 @@ export type RetryNotify = (message: string) => void | Promise<void>;
  * blips. A non-transient error (a 409 we adopt, a 404 we treat as gone) is
  * re-thrown unchanged so the idempotency checks below still see its status.
  */
-function directoryCall<T>(
-  label: string,
-  notify: RetryNotify | undefined,
-  fn: () => Promise<T>,
-): Promise<T> {
+function directoryCall<T>(label: string, notify: RetryNotify | undefined, fn: () => Promise<T>): Promise<T> {
   return withRetry(fn, {
     label: `Google Workspace Directory (${label})`,
     onRetry: async ({ attempt, attempts, delayMs, summary }) => {
@@ -34,10 +30,7 @@ function directoryCall<T>(
   });
 }
 
-const SCOPES = [
-  "https://www.googleapis.com/auth/admin.directory.orgunit",
-  "https://www.googleapis.com/auth/admin.directory.user",
-];
+const SCOPES = ["https://www.googleapis.com/auth/admin.directory.orgunit", "https://www.googleapis.com/auth/admin.directory.user"];
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
@@ -117,10 +110,7 @@ async function delegatedToken(adminEmail: string): Promise<string> {
         if (res.status >= 500 || res.status === 429) {
           // Transient — let withRetry back off. The status rides on the error
           // so `isTransient` recognises it (a bare fetch throws nothing here).
-          throw Object.assign(
-            new Error(`token endpoint returned HTTP ${res.status}`),
-            { status: res.status },
-          );
+          throw Object.assign(new Error(`token endpoint returned HTTP ${res.status}`), { status: res.status });
         }
         // `unauthorized_client` means the Workspace Admin console has not
         // granted this service account's client ID the scopes above. That is
@@ -195,9 +185,7 @@ async function directory(): Promise<admin_directory_v1.Admin> {
 
 /** HTTP status of a googleapis error, if it carries one. */
 function statusOf(err: unknown): number | undefined {
-  return typeof err === "object" && err !== null && "code" in err
-    ? Number((err as { code: unknown }).code)
-    : undefined;
+  return typeof err === "object" && err !== null && "code" in err ? Number((err as { code: unknown }).code) : undefined;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -254,10 +242,7 @@ function joinOrgUnitPath(parent: string, name: string): string {
  * Idempotent: an existing OU at the same path is reused so a retried run does
  * not fail. Returns the full org unit path.
  */
-export async function createOrgUnit(
-  name: string,
-  notify?: RetryNotify,
-): Promise<string> {
+export async function createOrgUnit(name: string, notify?: RetryNotify): Promise<string> {
   const svc = await directory();
   const { customerId, parentOrgUnitPath } = workspaceCfg();
   const path = joinOrgUnitPath(parentOrgUnitPath, name);
@@ -278,9 +263,7 @@ export async function createOrgUnit(
     // ready workshop). So don't trust the status — look. If the OU is there,
     // adopt it; only if it genuinely is not do we surface the insert error.
     try {
-      const existing = await directoryCall("look up OU", notify, () =>
-        svc.orgunits.get({ customerId, orgUnitPath: key }),
-      );
+      const existing = await directoryCall("look up OU", notify, () => svc.orgunits.get({ customerId, orgUnitPath: key }));
       if (existing.data.orgUnitPath) return existing.data.orgUnitPath;
     } catch (getErr) {
       if (statusOf(getErr) !== 404) throw getErr;
@@ -290,10 +273,7 @@ export async function createOrgUnit(
 }
 
 /** Every user currently in an OU (and its sub-OUs), by primary email. */
-async function listOrgUnitUsers(
-  svc: admin_directory_v1.Admin,
-  orgUnitPath: string,
-): Promise<string[]> {
+async function listOrgUnitUsers(svc: admin_directory_v1.Admin, orgUnitPath: string): Promise<string[]> {
   const { customerId } = workspaceCfg();
   const emails: string[] = [];
   let pageToken: string | undefined;
@@ -351,12 +331,8 @@ export async function deleteUserOnceCreated(
 
 /** Every OU path in the customer, at any depth. */
 async function listOrgUnitPaths(svc: admin_directory_v1.Admin): Promise<string[]> {
-  const res = await directoryCall("list OUs", undefined, () =>
-    svc.orgunits.list({ customerId: workspaceCfg().customerId, type: "all" }),
-  );
-  return (res.data.organizationUnits ?? [])
-    .map((o) => o.orgUnitPath)
-    .filter((p): p is string => !!p);
+  const res = await directoryCall("list OUs", undefined, () => svc.orgunits.list({ customerId: workspaceCfg().customerId, type: "all" }));
+  return (res.data.organizationUnits ?? []).map((o) => o.orgUnitPath).filter((p): p is string => !!p);
 }
 
 /**
@@ -371,11 +347,7 @@ async function listOrgUnitPaths(svc: admin_directory_v1.Admin): Promise<string[]
  * list is read, and only an OU that is not in it counts as gone. If that list
  * cannot be read either, the answer is no and the caller surfaces its error.
  */
-export async function orgUnitAbsent(
-  err: unknown,
-  orgUnitPath: string,
-  listPaths: () => Promise<string[]>,
-): Promise<boolean> {
+export async function orgUnitAbsent(err: unknown, orgUnitPath: string, listPaths: () => Promise<string[]>): Promise<boolean> {
   if (statusOf(err) === 404) return true;
   let paths: string[];
   try {
@@ -414,19 +386,11 @@ export async function deleteOrgUnit(orgUnitPath: string): Promise<void> {
       throw err;
     }
     for (const email of users) {
-      await deleteUserOnceCreated(
-        () =>
-          directoryCall("delete OU user", undefined, () =>
-            svc.users.delete({ userKey: email }),
-          ),
-        email,
-      );
+      await deleteUserOnceCreated(() => directoryCall("delete OU user", undefined, () => svc.users.delete({ userKey: email })), email);
     }
 
     try {
-      await directoryCall("delete OU", undefined, () =>
-        svc.orgunits.delete({ customerId: workspaceCfg().customerId, orgUnitPath: key }),
-      );
+      await directoryCall("delete OU", undefined, () => svc.orgunits.delete({ customerId: workspaceCfg().customerId, orgUnitPath: key }));
       return;
     } catch (err) {
       // Only the "still has members" case is worth another sweep — the just-
@@ -489,9 +453,7 @@ export async function insertIntoNewOrgUnit<T>(
       if (statusOf(err) !== 403) throw err;
 
       if (attempt >= OU_VISIBLE_ATTEMPTS) {
-        const waited = Math.round(
-          ((OU_VISIBLE_ATTEMPTS - 1) * OU_VISIBLE_BACKOFF_MS) / 1000,
-        );
+        const waited = Math.round(((OU_VISIBLE_ATTEMPTS - 1) * OU_VISIBLE_BACKOFF_MS) / 1000);
         throw new Error(
           `Google Workspace refused to create ${ctx.email} in ` +
             `${ctx.orgUnitPath} with 403 "Not Authorized" for ${waited}s. A ` +
@@ -543,43 +505,29 @@ export async function createAccount(
   };
 
   try {
-    await insertIntoNewOrgUnit(
-      () =>
-        directoryCall("create user", notify, () =>
-          svc.users.insert({ requestBody: body }),
-        ),
-      { email: input.email, orgUnitPath: input.orgUnitPath, notify },
-    );
+    await insertIntoNewOrgUnit(() => directoryCall("create user", notify, () => svc.users.insert({ requestBody: body })), {
+      email: input.email,
+      orgUnitPath: input.orgUnitPath,
+      notify,
+    });
   } catch (err) {
     if (statusOf(err) !== 409) throw err;
     // Someone got this address between the availability check and here. If it
     // sits in this workshop's OU it is ours — an earlier attempt that crashed
     // before recording it — so adopt it. Anywhere else it belongs to a real
     // person, and resetting their password would lock them out.
-    const existing = await directoryCall("look up user", notify, () =>
-      svc.users.get({ userKey: input.email }),
-    );
+    const existing = await directoryCall("look up user", notify, () => svc.users.get({ userKey: input.email }));
     if (existing.data.orgUnitPath !== input.orgUnitPath) {
-      throw new Error(
-        `address ${input.email} is already in use outside ${input.orgUnitPath}`,
-      );
+      throw new Error(`address ${input.email} is already in use outside ${input.orgUnitPath}`);
     }
-    await directoryCall("update user", notify, () =>
-      svc.users.update({ userKey: input.email, requestBody: body }),
-    );
+    await directoryCall("update user", notify, () => svc.users.update({ userKey: input.email, requestBody: body }));
   }
   return { email: input.email, tempPassword };
 }
 
 export async function deleteAccount(email: string): Promise<void> {
   const svc = await directory();
-  await deleteUserOnceCreated(
-    () =>
-      directoryCall("delete user", undefined, () =>
-        svc.users.delete({ userKey: email }),
-      ),
-    email,
-  );
+  await deleteUserOnceCreated(() => directoryCall("delete user", undefined, () => svc.users.delete({ userKey: email })), email);
 }
 
 function localPartOf(email: string): string {
@@ -595,9 +543,7 @@ export function usernameEmail(username: string): string {
 export async function accountExists(email: string): Promise<boolean> {
   const svc = await directory();
   try {
-    await directoryCall("check address", undefined, () =>
-      svc.users.get({ userKey: email }),
-    );
+    await directoryCall("check address", undefined, () => svc.users.get({ userKey: email }));
     return true;
   } catch (err) {
     if (statusOf(err) === 404) return false;
@@ -637,8 +583,7 @@ export async function allocateEmails(
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       // `bouncypenguin` first; once the plain combinations keep colliding,
       // fall back to `bouncypenguin-479` to open up the space again.
-      const suffix =
-        attempt < PLAIN_ATTEMPTS ? "" : `-${crypto.randomInt(2, 1000)}`;
+      const suffix = attempt < PLAIN_ATTEMPTS ? "" : `-${crypto.randomInt(2, 1000)}`;
       const candidate = usernameEmail(randomUsername() + suffix);
 
       if (seen.has(candidate)) continue;

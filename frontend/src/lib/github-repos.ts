@@ -27,17 +27,13 @@ export type RepoRow = {
  * importing the whole repository from a link to one file inside it is a guess
  * this has no business making.
  */
-export function parseGithubUrl(
-  input: string,
-): { providerRepo: string; url: string } | null {
+export function parseGithubUrl(input: string): { providerRepo: string; url: string } | null {
   const trimmed = input.trim();
   if (trimmed.length === 0 || trimmed.length > REPO_LIMITS.url) return null;
 
   let parsed: URL;
   try {
-    parsed = new URL(
-      /^[a-z]+:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`,
-    );
+    parsed = new URL(/^[a-z]+:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
   } catch {
     return null;
   }
@@ -62,12 +58,10 @@ export function parseGithubUrl(
 /** What a Harness Code repository may be called. */
 const IDENTIFIER = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/;
 
-export const repoIdentifierValid = (value: string) =>
-  IDENTIFIER.test(value.trim());
+export const repoIdentifierValid = (value: string) => IDENTIFIER.test(value.trim());
 
 /**
  * The name to offer for a repository nobody has named yet: the GitHub name
  * without its owner, which is what an administrator would type anyway.
  */
-export const suggestedIdentifier = (providerRepo: string) =>
-  providerRepo.split("/")[1] ?? "";
+export const suggestedIdentifier = (providerRepo: string) => providerRepo.split("/")[1] ?? "";

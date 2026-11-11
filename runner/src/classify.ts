@@ -95,11 +95,7 @@ export const AWS_ORG_CONTENTION_SIGNATURES = [
  * the whole warm-up budget before failing would bury the real cause instead of
  * fixing it. See `classify.test.ts`, which pins that exclusion.
  */
-export const AWS_ACCOUNT_WARMUP_SIGNATURES = [
-  "optinrequired",
-  "not subscribed to this service",
-  "invalidclienttokenid",
-] as const;
+export const AWS_ACCOUNT_WARMUP_SIGNATURES = ["optinrequired", "not subscribed to this service", "invalidclienttokenid"] as const;
 
 /** Why an AWS apply is worth another attempt rather than being a real failure. */
 export type AwsRetryKind = "contention" | "warmup";
@@ -131,14 +127,9 @@ export const AWS_RETRY_DELAYS_MS: Record<AwsRetryKind, number[]> = {
  * — every run trips the warm-up race once. `run.ts` writes them at the
  * severity this outcome implies.
  */
-export type AwsAttemptOutcome =
-  | { action: "retry"; kind: AwsRetryKind; delayMs: number }
-  | { action: "fail" };
+export type AwsAttemptOutcome = { action: "retry"; kind: AwsRetryKind; delayMs: number } | { action: "fail" };
 
-export function awsAttemptOutcome(
-  stderr: string,
-  spent: Readonly<Record<AwsRetryKind, number>>,
-): AwsAttemptOutcome {
+export function awsAttemptOutcome(stderr: string, spent: Readonly<Record<AwsRetryKind, number>>): AwsAttemptOutcome {
   const kind = awsRetryKind(stderr);
   if (kind === null) return { action: "fail" };
 
@@ -183,9 +174,7 @@ export function awsAttemptOutcome(
  * that reason — collapsing either into the common prefix would compile, read
  * fine, and quietly swap them.
  */
-export const SELF_CLEARING_DESTROY_SIGNATURES = [
-  "timeout while waiting for resource to be gone",
-] as const;
+export const SELF_CLEARING_DESTROY_SIGNATURES = ["timeout while waiting for resource to be gone"] as const;
 
 export function isSelfClearingDestroyFailure(text: string): boolean {
   return has(text, SELF_CLEARING_DESTROY_SIGNATURES);

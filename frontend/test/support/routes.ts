@@ -16,9 +16,7 @@ export function routeFiles(dir: string): string[] {
 /** "src/app/api/runs/[id]/end/route.ts" → "/api/runs/{id}/end". */
 export function urlPath(file: string): string {
   const dir = relative(API_DIR, file).split(sep).slice(0, -1);
-  const segments = dir.map((s) =>
-    s.replace(/^\[\.\.\.(.+)\]$/, "{...$1}").replace(/^\[(.+)\]$/, "{$1}"),
-  );
+  const segments = dir.map((s) => s.replace(/^\[\.\.\.(.+)\]$/, "{...$1}").replace(/^\[(.+)\]$/, "{$1}"));
   return ["/api", ...segments].join("/");
 }
 

@@ -57,7 +57,10 @@ export async function listTranscripts(filing: TranscriptFiling): Promise<Transcr
 
 /** One transcript, only if it is filed under `filing`. */
 export async function getTranscript(filing: TranscriptFiling, id: string): Promise<Transcript | null> {
-  const [row] = await db.select(COLUMNS).from(t).where(and(filedAs(filing), eq(t.id, id)));
+  const [row] = await db
+    .select(COLUMNS)
+    .from(t)
+    .where(and(filedAs(filing), eq(t.id, id)));
   return row ?? null;
 }
 
@@ -88,10 +91,7 @@ export async function saveTranscript(
   actorId: string,
   filing: TranscriptFiling,
   input: TranscriptInput,
-): Promise<
-  | { ok: true; transcript: Transcript; created: boolean }
-  | { ok: false; error: TranscriptError; detail?: string }
-> {
+): Promise<{ ok: true; transcript: Transcript; created: boolean } | { ok: false; error: TranscriptError; detail?: string }> {
   const already = async () => {
     const [row] = await db
       .select({ ...COLUMNS, bootcampId: t.bootcampId, assessmentId: t.assessmentId, attendeeEmail: t.attendeeEmail })
@@ -99,11 +99,8 @@ export async function saveTranscript(
       .where(eq(t.recordingId, input.recordingId));
     if (!row) return null;
     const { bootcampId, assessmentId, attendeeEmail, ...transcript } = row;
-    const same =
-      bootcampId === filing.bootcampId && assessmentId === filing.assessmentId && attendeeEmail === filing.attendeeEmail;
-    return same
-      ? ({ ok: true, transcript, created: false } as const)
-      : ({ ok: false, error: "conflict" } as const);
+    const same = bootcampId === filing.bootcampId && assessmentId === filing.assessmentId && attendeeEmail === filing.attendeeEmail;
+    return same ? ({ ok: true, transcript, created: false } as const) : ({ ok: false, error: "conflict" } as const);
   };
 
   const found = await already();

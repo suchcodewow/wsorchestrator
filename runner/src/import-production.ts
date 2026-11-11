@@ -27,12 +27,7 @@
 
 import { GoogleAuth } from "google-auth-library";
 import pg from "pg";
-import {
-  endPool,
-  runsHoldingResources,
-  snapshotUsers,
-  type UserSnapshot,
-} from "./db.js";
+import { endPool, runsHoldingResources, snapshotUsers, type UserSnapshot } from "./db.js";
 import {
   QUARANTINE_SQL,
   databaseCredentials,
@@ -99,10 +94,7 @@ const auth = new GoogleAuth({
   scopes: ["https://www.googleapis.com/auth/cloud-platform"],
 });
 
-async function call<T>(
-  url: string,
-  init?: { method?: "GET" | "POST" | "PUT"; data?: unknown },
-): Promise<T> {
+async function call<T>(url: string, init?: { method?: "GET" | "POST" | "PUT"; data?: unknown }): Promise<T> {
   const client = await auth.getClient();
   const res = await client.request<T>({
     url,
@@ -117,9 +109,7 @@ async function waitFor(project: string, op: SqlOperation, what: string) {
   if (!op.name) throw new Error(`${what}: the API returned no operation`);
   const started = Date.now();
   for (;;) {
-    const current = await call<SqlOperation>(
-      `${SQL_API}/projects/${project}/operations/${op.name}`,
-    );
+    const current = await call<SqlOperation>(`${SQL_API}/projects/${project}/operations/${op.name}`);
     const state = operationState(current);
     if (state.state === "done") return;
     if (state.state === "failed") throw new Error(`${what} failed: ${state.message}`);

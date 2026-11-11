@@ -68,7 +68,14 @@ export function HistoryGraph({
           : "main, with no branch yet"
       }
     >
-      <line x1={x(0)} y1={MAIN_Y} x2={production ? prodX - 7 : width - 4} y2={MAIN_Y} className="stroke-muted-foreground/50" strokeWidth={2} />
+      <line
+        x1={x(0)}
+        y1={MAIN_Y}
+        x2={production ? prodX - 7 : width - 4}
+        y2={MAIN_Y}
+        className="stroke-muted-foreground/50"
+        strokeWidth={2}
+      />
       {production && (
         <>
           <path d={`M${prodX},${MAIN_Y} l-8,-5 v10 z`} className="fill-muted-foreground" />

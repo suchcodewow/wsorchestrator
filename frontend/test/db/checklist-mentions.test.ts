@@ -71,7 +71,10 @@ describe("tags in a checklist item", () => {
 describe("changing a checklist item", () => {
   test("a new name moves its tags, keeping the ones it still makes", async () => {
     const stamp = Date.now();
-    const saved = await addChecklistItem(admin.id, bootcampId, "btc", 1, { name: `Ask @judge for slides ${stamp}`, mentions: [judge.email] });
+    const saved = await addChecklistItem(admin.id, bootcampId, "btc", 1, {
+      name: `Ask @judge for slides ${stamp}`,
+      mentions: [judge.email],
+    });
     assert.ok(saved.ok);
     added.push(saved.value.id);
 
@@ -80,9 +83,15 @@ describe("changing a checklist item", () => {
     assert.ok(both.ok);
     assert.deepEqual(both.value.mentions.map((m) => m.email).sort(), [admin.email, judge.email].sort());
 
-    const dropped = await editChecklistItem(admin.id, bootcampId, saved.value.id, { name: `Ask @admin for slides ${stamp}`, mentions: [admin.email] });
+    const dropped = await editChecklistItem(admin.id, bootcampId, saved.value.id, {
+      name: `Ask @admin for slides ${stamp}`,
+      mentions: [admin.email],
+    });
     assert.ok(dropped.ok);
-    assert.deepEqual(dropped.value.mentions.map((m) => m.email), [admin.email]);
+    assert.deepEqual(
+      dropped.value.mentions.map((m) => m.email),
+      [admin.email],
+    );
     const page = await listMyMentions({ email: judge.email, access: judge.access }, { ...MY_MENTION_LIST, q: `${stamp}`, page: 1 });
     assert.equal(page.rows.length, 0);
   });

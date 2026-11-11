@@ -11,10 +11,7 @@ async function triggerRunnerJob(runId: string): Promise<void> {
   const job = process.env.TF_RUNNER_JOB;
   const project = process.env.GCP_ADMIN_PROJECT_ID;
   const region = process.env.GCP_REGION ?? "us-central1";
-  const missing = [
-    !job && "TF_RUNNER_JOB",
-    !project && "GCP_ADMIN_PROJECT_ID",
-  ].filter(Boolean);
+  const missing = [!job && "TF_RUNNER_JOB", !project && "GCP_ADMIN_PROJECT_ID"].filter(Boolean);
   if (missing.length > 0) {
     throw new Error(`${missing.join(" and ")} not set`);
   }
@@ -39,9 +36,7 @@ export async function reprovisionRun(runId: string): Promise<boolean> {
   const claimed = await db
     .update(workshopRuns)
     .set({ status: "requested" })
-    .where(
-      and(eq(workshopRuns.id, runId), eq(workshopRuns.status, "ready"), localRun()),
-    )
+    .where(and(eq(workshopRuns.id, runId), eq(workshopRuns.status, "ready"), localRun()))
     .returning({ id: workshopRuns.id });
 
   if (claimed.length === 0) return false;
@@ -56,10 +51,7 @@ export async function reprovisionRun(runId: string): Promise<boolean> {
     return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await db
-      .update(workshopRuns)
-      .set({ status: "ready" })
-      .where(eq(workshopRuns.id, runId));
+    await db.update(workshopRuns).set({ status: "ready" }).where(eq(workshopRuns.id, runId));
     await db.insert(runLogs).values({
       runId,
       stream: "stderr",
@@ -71,21 +63,11 @@ export async function reprovisionRun(runId: string): Promise<boolean> {
 
 export type RetryRunError = "not_found" | "not_retryable" | "trigger_failed";
 
-export async function retryRun(
-  runId: string,
-  viewer: Viewer,
-): Promise<{ ok: true } | { ok: false; error: RetryRunError }> {
+export async function retryRun(runId: string, viewer: Viewer): Promise<{ ok: true } | { ok: false; error: RetryRunError }> {
   const claimed = await db
     .update(workshopRuns)
     .set({ status: "requested", error: null })
-    .where(
-      and(
-        eq(workshopRuns.id, runId),
-        eq(workshopRuns.status, "failed"),
-        ownedBy(viewer),
-        localRun(),
-      ),
-    )
+    .where(and(eq(workshopRuns.id, runId), eq(workshopRuns.status, "failed"), ownedBy(viewer), localRun()))
     .returning({ id: workshopRuns.id });
 
   if (claimed.length === 0) {
@@ -106,10 +88,7 @@ export async function retryRun(
     return { ok: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await db
-      .update(workshopRuns)
-      .set({ status: "failed", error: message })
-      .where(eq(workshopRuns.id, runId));
+    await db.update(workshopRuns).set({ status: "failed", error: message }).where(eq(workshopRuns.id, runId));
     await db.insert(runLogs).values({
       runId,
       stream: "stderr",
@@ -123,9 +102,7 @@ export async function startRunNow(runId: string): Promise<boolean> {
   const claimed = await db
     .update(workshopRuns)
     .set({ status: "requested" })
-    .where(
-      and(eq(workshopRuns.id, runId), eq(workshopRuns.status, "scheduled"), localRun()),
-    )
+    .where(and(eq(workshopRuns.id, runId), eq(workshopRuns.status, "scheduled"), localRun()))
     .returning({ id: workshopRuns.id });
 
   if (claimed.length === 0) return false;
@@ -140,10 +117,7 @@ export async function startRunNow(runId: string): Promise<boolean> {
     return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await db
-      .update(workshopRuns)
-      .set({ status: "scheduled" })
-      .where(eq(workshopRuns.id, runId));
+    await db.update(workshopRuns).set({ status: "scheduled" }).where(eq(workshopRuns.id, runId));
     await db.insert(runLogs).values({
       runId,
       stream: "stderr",

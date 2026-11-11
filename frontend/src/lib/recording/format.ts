@@ -8,12 +8,7 @@
  * Opus first: Chrome, Edge and Firefox record it, and it is what speech
  * services take without converting. Safari records only MP4.
  */
-export const RECORDING_MIME_TYPES = [
-  "audio/webm;codecs=opus",
-  "audio/ogg;codecs=opus",
-  "audio/webm",
-  "audio/mp4",
-] as const;
+export const RECORDING_MIME_TYPES = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm", "audio/mp4"] as const;
 
 /** Speech at 32 kbit/s is about 14 MB an hour, well under what a browser lets a site keep. */
 export const RECORDING_BITS_PER_SECOND = 32_000;

@@ -53,13 +53,7 @@ import {
 import { INTAKE_FORM_HEADINGS, intakeInviteText, intakeReminderText } from "@/lib/logistics/intake-values";
 import { answeredIntake, getIntakeForm } from "@/lib/logistics/intake";
 import { cohortStageOf } from "@/lib/evals/current-cohort";
-import {
-  channelAudience,
-  cohortChannels,
-  planMembership,
-  type CohortChannel,
-  type CohortChannelKind,
-} from "@/lib/cohorts/slack-plan";
+import { channelAudience, cohortChannels, planMembership, type CohortChannel, type CohortChannelKind } from "@/lib/cohorts/slack-plan";
 import { forgetTestArtifact, getTestGroup, outboundCohort, recordTestArtifact, testArtifacts } from "@/lib/cohorts/test-group";
 import type { SlackSyncChangeSort, SlackSyncSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
@@ -123,12 +117,7 @@ async function closeStaleRuns(): Promise<void> {
 }
 
 /** Opens a run, or null if one is already running — the partial unique index allows one. */
-async function startRun(
-  trigger: SlackSyncTrigger,
-  actorId: string | null,
-  dryRun: boolean,
-  scope: SlackSyncScope,
-): Promise<string | null> {
+async function startRun(trigger: SlackSyncTrigger, actorId: string | null, dryRun: boolean, scope: SlackSyncScope): Promise<string | null> {
   await closeStaleRuns();
   const [run] = await db
     .insert(slackSyncRuns)
@@ -249,10 +238,12 @@ async function findChannels(slack: SlackClient, names: readonly string[]): Promi
   const found = new Map<string, ListedChannel>();
   let cursor = "";
   do {
-    const page = await slack.call<{ channels: ListedChannel[]; response_metadata?: { next_cursor?: string } }>(
-      "conversations.list",
-      { types: "public_channel", exclude_archived: "true", limit: "1000", ...(cursor ? { cursor } : {}) },
-    );
+    const page = await slack.call<{ channels: ListedChannel[]; response_metadata?: { next_cursor?: string } }>("conversations.list", {
+      types: "public_channel",
+      exclude_archived: "true",
+      limit: "1000",
+      ...(cursor ? { cursor } : {}),
+    });
     for (const ch of page.channels) if (wanted.has(ch.name)) found.set(ch.name, ch);
     cursor = page.response_metadata?.next_cursor ?? "";
   } while (cursor && found.size < wanted.size);
@@ -264,10 +255,11 @@ export async function channelMembers(slack: SlackClient, channelId: string): Pro
   const members = new Set<string>();
   let cursor = "";
   do {
-    const page = await slack.call<{ members: string[]; response_metadata?: { next_cursor?: string } }>(
-      "conversations.members",
-      { channel: channelId, limit: "1000", ...(cursor ? { cursor } : {}) },
-    );
+    const page = await slack.call<{ members: string[]; response_metadata?: { next_cursor?: string } }>("conversations.members", {
+      channel: channelId,
+      limit: "1000",
+      ...(cursor ? { cursor } : {}),
+    });
     for (const m of page.members) members.add(m);
     cursor = page.response_metadata?.next_cursor ?? "";
   } while (cursor);
@@ -287,9 +279,7 @@ async function ensureChannels(
   log: RunLog,
 ): Promise<Map<string, string | null>> {
   const names = channels.map((c) => c.name);
-  const stored = new Map(
-    (await db.select().from(slackChannels).where(inArray(slackChannels.name, names))).map((r) => [r.name, r]),
-  );
+  const stored = new Map((await db.select().from(slackChannels).where(inArray(slackChannels.name, names))).map((r) => [r.name, r]));
 
   const ids = new Map<string, string | null>();
   const isMember = new Map<string, boolean>();
@@ -381,15 +371,17 @@ async function ensureChannels(
 
 /** Errors that would fail every call alike, so the whole run stops rather than logging one per person. */
 export function isFatal(err: SlackError): boolean {
-  return [
-    "invalid_auth",
-    "not_authed",
-    "account_inactive",
-    "token_revoked",
-    "token_expired",
-    "missing_scope",
-    "not_allowed_token_type",
-  ].includes(err.error) || err.error.startsWith("unreachable");
+  return (
+    [
+      "invalid_auth",
+      "not_authed",
+      "account_inactive",
+      "token_revoked",
+      "token_expired",
+      "missing_scope",
+      "not_allowed_token_type",
+    ].includes(err.error) || err.error.startsWith("unreachable")
+  );
 }
 
 /** Brings one channel's membership in line, or in a dry run logs what that would take. */
@@ -500,9 +492,17 @@ async function syncChannels(slack: SlackClient | null, runId: string, dryRun: bo
 
   if (!slack) {
     const known = new Set(
-      (await db.select({ name: slackChannels.name }).from(slackChannels).where(inArray(slackChannels.name, channels.map((ch) => ch.name)))).map(
-        (r) => r.name,
-      ),
+      (
+        await db
+          .select({ name: slackChannels.name })
+          .from(slackChannels)
+          .where(
+            inArray(
+              slackChannels.name,
+              channels.map((ch) => ch.name),
+            ),
+          )
+      ).map((r) => r.name),
     );
     for (const channel of channels) {
       if (!known.has(channel.name)) log.note({ channelName: channel.name, action: "created" });
@@ -685,7 +685,7 @@ export async function sendRegistrationLink(actorId: string, email: string, appUr
 /* ------------------------------------------------------------------ */
 
 export type SlackSyncResult =
-  | {
+  | ({
       ok: true;
       runId: string;
       status: "succeeded" | "skipped";
@@ -693,7 +693,7 @@ export type SlackSyncResult =
       unfinished: boolean;
       /** Why a part of the run did nothing. */
       notes: string[];
-    } & Tally
+    } & Tally)
   | { ok: false; runId: string | null; error: SlackSyncError; detail?: string };
 
 /** Why a dry run with Slack not connected lists what it does. */
@@ -799,7 +799,12 @@ export async function activeCohortChannels(): Promise<{
       await db
         .select()
         .from(slackChannels)
-        .where(inArray(slackChannels.name, channels.map((c) => c.name)))
+        .where(
+          inArray(
+            slackChannels.name,
+            channels.map((c) => c.name),
+          ),
+        )
     ).map((r) => [r.name, r]),
   );
   return {
@@ -879,20 +884,15 @@ export async function listSlackSyncRuns(query: ListQuery<SlackSyncSort>): Promis
     .select(runColumns)
     .from(slackSyncRuns)
     .leftJoin(users, eq(users.id, slackSyncRuns.triggeredBy))
-    .where(
-      searchAny(query.q, [
-        users.name,
-        users.email,
-        slackSyncRuns.trigger,
-        slackSyncRuns.status,
-        slackSyncRuns.error,
-      ]),
-    )
+    .where(searchAny(query.q, [users.name, users.email, slackSyncRuns.trigger, slackSyncRuns.status, slackSyncRuns.error]))
     .orderBy(...orderFor(RUN_SORT_COLUMNS[query.sort], query.dir, desc(slackSyncRuns.startedAt), slackSyncRuns.id))
     .limit(limit)
     .offset(offset);
   const staleBefore = Date.now() - STALE_MS;
-  return toPage(rows.map((r) => summarize(r, staleBefore)), query.page);
+  return toPage(
+    rows.map((r) => summarize(r, staleBefore)),
+    query.page,
+  );
 }
 
 /** One run, or null. */
@@ -910,9 +910,7 @@ export async function slackSyncInProgress(): Promise<boolean> {
   const [row] = await db
     .select({ id: slackSyncRuns.id })
     .from(slackSyncRuns)
-    .where(
-      and(eq(slackSyncRuns.status, "running"), sql`${slackSyncRuns.startedAt} >= ${new Date(Date.now() - STALE_MS)}`),
-    )
+    .where(and(eq(slackSyncRuns.status, "running"), sql`${slackSyncRuns.startedAt} >= ${new Date(Date.now() - STALE_MS)}`))
     .limit(1);
   return Boolean(row);
 }
@@ -1005,9 +1003,7 @@ export async function listSlackSyncChanges(
         ]),
       ),
     )
-    .orderBy(
-      ...orderFor(CHANGE_SORT_COLUMNS[query.sort], query.dir, slackSyncChanges.at, slackSyncChanges.id),
-    )
+    .orderBy(...orderFor(CHANGE_SORT_COLUMNS[query.sort], query.dir, slackSyncChanges.at, slackSyncChanges.id))
     .limit(limit)
     .offset(offset);
   return toPage(rows, query.page);
@@ -1032,7 +1028,17 @@ export async function archiveTestChannels(): Promise<{ archived: string[]; failu
   const token = await slackToken();
   const slack = token ? slackClient(token, Date.now() + 120_000) : null;
   const rows = new Map(
-    (await db.select().from(slackChannels).where(inArray(slackChannels.name, artifacts.map((a) => a.key)))).map((r) => [r.name, r]),
+    (
+      await db
+        .select()
+        .from(slackChannels)
+        .where(
+          inArray(
+            slackChannels.name,
+            artifacts.map((a) => a.key),
+          ),
+        )
+    ).map((r) => [r.name, r]),
   );
 
   for (const { key: name } of artifacts) {

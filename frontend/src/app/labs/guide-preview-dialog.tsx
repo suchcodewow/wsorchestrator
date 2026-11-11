@@ -18,11 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-export function GuidePreviewDialog({
-  guide,
-}: {
-  guide: { id: string; slug: string; title: string };
-}) {
+export function GuidePreviewDialog({ guide }: { guide: { id: string; slug: string; title: string } }) {
   const [open, setOpen] = useState(false);
   const [html, setHtml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,9 +61,7 @@ export function GuidePreviewDialog({
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle className="pr-8">{guide.title}</DialogTitle>
-          <DialogDescription>
-            A preview of this guide as the room will read it.
-          </DialogDescription>
+          <DialogDescription>A preview of this guide as the room will read it.</DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[60vh] overflow-y-auto pr-2">
@@ -79,9 +73,7 @@ export function GuidePreviewDialog({
               Loading…
             </p>
           ) : html.length === 0 ? (
-            <p className="py-6 text-sm text-muted-foreground">
-              This guide has no content yet.
-            </p>
+            <p className="py-6 text-sm text-muted-foreground">This guide has no content yet.</p>
           ) : (
             <LabGuideBody html={html} />
           )}

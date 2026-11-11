@@ -36,9 +36,6 @@ export default async function ActiveSchedulePage() {
   }
 
   return (
-    <SchedulePage
-      schedule={schedule}
-      viewer={{ id: session.user.id, email: session.user.email ?? "", access: session.user.access }}
-    />
+    <SchedulePage schedule={schedule} viewer={{ id: session.user.id, email: session.user.email ?? "", access: session.user.access }} />
   );
 }

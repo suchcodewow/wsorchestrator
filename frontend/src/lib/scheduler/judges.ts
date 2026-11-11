@@ -47,12 +47,7 @@ export async function listJudges(bootcampId: string, query: ListQuery<JudgeSort>
     })
     .from(bootcampJudges)
     .leftJoin(users, eq(users.id, bootcampJudges.addedBy))
-    .where(
-      and(
-        eq(bootcampJudges.bootcampId, bootcampId),
-        searchAny(query.q, [judgeName, bootcampJudges.email, users.name, users.email]),
-      ),
-    )
+    .where(and(eq(bootcampJudges.bootcampId, bootcampId), searchAny(query.q, [judgeName, bootcampJudges.email, users.name, users.email])))
     .orderBy(...orderFor(SORT_COLUMNS[query.sort], query.dir, bootcampJudges.email, bootcampJudges.id))
     .limit(limit)
     .offset(offset);
@@ -123,12 +118,7 @@ export async function setJudges(
   const emails = judges.map((j) => j.email);
   await tx
     .delete(bootcampJudges)
-    .where(
-      and(
-        eq(bootcampJudges.bootcampId, bootcampId),
-        emails.length > 0 ? notInArray(bootcampJudges.email, emails) : undefined,
-      ),
-    );
+    .where(and(eq(bootcampJudges.bootcampId, bootcampId), emails.length > 0 ? notInArray(bootcampJudges.email, emails) : undefined));
   if (judges.length === 0) return;
   await tx
     .insert(bootcampJudges)

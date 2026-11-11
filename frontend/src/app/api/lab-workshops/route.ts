@@ -2,11 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { sessionOrToken } from "@/lib/api-auth";
-import {
-  createLabWorkshop,
-  labWorkshopSchema,
-  listLabWorkshops,
-} from "@/lib/lab-workshops";
+import { createLabWorkshop, labWorkshopSchema, listLabWorkshops } from "@/lib/lab-workshops";
 import { canManageLabGuides } from "@/lib/roles";
 import { audited } from "@/lib/audit";
 

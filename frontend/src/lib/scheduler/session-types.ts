@@ -94,7 +94,10 @@ export const sessionTypeInputSchema = z.object({
   position: z.number().int().min(0).max(1000).optional(),
 });
 
-export const sessionTypePatchSchema = z.object(sessionLookSchema).extend({ position: z.number().int().min(0).max(1000) }).partial();
+export const sessionTypePatchSchema = z
+  .object(sessionLookSchema)
+  .extend({ position: z.number().int().min(0).max(1000) })
+  .partial();
 
 export type SessionTypeError = "invalid" | "duplicate" | "too_many" | "not_found";
 
@@ -109,9 +112,9 @@ export async function createSessionType(
   actorId: string,
   input: z.infer<typeof sessionTypeInputSchema>,
 ): Promise<{ ok: true; type: SessionTypeRow } | { ok: false; error: SessionTypeError }> {
-  const [{ count, last }] = await db
+  const [{ count, last }] = (await db
     .select({ count: sql<number>`count(*)::int`, last: sql<number>`coalesce(max(${sessionTypes.position}), -1)::int` })
-    .from(sessionTypes) as [{ count: number; last: number }];
+    .from(sessionTypes)) as [{ count: number; last: number }];
   if (count >= SCHEDULE_LIMITS.types) return { ok: false, error: "too_many" };
   try {
     const [made] = await db

@@ -192,7 +192,11 @@ export function calendarClient(token: string, base: string = API): CalendarClien
         if (!res.ok) {
           const error = (json as { error?: { message?: string; errors?: { reason?: string }[] } } | null)?.error;
           const reason = error?.errors?.[0]?.reason ?? `http_${res.status}`;
-          throw new GoogleError(res.status, reason, `Google Calendar ${method} ${path} answered ${res.status}: ${error?.message ?? reason}`);
+          throw new GoogleError(
+            res.status,
+            reason,
+            `Google Calendar ${method} ${path} answered ${res.status}: ${error?.message ?? reason}`,
+          );
         }
         return json as T;
       }

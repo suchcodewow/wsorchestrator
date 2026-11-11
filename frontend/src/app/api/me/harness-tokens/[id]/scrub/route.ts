@@ -7,20 +7,14 @@ import { audited } from "@/lib/audit";
 
 export const maxDuration = 120;
 
-export const POST = audited(async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const POST = audited(async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error, user } = await requireAdministrator(req);
   if (error) return error;
 
   const { id } = await params;
   const result = await scrubDeployedSecrets(user.id, id);
   if ("error" in result) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: result.error === "not_found" ? 404 : 409 },
-    );
+    return NextResponse.json({ error: result.error }, { status: result.error === "not_found" ? 404 : 409 });
   }
 
   return NextResponse.json({ run: result });

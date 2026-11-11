@@ -9,10 +9,7 @@ import { removeJudge } from "@/lib/scheduler/judges";
 
 const idSchema = z.string().uuid();
 
-export const DELETE = audited(async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string; judgeId: string }> },
-) {
+export const DELETE = audited(async function DELETE(req: Request, { params }: { params: Promise<{ id: string; judgeId: string }> }) {
   const { error } = await requireCaller(req, canManageTrainingSettings);
   if (error) return error;
 

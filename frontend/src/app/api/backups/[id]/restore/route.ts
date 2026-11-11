@@ -3,13 +3,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
-import {
-  auditBackupAction,
-  listBackups,
-  restoreBackup,
-  runsStrandedBy,
-  type RestoreError,
-} from "@/lib/backups";
+import { auditBackupAction, listBackups, restoreBackup, runsStrandedBy, type RestoreError } from "@/lib/backups";
 import { canManageBackups } from "@/lib/roles";
 import { audited } from "@/lib/audit";
 
@@ -26,10 +20,7 @@ const STATUS_FOR: Record<RestoreError, number> = {
   confirmation_mismatch: 400,
 };
 
-export const POST = audited(async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const POST = audited(async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -47,9 +38,7 @@ export const POST = audited(async function POST(
 
   const listed = await listBackups();
   const backup = listed.ok ? listed.backups.find((b) => b.id === id) : undefined;
-  const stranded = backup?.startTime
-    ? await runsStrandedBy(new Date(backup.startTime))
-    : [];
+  const stranded = backup?.startTime ? await runsStrandedBy(new Date(backup.startTime)) : [];
 
   auditBackupAction({
     action: "restore",
@@ -62,14 +51,8 @@ export const POST = audited(async function POST(
 
   const result = await restoreBackup(id, parsed.data.confirmation);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
 
-  return NextResponse.json(
-    { ok: true, stranded: stranded.map((r) => ({ id: r.id, name: r.name })) },
-    { status: 202 },
-  );
+  return NextResponse.json({ ok: true, stranded: stranded.map((r) => ({ id: r.id, name: r.name })) }, { status: 202 });
 });

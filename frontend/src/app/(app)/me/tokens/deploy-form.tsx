@@ -44,9 +44,7 @@ export function useDeployForm(token: HarnessTokenSummary, choices: DeployChoices
   const toggleTemplate = (id: string) =>
     setSelection((current) => ({
       ...current,
-      myTemplates: current.myTemplates.includes(id)
-        ? current.myTemplates.filter((other) => other !== id)
-        : [...current.myTemplates, id],
+      myTemplates: current.myTemplates.includes(id) ? current.myTemplates.filter((other) => other !== id) : [...current.myTemplates, id],
     }));
 
   async function submit() {
@@ -91,21 +89,19 @@ export function DeployForm({
   scrubDays: number;
 }) {
   const { selection, rerun } = form;
-  const secretsGoing =
-    (selection.official && choices.official.secrets > 0) || (selection.mySecrets && choices.mySecrets > 0);
+  const secretsGoing = (selection.official && choices.official.secrets > 0) || (selection.mySecrets && choices.mySecrets > 0);
 
   return (
     <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
       <p className="text-xs leading-relaxed text-muted-foreground">
         {rerun ? (
           <>
-            Into <span className="font-medium text-foreground">{token.lastDeploy?.orgName}</span> again, leaving
-            anything already there as it is.
+            Into <span className="font-medium text-foreground">{token.lastDeploy?.orgName}</span> again, leaving anything already there as
+            it is.
           </>
         ) : (
           <>
-            A new organization in{" "}
-            <span className="font-medium text-foreground">{token.accountName ?? token.accountId}</span>, filled with
+            A new organization in <span className="font-medium text-foreground">{token.accountName ?? token.accountId}</span>, filled with
             whatever is ticked below.
           </>
         )}
@@ -124,9 +120,7 @@ export function DeployForm({
         <p className="text-xs leading-relaxed text-muted-foreground">
           The org secrets go in with their real values so the content works immediately, and{" "}
           <span className="font-medium text-foreground">
-            {scrubDays === 0
-              ? "are scrubbed to 123 at the next sweep"
-              : `are scrubbed to 123 after ${scrubDays} day${plural(scrubDays)}`}
+            {scrubDays === 0 ? "are scrubbed to 123 at the next sweep" : `are scrubbed to 123 after ${scrubDays} day${plural(scrubDays)}`}
           </span>
           .
         </p>
@@ -165,15 +159,7 @@ export function DeployForm({
 }
 
 /** Why Deploy is disabled, or the identifier it will create. */
-function DeployFormHint({
-  form,
-  token,
-  deploying,
-}: {
-  form: DeployFormState;
-  token: HarnessTokenSummary;
-  deploying: boolean;
-}) {
+function DeployFormHint({ form, token, deploying }: { form: DeployFormState; token: HarnessTokenSummary; deploying: boolean }) {
   if (form.identifier === null) {
     return form.org.trim().length === 0 ? (
       <>Harness needs a name to create the organization under.</>
@@ -186,9 +172,7 @@ function DeployFormHint({
   return (
     <>
       Harness identifier:{" "}
-      <code className="rounded bg-muted px-1 py-0.5 font-mono">
-        {form.rerun ? token.lastDeploy?.orgIdentifier : form.identifier}
-      </code>
+      <code className="rounded bg-muted px-1 py-0.5 font-mono">{form.rerun ? token.lastDeploy?.orgIdentifier : form.identifier}</code>
       {deploying && <> — this runs one call per entity, so give it a minute.</>}
     </>
   );
@@ -223,8 +207,7 @@ function DeployPicker({
             <>This site holds no org secrets or template sources of its own.</>
           ) : (
             <>
-              {countOf(official.secrets, "org secret")} and everything in{" "}
-              {countOf(official.sources, "template source")} this site holds.
+              {countOf(official.secrets, "org secret")} and everything in {countOf(official.sources, "template source")} this site holds.
             </>
           )
         }
@@ -240,8 +223,8 @@ function DeployPicker({
             <>You keep no org secrets of your own — add them in My settings → My org secrets.</>
           ) : (
             <>
-              {countOf(choices.mySecrets, "org secret")} of your own, written into the organization. One named the
-              same as an official secret wins.
+              {countOf(choices.mySecrets, "org secret")} of your own, written into the organization. One named the same as an official
+              secret wins.
             </>
           )
         }
@@ -252,14 +235,11 @@ function DeployPicker({
 
       {choices.myTemplates.length === 0 ? (
         <p className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
-          You keep no template sources of your own — add one in My settings → My templates to copy an
-          organization&apos;s content in.
+          You keep no template sources of your own — add one in My settings → My templates to copy an organization&apos;s content in.
         </p>
       ) : (
         <>
-          <p className="px-2 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            My templates
-          </p>
+          <p className="px-2 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">My templates</p>
           {choices.myTemplates.map((source) => (
             <Tick
               key={source.id}
@@ -269,9 +249,7 @@ function DeployPicker({
                   <>
                     Copy every connector, template, environment, infrastructure, policy, policy set, and filter from{" "}
                     <code className="rounded bg-muted px-1 py-0.5 font-mono">
-                      {source.projectIdentifier === null
-                        ? source.orgIdentifier
-                        : `${source.orgIdentifier}/${source.projectIdentifier}`}
+                      {source.projectIdentifier === null ? source.orgIdentifier : `${source.orgIdentifier}/${source.projectIdentifier}`}
                     </code>{" "}
                     in {source.accountName ?? source.accountId}.
                   </>

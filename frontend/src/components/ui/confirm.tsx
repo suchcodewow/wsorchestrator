@@ -15,14 +15,7 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type ConfirmOptions = {
   title: string;
@@ -74,7 +67,11 @@ function settle(ok: boolean) {
 }
 
 export function ConfirmHost() {
-  const head = React.useSyncExternalStore(subscribe, () => queue[0] ?? null, () => null);
+  const head = React.useSyncExternalStore(
+    subscribe,
+    () => queue[0] ?? null,
+    () => null,
+  );
   // The last request stays rendered while the dialog animates out.
   const [shown, setShown] = React.useState(head);
   if (head && head !== shown) setShown(head);

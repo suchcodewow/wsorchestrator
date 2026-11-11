@@ -10,14 +10,7 @@ import { useRouter } from "next/navigation";
 import { FlaskConical, Loader2, Recycle, RotateCcw, VenetianMask, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmployeeMatches, useEmployeeSearch, type EmployeeCandidate } from "@/components/employee-picker";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { impersonate } from "@/components/user-menu";
 import { TEST_ACCOUNT_LIMITS } from "@/db/schema";
@@ -131,8 +124,7 @@ export function CreateTestAccountDialog() {
           <DialogHeader>
             <DialogTitle>New test account</DialogTitle>
             <DialogDescription>
-              An account to view the app as from your account menu, where
-              anything you do is saved as it. Nobody can sign in as it.
+              An account to view the app as from your account menu, where anything you do is saved as it. Nobody can sign in as it.
             </DialogDescription>
           </DialogHeader>
 
@@ -320,10 +312,8 @@ export function ResetTestAccountButton({
           <DialogHeader>
             <DialogTitle>Reset {who}?</DialogTitle>
             <DialogDescription>
-              Everything that is its own goes, as if it were deleted: Diagnostic
-              sittings and track, progress, tokens and settings. It keeps its
-              name, address and roles. Anything it wrote elsewhere stays, with
-              no author.
+              Everything that is its own goes, as if it were deleted: Diagnostic sittings and track, progress, tokens and settings. It keeps
+              its name, address and roles. Anything it wrote elsewhere stays, with no author.
             </DialogDescription>
           </DialogHeader>
 

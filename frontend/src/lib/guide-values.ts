@@ -10,13 +10,7 @@ import { and, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { db } from "@/db";
 import { workshopAccounts, workshopRuns } from "@/db/schema";
-import {
-  EMPTY_GUIDE_CONTEXT,
-  GUIDE_CONTEXT_COOKIE,
-  parseGuideContext,
-  type GuideContext,
-  type GuideValues,
-} from "@/lib/guide-variables";
+import { EMPTY_GUIDE_CONTEXT, GUIDE_CONTEXT_COOKIE, parseGuideContext, type GuideContext, type GuideValues } from "@/lib/guide-variables";
 
 /** Where a reader's values came from, so the page can say so and offer to change it. */
 export type GuideReader = {
@@ -40,17 +34,14 @@ function str(value: unknown): string | undefined {
 }
 
 function map(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 // Both links are built by the runner (`orgUrl` and `projectUrl` in
 // runner/src/harness.ts), which emits the finished URL rather than the pieces so
 // the identifier rules live in one place. Reading the pieces back out of the URL
 // keeps that true: this is the same one source, read rather than re-derived.
-const PROJECT_URL =
-  /\/ng\/account\/([^/?#]+)\/home\/orgs\/([^/?#]+)\/projects\/([^/?#]+)/;
+const PROJECT_URL = /\/ng\/account\/([^/?#]+)\/home\/orgs\/([^/?#]+)\/projects\/([^/?#]+)/;
 const ORG_URL = /\/ng\/account\/([^/?#]+)\/settings\/organizations\/([^/?#]+)/;
 
 const DEFAULT_AWS_REGION = "us-east-1";
@@ -79,12 +70,8 @@ function valuesOf(run: RunRow, email: string): GuideValues {
     orgUrl,
     account: project?.[1] ?? org?.[1],
     gcpProject:
-      str(map(outputs.gcp_projects)[email]) ??
-      str(outputs.gcp_project_id) ??
-      str(run.gcpProjectId) ??
-      str(outputs.sandbox_project_id),
-    awsAccount:
-      str(map(outputs.aws_accounts)[email]) ?? str(outputs.aws_account_id),
+      str(map(outputs.gcp_projects)[email]) ?? str(outputs.gcp_project_id) ?? str(run.gcpProjectId) ?? str(outputs.sandbox_project_id),
+    awsAccount: str(map(outputs.aws_accounts)[email]) ?? str(outputs.aws_account_id),
     awsRegion: str(outputs.aws_region) ?? DEFAULT_AWS_REGION,
   };
 
@@ -107,10 +94,7 @@ async function eventValues(
       columns: { name: true, gcpProjectId: true, outputs: true },
     }),
     db.query.workshopAccounts.findFirst({
-      where: and(
-        eq(workshopAccounts.runId, runId),
-        eq(workshopAccounts.id, accountId),
-      ),
+      where: and(eq(workshopAccounts.runId, runId), eq(workshopAccounts.id, accountId)),
       columns: { email: true },
     }),
   ]);
@@ -134,10 +118,7 @@ export async function readGuideReader(): Promise<GuideReader> {
 
   const context = parseGuideContext(raw);
 
-  const provisioned =
-    context.runId !== null && context.accountId !== null
-      ? await eventValues(context.runId, context.accountId)
-      : null;
+  const provisioned = context.runId !== null && context.accountId !== null ? await eventValues(context.runId, context.accountId) : null;
 
   const provided = provisioned?.values ?? {};
 

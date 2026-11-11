@@ -12,15 +12,7 @@
 //
 //   SKIP_DEV_MIGRATE=1 npm run dev     # start without it
 import path from "node:path";
-import {
-  applyMigrations,
-  databaseName,
-  databaseUrlFrom,
-  frontend,
-  isCloudSql,
-  isLocalContainer,
-  withClient,
-} from "./local-db.mjs";
+import { applyMigrations, databaseName, databaseUrlFrom, frontend, isCloudSql, isLocalContainer, withClient } from "./local-db.mjs";
 
 if (process.env.SKIP_DEV_MIGRATE) process.exit(0);
 
@@ -38,9 +30,7 @@ let state;
 try {
   state = await withClient(url, async (client) => {
     if (await isCloudSql(client)) return "cloud";
-    const { rows } = await client.query(
-      "select count(*)::int as n from information_schema.tables where table_schema = 'public'",
-    );
+    const { rows } = await client.query("select count(*)::int as n from information_schema.tables where table_schema = 'public'");
     return rows[0].n > 0 ? "ready" : "empty";
   });
 } catch (err) {

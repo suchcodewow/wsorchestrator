@@ -18,12 +18,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { apiTokens, MAX_TOKENS_PER_USER, users } from "@/db/schema";
-import {
-  listTokens,
-  mintToken,
-  resolveToken,
-  revokeToken,
-} from "@/lib/api-tokens";
+import { listTokens, mintToken, resolveToken, revokeToken } from "@/lib/api-tokens";
 import { PERSONAS, PERSONA_NAMES } from "../support/access";
 import { testScope } from "../support/seed";
 
@@ -75,10 +70,7 @@ describe("an unusable token resolves to nobody", () => {
     assert.notEqual(await resolveToken(token), null);
     await db.delete(users).where(eq(users.id, user.id));
     assert.equal(await resolveToken(token), null);
-    assert.equal(
-      (await db.select().from(apiTokens).where(eq(apiTokens.userId, user.id))).length,
-      0,
-    );
+    assert.equal((await db.select().from(apiTokens).where(eq(apiTokens.userId, user.id))).length, 0);
   });
 
   test("expired", async () => {

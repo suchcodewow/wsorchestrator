@@ -26,14 +26,9 @@ export default async function IrisQuestionsPage({
   const askedLevel = Number(one(params.level));
   const level = [1, 2, 3].includes(askedLevel) ? (askedLevel as Level) : undefined;
   const askedStatus = one(params.status);
-  const status = IRIS_REVIEW_STATUSES.includes(askedStatus as IrisReviewStatus)
-    ? (askedStatus as IrisReviewStatus)
-    : undefined;
+  const status = IRIS_REVIEW_STATUSES.includes(askedStatus as IrisReviewStatus) ? (askedStatus as IrisReviewStatus) : undefined;
 
-  const [questions, counts] = await Promise.all([
-    listQuestions(subject, "A", { level, status }),
-    reviewCounts(subject, "A"),
-  ]);
+  const [questions, counts] = await Promise.all([listQuestions(subject, "A", { level, status }), reviewCounts(subject, "A")]);
   return (
     <QuestionsView
       subject={subject}

@@ -29,13 +29,33 @@ const BOTTOM_PAD = 24;
 
 export type PublicConcept = PublicMap["concepts"][number];
 export type PlacedConcept = InOrder<PublicConcept> & { x: number; y: number };
-export type PlacedGroup = { index: number; id: string; level: MapLevel; name: string; sub?: string; x0: number; x1: number; y: number; concepts: string[] };
+export type PlacedGroup = {
+  index: number;
+  id: string;
+  level: MapLevel;
+  name: string;
+  sub?: string;
+  x0: number;
+  x1: number;
+  y: number;
+  concepts: string[];
+};
 export type PlacedLevel = { level: MapLevel; x0: number; x1: number; y: number };
 export type Edge = { slide: number; concept: string; level: MapLevel; d: string };
 /** From a concept down to one it requires; `level` is the required concept's. */
 export type Link = { from: string; to: string; level: MapLevel; d: string };
 /** A section's band across the slides it covers, among those shown. */
-export type Band = { name: string; band: number; from: number; to: number; count: number; left: number; width: number; top: number; height: number };
+export type Band = {
+  name: string;
+  band: number;
+  from: number;
+  to: number;
+  count: number;
+  left: number;
+  width: number;
+  top: number;
+  height: number;
+};
 
 export type MapLayout = {
   width: number;
@@ -84,7 +104,9 @@ export function layoutMap(map: PublicMap, only: string | null = null, minWidth =
   const need = slideLevels(everyConcept);
   const section = only === null ? null : map.sections.find((s) => s.name === only);
   const inSection = (n: number) => only === null || (!!section && n >= section.from && n <= section.to);
-  const shown = new Set(everyConcept.filter((c) => c.slides.some(inSection) && (slide === null || c.slides.includes(slide))).map((c) => c.id));
+  const shown = new Set(
+    everyConcept.filter((c) => c.slides.some(inSection) && (slide === null || c.slides.includes(slide))).map((c) => c.id),
+  );
   const byId = new Map(everyConcept.map((c) => [c.id, c]));
 
   // A level keeps its column even when nothing in it is shown.
@@ -143,7 +165,17 @@ export function layoutMap(map: PublicMap, only: string | null = null, minWidth =
   stack.forEach((group, k) => {
     if (k > 0) sy += 16;
     if (group.section) {
-      bands.push({ name: group.section.name, band: group.section.band, from: group.slides[0]!, to: group.slides.at(-1)!, count: group.slides.length, left: slidesLeft, width: sw, top: sy, height: BAND_H });
+      bands.push({
+        name: group.section.name,
+        band: group.section.band,
+        from: group.slides[0]!,
+        to: group.slides.at(-1)!,
+        count: group.slides.length,
+        left: slidesLeft,
+        width: sw,
+        top: sy,
+        height: BAND_H,
+      });
       sy += BAND_H + 6;
     }
     group.slides.forEach((s, i) => {
@@ -204,5 +236,23 @@ export function layoutMap(map: PublicMap, only: string | null = null, minWidth =
     });
   }
 
-  return { width, height, conceptW: cw, slideW: sw, heading, concepts: placed, groups, levels, slides, bands, need, edges, links, slideX, slideY, slideSpacing: SLIDE_PITCH, divider: m && n ? slidesLeft + sw + (colsLeft - slidesLeft - sw) / 2 : null };
+  return {
+    width,
+    height,
+    conceptW: cw,
+    slideW: sw,
+    heading,
+    concepts: placed,
+    groups,
+    levels,
+    slides,
+    bands,
+    need,
+    edges,
+    links,
+    slideX,
+    slideY,
+    slideSpacing: SLIDE_PITCH,
+    divider: m && n ? slidesLeft + sw + (colsLeft - slidesLeft - sw) / 2 : null,
+  };
 }

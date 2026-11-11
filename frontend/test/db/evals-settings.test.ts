@@ -166,7 +166,10 @@ describe("title lists", () => {
       (await myTitles("sales", { dir: "desc" })).map((t) => t.title),
       [T("SDR"), T("Account Executive")],
     );
-    assert.deepEqual((await myTitles("ignored")).map((t) => t.title), []);
+    assert.deepEqual(
+      (await myTitles("ignored")).map((t) => t.title),
+      [],
+    );
     const later = await listTitles({ ...TITLE_LIST, q: TEST_PREFIX, page: 2 });
     assert.deepEqual([later.rows.length, later.hasMore], [0, false]);
   });
@@ -196,11 +199,7 @@ describe("title lists", () => {
 
 describe("Additional Slack Contacts", () => {
   const mine = async () =>
-    (await listSlackContacts({ ...SLACK_CONTACT_LIST, q: TEST_EMAIL_DOMAIN, page: 1 })).rows.map((c) => [
-      c.email,
-      c.fullName,
-      c.addedBy,
-    ]);
+    (await listSlackContacts({ ...SLACK_CONTACT_LIST, q: TEST_EMAIL_DOMAIN, page: 1 })).rows.map((c) => [c.email, c.fullName, c.addedBy]);
 
   test("only someone on the employee list can be added, and is named as it has them", async () => {
     await db.insert(employees).values([
@@ -258,7 +257,10 @@ describe("Slack lookups", () => {
       [email("sl-out")]: `U-${email("sl-out")}`,
       [email("sl-nobody")]: null,
     });
-    const [stored] = await db.select().from(employees).where(eq(employees.id, `${TEST_PREFIX}sl_out`));
+    const [stored] = await db
+      .select()
+      .from(employees)
+      .where(eq(employees.id, `${TEST_PREFIX}sl_out`));
     assert.equal(stored!.slackUserId, `U-${email("sl-out")}`);
 
     assert.equal((await resolveSlackUsers(slack, everyone)).get(email("sl-out")), `U-${email("sl-out")}`);
@@ -301,7 +303,12 @@ describe("HiBob sync", () => {
     const saved = await db
       .select()
       .from(evalsSettings)
-      .where(inArray(evalsSettings.key, keys.map((k) => EVALS_SETTINGS_KEYS[k])));
+      .where(
+        inArray(
+          evalsSettings.key,
+          keys.map((k) => EVALS_SETTINGS_KEYS[k]),
+        ),
+      );
     for (const k of keys) {
       const row = { key: EVALS_SETTINGS_KEYS[k], value: values[k]!, updatedBy: admin.id };
       await db.insert(evalsSettings).values(row).onConflictDoUpdate({ target: evalsSettings.key, set: row });
@@ -411,15 +418,12 @@ describe("HiBob sync", () => {
     assert.equal(second.count, 2);
     // Those the sync no longer lists stay, as inactive.
     const kept = await db.select().from(employees);
-    assert.deepEqual(
-      kept.map((e) => [e.email.split("@")[0], e.active]).sort(),
-      [
-        ["ae", true],
-        ["outsider", false],
-        ["root", true],
-        ["vp", false],
-      ],
-    );
+    assert.deepEqual(kept.map((e) => [e.email.split("@")[0], e.active]).sort(), [
+      ["ae", true],
+      ["outsider", false],
+      ["root", true],
+      ["vp", false],
+    ]);
 
     const logged = await run(second.runId);
     assert.equal(logged.status, "succeeded");
@@ -447,7 +451,10 @@ describe("HiBob sync", () => {
 
       stubHibob(200, [person("1", "root", ""), person("2", "keep", "root")]);
       assert.ok((await sync()).ok);
-      const [row] = await db.select().from(employees).where(eq(employees.email, email("keep")));
+      const [row] = await db
+        .select()
+        .from(employees)
+        .where(eq(employees.email, email("keep")));
       assert.deepEqual(
         [row!.chosenName, row!.fullName, row!.trackPinned, row!.track, row!.timezone, row!.active],
         ["Kay", "Kay", true, "engineer", "Europe/Paris", true],
@@ -460,7 +467,13 @@ describe("HiBob sync", () => {
     await withSettings({ orgLeaderEmail: email("root"), ...SHEET_CUTOFFS, deferralDays: "0" }, async () => {
       stubHibob(200, [person("1", "root", ""), person("2", "pat.rowe", "root")]);
       assert.ok((await sync()).ok);
-      const read = async () => (await db.select().from(employees).where(eq(employees.email, email("pat.rowe"))))[0]!;
+      const read = async () =>
+        (
+          await db
+            .select()
+            .from(employees)
+            .where(eq(employees.email, email("pat.rowe")))
+        )[0]!;
 
       assert.equal(await setChosenName(email("pat.rowe"), "Patty"), true);
       let row = await read();
@@ -505,10 +518,7 @@ describe("HiBob sync", () => {
   test("one sync at a time, unless the running one was cut off long ago", async () => {
     configure();
     stubHibob(200, [person("1", "root", "")]);
-    const [running] = await db
-      .insert(hibobSyncRuns)
-      .values({ trigger: "schedule" })
-      .returning({ id: hibobSyncRuns.id });
+    const [running] = await db.insert(hibobSyncRuns).values({ trigger: "schedule" }).returning({ id: hibobSyncRuns.id });
     runIds.push(running!.id);
 
     const refused = await sync();
@@ -566,12 +576,17 @@ describe("HiBob sync", () => {
       const synced = await sync();
       assert.ok(synced.ok, JSON.stringify(synced));
 
-      const stored = await db.select({ email: employees.email, fullName: employees.fullName, reportsToName: employees.reportsToName }).from(employees);
-      assert.deepEqual(stored.find((e) => e.email === email("sam.attendee")), {
-        email: email("sam.attendee"),
-        fullName: "Sam Attendee",
-        reportsToName: "Jo Judge",
-      });
+      const stored = await db
+        .select({ email: employees.email, fullName: employees.fullName, reportsToName: employees.reportsToName })
+        .from(employees);
+      assert.deepEqual(
+        stored.find((e) => e.email === email("sam.attendee")),
+        {
+          email: email("sam.attendee"),
+          fullName: "Sam Attendee",
+          reportsToName: "Jo Judge",
+        },
+      );
       const judges = await judgePicks(camp!.id);
       assert.deepEqual(judges.map((j) => j.fullName).sort(), ["Ann Trainer", "Jo Judge"]);
       const staff = (await getSession(camp!.id, session!.id))!.staff;
@@ -722,82 +737,88 @@ describe("HiBob sync", () => {
       assert.deepEqual(sorted, {
         ok: true,
         result: { title: T("Cand Mystery"), list: "engineer", added: true, retracked: 2 },
-    });
-    assert.equal((await myTitles("engineer")).find((t) => t.title === T("Cand Mystery"))?.addedBy, "admin");
-    assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-new2"), "sales"), {
-      ok: false,
-      error: "not_undecided",
-    });
+      });
+      assert.equal((await myTitles("engineer")).find((t) => t.title === T("Cand Mystery"))?.addedBy, "admin");
+      assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-new2"), "sales"), {
+        ok: false,
+        error: "not_undecided",
+      });
 
-    // A title someone listed since the sync stays on its list.
-    await addTitles(admin.id, "sales", [T("Cand Late")]);
-    const late = await sortUndecidedTitle(admin.id, email("c-late"), "engineer");
-    assert.ok(late.ok);
-    assert.deepEqual([late.result.list, late.result.added], ["sales", false]);
+      // A title someone listed since the sync stays on its list.
+      await addTitles(admin.id, "sales", [T("Cand Late")]);
+      const late = await sortUndecidedTitle(admin.id, email("c-late"), "engineer");
+      assert.ok(late.ok);
+      assert.deepEqual([late.result.list, late.result.added], ["sales", false]);
 
-    // Ignored takes them off the Current tab. No one outside the org can be sorted.
-    assert.ok((await sortUndecidedTitle(admin.id, email("c-odd"), "ignored")).ok);
-    assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-out"), "ignored"), {
-      ok: false,
-      error: "not_found",
-    });
-    assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-blank"), "sales"), { ok: false, error: "no_title" });
+      // Ignored takes them off the Current tab. No one outside the org can be sorted.
+      assert.ok((await sortUndecidedTitle(admin.id, email("c-odd"), "ignored")).ok);
+      assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-out"), "ignored"), {
+        ok: false,
+        error: "not_found",
+      });
+      assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-blank"), "sales"), { ok: false, error: "no_title" });
 
-    assert.deepEqual(await stage("bootcamp"), [
-      ["c-ae", "sales", null],
-      ["c-blank", "undecided", null],
-      ["c-late", "sales", null],
-      ["c-new1", "engineer", null],
-      ["c-new2", "engineer", null],
-    ]);
-    assert.deepEqual((await currentCohortSummary()).counts, {
-      bootcamp: { sales: 2, engineer: 2, other: 0, undecided: 1, deferred: 0 },
-      intermediate: { sales: 1, engineer: 0, other: 0, undecided: 0, deferred: 0 },
-    });
+      assert.deepEqual(await stage("bootcamp"), [
+        ["c-ae", "sales", null],
+        ["c-blank", "undecided", null],
+        ["c-late", "sales", null],
+        ["c-new1", "engineer", null],
+        ["c-new2", "engineer", null],
+      ]);
+      assert.deepEqual((await currentCohortSummary()).counts, {
+        bootcamp: { sales: 2, engineer: 2, other: 0, undecided: 1, deferred: 0 },
+        intermediate: { sales: 1, engineer: 0, other: 0, undecided: 0, deferred: 0 },
+      });
 
-    // Someone added by hand is marked Added, and no one else is; one RSVP leaves the rest unanswered.
-    assert.ok((await addAttendee(admin.id, { email: email("c-out"), stage: "bootcamp", track: "sales" })).ok);
-    await db.insert(intakeResponses).values({ form: "bootcamp", email: email("c-ae"), answers: { attend: "Yes" } });
-    const listed = async (s: CandidateStage) =>
-      (await listCurrentCohort({ stage: s, track: null }, { ...CURRENT_COHORT_LIST, q: "", page: 1, sort: "email", dir: "asc" })).rows;
-    const outsider = async (s: CandidateStage) => {
-      const m = (await listed(s)).find((r) => r.email === email("c-out"));
-      return m && [m.track, m.overridden, m.added];
-    };
-    assert.deepEqual(
-      (await listed("bootcamp")).filter((m) => m.added).map((m) => m.email.split("@")[0]),
-      ["c-out"],
-    );
-    // Added on Sales, they are pinned there as the track menu pins anyone.
-    assert.deepEqual(await outsider("bootcamp"), ["sales", true, true]);
-    assert.deepEqual((await currentCohortSummary()).unanswered.bootcamp, {
-      sales: 2,
-      engineer: 2,
-      other: 0,
-      undecided: 1,
-      deferred: 0,
-    });
+      // Someone added by hand is marked Added, and no one else is; one RSVP leaves the rest unanswered.
+      assert.ok((await addAttendee(admin.id, { email: email("c-out"), stage: "bootcamp", track: "sales" })).ok);
+      await db.insert(intakeResponses).values({ form: "bootcamp", email: email("c-ae"), answers: { attend: "Yes" } });
+      const listed = async (s: CandidateStage) =>
+        (await listCurrentCohort({ stage: s, track: null }, { ...CURRENT_COHORT_LIST, q: "", page: 1, sort: "email", dir: "asc" })).rows;
+      const outsider = async (s: CandidateStage) => {
+        const m = (await listed(s)).find((r) => r.email === email("c-out"));
+        return m && [m.track, m.overridden, m.added];
+      };
+      assert.deepEqual(
+        (await listed("bootcamp")).filter((m) => m.added).map((m) => m.email.split("@")[0]),
+        ["c-out"],
+      );
+      // Added on Sales, they are pinned there as the track menu pins anyone.
+      assert.deepEqual(await outsider("bootcamp"), ["sales", true, true]);
+      assert.deepEqual((await currentCohortSummary()).unanswered.bootcamp, {
+        sales: 2,
+        engineer: 2,
+        other: 0,
+        undecided: 1,
+        deferred: 0,
+      });
 
-    // The track menu sets them like anyone else, moving no title's list, and the rules give back the track they were added on.
-    const toEngineer = await setTrack(admin.id, email("c-out"), "engineer");
-    assert.ok(toEngineer.ok);
-    assert.deepEqual([toEngineer.result.track, toEngineer.result.overridden, toEngineer.result.title], ["engineer", true, null]);
-    assert.equal((await myTitles("engineer")).some((t) => t.title === T("Cand Odd")), false);
-    assert.ok((await setTrack(admin.id, email("c-out"), "automatic")).ok);
-    assert.deepEqual(await outsider("bootcamp"), ["sales", false, true]);
+      // The track menu sets them like anyone else, moving no title's list, and the rules give back the track they were added on.
+      const toEngineer = await setTrack(admin.id, email("c-out"), "engineer");
+      assert.ok(toEngineer.ok);
+      assert.deepEqual([toEngineer.result.track, toEngineer.result.overridden, toEngineer.result.title], ["engineer", true, null]);
+      assert.equal(
+        (await myTitles("engineer")).some((t) => t.title === T("Cand Odd")),
+        false,
+      );
+      assert.ok((await setTrack(admin.id, email("c-out"), "automatic")).ok);
+      assert.deepEqual(await outsider("bootcamp"), ["sales", false, true]);
 
-    // Attending Bootcamp moves them on to Intermediate, as it does anyone; attending Intermediate takes them out.
-    await giveClasses([{ name: "c-out", btcDate: "2026-03-01" }]);
-    assert.deepEqual(await outsider("bootcamp"), undefined);
-    assert.deepEqual(await outsider("intermediate"), ["sales", false, true]);
-    await giveClasses([{ name: "c-out", intDate: "2026-04-01" }]);
-    assert.deepEqual(await outsider("intermediate"), undefined);
+      // Attending Bootcamp moves them on to Intermediate, as it does anyone; attending Intermediate takes them out.
+      await giveClasses([{ name: "c-out", btcDate: "2026-03-01" }]);
+      assert.deepEqual(await outsider("bootcamp"), undefined);
+      assert.deepEqual(await outsider("intermediate"), ["sales", false, true]);
+      await giveClasses([{ name: "c-out", intDate: "2026-04-01" }]);
+      assert.deepEqual(await outsider("intermediate"), undefined);
 
-    // Taken off, they lose any pin with the addition.
-    assert.ok((await addAttendee(admin.id, { email: email("c-blank"), stage: "bootcamp", track: "engineer" })).ok);
-    assert.deepEqual((await removeAttendee(email("c-blank"))).removed, true);
-    const [blank] = await db.select().from(employees).where(eq(employees.email, email("c-blank")));
-    assert.deepEqual([blank.track, blank.trackPinned], [null, false]);
+      // Taken off, they lose any pin with the addition.
+      assert.ok((await addAttendee(admin.id, { email: email("c-blank"), stage: "bootcamp", track: "engineer" })).ok);
+      assert.deepEqual((await removeAttendee(email("c-blank"))).removed, true);
+      const [blank] = await db
+        .select()
+        .from(employees)
+        .where(eq(employees.email, email("c-blank")));
+      assert.deepEqual([blank.track, blank.trackPinned], [null, false]);
     });
   });
 
@@ -898,9 +919,9 @@ describe("HiBob sync", () => {
         });
 
         const listed = async (filter: Parameters<typeof listCurrentCohort>[0]) =>
-          (
-            await listCurrentCohort(filter, { ...CURRENT_COHORT_LIST, q: "", page: 1, sort: "email", dir: "asc" })
-          ).rows.map((m) => m.email.split("@")[0]);
+          (await listCurrentCohort(filter, { ...CURRENT_COHORT_LIST, q: "", page: 1, sort: "email", dir: "asc" })).rows.map(
+            (m) => m.email.split("@")[0],
+          );
         assert.deepEqual(await listed({ stage: null, track: "deferred" }), ["d-after", "d-close", "d-mystery"]);
         assert.deepEqual(await listed({ stage: "bootcamp", track: "sales" }), ["d-early", "d-edge", "d-no-start"]);
         assert.deepEqual(await listed({ stage: "intermediate", track: "sales" }), []);
@@ -946,17 +967,18 @@ describe("HiBob sync", () => {
       assert.ok((await sync()).ok);
       const tracks = async () =>
         Object.fromEntries(
-          (
-            await db
-              .select({ email: employees.email, track: employees.track, pinned: employees.trackPinned })
-              .from(employees)
-          )
+          (await db.select({ email: employees.email, track: employees.track, pinned: employees.trackPinned }).from(employees))
             // Earlier tests' people stay in the table, no longer active, after a sync.
             .filter((e) => e.email.startsWith("h-"))
             .map((e) => [e.email.split("@")[0], `${e.track ?? "undecided"}${e.pinned ? " (pinned)" : ""}`]),
         );
       const listOf = async (title: string) =>
-        (await db.select({ list: evalsTitles.list }).from(evalsTitles).where(eq(evalsTitles.title, T(title))))[0]?.list;
+        (
+          await db
+            .select({ list: evalsTitles.list })
+            .from(evalsTitles)
+            .where(eq(evalsTitles.title, T(title)))
+        )[0]?.list;
 
       // An undecided title goes on the list, and everyone holding it follows; a pinned exempt stays.
       assert.deepEqual(await setTrack(admin.id, email("h-mystery"), "sales"), {
@@ -1113,13 +1135,8 @@ describe("bootcamps", () => {
     });
     assert.ok(third.ok);
 
-    const status = new Map(
-      (await listBootcamps({ ...BOOTCAMP_LIST, q: "", page: 1 })).rows.map((b) => [b.id, b.status]),
-    );
-    assert.deepEqual(
-      [status.get(first.id), status.get(second.id), status.get(third.id)],
-      ["complete", "complete", "active"],
-    );
+    const status = new Map((await listBootcamps({ ...BOOTCAMP_LIST, q: "", page: 1 })).rows.map((b) => [b.id, b.status]));
+    assert.deepEqual([status.get(first.id), status.get(second.id), status.get(third.id)], ["complete", "complete", "active"]);
     assert.deepEqual(await updateBootcamp(admin.id, third.id, { status: "complete" }), { ok: true });
     assert.equal(await activeBootcamp(), null);
   });

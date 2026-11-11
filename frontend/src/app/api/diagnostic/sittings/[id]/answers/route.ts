@@ -22,10 +22,9 @@ export const POST = audited(async function POST(req: Request, { params }: { para
 
   const result = await answer(user.id, id.data, parsed.data.number, parsed.data.choice, Math.random, sittingModes(user.access));
   if (!result.ok) {
-    return NextResponse.json(
-      result.sitting ? { error: result.error, sitting: result.sitting } : { error: result.error },
-      { status: STATUS[result.error] },
-    );
+    return NextResponse.json(result.sitting ? { error: result.error, sitting: result.sitting } : { error: result.error }, {
+      status: STATUS[result.error],
+    });
   }
   if (result.done) {
     const finished = {

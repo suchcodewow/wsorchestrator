@@ -22,20 +22,9 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import {
-  auditEvents,
-  type AuditEvent,
-  type AuditOutcome,
-  type AuditVia,
-} from "@/db/schema";
+import { auditEvents, type AuditEvent, type AuditOutcome, type AuditVia } from "@/db/schema";
 import { sessionOrToken } from "@/lib/api-auth";
-import {
-  auditScope,
-  noteAudit,
-  noteCaller,
-  type AuditActor,
-  type AuditScope,
-} from "@/lib/audit-context";
+import { auditScope, noteAudit, noteCaller, type AuditActor, type AuditScope } from "@/lib/audit-context";
 import { createdTarget, endpointFor, outcomeFor, redact } from "@/lib/audit-shape";
 import { IMPERSONATION_PATH } from "@/lib/impersonation";
 import type { AuditSort } from "@/lib/list-specs";
@@ -82,12 +71,8 @@ export async function recordAudit(entry: AuditEntry): Promise<void> {
   try {
     await db.insert(auditEvents).values({
       actorId,
-      actorName:
-        entry.actor?.name ??
-        (actorId ? sql`(select name from users where id = ${actorId})` : entry.actorName ?? null),
-      actorEmail:
-        entry.actor?.email ??
-        (actorId ? sql`(select email from users where id = ${actorId})` : null),
+      actorName: entry.actor?.name ?? (actorId ? sql`(select name from users where id = ${actorId})` : (entry.actorName ?? null)),
+      actorEmail: entry.actor?.email ?? (actorId ? sql`(select email from users where id = ${actorId})` : null),
       via: entry.via,
       action: entry.action,
       summary: entry.summary,
@@ -120,8 +105,7 @@ async function requestBody(req: Request): Promise<unknown> {
       const form = await req.clone().formData();
       const fields: Record<string, unknown> = {};
       for (const [name, v] of form) {
-        fields[name] =
-          typeof v === "string" ? v : { file: v.name, bytes: v.size, type: v.type };
+        fields[name] = typeof v === "string" ? v : { file: v.name, bytes: v.size, type: v.type };
       }
       return redact(fields);
     }
@@ -158,9 +142,7 @@ async function jsonOf(res: Response): Promise<Record<string, unknown> | null> {
   if (!(res.headers.get("content-type") ?? "").includes("application/json")) return null;
   try {
     const body = (await res.clone().json()) as unknown;
-    return body && typeof body === "object" && !Array.isArray(body)
-      ? (body as Record<string, unknown>)
-      : null;
+    return body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
   } catch {
     return null;
   }
@@ -182,10 +164,7 @@ export function audited<C extends RouteContext>(
     let res: Response | null = null;
     let thrown: unknown = null;
     try {
-      res = await auditScope.run(
-        scope,
-        async () => (await refuseWhileImpersonating(req)) ?? handler(req, ctx),
-      );
+      res = await auditScope.run(scope, async () => (await refuseWhileImpersonating(req)) ?? handler(req, ctx));
     } catch (err) {
       thrown = err;
     }
@@ -287,9 +266,7 @@ const SORT_COLUMNS = {
  * One page of the trail, newest first unless asked otherwise. The search
  * matches any part of who, what, where, the outcome and the recorded detail.
  */
-export async function listAuditEvents(
-  query: ListQuery<AuditSort>,
-): Promise<Page<AuditListing>> {
+export async function listAuditEvents(query: ListQuery<AuditSort>): Promise<Page<AuditListing>> {
   const where = searchAny(query.q, [
     auditEvents.actorName,
     auditEvents.actorEmail,

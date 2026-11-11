@@ -11,7 +11,15 @@
  */
 
 import { z } from "zod";
-import { MAP_SLIDE_LIMIT, TRANSLATED_LANGUAGES, VIDEO_LANGUAGES, VIDEO_PREFIX, mapContentSchema, type MapContent, type TranslatedLanguage } from "../map/schema";
+import {
+  MAP_SLIDE_LIMIT,
+  TRANSLATED_LANGUAGES,
+  VIDEO_LANGUAGES,
+  VIDEO_PREFIX,
+  mapContentSchema,
+  type MapContent,
+  type TranslatedLanguage,
+} from "../map/schema";
 
 /** Everything the studio keeps sits under this prefix in the recordings bucket. */
 export const STUDIO_PREFIX = "mimir/studio/";
@@ -118,7 +126,13 @@ export function diffMaps(live: MapContent | null, draft: MapContent): MapDiff {
   const after = new Map(draft.concepts.map((c) => [c.id, c]));
   const levelBefore = live ? levelsOf(live) : new Map<string, number>();
   const levelAfter = levelsOf(draft);
-  const diff: MapDiff = { added: [], removed: [], changed: [], unchanged: 0, slides: { was: live?.slides.length ?? 0, now: draft.slides.length } };
+  const diff: MapDiff = {
+    added: [],
+    removed: [],
+    changed: [],
+    unchanged: 0,
+    slides: { was: live?.slides.length ?? 0, now: draft.slides.length },
+  };
   for (const c of draft.concepts) {
     const was = before.get(c.id);
     if (!was) {
@@ -160,6 +174,10 @@ export function withLiveVideos(draft: MapContent, live: MapContent | null): MapC
 export function newVideoId(map: MapContent, conceptId: string): string {
   const numbers = map.concepts.map((c) => (c.video ? Number(videoIdOf(c.video.object)?.match(/^(\d+)-/)?.[1] ?? 0) : 0));
   const next = Math.max(0, ...numbers) + 1;
-  const slug = conceptId.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "concept";
+  const slug =
+    conceptId
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "concept";
   return `${String(next).padStart(2, "0")}-${slug}`.slice(0, 64).replace(/-+$/, "");
 }

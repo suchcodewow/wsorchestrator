@@ -31,20 +31,7 @@ type CalendarEvent = {
 };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAY_MS = 86_400_000;
 
 function dayNum(d: Date): number {
@@ -352,12 +339,7 @@ export function EventCalendar({
               <Button variant="ghost" size="sm" onClick={() => setView(new Date(today.getFullYear(), today.getMonth(), 1))}>
                 Today
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Previous month"
-                onClick={() => setView(new Date(year, month - 1, 1))}
-              >
+              <Button variant="ghost" size="icon" aria-label="Previous month" onClick={() => setView(new Date(year, month - 1, 1))}>
                 <ChevronLeft />
               </Button>
               <Button variant="ghost" size="icon" aria-label="Next month" onClick={() => setView(new Date(year, month + 1, 1))}>

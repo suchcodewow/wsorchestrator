@@ -17,10 +17,7 @@ export function ReturnHome({ className }: { className?: string }) {
       asChild
       variant="brand"
       size="lg"
-      className={cn(
-        "group pointer-events-auto h-12 rounded-full px-7 text-base shadow-lg ring-4 ring-white/40",
-        className,
-      )}
+      className={cn("group pointer-events-auto h-12 rounded-full px-7 text-base shadow-lg ring-4 ring-white/40", className)}
     >
       <Link href="/">
         <House className="size-5 transition-transform duration-200 group-hover:-translate-y-0.5" />

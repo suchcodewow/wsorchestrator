@@ -110,7 +110,11 @@ const COLUMNS: { column: CurrentCohortSort; label: string }[] = [
  * a list choice moves everyone with the title, so its hint says whose. No one
  * is set to Undecided by hand; "Let the rules decide" is the way back to it.
  */
-const TRACK_OPTIONS: { choice: Exclude<TrackChoice, "automatic" | "undecided">; label: string; hint: (title?: string) => string | undefined }[] = [
+const TRACK_OPTIONS: {
+  choice: Exclude<TrackChoice, "automatic" | "undecided">;
+  label: string;
+  hint: (title?: string) => string | undefined;
+}[] = [
   { choice: "sales", label: "Sales", hint: (t) => t && `All “${t}” will be automatically added to the Sales track` },
   { choice: "engineer", label: "Engineer", hint: (t) => t && `All “${t}” will be automatically added to the Engineer track` },
   { choice: "deferred", label: "Deferred", hint: () => "This person will be deferred until the next session" },
@@ -301,9 +305,8 @@ export function CurrentCohortView({
               "Deferral is off on Cohort Settings → Automation, so only those an administrator deferred are here."
             ) : deferral.bootcampStart ? (
               <>
-                Deferred from the bootcamp on{" "}
-                <span className="font-medium text-foreground">{formatDate(deferral.bootcampStart)}</span>: anyone who started
-                fewer than {deferral.days} days before it or since, and anyone an administrator deferred.
+                Deferred from the bootcamp on <span className="font-medium text-foreground">{formatDate(deferral.bootcampStart)}</span>:
+                anyone who started fewer than {deferral.days} days before it or since, and anyone an administrator deferred.
               </>
             ) : (
               "No bootcamp is coming, so only those an administrator deferred are here."
@@ -353,18 +356,20 @@ export function CurrentCohortView({
 
       {tab === "current" && (
         <motion.div variants={riseChild} role="group" aria-label="Track" className={COUNTER_GRID}>
-          {TRACK_COUNTERS.filter((c) => !c.onlyWhenAny || trackCount(c.track) > 0 || filter.track === c.track).map(({ track, label, Icon, warn }) => (
-            <Counter
-              key={track}
-              label={label}
-              Icon={Icon}
-              warn={warn}
-              count={trackCount(track)}
-              on={filter.track === track}
-              disabled={pending}
-              onClick={() => toggle("track", track)}
-            />
-          ))}
+          {TRACK_COUNTERS.filter((c) => !c.onlyWhenAny || trackCount(c.track) > 0 || filter.track === c.track).map(
+            ({ track, label, Icon, warn }) => (
+              <Counter
+                key={track}
+                label={label}
+                Icon={Icon}
+                warn={warn}
+                count={trackCount(track)}
+                on={filter.track === track}
+                disabled={pending}
+                onClick={() => toggle("track", track)}
+              />
+            ),
+          )}
         </motion.div>
       )}
 
@@ -424,12 +429,7 @@ export function CurrentCohortView({
                   {change.message}
                 </p>
                 {change.undo && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy !== null}
-                    onClick={() => setTrack(change.member, change.undo!, true)}
-                  >
+                  <Button variant="outline" size="sm" disabled={busy !== null} onClick={() => setTrack(change.member, change.undo!, true)}>
                     {busy === change.member.email && <Loader2 className="animate-spin" />}
                     Undo
                   </Button>
@@ -456,9 +456,7 @@ export function CurrentCohortView({
               </tr>
             </thead>
             <tbody>
-              {reference.shown && (
-                <ReferenceRow btcDate={showBtcDate} onClick={reference.play} />
-              )}
+              {reference.shown && <ReferenceRow btcDate={showBtcDate} onClick={reference.play} />}
               {page.rows.map((m) => {
                 const expanded = open.has(m.email);
                 return (
@@ -509,20 +507,13 @@ export function CurrentCohortView({
                       {/* React bubbles the menu's clicks through its portal, so they stop here rather than toggling the row. */}
                       <td className="px-5 py-1" onClick={(ev) => ev.stopPropagation()}>
                         {canSetTrack ? (
-                          <TrackMenu
-                            member={m}
-                            busy={busy === m.email}
-                            disabled={busy !== null}
-                            onPick={(choice) => setTrack(m, choice)}
-                          />
+                          <TrackMenu member={m} busy={busy === m.email} disabled={busy !== null} onPick={(choice) => setTrack(m, choice)} />
                         ) : (
                           <TrackLabel member={m} />
                         )}
                       </td>
                       {showBtcDate && (
-                        <td className="whitespace-nowrap px-5 py-2 tabular-nums text-muted-foreground">
-                          {formatDate(m.btcDate)}
-                        </td>
+                        <td className="whitespace-nowrap px-5 py-2 tabular-nums text-muted-foreground">{formatDate(m.btcDate)}</td>
                       )}
                     </tr>
                     {expanded && (
@@ -539,11 +530,7 @@ export function CurrentCohortView({
                             }}
                             onError={setError}
                           />
-                          <Registrations
-                            stage={m.stage}
-                            intakes={intakes[m.email.toLowerCase()] ?? []}
-                            questions={intakeQuestions}
-                          />
+                          <Registrations stage={m.stage} intakes={intakes[m.email.toLowerCase()] ?? []} questions={intakeQuestions} />
                         </td>
                       </tr>
                     )}
@@ -630,7 +617,9 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       {label}
-      {member.overridden && member.track !== "deferred" && <Pin className="size-3 text-muted-foreground" aria-label="Set by an administrator" />}
+      {member.overridden && member.track !== "deferred" && (
+        <Pin className="size-3 text-muted-foreground" aria-label="Set by an administrator" />
+      )}
     </span>
   );
 }
@@ -704,9 +693,7 @@ function PersonDetails({
       <Field label="Site">{m.site || "—"}</Field>
       <Field label="Manager">
         {m.reportsToName || m.reportsToEmail || "—"}
-        {m.reportsToName && m.reportsToEmail && (
-          <span className="block text-xs text-muted-foreground">{m.reportsToEmail}</span>
-        )}
+        {m.reportsToName && m.reportsToEmail && <span className="block text-xs text-muted-foreground">{m.reportsToEmail}</span>}
       </Field>
       <Field label="Started">{formatDate(m.startDate)}</Field>
       <Field label="In position since">{formatDate(m.activeEffectiveDate)}</Field>
@@ -779,9 +766,7 @@ function Registrations({
         <section key={intake.form} className="space-y-2">
           <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {FORM_NAMES[intake.form]}
-            {intake.submittedAt && (
-              <span className="normal-case tracking-normal"> · answered {formatWhen(intake.submittedAt)}</span>
-            )}
+            {intake.submittedAt && <span className="normal-case tracking-normal"> · answered {formatWhen(intake.submittedAt)}</span>}
           </h4>
           {!intake.submittedAt ? (
             <p className="text-sm text-muted-foreground">Not filled in yet.</p>
@@ -1130,10 +1115,7 @@ function MeetingMarks({
                     <span className="block text-xs text-muted-foreground">{member.fullName}</span>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    disabled={m.marked === true}
-                    onSelect={() => setConfirming({ meetingId: m.meetingId, name: m.name })}
-                  >
+                  <DropdownMenuItem disabled={m.marked === true} onSelect={() => setConfirming({ meetingId: m.meetingId, name: m.name })}>
                     <CircleCheck />
                     Mark complete
                   </DropdownMenuItem>
@@ -1179,9 +1161,9 @@ function MeetingMarks({
             <DialogHeader>
               <DialogTitle>Mark {member.fullName} complete?</DialogTitle>
               <DialogDescription>
-                {member.fullName} counts as having attended {confirming?.name}, whatever Zoom said or whether they have
-                been invited. They are not invited to it, and any upcoming invite they hold is taken off at the next
-                sync. You can undo this from the same menu.
+                {member.fullName} counts as having attended {confirming?.name}, whatever Zoom said or whether they have been invited. They
+                are not invited to it, and any upcoming invite they hold is taken off at the next sync. You can undo this from the same
+                menu.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

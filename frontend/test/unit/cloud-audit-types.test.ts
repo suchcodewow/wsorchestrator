@@ -11,13 +11,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { CLOUDS } from "@/db/schema";
-import {
-  AUDIT_TARGETS,
-  CLASSIFICATIONS,
-  summarize,
-  type AuditedResource,
-  type Classification,
-} from "@/lib/cloud-audit/types";
+import { AUDIT_TARGETS, CLASSIFICATIONS, summarize, type AuditedResource, type Classification } from "@/lib/cloud-audit/types";
 
 const r = (id: string, classification: Classification): AuditedResource => ({
   id,
@@ -69,7 +63,10 @@ describe("summarize", () => {
   test("does not reorder the caller's array", () => {
     const input = [r("b", "tracked"), r("a", "untracked")];
     summarize(input);
-    assert.deepEqual(input.map((x) => x.id), ["b", "a"]);
+    assert.deepEqual(
+      input.map((x) => x.id),
+      ["b", "a"],
+    );
   });
 
   test("counts always add up to the total", () => {

@@ -208,7 +208,10 @@ describe("marks", () => {
       const ran = await regenerateParticipation(admin.id, a.id);
       if (!ran.ok) assert.equal(ran.error, "unconfigured", "release does not stop an administrator's Regenerate");
     } finally {
-      await db.update(bootcamps).set({ btcReleasedAt: was?.at ?? null }).where(eq(bootcamps.id, bootcampId));
+      await db
+        .update(bootcamps)
+        .set({ btcReleasedAt: was?.at ?? null })
+        .where(eq(bootcamps.id, bootcampId));
     }
   });
 
@@ -225,7 +228,10 @@ describe("the built-in assessment", () => {
     assert.equal(await scoringAssessment(built.id), null);
     assert.equal(await getAssessment(built.id), null);
     const page = await listAssessments({ ...ASSESSMENT_LIST, q: "Participation", page: 1 });
-    assert.equal(page.rows.some((r) => r.id === built.id), false);
+    assert.equal(
+      page.rows.some((r) => r.id === built.id),
+      false,
+    );
     const a = await attendee("hidden");
     assert.equal(await getScoringForm(built.id, a.id, bootcampId), null);
   });
@@ -302,7 +308,10 @@ describe("settings", () => {
 
     const back = await saveParticipationSettings(admin.id, before);
     assert.ok(back.ok);
-    assert.equal(back.settings.descriptors.some((d) => d.id === added.id), false);
+    assert.equal(
+      back.settings.descriptors.some((d) => d.id === added.id),
+      false,
+    );
     const [retired] = await db.select().from(participationDescriptors).where(eq(participationDescriptors.id, added.id));
     assert.ok(retired?.retiredAt);
     await db.delete(participationDescriptors).where(eq(participationDescriptors.id, added.id));

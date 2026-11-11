@@ -18,11 +18,7 @@ import { InboxView } from "./inbox-view";
 
 export const metadata: Metadata = { title: "My inbox" };
 
-export default async function InboxPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function InboxPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
 

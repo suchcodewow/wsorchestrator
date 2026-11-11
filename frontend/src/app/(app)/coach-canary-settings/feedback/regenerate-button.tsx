@@ -89,16 +89,18 @@ export function RegenerateButton({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{translate ? `Translate “${name}”?` : hasVideo ? `Regenerate “${name}”?` : `Generate a video for “${name}”?`}</DialogTitle>
+            <DialogTitle>
+              {translate ? `Translate “${name}”?` : hasVideo ? `Regenerate “${name}”?` : `Generate a video for “${name}”?`}
+            </DialogTitle>
             <DialogDescription>
               {translate ? (
                 `Claude translates the script and what appears on screen into ${languages}, ElevenLabs narrates it, and the video is rendered again in time with the new narration. It takes up to an hour and spends Claude and ElevenLabs credits.`
               ) : (
                 <>
-                  Claude writes the script and scenes by the explainer standards, ElevenLabs narrates them, and the
-                  video is rendered and put on the map in place of {hasVideo ? "the current one" : "the empty slot"},
-                  then the same is done in every other language. Until each is ready, that language plays in English.
-                  It takes up to two hours and spends Claude and ElevenLabs credits.
+                  Claude writes the script and scenes by the explainer standards, ElevenLabs narrates them, and the video is rendered and
+                  put on the map in place of {hasVideo ? "the current one" : "the empty slot"}, then the same is done in every other
+                  language. Until each is ready, that language plays in English. It takes up to two hours and spends Claude and ElevenLabs
+                  credits.
                   {accepted > 0 &&
                     ` The ${accepted} accepted ${accepted === 1 ? "comment goes" : "comments go"} with it, each with where in the video it was made, and ${accepted === 1 ? "is" : "are"} marked applied once the new video is up.`}
                 </>

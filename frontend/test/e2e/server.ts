@@ -25,10 +25,7 @@ const FRONTEND = path.resolve(import.meta.dirname, "../..");
 
 function standaloneServer(): string {
   // `output: "standalone"` nests the server under the tracing root's layout.
-  for (const candidate of [
-    ".next/standalone/server.js",
-    ".next/standalone/frontend/server.js",
-  ]) {
+  for (const candidate of [".next/standalone/server.js", ".next/standalone/frontend/server.js"]) {
     const full = path.join(FRONTEND, candidate);
     if (existsSync(full)) return full;
   }

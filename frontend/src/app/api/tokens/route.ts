@@ -21,8 +21,7 @@ export const POST = audited(async function POST(req: Request) {
   }
 
   const body = (await req.json().catch(() => null)) as { name?: unknown } | null;
-  const name =
-    typeof body?.name === "string" ? body.name.slice(0, TOKEN_NAME_MAX) : "";
+  const name = typeof body?.name === "string" ? body.name.slice(0, TOKEN_NAME_MAX) : "";
 
   const result = await mintToken(session.user.id, name);
   if (!result.ok) {

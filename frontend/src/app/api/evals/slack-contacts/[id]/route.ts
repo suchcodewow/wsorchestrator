@@ -8,10 +8,7 @@ import { deleteSlackContact, STATUS_FOR } from "@/lib/evals/slack-contacts";
 
 const idSchema = z.string().uuid();
 
-export const DELETE = audited(async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireEvalsAdministrator(req);
   if (error) return error;
 

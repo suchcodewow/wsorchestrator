@@ -10,12 +10,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  firstConcern,
-  type AuditTarget,
-  type CloudAuditResult,
-  type CloudStatusReport,
-} from "@/lib/cloud-audit";
+import { firstConcern, type AuditTarget, type CloudAuditResult, type CloudStatusReport } from "@/lib/cloud-audit";
 
 const ok = (target: AuditTarget, untracked = 0): CloudAuditResult => ({
   ok: true,

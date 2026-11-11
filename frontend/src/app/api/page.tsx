@@ -7,20 +7,12 @@ import { auth } from "@/auth";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { SiteHeader } from "@/components/site-header";
 import { MAX_TOKENS_PER_USER } from "@/db/schema";
-import {
-  ACCESS_LABELS,
-  GROUPS,
-  endpointAnchor,
-  type Endpoint,
-  type Field,
-  type Method,
-} from "@/lib/api-reference";
+import { ACCESS_LABELS, GROUPS, endpointAnchor, type Endpoint, type Field, type Method } from "@/lib/api-reference";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "API reference — Harness Events",
-  description:
-    "Every Harness Events API endpoint, who may call it, and how to call it with a personal access token.",
+  description: "Every Harness Events API endpoint, who may call it, and how to call it with a personal access token.",
 };
 
 const METHOD_TINT: Record<Method, string> = {
@@ -35,18 +27,12 @@ const METHOD_TINT: Record<Method, string> = {
 async function origin(): Promise<string> {
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "harnessevents.io";
-  const proto =
-    h.get("x-forwarded-proto") ??
-    (host.startsWith("localhost") ? "http" : "https");
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   return `${proto}://${host}`;
 }
 
 function Code({ children }: { children: React.ReactNode }) {
-  return (
-    <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.8125rem]">
-      {children}
-    </code>
-  );
+  return <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.8125rem]">{children}</code>;
 }
 
 function Pre({ children }: { children: string }) {
@@ -63,13 +49,7 @@ function Prose({ text }: { text: string }) {
     <>
       {text
         .split(/(`[^`]+`)/)
-        .map((part, i) =>
-          part.startsWith("`") && part.endsWith("`") ? (
-            <Code key={i}>{part.slice(1, -1)}</Code>
-          ) : (
-            part
-          ),
-        )}
+        .map((part, i) => (part.startsWith("`") && part.endsWith("`") ? <Code key={i}>{part.slice(1, -1)}</Code> : part))}
     </>
   );
 }
@@ -108,15 +88,12 @@ function MethodPill({ method }: { method: Method }) {
  * wrapping line: the first two cells side by side, the last on its own line.
  */
 const STACKED_TABLE = "w-full text-sm max-sm:block max-sm:[&>tbody]:block";
-const STACKED_ROW =
-  "align-top max-sm:flex max-sm:flex-wrap max-sm:gap-x-3 max-sm:py-1.5";
+const STACKED_ROW = "align-top max-sm:flex max-sm:flex-wrap max-sm:gap-x-3 max-sm:py-1.5";
 
 function FieldTable({ title, fields }: { title: string; fields: Field[] }) {
   return (
     <div>
-      <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        {title}
-      </h4>
+      <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{title}</h4>
       <table className={`mt-1.5 ${STACKED_TABLE}`}>
         <tbody className="divide-y divide-border/60">
           {fields.map((f, i) => (
@@ -128,9 +105,7 @@ function FieldTable({ title, fields }: { title: string; fields: Field[] }) {
               <td className="min-w-0 font-mono text-[0.8125rem] break-words text-muted-foreground sm:min-w-44 sm:py-1.5 sm:pr-3">
                 {f.type}
               </td>
-              <td className="text-muted-foreground max-sm:basis-full sm:w-full sm:py-1.5">
-                {f.note && <Prose text={f.note} />}
-              </td>
+              <td className="text-muted-foreground max-sm:basis-full sm:w-full sm:py-1.5">{f.note && <Prose text={f.note} />}</td>
             </tr>
           ))}
         </tbody>
@@ -142,22 +117,14 @@ function FieldTable({ title, fields }: { title: string; fields: Field[] }) {
 function EndpointCard({ e }: { e: Endpoint }) {
   const anchor = endpointAnchor(e);
   return (
-    <article
-      id={anchor}
-      className="scroll-mt-20 rounded-2xl border bg-card/60 p-5 backdrop-blur-sm dark:bg-card"
-    >
+    <article id={anchor} className="scroll-mt-20 rounded-2xl border bg-card/60 p-5 backdrop-blur-sm dark:bg-card">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <MethodPill method={e.method} />
-        <a
-          href={`#${anchor}`}
-          className="min-w-0 font-mono text-sm font-medium break-all hover:underline"
-        >
+        <a href={`#${anchor}`} className="min-w-0 font-mono text-sm font-medium break-all hover:underline">
           <PathText path={e.path} />
         </a>
         <span className="ml-auto flex flex-wrap gap-1.5">
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-            {ACCESS_LABELS[e.access]}
-          </span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{ACCESS_LABELS[e.access]}</span>
           {!e.token && e.access !== "internal" && (
             <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-500/25 dark:text-amber-300">
               Browser session only
@@ -176,45 +143,26 @@ function EndpointCard({ e }: { e: Endpoint }) {
       )}
 
       <div className="mt-4 space-y-4">
-        {e.params && e.params.length > 0 && (
-          <FieldTable title="Path" fields={e.params} />
-        )}
-        {e.query && e.query.length > 0 && (
-          <FieldTable title="Query" fields={e.query} />
-        )}
+        {e.params && e.params.length > 0 && <FieldTable title="Path" fields={e.params} />}
+        {e.query && e.query.length > 0 && <FieldTable title="Query" fields={e.query} />}
         {e.body && e.body.fields.length > 0 && (
-          <FieldTable
-            title={
-              e.body.kind === "multipart"
-                ? "Form data (multipart)"
-                : "JSON body"
-            }
-            fields={e.body.fields}
-          />
+          <FieldTable title={e.body.kind === "multipart" ? "Form data (multipart)" : "JSON body"} fields={e.body.fields} />
         )}
 
         <div>
-          <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-            Returns
-          </h4>
-          <p className="mt-1.5 font-mono text-[0.8125rem] leading-relaxed break-words">
-            {e.returns.replaceAll("`", "")}
-          </p>
+          <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Returns</h4>
+          <p className="mt-1.5 font-mono text-[0.8125rem] leading-relaxed break-words">{e.returns.replaceAll("`", "")}</p>
         </div>
 
         {e.errors && e.errors.length > 0 && (
           <div>
-            <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Errors
-            </h4>
+            <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Errors</h4>
             <div className="mt-1.5">
               <table className={STACKED_TABLE}>
                 <tbody className="divide-y divide-border/60">
                   {e.errors.map((err, i) => (
                     <tr key={i} className={STACKED_ROW}>
-                      <td className="font-mono text-[0.8125rem] sm:py-1.5 sm:pr-3">
-                        {err.status}
-                      </td>
+                      <td className="font-mono text-[0.8125rem] sm:py-1.5 sm:pr-3">{err.status}</td>
                       <td className="font-mono text-[0.8125rem] break-all text-muted-foreground sm:py-1.5 sm:pr-3 sm:break-normal sm:whitespace-nowrap">
                         {err.error}
                       </td>
@@ -237,12 +185,8 @@ export default async function ApiReferencePage() {
   const session = await auth();
   const base = await origin();
   const endpoints = GROUPS.flatMap((g) => g.endpoints);
-  const sessionOnly = endpoints.filter(
-    (e) => !e.token && e.access !== "internal",
-  );
-  const tokenCount = endpoints.filter(
-    (e) => e.token && e.access !== "internal",
-  ).length;
+  const sessionOnly = endpoints.filter((e) => !e.token && e.access !== "internal");
+  const tokenCount = endpoints.filter((e) => e.token && e.access !== "internal").length;
 
   return (
     <div className="relative min-h-screen">
@@ -258,23 +202,15 @@ export default async function ApiReferencePage() {
               { id: "session-only", title: "Session-only routes" },
             ].map((s) => (
               <li key={s.id}>
-                <a
-                  href={`#${s.id}`}
-                  className="text-muted-foreground hover:text-foreground"
-                >
+                <a href={`#${s.id}`} className="text-muted-foreground hover:text-foreground">
                   {s.title}
                 </a>
               </li>
             ))}
-            <li className="pt-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Endpoints
-            </li>
+            <li className="pt-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Endpoints</li>
             {GROUPS.map((g) => (
               <li key={g.id}>
-                <a
-                  href={`#${g.id}`}
-                  className="text-muted-foreground hover:text-foreground"
-                >
+                <a href={`#${g.id}`} className="text-muted-foreground hover:text-foreground">
                   {g.title}
                 </a>
               </li>
@@ -284,49 +220,32 @@ export default async function ApiReferencePage() {
 
         <div className="min-w-0 space-y-16">
           <header>
-            <h1 className="text-4xl font-medium tracking-tight">
-              API reference
-            </h1>
+            <h1 className="text-4xl font-medium tracking-tight">API reference</h1>
             <p className="mt-3 text-base text-muted-foreground">
-              {tokenCount} endpoints take a personal access token;{" "}
-              {sessionOnly.length} need a browser session.
+              {tokenCount} endpoints take a personal access token; {sessionOnly.length} need a browser session.
             </p>
           </header>
 
           <section id="authentication" className="scroll-mt-20 space-y-4">
-            <h2 className="text-2xl font-medium tracking-tight">
-              Authentication
-            </h2>
+            <h2 className="text-2xl font-medium tracking-tight">Authentication</h2>
             <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed">
               <li>
                 Create a token on{" "}
-                <Link
-                  href="/me/api-tokens"
-                  className="text-brand hover:underline"
-                >
+                <Link href="/me/api-tokens" className="text-brand hover:underline">
                   My settings → My API tokens
                 </Link>
                 . It is shown once.
               </li>
               <li>
-                Send it as <Code>Authorization: Bearer wo_…</Code>. A token
-                does not expire, and each account can hold{" "}
-                {MAX_TOKENS_PER_USER} active ones. Revoking one, or deleting
-                the account, takes effect on the next request.
+                Send it as <Code>Authorization: Bearer wo_…</Code>. A token does not expire, and each account can hold {MAX_TOKENS_PER_USER}{" "}
+                active ones. Revoking one, or deleting the account, takes effect on the next request.
               </li>
               <li>
-                A token has no scopes. It acts as you, with the roles you have
-                at the moment of each request, so a role change applies to your
-                tokens at once.
+                A token has no scopes. It acts as you, with the roles you have at the moment of each request, so a role change applies to
+                your tokens at once.
               </li>
-              <li>
-                A request that carries both a session cookie and a token is
-                treated as the session.
-              </li>
-              <li>
-                Bodies are JSON unless an endpoint says form data. Times are ISO
-                8601 in UTC.
-              </li>
+              <li>A request that carries both a session cookie and a token is treated as the session.</li>
+              <li>Bodies are JSON unless an endpoint says form data. Times are ISO 8601 in UTC.</li>
             </ul>
             <Pre>{`export TOKEN="wo_..."
 curl -H "Authorization: Bearer $TOKEN" ${base}/api/me
@@ -341,21 +260,9 @@ curl -X PATCH -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/js
               <table className={STACKED_TABLE}>
                 <tbody className="divide-y divide-border/60">
                   {[
-                    [
-                      "400",
-                      `{"error":"…"}`,
-                      "The body or query failed validation. The code, and often a message, says which part.",
-                    ],
-                    [
-                      "401",
-                      `{"error":"unauthorized"}`,
-                      "No session, or the token is missing, revoked, expired or malformed.",
-                    ],
-                    [
-                      "403",
-                      `{"error":"forbidden"}`,
-                      "Your roles do not allow the request.",
-                    ],
+                    ["400", `{"error":"…"}`, "The body or query failed validation. The code, and often a message, says which part."],
+                    ["401", `{"error":"unauthorized"}`, "No session, or the token is missing, revoked, expired or malformed."],
+                    ["403", `{"error":"forbidden"}`, "Your roles do not allow the request."],
                     [
                       "404",
                       `{"error":"not_found"}`,
@@ -363,44 +270,31 @@ curl -X PATCH -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/js
                     ],
                   ].map(([status, body, when]) => (
                     <tr key={status} className={STACKED_ROW}>
-                      <td className="font-mono text-[0.8125rem] sm:py-2 sm:pr-4">
-                        {status}
-                      </td>
-                      <td className="font-mono text-[0.8125rem] whitespace-nowrap text-muted-foreground sm:py-2 sm:pr-4">
-                        {body}
-                      </td>
-                      <td className="text-muted-foreground max-sm:basis-full sm:w-full sm:py-2">
-                        {when}
-                      </td>
+                      <td className="font-mono text-[0.8125rem] sm:py-2 sm:pr-4">{status}</td>
+                      <td className="font-mono text-[0.8125rem] whitespace-nowrap text-muted-foreground sm:py-2 sm:pr-4">{body}</td>
+                      <td className="text-muted-foreground max-sm:basis-full sm:w-full sm:py-2">{when}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Every error is JSON with an <Code>error</Code> code. Each endpoint
-              below lists the ones it can return beyond 401 and 403.
+              Every error is JSON with an <Code>error</Code> code. Each endpoint below lists the ones it can return beyond 401 and 403.
             </p>
           </section>
 
           <section id="session-only" className="scroll-mt-20 space-y-4">
-            <h2 className="text-2xl font-medium tracking-tight">
-              Session-only routes
-            </h2>
+            <h2 className="text-2xl font-medium tracking-tight">Session-only routes</h2>
             <p className="text-sm leading-relaxed">
-              These refuse a token with 401 even when its owner could make the
-              same request in a browser. Each one either acts on every account
-              at once or could be used to raise its own access: SQL, backups,
-              roles and invites, sign-in domains, and minting tokens.
+              These refuse a token with 401 even when its owner could make the same request in a browser. Each one either acts on every
+              account at once or could be used to raise its own access: SQL, backups, roles and invites, sign-in domains, and minting
+              tokens.
             </p>
             <ul className="space-y-1.5">
               {sessionOnly.map((e) => (
                 <li key={endpointAnchor(e)} className="flex items-center gap-3">
                   <MethodPill method={e.method} />
-                  <a
-                    href={`#${endpointAnchor(e)}`}
-                    className="font-mono text-sm break-all hover:underline"
-                  >
+                  <a href={`#${endpointAnchor(e)}`} className="font-mono text-sm break-all hover:underline">
                     <PathText path={e.path} />
                   </a>
                 </li>

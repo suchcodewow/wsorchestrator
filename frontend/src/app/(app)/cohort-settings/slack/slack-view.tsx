@@ -26,15 +26,7 @@ import {
   User,
   XCircle,
 } from "lucide-react";
-import {
-  HEADER_ROW,
-  LINK_ROW,
-  Pager,
-  PlainHeader,
-  SortHeader,
-  TableSearch,
-  useRowLink,
-} from "@/components/data-table";
+import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { INTAKE_FORM_IDS, type SlackSyncScope, type SlackSyncStatus, type SlackSyncTrigger } from "@/db/schema";
@@ -119,9 +111,7 @@ function plural(n: number, one: string, many = `${one}s`) {
 }
 
 /** "12 invited, 2 removed, 5 messaged, 3 not in Slack", leaving out the zeros; "No changes" for none. */
-export function runCounts(
-  run: Pick<SlackRun, "invited" | "removed" | "messaged" | "notInSlack" | "failures" | "dryRun">,
-): string {
+export function runCounts(run: Pick<SlackRun, "invited" | "removed" | "messaged" | "notInSlack" | "failures" | "dryRun">): string {
   const parts = [
     run.invited && `${run.invited.toLocaleString()} ${run.dryRun ? "to invite" : "invited"}`,
     run.removed && `${run.removed.toLocaleString()} ${run.dryRun ? "to remove" : "removed"}`,
@@ -168,7 +158,12 @@ export function SlackSyncView({
     if (
       !preview &&
       live &&
-      !(await confirmDialog({ title: "Sync Slack now?", description: "It changes the cohort channels and sends the intake form reminders that are due. Preview shows what it would do without doing it.", confirmLabel: "Sync" }))
+      !(await confirmDialog({
+        title: "Sync Slack now?",
+        description:
+          "It changes the cohort channels and sends the intake form reminders that are due. Preview shows what it would do without doing it.",
+        confirmLabel: "Sync",
+      }))
     ) {
       return;
     }
@@ -199,9 +194,13 @@ export function SlackSyncView({
   async function setReminders(next: boolean) {
     if (
       next &&
-      !(await confirmDialog({ title: "Turn the daily reminder on?", description: live
+      !(await confirmDialog({
+        title: "Turn the daily reminder on?",
+        description: live
           ? "From the next sync, everyone in the current cohort who has not answered their form gets a Slack message once a day."
-          : "The sync is in dry run, so reminders are logged, not sent, until it goes live.", confirmLabel: "Turn on" }))
+          : "The sync is in dry run, so reminders are logged, not sent, until it goes live.",
+        confirmLabel: "Turn on",
+      }))
     ) {
       return;
     }
@@ -232,11 +231,7 @@ export function SlackSyncView({
       <motion.div variants={riseChild} className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-xl font-medium tracking-tight">Slack</h2>
-          {active && (
-            <p className="text-sm text-muted-foreground">
-              For the bootcamp starting {formatDate(active.startDate)}
-            </p>
-          )}
+          {active && <p className="text-sm text-muted-foreground">For the bootcamp starting {formatDate(active.startDate)}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
           {/* In dry run every sync is already a preview; live, this is the way to see one first. */}
@@ -301,12 +296,7 @@ export function SlackSyncView({
                   : "Once a day, right after the channels are synced, and with Sync Now, everyone in the current cohort who has not answered their intake form gets a direct message linking to it."}
             </p>
           </div>
-          <Button
-            variant="outline"
-            className="shrink-0"
-            disabled={busy === "reminders"}
-            onClick={() => setReminders(!reminders.on)}
-          >
+          <Button variant="outline" className="shrink-0" disabled={busy === "reminders"} onClick={() => setReminders(!reminders.on)}>
             {busy === "reminders" && <Loader2 className="animate-spin" />}
             {reminders.on ? "Turn off" : "Turn on"}
           </Button>
@@ -347,9 +337,7 @@ export function SlackSyncView({
             </div>
           ))
         ) : (
-          <p className="px-5 py-4 text-sm text-muted-foreground">
-            No bootcamp is active in the Scheduler, so each sync skips itself.
-          </p>
+          <p className="px-5 py-4 text-sm text-muted-foreground">No bootcamp is active in the Scheduler, so each sync skips itself.</p>
         )}
       </motion.div>
 
@@ -377,11 +365,7 @@ export function SlackSyncView({
             </thead>
             <tbody>
               {runs.map((run) => (
-                <tr
-                  key={run.id}
-                  className={`${LINK_ROW} align-top`}
-                  onClick={rowLink(`/cohort-settings/slack/${run.id}`)}
-                >
+                <tr key={run.id} className={`${LINK_ROW} align-top`} onClick={rowLink(`/cohort-settings/slack/${run.id}`)}>
                   <td className="whitespace-nowrap px-5 py-2.5 tabular-nums">
                     <Link href={`/cohort-settings/slack/${run.id}`} className="group-hover:underline">
                       {formatWhen(run.startedAt)}
@@ -406,9 +390,7 @@ export function SlackSyncView({
                   <td className="px-5 py-2.5">
                     <RunResult run={run} />
                   </td>
-                  <td className="whitespace-nowrap px-5 py-2.5 text-right">
-                    {run.dryRun && <Badge variant="secondary">Dry run</Badge>}
-                  </td>
+                  <td className="whitespace-nowrap px-5 py-2.5 text-right">{run.dryRun && <Badge variant="secondary">Dry run</Badge>}</td>
                 </tr>
               ))}
               {runs.length === 0 && (
@@ -453,7 +435,8 @@ function ConnectionRow({ connection: { envToken, installation } }: { connection:
         </p>
         {installation && !installation.readable && (
           <p className="text-sm text-destructive">
-            This deployment cannot open the saved token, which another deployment sealed. A platform administrator needs to add the app again.
+            This deployment cannot open the saved token, which another deployment sealed. A platform administrator needs to add the app
+            again.
           </p>
         )}
         {installation?.readable && installation.missingScopes.length > 0 && (

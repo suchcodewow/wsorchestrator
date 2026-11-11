@@ -14,12 +14,7 @@ import { Loader2, TriangleAlert, X } from "lucide-react";
 import { EmployeePicker } from "@/components/employee-picker";
 import { PillSwitch } from "@/components/pill-switch";
 import { Input } from "@/components/ui/input";
-import {
-  TEST_GROUP_STAGES,
-  testGroupSlug,
-  type TestGroupMember,
-  type TestGroupStage,
-} from "@/lib/cohorts/test-group-plan";
+import { TEST_GROUP_STAGES, testGroupSlug, type TestGroupMember, type TestGroupStage } from "@/lib/cohorts/test-group-plan";
 import { confirmDialog } from "@/components/ui/confirm";
 
 const STAGE_LABELS: Record<TestGroupStage, string> = {
@@ -69,13 +64,7 @@ const ERRORS: Record<string, string> = {
   forbidden: "Only a platform administrator can change the test group.",
 };
 
-export function TestGroupPanel({
-  group,
-  canManage,
-}: {
-  group: Group;
-  canManage: boolean;
-}) {
+export function TestGroupPanel({ group, canManage }: { group: Group; canManage: boolean }) {
   const router = useRouter();
   const [draft, setDraft] = useState(false);
   const [suffix, setSuffix] = useState(group.suffix);
@@ -139,7 +128,12 @@ export function TestGroupPanel({
       return;
     }
     if (
-      !(await confirmDialog({ title: "Turn the test group off?", description: "Its Slack channels are archived and its calendar invites cancelled.", confirmLabel: "Turn off", destructive: true }))
+      !(await confirmDialog({
+        title: "Turn the test group off?",
+        description: "Its Slack channels are archived and its calendar invites cancelled.",
+        confirmLabel: "Turn off",
+        destructive: true,
+      }))
     )
       return;
     if (await save({ on: false })) setDraft(false);
@@ -156,15 +150,11 @@ export function TestGroupPanel({
         >
           <TriangleAlert className="mt-0.5 size-4 shrink-0" />
           <div className="space-y-1.5">
-            <p className="font-medium">
-              The test group is enabled. Contact a platform administrator to
-              turn it off.
-            </p>
+            <p className="font-medium">The test group is enabled. Contact a platform administrator to turn it off.</p>
             <p>
-              Slack, calendar invites and reminders for the cohort go to these{" "}
-              {group.members.length}{" "}
-              {group.members.length === 1 ? "person" : "people"} instead, under
-              names ending <span className="font-mono">-{group.suffix}</span>:
+              Slack, calendar invites and reminders for the cohort go to these {group.members.length}{" "}
+              {group.members.length === 1 ? "person" : "people"} instead, under names ending{" "}
+              <span className="font-mono">-{group.suffix}</span>:
             </p>
             <ul className="list-disc pl-5">
               {group.members.map((m) => (
@@ -181,32 +171,16 @@ export function TestGroupPanel({
       )}
 
       {canManage && (
-        <div
-          className={
-            editing
-              ? "space-y-4 rounded-2xl border bg-card px-5 py-3 shadow-sm"
-              : undefined
-          }
-        >
+        <div className={editing ? "space-y-4 rounded-2xl border bg-card px-5 py-3 shadow-sm" : undefined}>
           <div className="flex items-center gap-3">
-            <PillSwitch
-              label="Use test group"
-              on={group.on || draft}
-              onChange={toggle}
-              disabled={busy}
-            />
-            {busy && (
-              <Loader2 className="size-4 animate-spin text-muted-foreground" />
-            )}
+            <PillSwitch label="Use test group" on={group.on || draft} onChange={toggle} disabled={busy} />
+            {busy && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
           </div>
 
           {editing && (
             <>
               <div className="max-w-md space-y-1.5">
-                <label
-                  htmlFor="test-group-suffix"
-                  className="text-sm font-medium"
-                >
+                <label htmlFor="test-group-suffix" className="text-sm font-medium">
                   Suffix
                 </label>
                 <Input
@@ -216,8 +190,7 @@ export function TestGroupPanel({
                   placeholder="smoke-test"
                   onChange={(e) => setSuffix(e.target.value)}
                   onBlur={() => {
-                    if (!group.on && slug !== group.suffix)
-                      void saveAndEnable({ suffix });
+                    if (!group.on && slug !== group.suffix) void saveAndEnable({ suffix });
                   }}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -249,10 +222,7 @@ export function TestGroupPanel({
                 busy={busy}
                 onAdd={async (email, fullName) =>
                   saveAndEnable({
-                    members: [
-                      ...group.members,
-                      { email, fullName: fullName ?? "", stage: newStage },
-                    ],
+                    members: [...group.members, { email, fullName: fullName ?? "", stage: newStage }],
                   })
                 }
               />
@@ -260,14 +230,9 @@ export function TestGroupPanel({
               {group.members.length > 0 ? (
                 <ul className="divide-y rounded-xl border text-sm">
                   {group.members.map((m) => (
-                    <li
-                      key={m.email}
-                      className="flex items-center justify-between gap-3 px-4 py-2"
-                    >
+                    <li key={m.email} className="flex items-center justify-between gap-3 px-4 py-2">
                       <span>
-                        {m.fullName && (
-                          <span className="font-medium">{m.fullName} </span>
-                        )}
+                        {m.fullName && <span className="font-medium">{m.fullName} </span>}
                         <span className="text-muted-foreground">{m.email}</span>
                       </span>
                       <StageSelect
@@ -277,28 +242,18 @@ export function TestGroupPanel({
                         disabled={busy}
                         onChange={(stage) =>
                           void saveAndEnable({
-                            members: group.members.map((x) =>
-                              x.email === m.email ? { ...x, stage } : x,
-                            ),
+                            members: group.members.map((x) => (x.email === m.email ? { ...x, stage } : x)),
                           })
                         }
                       />
                       <button
                         type="button"
                         aria-label={`Remove ${m.fullName || m.email}`}
-                        disabled={
-                          busy || (group.on && group.members.length === 1)
-                        }
-                        title={
-                          group.on && group.members.length === 1
-                            ? "Turn the test group off to remove the last person."
-                            : undefined
-                        }
+                        disabled={busy || (group.on && group.members.length === 1)}
+                        title={group.on && group.members.length === 1 ? "Turn the test group off to remove the last person." : undefined}
                         onClick={() =>
                           void saveAndEnable({
-                            members: group.members.filter(
-                              (x) => x.email !== m.email,
-                            ),
+                            members: group.members.filter((x) => x.email !== m.email),
                           })
                         }
                         className="cursor-pointer rounded-md p-1 text-muted-foreground outline-none hover:text-destructive focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
@@ -309,9 +264,7 @@ export function TestGroupPanel({
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  No one is in the test group yet.
-                </p>
+                <p className="text-sm text-muted-foreground">No one is in the test group yet.</p>
               )}
             </>
           )}

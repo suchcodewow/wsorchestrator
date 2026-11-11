@@ -69,16 +69,11 @@ export const FRAME_STATUS_FOR: Record<FrameDomainError, number> = {
 };
 
 async function currentDomains(): Promise<Map<string, string>> {
-  const rows = await db
-    .select({ id: allowedFrameDomains.id, domain: allowedFrameDomains.domain })
-    .from(allowedFrameDomains);
+  const rows = await db.select({ id: allowedFrameDomains.id, domain: allowedFrameDomains.domain }).from(allowedFrameDomains);
   return new Map(rows.map((r) => [r.id, r.domain]));
 }
 
-export async function addFrameDomain(
-  actor: Actor,
-  input: { domain: string; note?: string },
-): Promise<Result & { domain?: string }> {
+export async function addFrameDomain(actor: Actor, input: { domain: string; note?: string }): Promise<Result & { domain?: string }> {
   const domain = normalizeFrameDomain(input.domain);
   if (!domain) return { ok: false, error: "invalid" };
 
@@ -94,10 +89,7 @@ export async function addFrameDomain(
   return { ok: true, domain };
 }
 
-export async function updateFrameDomain(
-  id: string,
-  input: { domain: string; note?: string },
-): Promise<Result & { domain?: string }> {
+export async function updateFrameDomain(id: string, input: { domain: string; note?: string }): Promise<Result & { domain?: string }> {
   const domain = normalizeFrameDomain(input.domain);
   if (!domain) return { ok: false, error: "invalid" };
 

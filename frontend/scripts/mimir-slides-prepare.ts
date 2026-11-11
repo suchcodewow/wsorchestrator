@@ -48,7 +48,10 @@ if (seen.size === 0) {
 }
 
 for (const [n, file] of [...seen].sort((a, b) => a[0] - b[0])) {
-  await sharp(join(from, file)).resize({ width: WIDTH, withoutEnlargement: true }).jpeg({ quality: 82, mozjpeg: true }).toFile(join(to, `${n}.jpg`));
+  await sharp(join(from, file))
+    .resize({ width: WIDTH, withoutEnlargement: true })
+    .jpeg({ quality: 82, mozjpeg: true })
+    .toFile(join(to, `${n}.jpg`));
 }
 const numbers = [...seen.keys()].sort((a, b) => a - b);
 const missing = Array.from({ length: numbers[numbers.length - 1]! }, (_, i) => i + 1).filter((n) => !seen.has(n));

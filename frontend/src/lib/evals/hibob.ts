@@ -19,13 +19,7 @@ import "server-only";
 
 import { and, desc, eq, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  employees,
-  hibobSyncRuns,
-  users,
-  type HibobSyncStatus,
-  type HibobSyncTrigger,
-} from "@/db/schema";
+import { employees, hibobSyncRuns, users, type HibobSyncStatus, type HibobSyncTrigger } from "@/db/schema";
 import { hibobAuthorization, toEmployeeRow } from "@/lib/evals/hibob-record";
 import { firstNameOf, preferredFullName } from "@/lib/logistics/intake-values";
 import { orgUnder } from "@/lib/evals/org";
@@ -47,12 +41,7 @@ const SEARCH_URL = "https://api.hibob.com/v1/people/search";
  */
 const STALE_MS = 10 * 60_000;
 
-export type HibobError =
-  | "not_configured"
-  | "already_running"
-  | "rejected"
-  | "unreachable"
-  | "bad_response";
+export type HibobError = "not_configured" | "already_running" | "rejected" | "unreachable" | "bad_response";
 
 export const STATUS_FOR: Record<HibobError, number> = {
   not_configured: 409,
@@ -85,9 +74,7 @@ export function hibobServiceUser(): string | null {
 }
 
 /** One `people/search` call; the employees, or why there are none. */
-async function search(
-  creds: Credentials,
-): Promise<{ ok: true; employees: unknown[] } | { ok: false; error: HibobError; detail?: string }> {
+async function search(creds: Credentials): Promise<{ ok: true; employees: unknown[] } | { ok: false; error: HibobError; detail?: string }> {
   let res: Response;
   try {
     res = await fetch(SEARCH_URL, {
@@ -131,12 +118,7 @@ async function closeStaleRuns(): Promise<void> {
   await db
     .update(hibobSyncRuns)
     .set({ status: "failed", error: "Did not finish — the server stopped mid-sync." })
-    .where(
-      and(
-        eq(hibobSyncRuns.status, "running"),
-        lt(hibobSyncRuns.startedAt, new Date(Date.now() - STALE_MS)),
-      ),
-    );
+    .where(and(eq(hibobSyncRuns.status, "running"), lt(hibobSyncRuns.startedAt, new Date(Date.now() - STALE_MS))));
 }
 
 /** Opens a run, or null if one is already running — the partial unique index allows one. */
@@ -164,8 +146,7 @@ async function failRun(runId: string, error: HibobError, detail?: string): Promi
 const BATCH = 500;
 
 export type SyncResult =
-  | { ok: true; runId: string; count: number; skipped: number }
-  | { ok: false; runId: string | null; error: HibobError; detail?: string };
+  { ok: true; runId: string; count: number; skipped: number } | { ok: false; runId: string | null; error: HibobError; detail?: string };
 
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -174,10 +155,7 @@ export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
  * Someone it no longer sends is marked inactive rather than removed.
  * `actorId` is whoever pressed the button, or null for the schedule.
  */
-export async function syncHibobEmployees(
-  trigger: HibobSyncTrigger,
-  actorId: string | null,
-): Promise<SyncResult> {
+export async function syncHibobEmployees(trigger: HibobSyncTrigger, actorId: string | null): Promise<SyncResult> {
   const runId = await startRun(trigger, actorId);
   if (!runId) return { ok: false, runId: null, error: "already_running" };
 
@@ -392,20 +370,21 @@ export async function listHibobSyncRuns(query: ListQuery<HibobSyncSort>): Promis
         hibobSyncRuns.error,
       ]),
     )
-    .orderBy(
-      ...orderFor(SYNC_SORT_COLUMNS[query.sort], query.dir, desc(hibobSyncRuns.startedAt), hibobSyncRuns.id),
-    )
+    .orderBy(...orderFor(SYNC_SORT_COLUMNS[query.sort], query.dir, desc(hibobSyncRuns.startedAt), hibobSyncRuns.id))
     .limit(limit)
     .offset(offset);
   const staleBefore = Date.now() - STALE_MS;
-  return toPage(rows.map(({ triggeredByName, triggeredByEmail, ...rest }) => ({
-    ...rest,
-    triggeredBy: triggeredByName ?? triggeredByEmail,
-    // The next sync closes it for good; until then, say what happened.
-    ...(rest.status === "running" && rest.startedAt.getTime() < staleBefore
-      ? { status: "failed" as const, error: "Did not finish — the server stopped mid-sync." }
-      : {}),
-  })), query.page);
+  return toPage(
+    rows.map(({ triggeredByName, triggeredByEmail, ...rest }) => ({
+      ...rest,
+      triggeredBy: triggeredByName ?? triggeredByEmail,
+      // The next sync closes it for good; until then, say what happened.
+      ...(rest.status === "running" && rest.startedAt.getTime() < staleBefore
+        ? { status: "failed" as const, error: "Did not finish — the server stopped mid-sync." }
+        : {}),
+    })),
+    query.page,
+  );
 }
 
 /** Whether a sync is running now: one marked running that has not gone stale. */
@@ -413,12 +392,7 @@ export async function syncInProgress(): Promise<boolean> {
   const [row] = await db
     .select({ id: hibobSyncRuns.id })
     .from(hibobSyncRuns)
-    .where(
-      and(
-        eq(hibobSyncRuns.status, "running"),
-        sql`${hibobSyncRuns.startedAt} >= ${new Date(Date.now() - STALE_MS)}`,
-      ),
-    )
+    .where(and(eq(hibobSyncRuns.status, "running"), sql`${hibobSyncRuns.startedAt} >= ${new Date(Date.now() - STALE_MS)}`))
     .limit(1);
   return Boolean(row);
 }

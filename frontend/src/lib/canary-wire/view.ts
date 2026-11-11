@@ -286,8 +286,7 @@ export function monthView(
     if (l.manager_email) managers.add(l.manager_email.trim().toLowerCase());
     if (l.manager) managers.add(l.manager.trim().toLowerCase());
   }
-  const isIc = (email: string, name: string) =>
-    !(managers.has(email.trim().toLowerCase()) || managers.has(name.trim().toLowerCase()));
+  const isIc = (email: string, name: string) => !(managers.has(email.trim().toLowerCase()) || managers.has(name.trim().toLowerCase()));
 
   const reps: Rep[] = snap.learners.map((learner) => {
     const s = standing(learner.email, month, learner.role);
@@ -445,9 +444,16 @@ function csvField(value: string): string {
 /** The month as a flat export: one row per rep, one column per module. */
 export function monthCsv(view: CanaryWireView): string {
   const header = [
-    "Name", "Email", "Role", "Manager", "Manager Email",
+    "Name",
+    "Email",
+    "Role",
+    "Manager",
+    "Manager Email",
     ...view.labels,
-    "Modules Assigned", "Modules Completed", "Completion %", "Account",
+    "Modules Assigned",
+    "Modules Completed",
+    "Completion %",
+    "Account",
   ];
   const rows = [header];
   for (const team of view.teams) {
@@ -472,7 +478,9 @@ export function monthCsv(view: CanaryWireView): string {
         ? rep.exemptSource === "first_month"
           ? `New hire — counts from ${rep.exemptFrom}`
           : "Pre-bootcamp — not accountable this month"
-        : rep.notActivated ? "Never activated Mindtickle" : "Active";
+        : rep.notActivated
+          ? "Never activated Mindtickle"
+          : "Active";
       line.push(String(rep.assigned), String(rep.completed), rep.pct === null ? "" : rep.pct.toFixed(1), account);
       rows.push(line);
     }

@@ -48,10 +48,7 @@ export async function getCoachingSettings(): Promise<CoachingSettings> {
     .leftJoin(users, eq(users.id, mimirSettings.updatedBy))
     .where(inArray(mimirSettings.key, Object.values(MIMIR_SETTINGS_KEYS)));
   const byKey = new Map(rows.map((r) => [r.key, r]));
-  const latest = rows.reduce<(typeof rows)[number] | null>(
-    (a, r) => (!a || r.updatedAt > a.updatedAt ? r : a),
-    null,
-  );
+  const latest = rows.reduce<(typeof rows)[number] | null>((a, r) => (!a || r.updatedAt > a.updatedAt ? r : a), null);
   return {
     platformContext: byKey.get(MIMIR_SETTINGS_KEYS.platformContext)?.value ?? DEFAULT_PLATFORM_CONTEXT,
     namingGuard: byKey.get(MIMIR_SETTINGS_KEYS.namingGuard)?.value ?? DEFAULT_NAMING_GUARD,

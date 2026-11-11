@@ -56,11 +56,22 @@
   stroke-width: 1;
   opacity: 0.22;
 }
-.mm-l1 { stroke: var(--l1); }
-.mm-l2 { stroke: var(--l2); }
-.mm-l3 { stroke: var(--l3); }
-.mm-sel .mm-e { opacity: 0.035; }
-.mm-sel .mm-e.mm-on { opacity: 0.9; stroke-width: 1.8; }
+.mm-l1 {
+  stroke: var(--l1);
+}
+.mm-l2 {
+  stroke: var(--l2);
+}
+.mm-l3 {
+  stroke: var(--l3);
+}
+.mm-sel .mm-e {
+  opacity: 0.035;
+}
+.mm-sel .mm-e.mm-on {
+  opacity: 0.9;
+  stroke-width: 1.8;
+}
 
 .mm-band {
   position: absolute;
@@ -212,9 +223,17 @@
   border-radius: 999px;
   cursor: pointer;
 }
-.mm-play:hover { filter: brightness(1.15); }
-.mm-play:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.mm-play:disabled { opacity: 0.4; cursor: not-allowed; }
+.mm-play:hover {
+  filter: brightness(1.15);
+}
+.mm-play:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.mm-play:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .mm-chat {
   position: relative;
   justify-content: center;
@@ -252,11 +271,16 @@
 }
 
 /* A line from a concept to one it requires: dashed, so it reads apart from the slide lines. */
-.mm-e.mm-req { stroke-dasharray: 5 3; opacity: 0.4; }
-.mm-sel .mm-e.mm-req { opacity: 0.035; }
-.mm-sel .mm-e.mm-req.mm-on { opacity: 0.9; }
-
-
+.mm-e.mm-req {
+  stroke-dasharray: 5 3;
+  opacity: 0.4;
+}
+.mm-sel .mm-e.mm-req {
+  opacity: 0.035;
+}
+.mm-sel .mm-e.mm-req.mm-on {
+  opacity: 0.9;
+}
 
 /* The heading over the stack of slides, in the shape of a level's but belonging to none. */
 .mm-heading {
@@ -273,8 +297,12 @@
 }
 
 /* "Show all connections" off: a line shows only when it belongs to what is selected. */
-.mm-bare .mm-edges .mm-e { opacity: 0; }
-.mm-bare.mm-sel .mm-edges .mm-e.mm-on { opacity: 0.9; }
+.mm-bare .mm-edges .mm-e {
+  opacity: 0;
+}
+.mm-bare.mm-sel .mm-edges .mm-e.mm-on {
+  opacity: 0.9;
+}
 
 /* A faint rule between the slides and the first level's column. */
 .mm-divider {

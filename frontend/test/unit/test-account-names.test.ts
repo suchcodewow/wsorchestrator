@@ -25,14 +25,24 @@ describe("CHARACTER_NAMES", () => {
 
 describe("pickCharacterName", () => {
   test("with nothing taken, can be any of them", () => {
-    assert.equal(pickCharacterName([], () => 0), CHARACTER_NAMES[0]);
-    assert.equal(pickCharacterName([], () => 0.999999), CHARACTER_NAMES.at(-1));
+    assert.equal(
+      pickCharacterName([], () => 0),
+      CHARACTER_NAMES[0],
+    );
+    assert.equal(
+      pickCharacterName([], () => 0.999999),
+      CHARACTER_NAMES.at(-1),
+    );
   });
 
   test("never picks a taken name, whatever its case or spacing", () => {
     const [kept, ...rest] = CHARACTER_NAMES;
     const taken = rest.map((n, i) => (i % 2 ? `  ${n.toUpperCase()} ` : n));
-    for (const r of [0, 0.5, 0.999999]) assert.equal(pickCharacterName(taken, () => r), kept);
+    for (const r of [0, 0.5, 0.999999])
+      assert.equal(
+        pickCharacterName(taken, () => r),
+        kept,
+      );
   });
 
   test("is null once every name is taken", () => {

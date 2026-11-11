@@ -15,8 +15,5 @@ export const POST = audited(async function POST() {
 
   noteAudit({ target: session.user.email ?? session.user.id, targetLabel: session.user.name ?? undefined });
   const token = await mintFrameTicket(session.user.id);
-  return NextResponse.json(
-    { token, expiresIn: FRAME_TICKET_SECONDS },
-    { headers: { "Cache-Control": "no-store" } },
-  );
+  return NextResponse.json({ token, expiresIn: FRAME_TICKET_SECONDS }, { headers: { "Cache-Control": "no-store" } });
 });

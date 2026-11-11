@@ -14,11 +14,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function EditLabGuidePage({
-  params,
-}: {
-  params: Promise<{ guideSlug: string }>;
-}) {
+export default async function EditLabGuidePage({ params }: { params: Promise<{ guideSlug: string }> }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   if (!canManageLabGuides(session.user.access)) notFound();
@@ -39,9 +35,7 @@ export default async function EditLabGuidePage({
         Back to the guide
       </Link>
 
-      <h1 className="mt-6 mb-8 text-2xl font-medium tracking-tight">
-        Edit lab guide
-      </h1>
+      <h1 className="mt-6 mb-8 text-2xl font-medium tracking-tight">Edit lab guide</h1>
 
       <GuideEditor guide={guide} usedIn={usedIn} />
     </div>

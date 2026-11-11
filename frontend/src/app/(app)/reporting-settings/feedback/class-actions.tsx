@@ -74,12 +74,7 @@ export function ClassActions({
               <div className="flex flex-wrap gap-2">
                 <GenerateButton stage={stage} pending={pending[stage]} />
                 <PreviewButton stage={stage} />
-                <ReleaseButton
-                  stage={stage}
-                  startDate={bootcamp.startDate}
-                  blockers={pending[stage] ?? null}
-                  slackLive={slackLive}
-                />
+                <ReleaseButton stage={stage} startDate={bootcamp.startDate} blockers={pending[stage] ?? null} slackLive={slackLive} />
               </div>
             )}
           </div>

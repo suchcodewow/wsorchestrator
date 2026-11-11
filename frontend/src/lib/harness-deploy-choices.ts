@@ -2,10 +2,7 @@
 
 import "server-only";
 import { countOrgSecrets } from "@/lib/harness-org-secrets";
-import {
-  listTemplateSources,
-  type TemplateSourceRow,
-} from "@/lib/harness-templates";
+import { listTemplateSources, type TemplateSourceRow } from "@/lib/harness-templates";
 
 export type DeployChoices = {
   /** How much the site holds of its own, which is one tick together. */

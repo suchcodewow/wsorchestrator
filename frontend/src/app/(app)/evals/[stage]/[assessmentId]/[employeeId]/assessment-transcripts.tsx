@@ -83,10 +83,10 @@ export function useAssessmentTranscripts({
           form.append("recordingId", recording.id);
           form.append("recordedAt", String(recording.startedAt));
           form.append("durationMs", String(recording.durationMs));
-          const res = await fetch(
-            `/api/evals/scoring/${assessmentId}/${encodeURIComponent(employeeId)}/transcripts`,
-            { method: "POST", body: form },
-          ).catch(() => null);
+          const res = await fetch(`/api/evals/scoring/${assessmentId}/${encodeURIComponent(employeeId)}/transcripts`, {
+            method: "POST",
+            body: form,
+          }).catch(() => null);
           if (!res) return fail("Could not reach the server.");
           const body = (await res.json().catch(() => null)) as (ClientTranscript & { error?: string }) | null;
           if (body?.error === "unconfigured") {
@@ -146,9 +146,7 @@ export function AssessmentTranscripts({
       )
     : [];
   const showLive =
-    (recording || live.status === "connecting" || live.status === "finishing") &&
-    live.status !== "unavailable" &&
-    live.status !== "idle";
+    (recording || live.status === "connecting" || live.status === "finishing") && live.status !== "unavailable" && live.status !== "idle";
   const jobRows = Object.entries(jobs);
   const notSetUp = unavailable || live.status === "unavailable";
   const empty = !showLive && transcripts.length === 0 && jobRows.length === 0 && unfiled.length === 0;
@@ -180,9 +178,7 @@ export function AssessmentTranscripts({
                 <Loader2 className="size-3.5 animate-spin" />
                 Transcribing the full recording…
               </p>
-              {job.live && live.finals.length > 0 && (
-                <p className="leading-relaxed text-muted-foreground">{live.finals.join(" ")}</p>
-              )}
+              {job.live && live.finals.length > 0 && <p className="leading-relaxed text-muted-foreground">{live.finals.join(" ")}</p>}
             </>
           ) : (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

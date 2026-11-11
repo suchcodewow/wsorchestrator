@@ -42,13 +42,7 @@ export const themePreference = pgEnum("theme_preference", THEME_PREFERENCES);
  * The database type keeps its original name, `site_role`, from before the
  * site had more than one functional area.
  */
-export const EVENT_ROLES = [
-  "none",
-  "contributor",
-  "operator",
-  "manager",
-  "administrator",
-] as const;
+export const EVENT_ROLES = ["none", "contributor", "operator", "manager", "administrator"] as const;
 export type EventRole = (typeof EVENT_ROLES)[number];
 
 export const eventRole = pgEnum("site_role", EVENT_ROLES);
@@ -97,9 +91,7 @@ export const users = pgTable("users", {
   email: text("email").unique(),
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
-  themePreference: themePreference("theme_preference")
-    .notNull()
-    .default("system"),
+  themePreference: themePreference("theme_preference").notNull().default("system"),
   eventRole: eventRole("site_role").notNull().default("none"),
   trainingRole: trainingRole("training_role"),
   assessmentsRole: assessmentsRole("evals_role"),
@@ -136,9 +128,7 @@ export const accounts = pgTable(
     id_token: text("id_token"),
     session_state: text("session_state"),
   },
-  (account) => [
-    primaryKey({ columns: [account.provider, account.providerAccountId] }),
-  ],
+  (account) => [primaryKey({ columns: [account.provider, account.providerAccountId] })],
 );
 
 export const sessions = pgTable("sessions", {
@@ -194,10 +184,7 @@ export const eventMode = pgEnum("event_mode", EVENT_MODES);
 
 export const MAX_USERS = 50;
 
-export const EVENT_LIMITS: Record<
-  EventMode,
-  { maxUsers: number; defaultUsers: number; minClouds: number; maxClouds: number }
-> = {
+export const EVENT_LIMITS: Record<EventMode, { maxUsers: number; defaultUsers: number; minClouds: number; maxClouds: number }> = {
   workshop: {
     maxUsers: MAX_USERS,
     defaultUsers: 10,
@@ -216,13 +203,7 @@ export const limitsFor = (mode: EventMode) => EVENT_LIMITS[mode];
  * (`CLOUDS`, `EVENT_MODES`, `EVENT_LIMITS`) lives, and callers should not have
  * to know which of the two files a constant came from.
  */
-export {
-  SCENARIOS,
-  isScenarioId,
-  scenariosForCloud,
-  scenariosForClouds,
-  type ScenarioId,
-} from "@/lib/scenario-catalog";
+export { SCENARIOS, isScenarioId, scenariosForCloud, scenariosForClouds, type ScenarioId } from "@/lib/scenario-catalog";
 
 // Also imported, not just re-exported: the runs table below types its column
 // with it.
@@ -267,10 +248,7 @@ export const workshopRuns = pgTable(
     gcpProjectId: text("gcp_project_id"),
     statePrefix: text("state_prefix").notNull(),
     harnessOnly: boolean("harness_only").notNull().default(false),
-    componentSetId: uuid("component_set_id").references(
-      (): AnyPgColumn => harnessComponentSets.id,
-      { onDelete: "set null" },
-    ),
+    componentSetId: uuid("component_set_id").references((): AnyPgColumn => harnessComponentSets.id, { onDelete: "set null" }),
     outputs: jsonb("outputs"),
     error: text("error"),
     ttlSeconds: integer("ttl_seconds")
@@ -281,9 +259,7 @@ export const workshopRuns = pgTable(
     destroyAttempts: integer("destroy_attempts").notNull().default(0),
     /** Set while a teardown attempt owns this run; see `claimDestroy`. */
     destroyStartedAt: timestamp("destroy_started_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     destroyedAt: timestamp("destroyed_at", { withTimezone: true }),
     /**
      * The deployment that created this run, and the only one allowed to act on
@@ -320,9 +296,7 @@ export const workshopAccounts = pgTable(
     claimedFrom: text("claimed_from"),
     claimedVacation: text("claimed_vacation"),
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("workshop_accounts_run_idx").on(t.runId, t.id)],
 );
@@ -375,17 +349,10 @@ export const runResources = pgTable(
     url: text("url"),
     done: integer("done"),
     total: integer("total"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [
-    index("run_resources_run_idx").on(t.runId, t.id),
-    uniqueIndex("run_resources_identity_idx").on(t.runId, t.kind, t.key),
-  ],
+  (t) => [index("run_resources_run_idx").on(t.runId, t.id), uniqueIndex("run_resources_identity_idx").on(t.runId, t.kind, t.key)],
 );
 
 export const apiTokens = pgTable(
@@ -403,9 +370,7 @@ export const apiTokens = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("api_tokens_user_idx").on(t.userId, t.createdAt)],
 );
@@ -430,9 +395,7 @@ export const userInvites = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     uses: integer("uses").notNull().default(0),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("user_invites_created_by_idx").on(t.createdBy, t.createdAt)],
 );
@@ -468,9 +431,7 @@ export const harnessTokens = pgTable(
     deployedAt: timestamp("deployed_at", { withTimezone: true }),
     /** What went into that organization, null for a token never deployed with. */
     deployedContent: jsonb("deployed_content").$type<DeployedContent>(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("harness_tokens_user_idx").on(t.userId, t.createdAt),
@@ -488,23 +449,13 @@ export const MAX_HARNESS_TOKENS_PER_USER = 10;
 
 export type HarnessToken = typeof harnessTokens.$inferSelect;
 
-export const COMPONENT_KINDS = [
-  "secret_text",
-  "secret_file",
-  "connector",
-  "template",
-] as const;
+export const COMPONENT_KINDS = ["secret_text", "secret_file", "connector", "template"] as const;
 export type ComponentKind = (typeof COMPONENT_KINDS)[number];
 
 export const COMPONENT_SCOPES = ["org", "project"] as const;
 export type ComponentScope = (typeof COMPONENT_SCOPES)[number];
 
-export const COMPONENT_SET_STATUSES = [
-  "testing",
-  "submitted",
-  "approved",
-  "rejected",
-] as const;
+export const COMPONENT_SET_STATUSES = ["testing", "submitted", "approved", "rejected"] as const;
 export type ComponentSetStatus = (typeof COMPONENT_SET_STATUSES)[number];
 
 export const harnessComponentSets = pgTable(
@@ -517,12 +468,8 @@ export const harnessComponentSets = pgTable(
       onDelete: "set null",
     }),
     notes: text("notes").notNull().default(""),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("harness_component_sets_status_idx").on(t.status, t.updatedAt)],
 );
@@ -544,12 +491,8 @@ export const harnessComponents = pgTable(
     dependsOn: jsonb("depends_on").notNull().default([]),
     versionLabel: text("version_label").notNull().default("1"),
     builtin: boolean("builtin").notNull().default(false),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("harness_components_baseline_idx")
@@ -573,12 +516,8 @@ export const labGuides = pgTable(
     authorId: text("author_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("lab_guides_updated_at_idx").on(t.updatedAt)],
 );
@@ -600,12 +539,8 @@ export const labWorkshops = pgTable(
     authorId: text("author_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("lab_workshops_published_idx").on(t.published, t.updatedAt)],
 );
@@ -646,19 +581,12 @@ export const labImages = pgTable(
     authorId: text("author_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("lab_images_created_at_idx").on(t.createdAt)],
 );
 
-export const LAB_IMAGE_MIME_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-] as const;
+export const LAB_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
 
 export const LAB_IMAGE_LIMITS = {
   name: 200,
@@ -675,9 +603,7 @@ export const allowedEmailDomains = pgTable(
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("allowed_email_domains_domain_idx").on(t.domain)],
 );
@@ -696,9 +622,7 @@ export const allowedFrameDomains = pgTable(
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("allowed_frame_domains_domain_idx").on(t.domain)],
 );
@@ -722,12 +646,8 @@ export const harnessOrgSecrets = pgTable(
     updatedBy: text("updated_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     // One value per name within an owner. Two indexes rather than one on
@@ -770,9 +690,7 @@ export const harnessTemplateSources = pgTable(
     addedBy: text("added_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     // As with org secrets, one index per owner kind, since a nullable user_id
@@ -812,9 +730,7 @@ export const harnessRepos = pgTable(
     addedBy: text("added_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     // One name per scope. Harness keeps org repos and project repos in separate
@@ -840,30 +756,19 @@ export const harnessDeployedSecrets = pgTable(
     secretIdentifier: text("secret_identifier").notNull(),
     kind: text("kind").notNull(),
     harnessUpdatedAt: timestamp("harness_updated_at", { withTimezone: true }),
-    writtenAt: timestamp("written_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    writtenAt: timestamp("written_at", { withTimezone: true }).notNull().defaultNow(),
     scrubAfter: timestamp("scrub_after", { withTimezone: true }).notNull(),
     status: text("status").notNull().default("pending"),
     checkedAt: timestamp("checked_at", { withTimezone: true }),
     note: text("note"),
   },
   (t) => [
-    uniqueIndex("harness_deployed_secrets_idx").on(
-      t.accountId,
-      t.orgIdentifier,
-      t.secretIdentifier,
-    ),
+    uniqueIndex("harness_deployed_secrets_idx").on(t.accountId, t.orgIdentifier, t.secretIdentifier),
     index("harness_deployed_secrets_due_idx").on(t.status, t.scrubAfter),
   ],
 );
 
-export const SCRUB_STATUSES = [
-  "pending",
-  "scrubbed",
-  "skipped",
-  "failed",
-] as const;
+export const SCRUB_STATUSES = ["pending", "scrubbed", "skipped", "failed"] as const;
 export type ScrubStatus = (typeof SCRUB_STATUSES)[number];
 
 export type HarnessDeployedSecret = typeof harnessDeployedSecrets.$inferSelect;
@@ -899,9 +804,7 @@ export const employees = pgTable(
     activeEffectiveDate: date("active_effective_date", { mode: "string" }),
     /** The record as HiBob sent it, less the flattened `/…` duplicates; `{}` for someone HiBob never sent. */
     raw: jsonb("raw").notNull(),
-    importedAt: timestamp("imported_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
     /**
      * Links between this person and the Organization Leader, counting the
      * leader, as the sync that stored them worked it out; null for anyone not
@@ -989,10 +892,7 @@ export const employees = pgTable(
   (t) => [
     index("employees_email_idx").on(t.email),
     index("employees_reports_to_idx").on(t.reportsToEmail),
-    check(
-      "employees_track_override_check",
-      sql`${t.trackOverride} in ('sales', 'engineer', 'ignored', 'exempt', 'deferred')`,
-    ),
+    check("employees_track_override_check", sql`${t.trackOverride} in ('sales', 'engineer', 'ignored', 'exempt', 'deferred')`),
     check("employees_btc_score_check", sql`${t.btcScore} between 1 and 4`),
     check("employees_int_score_check", sql`${t.intScore} between 1 and 4`),
   ],
@@ -1018,9 +918,7 @@ export const hibobSyncRuns = pgTable(
     }),
     /** `running` until it ends; one that never ends was cut off mid-sync. */
     status: text("status").$type<HibobSyncStatus>().notNull().default("running"),
-    startedAt: timestamp("started_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     /** Employees stored, on success. */
     employeeCount: integer("employee_count"),
@@ -1071,9 +969,7 @@ export const evalsSettings = pgTable("evals_settings", {
   updatedBy: text("updated_by").references(() => users.id, {
     onDelete: "set null",
   }),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 /**
@@ -1103,9 +999,7 @@ export const timedJobs = pgTable("timed_jobs", {
   updatedBy: text("updated_by").references(() => users.id, {
     onDelete: "set null",
   }),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const TEST_GROUP_ARTIFACT_KINDS = ["slack_channel", "calendar_event", "zoom_meeting"] as const;
@@ -1123,9 +1017,7 @@ export const testGroupArtifacts = pgTable(
     kind: text("kind", { enum: TEST_GROUP_ARTIFACT_KINDS }).notNull(),
     key: text("key").notNull(),
     ref: text("ref"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.kind, t.key] })],
 );
@@ -1151,6 +1043,8 @@ export const EVALS_SETTINGS_KEYS = {
   testGroupMembers: "test_group_members",
   /** `true` to let the Google Meetings sync change calendar invites; anything else is a dry run. */
   meetingSyncLive: "meeting_sync_live",
+  /** `true` to have Google email every guest about the sync's changes to an invite; anything else is silent. */
+  meetingEmailInvites: "meeting_email_invites",
   /** JSON `{ email, fullName }[]`, at most `MEETING_FACILITATORS_MAX`: who the sync adds to each occurrence a cohort member is on. */
   meetingFacilitators: "meeting_facilitators",
   /** JSON `ParticipationBands`: the net marks each participation score starts at. See `lib/evals/participation-values.ts`. */
@@ -1175,9 +1069,7 @@ export const evalsTitles = pgTable(
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("evals_titles_title_idx").on(sql`lower(${t.title})`)],
 );
@@ -1201,9 +1093,7 @@ export const evalsSlackContacts = pgTable(
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("evals_slack_contacts_email_idx").on(t.email)],
 );
@@ -1213,12 +1103,7 @@ export const EVALS_SLACK_CONTACT_LIMITS = { email: 320 } as const;
 export type EvalsSlackContact = typeof evalsSlackContacts.$inferSelect;
 
 /** Who a Google meeting invites, each a stage and a track of the Cohorts page's Current tab. */
-export const MEETING_GROUPS = [
-  "bootcamp_sales",
-  "bootcamp_engineer",
-  "intermediate_sales",
-  "intermediate_engineer",
-] as const;
+export const MEETING_GROUPS = ["bootcamp_sales", "bootcamp_engineer", "intermediate_sales", "intermediate_engineer"] as const;
 export type MeetingGroup = (typeof MEETING_GROUPS)[number];
 
 /** The lengths a Google meeting can run, in minutes. */
@@ -1255,9 +1140,7 @@ export const googleMeetings = pgTable(
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("google_meetings_starts_at_idx").on(t.startsAt, t.id),
@@ -1285,9 +1168,7 @@ export const googleConnections = pgTable("google_connections", {
   connectedBy: text("connected_by").references(() => users.id, {
     onDelete: "set null",
   }),
-  connectedAt: timestamp("connected_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
   /** Set while a sync runs, so a second press waits for it rather than inviting everyone twice. */
   syncStartedAt: timestamp("sync_started_at", { withTimezone: true }),
   lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
@@ -1316,9 +1197,7 @@ export const zoomConnections = pgTable("zoom_connections", {
   connectedBy: text("connected_by").references(() => users.id, {
     onDelete: "set null",
   }),
-  connectedAt: timestamp("connected_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const ZOOM_CONNECTION_KEY = "meetings";
@@ -1371,12 +1250,8 @@ export const meetingSelections = pgTable(
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("meeting_selections_name_idx").on(sql`lower(${t.name})`),
@@ -1451,9 +1326,7 @@ export const meetingInvites = pgTable(
     responseStatus: text("response_status"),
     /** From Zoom once the occurrence is over; null until it is read, or where it cannot be. */
     attendance: text("attendance").$type<MeetingAttendance>(),
-    invitedAt: timestamp("invited_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    invitedAt: timestamp("invited_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.occurrenceId, t.email] }),
@@ -1482,9 +1355,7 @@ export const meetingAttendanceMarks = pgTable(
     markedBy: text("marked_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    markedAt: timestamp("marked_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    markedAt: timestamp("marked_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.meetingId, t.email] }), index("meeting_attendance_marks_email_idx").on(t.email)],
 );
@@ -1589,12 +1460,8 @@ export const bootcamps = pgTable(
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("bootcamps_start_date_idx").on(t.startDate),
@@ -1633,9 +1500,7 @@ export const cohortChannelContacts = pgTable(
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("cohort_channel_contacts_kind_email_idx").on(t.kind, t.email),
@@ -1666,9 +1531,7 @@ export const slackInstallation = pgTable(
     installedBy: text("installed_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    installedAt: timestamp("installed_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    installedAt: timestamp("installed_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check("slack_installation_one_row", sql`${t.id}`)],
 );
@@ -1679,9 +1542,7 @@ export const slackChannels = pgTable("slack_channels", {
   slackChannelId: text("slack_channel_id").notNull(),
   /** Whether the app created it, rather than finding it already there. */
   created: boolean("created").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 /**
@@ -1700,9 +1561,7 @@ export const feedbackChannels = pgTable(
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("feedback_channels_name_idx").on(t.name)],
 );
@@ -1721,12 +1580,8 @@ export const scorecardViews = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     views: integer("views").notNull().default(1),
-    firstViewedAt: timestamp("first_viewed_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    lastViewedAt: timestamp("last_viewed_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    firstViewedAt: timestamp("first_viewed_at", { withTimezone: true }).notNull().defaultNow(),
+    lastViewedAt: timestamp("last_viewed_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.attendeeEmail, t.viewerId] })],
 );
@@ -1744,9 +1599,7 @@ export const slackChannelMembers = pgTable(
     slackUserId: text("slack_user_id").notNull(),
     /** Lowercased; who they were invited as. */
     email: text("email").notNull(),
-    addedAt: timestamp("added_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.slackChannelId, t.slackUserId] })],
 );
@@ -1783,9 +1636,7 @@ export const slackSyncRuns = pgTable(
     bootcampId: uuid("bootcamp_id").references(() => bootcamps.id, {
       onDelete: "set null",
     }),
-    startedAt: timestamp("started_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     invited: integer("invited").notNull().default(0),
     removed: integer("removed").notNull().default(0),
@@ -1810,10 +1661,7 @@ export const slackSyncRuns = pgTable(
       .on(t.status)
       .where(sql`${t.status} = 'running'`),
     check("slack_sync_runs_trigger_check", sql`${t.trigger} in ('schedule', 'manual')`),
-    check(
-      "slack_sync_runs_status_check",
-      sql`${t.status} in ('running', 'succeeded', 'skipped', 'failed')`,
-    ),
+    check("slack_sync_runs_status_check", sql`${t.status} in ('running', 'succeeded', 'skipped', 'failed')`),
   ],
 );
 
@@ -1931,9 +1779,7 @@ export const meetingSyncRuns = pgTable(
     dryRun: boolean("dry_run").notNull(),
     /** Run for the test group rather than the cohort. */
     testGroup: boolean("test_group").notNull().default(false),
-    startedAt: timestamp("started_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     invited: integer("invited").notNull().default(0),
     removed: integer("removed").notNull().default(0),
@@ -1958,10 +1804,7 @@ export const meetingSyncRuns = pgTable(
       .on(t.status)
       .where(sql`${t.status} = 'running'`),
     check("meeting_sync_runs_trigger_check", sql`${t.trigger} in ('schedule', 'manual')`),
-    check(
-      "meeting_sync_runs_status_check",
-      sql`${t.status} in ('running', 'succeeded', 'skipped', 'failed')`,
-    ),
+    check("meeting_sync_runs_status_check", sql`${t.status} in ('running', 'succeeded', 'skipped', 'failed')`),
   ],
 );
 
@@ -2021,14 +1864,9 @@ export const bootcampJudges = pgTable(
     /** Lowercased. */
     email: text("email").notNull(),
     addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
-    addedAt: timestamp("added_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [
-    uniqueIndex("bootcamp_judges_bootcamp_email_idx").on(t.bootcampId, t.email),
-    index("bootcamp_judges_email_idx").on(t.email),
-  ],
+  (t) => [uniqueIndex("bootcamp_judges_bootcamp_email_idx").on(t.bootcampId, t.email), index("bootcamp_judges_email_idx").on(t.email)],
 );
 
 export type BootcampJudge = typeof bootcampJudges.$inferSelect;
@@ -2043,12 +1881,8 @@ export const facilities = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("facilities_name_idx").on(sql`lower(${t.name})`)],
 );
@@ -2064,9 +1898,7 @@ export const facilityRooms = pgTable(
     name: text("name").notNull(),
     capacity: integer("capacity").notNull(),
     position: integer("position").notNull().default(0),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("facility_rooms_name_idx").on(t.facilityId, t.name),
@@ -2157,12 +1989,8 @@ export const sessionTypes = pgTable(
     description: text("description").notNull().default(""),
     position: integer("position").notNull().default(0),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("session_types_name_idx").on(sql`lower(${t.name})`),
@@ -2205,12 +2033,8 @@ export const scheduleSessions = pgTable(
     /** The eVals assessment a breakout's instructors score their groups on; null on any other kind. */
     assessmentId: uuid("assessment_id").references(() => evalsAssessments.id, { onDelete: "set null" }),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("schedule_sessions_day_idx").on(t.bootcampId, t.track, t.day, t.start),
@@ -2288,9 +2112,7 @@ export const scheduleSessionComments = pgTable(
     /** Copied in, so the comment still says who wrote it after their account is gone. */
     authorName: text("author_name").notNull().default(""),
     authorEmail: text("author_email").notNull().default(""),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("schedule_session_comments_session_idx").on(t.sessionId, t.createdAt)],
 );
@@ -2345,9 +2167,7 @@ export const scheduleChecklistItems = pgTable(
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdByName: text("created_by_name").notNull().default(""),
     createdByEmail: text("created_by_email").notNull().default(""),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("schedule_checklist_items_day_idx").on(t.bootcampId, t.track, t.day, t.createdAt),
@@ -2391,16 +2211,14 @@ export const evalsAssessments = pgTable(
     /** Set on the app's own assessments, which stay inactive so no judge is offered them, and which eVals Settings leaves out. */
     builtIn: text("built_in").$type<EvalsBuiltInAssessment>(),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("evals_assessments_stage_idx").on(t.stage, t.active),
-    uniqueIndex("evals_assessments_built_in_idx").on(t.builtIn, t.stage).where(sql`${t.builtIn} is not null`),
+    uniqueIndex("evals_assessments_built_in_idx")
+      .on(t.builtIn, t.stage)
+      .where(sql`${t.builtIn} is not null`),
     check("evals_assessments_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
     check("evals_assessments_audience_check", sql`${t.audience} in ('sales', 'engineer', 'both')`),
   ],
@@ -2425,9 +2243,7 @@ export const evalsAssessmentCriteria = pgTable(
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
     retiredAt: timestamp("retired_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("evals_assessment_criteria_assessment_idx").on(t.assessmentId, t.position)],
 );
@@ -2472,13 +2288,9 @@ export const evalsSubmissions = pgTable(
     constructiveFeedback: text("constructive_feedback").notNull().default(""),
     /** Whoever saved it last. */
     ownerId: text("owner_id").references(() => users.id, { onDelete: "set null" }),
-    submittedAt: timestamp("submitted_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
     /** Also the version a revision must name, so two judges cannot silently overwrite each other. */
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("evals_submissions_one_idx").on(t.bootcampId, t.assessmentId, t.attendeeEmail),
@@ -2541,9 +2353,7 @@ export const bootcampClassReviews = pgTable(
     /** Whoever saved it last. */
     updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
     /** Also the version an edit must name. */
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.bootcampId, t.stage, t.attendeeEmail] }),
@@ -2576,12 +2386,8 @@ export const participationDescriptors = pgTable(
     position: integer("position").notNull(),
     retiredAt: timestamp("retired_at", { withTimezone: true }),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("participation_descriptors_position_idx").on(t.polarity, t.position),
@@ -2605,9 +2411,7 @@ export const participationMarks = pgTable(
       .notNull()
       .references(() => participationDescriptors.id, { onDelete: "cascade" }),
     count: integer("count").notNull().default(0),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.bootcampId, t.stage, t.attendeeEmail, t.descriptorId] }),
@@ -2634,9 +2438,7 @@ export const participationMarkEvents = pgTable(
     actorId: text("actor_id").references(() => users.id, { onDelete: "set null" }),
     /** Copied so the line still reads after the account goes. */
     actorName: text("actor_name").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("participation_mark_events_attendee_idx").on(t.bootcampId, t.stage, t.attendeeEmail),
@@ -2673,9 +2475,7 @@ export const evalsTranscripts = pgTable(
     durationMs: integer("duration_ms").notNull(),
     /** Deepgram's transcript of the whole recording, paragraphs split by blank lines. */
     text: text("text").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("evals_transcripts_recording_idx").on(t.recordingId),
@@ -2718,9 +2518,7 @@ export const mentions = pgTable(
     taggedBy: text("tagged_by").references(() => users.id, { onDelete: "set null" }),
     taggedByName: text("tagged_by_name").notNull().default(""),
     taggedByEmail: text("tagged_by_email").notNull().default(""),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("mentions_comment_email_idx").on(t.commentId, t.email),
@@ -3072,7 +2870,11 @@ export type MimirCoachStyle = (typeof MIMIR_COACH_STYLES)[number];
 /** Whose voice the coach speaks in. Only the voice: what it teaches and how it marks are the same for each. */
 export const MIMIR_COACH_PERSONALITIES = ["canary", "lasso", "taylor"] as const;
 export type MimirCoachPersonality = (typeof MIMIR_COACH_PERSONALITIES)[number];
-export const MIMIR_COACH_NAMES: Record<MimirCoachPersonality, string> = { canary: "Coach Canary", lasso: "Coach Lasso", taylor: "Coach Taylor" };
+export const MIMIR_COACH_NAMES: Record<MimirCoachPersonality, string> = {
+  canary: "Coach Canary",
+  lasso: "Coach Lasso",
+  taylor: "Coach Taylor",
+};
 
 /** What one person has told Mimir about themselves, for the coach. Kept apart from the Diagnostic track. */
 export const mimirProfiles = pgTable(
@@ -3333,7 +3135,9 @@ export const mimirCoachMessages = pgTable(
   (t) => [
     primaryKey({ columns: [t.userId, t.seq] }),
     // Named by hand: the name Drizzle would make is past Postgres's 63 characters.
-    foreignKey({ columns: [t.userId], foreignColumns: [mimirCoachConversations.userId], name: "mimir_coach_messages_user_fk" }).onDelete("cascade"),
+    foreignKey({ columns: [t.userId], foreignColumns: [mimirCoachConversations.userId], name: "mimir_coach_messages_user_fk" }).onDelete(
+      "cascade",
+    ),
     check("mimir_coach_messages_role_check", sql`${t.role} in ('user', 'assistant')`),
   ],
 );
@@ -3733,7 +3537,16 @@ export const videoFeedback = pgTable(
 export const MIMIR_STUDIO_JOB_KINDS = ["deck", "video"] as const;
 export type MimirStudioJobKind = (typeof MIMIR_STUDIO_JOB_KINDS)[number];
 
-export const MIMIR_STUDIO_JOB_STATUSES = ["uploading", "queued", "running", "ready", "succeeded", "failed", "published", "discarded"] as const;
+export const MIMIR_STUDIO_JOB_STATUSES = [
+  "uploading",
+  "queued",
+  "running",
+  "ready",
+  "succeeded",
+  "failed",
+  "published",
+  "discarded",
+] as const;
 export type MimirStudioJobStatus = (typeof MIMIR_STUDIO_JOB_STATUSES)[number];
 
 /** The statuses of a job still under way: only one deck at a time, and one video per concept. */

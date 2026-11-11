@@ -40,16 +40,13 @@ export async function slidesPresent(): Promise<number[] | null> {
   return numbers.sort((a, b2) => a - b2);
 }
 
-export type SlideUrl =
-  | { ok: true; url: string }
-  | { ok: false; error: "not_configured" | "missing" };
+export type SlideUrl = { ok: true; url: string } | { ok: false; error: "not_configured" | "missing" };
 
 /** A signed URL for slide `n`'s picture, or why there is none. */
 export async function signedSlideUrl(n: number): Promise<SlideUrl> {
   const b = bucket();
   if (!b) return { ok: false, error: "not_configured" };
-  if ((await objectSize(b, slideObject(n))) === null)
-    return { ok: false, error: "missing" };
+  if ((await objectSize(b, slideObject(n))) === null) return { ok: false, error: "missing" };
   return {
     ok: true,
     url: await signedUrl({

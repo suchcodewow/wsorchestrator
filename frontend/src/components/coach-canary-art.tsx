@@ -12,5 +12,13 @@ export function CoachCanaryArt({ className, title = "Coach Canary" }: { classNam
 }
 
 export function CoachCanaryAvatar({ className }: { className?: string }) {
-  return <Image src="/coach-canary-avatar.webp" alt="" width={56} height={56} className={cn("block shrink-0 rounded-full object-cover", className)} />;
+  return (
+    <Image
+      src="/coach-canary-avatar.webp"
+      alt=""
+      width={56}
+      height={56}
+      className={cn("block shrink-0 rounded-full object-cover", className)}
+    />
+  );
 }

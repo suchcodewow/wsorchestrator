@@ -34,12 +34,7 @@ export default async function BootcampPersonPage({
   // The list carried its search, sorts, pages and filters here, so the back link returns to them.
   const list = await searchParams;
   const back = writeListQuery(parseListQuery(list, BOOTCAMP_RECORD_LIST), BOOTCAMP_RECORD_LIST);
-  writeListQuery(
-    parseListQuery(list, BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX),
-    BOOTCAMP_COHORT_LIST,
-    back,
-    BOOTCAMP_COHORT_PREFIX,
-  );
+  writeListQuery(parseListQuery(list, BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX), BOOTCAMP_COHORT_LIST, back, BOOTCAMP_COHORT_PREFIX);
   if (isHistoryStatus(list.status)) back.set("status", list.status);
   const stage = list[`${BOOTCAMP_COHORT_PREFIX}.stage`];
   if (isReleaseStage(stage)) back.set(`${BOOTCAMP_COHORT_PREFIX}.stage`, stage);

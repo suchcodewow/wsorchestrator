@@ -58,10 +58,7 @@ describe("an imported run", () => {
     assert.deepEqual(await endRunNow(runId, viewer), { ok: false, error: "not_found" });
     assert.deepEqual(await extendRun(runId, viewer), { ok: false, error: "not_found" });
     assert.deepEqual(await retryTeardown(runId, viewer), { ok: false, error: "not_found" });
-    assert.deepEqual(
-      await updateRunConfig(runId, viewer, { userCount: 2, clouds: [] }),
-      { ok: false, error: "not_found" },
-    );
+    assert.deepEqual(await updateRunConfig(runId, viewer, { userCount: 2, clouds: [] }), { ok: false, error: "not_found" });
     assert.deepEqual(await deleteRun(runId, viewer), { ok: false, error: "not_found" });
 
     const [row] = await db.select().from(workshopRuns).where(eq(workshopRuns.id, runId));
@@ -218,41 +215,42 @@ describe("finishProductionImport", () => {
     const added = (await q(`select id from users where email = 'new@example.test'`))[0].id;
     assert.notEqual(added, "qa-admin", "a QA id production already uses is not reused");
 
-    assert.deepEqual(
-      await q(`select id, site_role::text as role, is_platform_admin as platform from users order by email`),
-      [
-        { id: added, role: "operator", platform: false },
-        { id: "prod-admin", role: "none", platform: false },
-        { id: "prod-qa-admin", role: "administrator", platform: true },
-        { id: "qa-admin", role: "none", platform: false },
-      ],
-    );
+    assert.deepEqual(await q(`select id, site_role::text as role, is_platform_admin as platform from users order by email`), [
+      { id: added, role: "operator", platform: false },
+      { id: "prod-admin", role: "none", platform: false },
+      { id: "prod-qa-admin", role: "administrator", platform: true },
+      { id: "qa-admin", role: "none", platform: false },
+    ]);
 
     assert.deepEqual(await q(`select "userId", "providerAccountId" from accounts order by "providerAccountId"`), [
       { userId: added, providerAccountId: "g-new" },
       { userId: "prod-admin", providerAccountId: "g-prod" },
       { userId: "prod-qa-admin", providerAccountId: "g-qa" },
     ]);
-    assert.deepEqual(
-      await q(`select refresh_token, access_token, id_token from accounts where "providerAccountId" = 'g-prod'`),
-      [{ refresh_token: null, access_token: null, id_token: null }],
-    );
+    assert.deepEqual(await q(`select refresh_token, access_token, id_token from accounts where "providerAccountId" = 'g-prod'`), [
+      { refresh_token: null, access_token: null, id_token: null },
+    ]);
 
-    for (const table of ["sessions", "api_tokens", "harness_tokens", "user_invites", "google_connections", "zoom_connections", "google_meetings", "meeting_selections", "meeting_sync_runs"]) {
+    for (const table of [
+      "sessions",
+      "api_tokens",
+      "harness_tokens",
+      "user_invites",
+      "google_connections",
+      "zoom_connections",
+      "google_meetings",
+      "meeting_selections",
+      "meeting_sync_runs",
+    ]) {
       assert.equal((await q(`select count(*)::int as n from ${table}`))[0].n, 0, table);
     }
     assert.deepEqual(await q(`select key from evals_settings where key = 'meeting_sync_live'`), [], "a sync on QA starts as a dry run");
     assert.deepEqual(await q(`select temp_password from workshop_accounts`), [{ temp_password: "" }]);
-    assert.deepEqual(await q(`select environment, status::text from workshop_runs`), [
-      { environment: "production", status: "ready" },
-    ]);
+    assert.deepEqual(await q(`select environment, status::text from workshop_runs`), [{ environment: "production", status: "ready" }]);
   });
 
   test("is safe to run twice", async () => {
-    await finishProductionImport(
-      { snapshot: [] },
-      { connectionString: url },
-    );
+    await finishProductionImport({ snapshot: [] }, { connectionString: url });
     const admins = (await probe.query(`select count(*)::int as n from users where is_platform_admin`)).rows[0].n;
     assert.equal(admins, 0, "an empty snapshot leaves nobody in charge; bootstrap admins regain it on sign-in");
   });

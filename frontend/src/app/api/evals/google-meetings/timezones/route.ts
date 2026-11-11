@@ -17,5 +17,7 @@ export async function GET(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
-  return NextResponse.json(await meetingTimezoneCoverage(parsed.data.stage, parsed.data.track, parsed.data.at ? new Date(parsed.data.at) : undefined));
+  return NextResponse.json(
+    await meetingTimezoneCoverage(parsed.data.stage, parsed.data.track, parsed.data.at ? new Date(parsed.data.at) : undefined),
+  );
 }

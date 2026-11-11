@@ -38,7 +38,12 @@ function runLocally(jobId: string): void {
   const studio = path.resolve(process.cwd(), "../scripts/explainer-video");
   const log = path.join(os.tmpdir(), `mimir-studio-${jobId}.log`);
   const out = openSync(log, "a");
-  const child = spawn("npx", ["tsx", "studio/index.ts", jobId], { cwd: studio, detached: true, stdio: ["ignore", out, out], env: process.env });
+  const child = spawn("npx", ["tsx", "studio/index.ts", jobId], {
+    cwd: studio,
+    detached: true,
+    stdio: ["ignore", out, out],
+    env: process.env,
+  });
   child.unref();
   console.log(`mimir studio: job ${jobId} running locally, logging to ${log}`);
 }

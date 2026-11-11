@@ -13,10 +13,7 @@ export const THEME_COOKIE = "theme";
 
 export function isDark(preference: ThemePreference): boolean {
   if (preference === "system") {
-    return (
-      typeof window !== "undefined" &&
-      window.matchMedia(DARK_QUERY).matches
-    );
+    return typeof window !== "undefined" && window.matchMedia(DARK_QUERY).matches;
   }
   return preference === "dark";
 }
@@ -43,10 +40,7 @@ export function applyTheme(preference: ThemePreference): void {
   if (!framed) writeThemeCookie(dark ? "dark" : "light");
 }
 
-export function themeScript(
-  preference: ThemePreference,
-  cookieScheme: ResolvedScheme | null,
-): string {
+export function themeScript(preference: ThemePreference, cookieScheme: ResolvedScheme | null): string {
   return `(function(){try{
 var p=${JSON.stringify(preference)};
 var c=${JSON.stringify(cookieScheme)};

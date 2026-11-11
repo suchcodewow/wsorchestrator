@@ -47,24 +47,16 @@ export function responsesFormOf(value: unknown): ResponsesForm {
  * then those only Pre-Intermediate asks. A question both ask, such as the
  * dietary ones, is one column, under Pre-Bootcamp's wording.
  */
-export function questionsOfBoth(
-  bootcamp: IntakeQuestion[],
-  intermediate: IntakeQuestion[],
-): IntakeQuestion[] {
+export function questionsOfBoth(bootcamp: IntakeQuestion[], intermediate: IntakeQuestion[]): IntakeQuestion[] {
   const ids = new Set(bootcamp.map((q) => q.id));
   return [...bootcamp, ...intermediate.filter((q) => !ids.has(q.id))];
 }
 
 /** Slack's mrkdwn treats these three as markup. */
-const slackEscape = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const slackEscape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /** The Slack message someone yet to answer `form` is sent, greeting them by their first name. */
-export function intakeReminderText(
-  fullName: string,
-  form: IntakeFormId,
-  link: string,
-): string {
+export function intakeReminderText(fullName: string, form: IntakeFormId, link: string): string {
   const first = fullName.trim().split(/\s+/)[0];
   const hello = first ? `Hi ${slackEscape(first)}!` : "Hi!";
   return `${hello} You haven't filled in your *${INTAKE_FORM_HEADINGS[form]}* yet. It only takes a few minutes: <${link}|complete it here>.`;
@@ -91,22 +83,12 @@ export const KIND_LABELS: Record<IntakeQuestionKind, string> = {
 };
 
 /** The kinds an attendee picks from a list of options. */
-export const HAS_OPTIONS: ReadonlySet<IntakeQuestionKind> = new Set([
-  "choice",
-  "checkboxes",
-  "dropdown",
-]);
+export const HAS_OPTIONS: ReadonlySet<IntakeQuestionKind> = new Set(["choice", "checkboxes", "dropdown"]);
 
 /** The kinds that may offer a free-text "Other". */
-export const HAS_OTHER: ReadonlySet<IntakeQuestionKind> = new Set([
-  "choice",
-  "checkboxes",
-]);
+export const HAS_OTHER: ReadonlySet<IntakeQuestionKind> = new Set(["choice", "checkboxes"]);
 
-const question = (
-  q: Omit<IntakeQuestion, "description" | "options" | "other"> &
-    Partial<IntakeQuestion>,
-): IntakeQuestion => ({
+const question = (q: Omit<IntakeQuestion, "description" | "options" | "other"> & Partial<IntakeQuestion>): IntakeQuestion => ({
   description: "",
   options: [],
   other: false,
@@ -114,8 +96,7 @@ const question = (
 });
 
 /** The name question as Pre-Bootcamp asks it. */
-export const PREFERRED_NAME_TITLE =
-  "Do you have a preferred first name you would like classmates and instructors to use?";
+export const PREFERRED_NAME_TITLE = "Do you have a preferred first name you would like classmates and instructors to use?";
 
 /**
  * The November 2026 Sales Bootcamp registration, as the Google Form it replaces
@@ -129,8 +110,7 @@ export const DEFAULT_INTAKE_FORM: IntakeForm = {
     question({
       id: "attend",
       kind: "choice",
-      title:
-        "Sales Bootcamp takes place in-person in Dallas November 17th - 20th. Will you attend?",
+      title: "Sales Bootcamp takes place in-person in Dallas November 17th - 20th. Will you attend?",
       required: false,
       options: ["Yes - I'm there!", "No - I can't make it."],
       other: true,
@@ -138,8 +118,7 @@ export const DEFAULT_INTAKE_FORM: IntakeForm = {
     question({
       id: "concerns",
       kind: "short",
-      title:
-        "Any other concerns or special considerations we should be aware of? Write them in here.",
+      title: "Any other concerns or special considerations we should be aware of? Write them in here.",
       description:
         "If you have received a copy of the Harness Value Framework please bring it to training. If not, we will provide you with one.\n\nYou will need to pass a Bootcamp entry exam, so make sure to complete your pre-work in advance to prepare!",
       required: false,
@@ -147,8 +126,7 @@ export const DEFAULT_INTAKE_FORM: IntakeForm = {
     question({
       id: "command-of-the-message",
       kind: "choice",
-      title:
-        "Have you gone through Force Management's Command of the Message training before?",
+      title: "Have you gone through Force Management's Command of the Message training before?",
       required: false,
       options: ["Yes", "No", "I'm not sure"],
     }),
@@ -201,36 +179,17 @@ export const DIETARY_GROUPS: readonly {
 }[] = [
   {
     label: "Allergies",
-    items: [
-      "Dairy",
-      "Gluten / wheat",
-      "Peanuts",
-      "Tree nuts",
-      "Shellfish",
-      "Eggs",
-      "Soy",
-      "Fish",
-    ],
+    items: ["Dairy", "Gluten / wheat", "Peanuts", "Tree nuts", "Shellfish", "Eggs", "Soy", "Fish"],
   },
   {
     label: "Dietary and religious",
-    items: [
-      "Vegetarian",
-      "Vegan",
-      "Kosher",
-      "Halal",
-      "Pescatarian",
-      "No pork",
-      "Low sodium",
-    ],
+    items: ["Vegetarian", "Vegan", "Kosher", "Halal", "Pescatarian", "No pork", "Low sodium"],
   },
   { label: "Other", items: [DIETARY_OTHER] },
 ];
 
 /** Every dietary item, in the order the form lists them. */
-export const DIETARY_ITEMS: readonly string[] = DIETARY_GROUPS.flatMap(
-  (g) => g.items,
-);
+export const DIETARY_ITEMS: readonly string[] = DIETARY_GROUPS.flatMap((g) => g.items);
 
 /**
  * The question whose answer becomes the person's time zone
@@ -266,11 +225,7 @@ const DAY_FORMAT = new Intl.DateTimeFormat("en-US", {
  * and ends at 12:00PM on the last. The times and days are wrapped in `**` so
  * the form shows them in bold (`splitBold`).
  */
-function classDatesLine(
-  name: string,
-  startDate: string,
-  days: number,
-): string {
+function classDatesLine(name: string, startDate: string, days: number): string {
   const first = new Date(`${startDate}T00:00:00Z`);
   const last = new Date(first.getTime() + (Math.max(days, 1) - 1) * 86_400_000);
   return `${name} takes place from **8:00AM ${DAY_FORMAT.format(first)}** to **12:00PM ${DAY_FORMAT.format(last)}**.`;
@@ -282,10 +237,7 @@ export function bootcampDatesLine(startDate: string, btcDays: number): string {
 }
 
 /** Pre-Intermediate's opening line, from the next intermediate class's first day and how many days it runs, which may differ from the Bootcamp class's. */
-export function intermediateDatesLine(
-  startDate: string,
-  intDays: number,
-): string {
+export function intermediateDatesLine(startDate: string, intDays: number): string {
   return classDatesLine("Intermediate", startDate, intDays);
 }
 
@@ -296,26 +248,13 @@ function withDatesLine(introduction: string, line: string | null): string {
 }
 
 /** `introduction` led by the line giving `bootcamp`'s dates, or as it is when there is no next bootcamp. */
-export function withBootcampDates(
-  introduction: string,
-  bootcamp: { startDate: string; btcDays: number } | null,
-): string {
-  return withDatesLine(
-    introduction,
-    bootcamp && bootcampDatesLine(bootcamp.startDate, bootcamp.btcDays),
-  );
+export function withBootcampDates(introduction: string, bootcamp: { startDate: string; btcDays: number } | null): string {
+  return withDatesLine(introduction, bootcamp && bootcampDatesLine(bootcamp.startDate, bootcamp.btcDays));
 }
 
 /** `introduction` led by the line giving the next intermediate class's dates, or as it is when there is none. */
-export function withIntermediateDates(
-  introduction: string,
-  intermediate: { startDate: string; intDays: number } | null,
-): string {
-  return withDatesLine(
-    introduction,
-    intermediate &&
-      intermediateDatesLine(intermediate.startDate, intermediate.intDays),
-  );
+export function withIntermediateDates(introduction: string, intermediate: { startDate: string; intDays: number } | null): string {
+  return withDatesLine(introduction, intermediate && intermediateDatesLine(intermediate.startDate, intermediate.intDays));
 }
 
 /**
@@ -380,9 +319,7 @@ export const TIMEZONE_QUESTION: IntakeQuestion = question({
 });
 
 /** Whether `q` is the time zone question, whose answer is the person's time zone. */
-export function isTimezoneQuestion(
-  q: Pick<IntakeQuestion, "id" | "kind">,
-): boolean {
+export function isTimezoneQuestion(q: Pick<IntakeQuestion, "id" | "kind">): boolean {
   return q.id === INTAKE_TIMEZONE_QUESTION_ID && q.kind === "dropdown";
 }
 
@@ -397,33 +334,23 @@ export const DIETARY_QUESTION: IntakeQuestion = question({
   id: DIETARY_KEYS.restrictions,
   kind: "checkboxes",
   title: "Do you have any dietary restrictions or allergies we should plan for?",
-  description:
-    "Check all that apply. Also check \u201cCritical\u201d if it's a medical need, such as a severe allergy.",
+  description: "Check all that apply. Also check \u201cCritical\u201d if it's a medical need, such as a severe allergy.",
   required: false,
   options: [...DIETARY_ITEMS],
 });
 
 /** Whether `q` is the dietary question, whose answers are the three in `DIETARY_KEYS`. */
-export function isDietaryQuestion(
-  q: Pick<IntakeQuestion, "id" | "kind">,
-): boolean {
+export function isDietaryQuestion(q: Pick<IntakeQuestion, "id" | "kind">): boolean {
   return q.id === DIETARY_KEYS.restrictions && q.kind === "checkboxes";
 }
 
 /** Whether `q` is one of the automatic questions, which no form saves. */
 function isAutomatic(q: Pick<IntakeQuestion, "id">): boolean {
-  return (
-    q.id === INTAKE_NAME_QUESTION_ID ||
-    q.id === INTAKE_TIMEZONE_QUESTION_ID ||
-    q.id === DIETARY_KEYS.restrictions
-  );
+  return q.id === INTAKE_NAME_QUESTION_ID || q.id === INTAKE_TIMEZONE_QUESTION_ID || q.id === DIETARY_KEYS.restrictions;
 }
 
 /** `questions` as the form builder keeps them: the automatic questions taken out, whatever was saved or sent. */
-export function withoutAutomaticQuestions(
-  _form: IntakeFormId,
-  questions: IntakeQuestion[],
-): IntakeQuestion[] {
+export function withoutAutomaticQuestions(_form: IntakeFormId, questions: IntakeQuestion[]): IntakeQuestion[] {
   return questions.filter((q) => !isAutomatic(q));
 }
 
@@ -431,26 +358,13 @@ export function withoutAutomaticQuestions(
  * `questions` as a form asks them: led by the name, time zone and dietary
  * questions, as every form is, then the form's own.
  */
-export function withAutomaticQuestions(
-  form: IntakeFormId,
-  questions: IntakeQuestion[],
-): IntakeQuestion[] {
-  return [
-    PREFERRED_NAME_QUESTION,
-    TIMEZONE_QUESTION,
-    DIETARY_QUESTION,
-    ...withoutAutomaticQuestions(form, questions),
-  ];
+export function withAutomaticQuestions(form: IntakeFormId, questions: IntakeQuestion[]): IntakeQuestion[] {
+  return [PREFERRED_NAME_QUESTION, TIMEZONE_QUESTION, DIETARY_QUESTION, ...withoutAutomaticQuestions(form, questions)];
 }
 
 /** Whether `q` is the name question, so its answer is the person's name. */
-export function isNameQuestion(
-  q: Pick<IntakeQuestion, "id" | "kind">,
-): boolean {
-  return (
-    q.id === INTAKE_NAME_QUESTION_ID &&
-    (q.kind === "short" || q.kind === "paragraph")
-  );
+export function isNameQuestion(q: Pick<IntakeQuestion, "id" | "kind">): boolean {
+  return q.id === INTAKE_NAME_QUESTION_ID && (q.kind === "short" || q.kind === "paragraph");
 }
 
 /**
@@ -459,23 +373,15 @@ export function isNameQuestion(
  * dietary needs, which last. What is about one cohort, such as whether they
  * will attend, starts blank. Only a question on both forms is carried.
  */
-export const CARRIED_TO_INTERMEDIATE = [
-  DIETARY_KEYS.restrictions,
-  DIETARY_KEYS.critical,
-  DIETARY_KEYS.other,
-] as const;
+export const CARRIED_TO_INTERMEDIATE = [DIETARY_KEYS.restrictions, DIETARY_KEYS.critical, DIETARY_KEYS.other] as const;
 
 /** `answers` cut down to what `CARRIED_TO_INTERMEDIATE` carries, for the questions `form` asks. */
-export function carriedAnswers(
-  form: IntakeForm,
-  answers: IntakeAnswers,
-): IntakeAnswers {
+export function carriedAnswers(form: IntakeForm, answers: IntakeAnswers): IntakeAnswers {
   const asked = new Set(form.questions.map((q) => q.id));
   const kept: IntakeAnswers = {};
   for (const id of CARRIED_TO_INTERMEDIATE) {
     // The critical marks and the write-in are asked with the checklist.
-    if (asked.has(DIETARY_KEYS.restrictions) && answers[id] !== undefined)
-      kept[id] = answers[id]!;
+    if (asked.has(DIETARY_KEYS.restrictions) && answers[id] !== undefined) kept[id] = answers[id]!;
   }
   return kept;
 }
@@ -487,10 +393,7 @@ const questionSchema = z
     title: z.string().trim().min(1).max(INTAKE_LIMITS.title),
     description: z.string().max(INTAKE_LIMITS.description).default(""),
     required: z.boolean().default(false),
-    options: z
-      .array(z.string().trim().min(1).max(INTAKE_LIMITS.option))
-      .max(INTAKE_LIMITS.options)
-      .default([]),
+    options: z.array(z.string().trim().min(1).max(INTAKE_LIMITS.option)).max(INTAKE_LIMITS.options).default([]),
     other: z.boolean().default(false),
   })
   .strict()
@@ -499,15 +402,8 @@ const questionSchema = z
     options: HAS_OPTIONS.has(q.kind) ? q.options : [],
     other: HAS_OTHER.has(q.kind) && q.other,
   }))
-  .refine(
-    (q) =>
-      !HAS_OPTIONS.has(q.kind) || q.options.length > 0 || isTimezoneQuestion(q),
-    "a list question needs an option",
-  )
-  .refine(
-    (q) => new Set(q.options).size === q.options.length,
-    "options repeat",
-  );
+  .refine((q) => !HAS_OPTIONS.has(q.kind) || q.options.length > 0 || isTimezoneQuestion(q), "a list question needs an option")
+  .refine((q) => new Set(q.options).size === q.options.length, "options repeat");
 
 export const intakeFormSchema = z
   .object({
@@ -515,21 +411,13 @@ export const intakeFormSchema = z
     questions: z.array(questionSchema).max(INTAKE_LIMITS.questions),
   })
   .strict()
-  .refine(
-    (f) => new Set(f.questions.map((q) => q.id)).size === f.questions.length,
-    "question ids repeat",
-  );
+  .refine((f) => new Set(f.questions.map((q) => q.id)).size === f.questions.length, "question ids repeat");
 
 /** Someone's answers to their own form; who they are is their sign-in, never something they type. */
 export const intakeSubmissionSchema = z
   .object({
     answers: z.record(
-      z.union([
-        z.string().max(INTAKE_LIMITS.answer),
-        z
-          .array(z.string().max(INTAKE_LIMITS.answer))
-          .max(INTAKE_LIMITS.options + 1),
-      ]),
+      z.union([z.string().max(INTAKE_LIMITS.answer), z.array(z.string().max(INTAKE_LIMITS.answer)).max(INTAKE_LIMITS.options + 1)]),
     ),
   })
   .strict();
@@ -544,9 +432,7 @@ export type AnswerProblem = {
 
 /** The trimmed, non-blank values of an answer, whether it came as one string or a list. */
 function valuesOf(raw: string | string[] | undefined): string[] {
-  return (Array.isArray(raw) ? raw : raw === undefined ? [] : [raw])
-    .map((v) => v.trim())
-    .filter((v) => v.length > 0);
+  return (Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).map((v) => v.trim()).filter((v) => v.length > 0);
 }
 
 /**
@@ -567,11 +453,7 @@ function checkDietary(
   const checked = new Set(valuesOf(answers[DIETARY_KEYS.restrictions]));
   const marked = new Set(valuesOf(answers[DIETARY_KEYS.critical]));
   const other = valuesOf(answers[DIETARY_KEYS.other]);
-  if (
-    [...checked].some((v) => !DIETARY_ITEMS.includes(v)) ||
-    [...marked].some((v) => !checked.has(v)) ||
-    other.length > 1
-  )
+  if ([...checked].some((v) => !DIETARY_ITEMS.includes(v)) || [...marked].some((v) => !checked.has(v)) || other.length > 1)
     return bad("not_an_option");
 
   const kept: IntakeAnswers = {};
@@ -610,8 +492,7 @@ export function checkAnswers(
     const values = valuesOf(answers[q.id]);
 
     if (values.length === 0) {
-      if (q.required)
-        return { ok: false, error: { questionId: q.id, problem: "required" } };
+      if (q.required) return { ok: false, error: { questionId: q.id, problem: "required" } };
       continue;
     }
 

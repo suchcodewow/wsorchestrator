@@ -91,12 +91,7 @@ export function ResponsesView({
             </option>
           ))}
         </select>
-        <TableSearch
-          value={query.q}
-          placeholder="Search names, emails and answers"
-          label="Search responses"
-          className="min-w-56 flex-1"
-        />
+        <TableSearch value={query.q} placeholder="Search names, emails and answers" label="Search responses" className="min-w-56 flex-1" />
         <div role="group" aria-label="Filter by an answer" className="flex flex-wrap items-center gap-2">
           <select
             aria-label="Question"
@@ -173,22 +168,14 @@ export function ResponsesView({
                   <td className="whitespace-nowrap px-5 py-3 text-muted-foreground tabular-nums">
                     {new Date(r.submittedAt).toLocaleString()}
                   </td>
-                  <td className="whitespace-nowrap px-5 py-3 font-medium">
-                    {r.name ?? <span className="text-muted-foreground">—</span>}
-                  </td>
+                  <td className="whitespace-nowrap px-5 py-3 font-medium">{r.name ?? <span className="text-muted-foreground">—</span>}</td>
                   <td className="px-5 py-3">{r.email}</td>
                   {form === "all" && <td className="whitespace-nowrap px-5 py-3">{PROGRAMS[r.form]}</td>}
                   {questions.map((q) => {
                     const a = r.answers[q.id];
                     return (
                       <td key={q.id} className="max-w-72 px-5 py-3 whitespace-pre-line">
-                        {a === undefined ? (
-                          <span className="text-muted-foreground">—</span>
-                        ) : Array.isArray(a) ? (
-                          a.join(", ")
-                        ) : (
-                          a
-                        )}
+                        {a === undefined ? <span className="text-muted-foreground">—</span> : Array.isArray(a) ? a.join(", ") : a}
                       </td>
                     );
                   })}

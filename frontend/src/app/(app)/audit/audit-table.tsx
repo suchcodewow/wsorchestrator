@@ -86,11 +86,7 @@ export function AuditTable({ query, page }: { query: ListQuery<AuditSort>; page:
       </motion.div>
 
       <motion.div variants={riseChild}>
-        <TableSearch
-          value={query.q}
-          placeholder="Search by who, action, target, outcome or detail"
-          label="Search the audit trail"
-        />
+        <TableSearch value={query.q} placeholder="Search by who, action, target, outcome or detail" label="Search the audit trail" />
       </motion.div>
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -138,9 +134,7 @@ export function AuditTable({ query, page }: { query: ListQuery<AuditSort>; page:
                           <ChevronRight className={cn("size-4 transition-transform", expanded && "rotate-90")} />
                         </button>
                       </td>
-                      <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">
-                        {WHEN.format(new Date(row.at))}
-                      </td>
+                      <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">{WHEN.format(new Date(row.at))}</td>
                       <td className="px-5 py-2.5">
                         <div className="font-medium">{row.actorName || row.actorEmail || "—"}</div>
                         <div className="text-xs text-muted-foreground">

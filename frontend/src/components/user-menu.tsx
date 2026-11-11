@@ -39,8 +39,7 @@ import { applyTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { setThemePreference } from "@/lib/user-settings";
 
-const SECTION_HEADING =
-  "px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
+const SECTION_HEADING = "px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
 
 const THEME_OPTIONS: { value: ThemePreference; label: string; Icon: LucideIcon }[] = [
   { value: "light", label: "Light", Icon: Sun },
@@ -195,9 +194,7 @@ function ImpersonationNotice({ impersonator, name }: { impersonator: Impersonato
           <VenetianMask className="size-3.5 shrink-0" />
           <span className="truncate">Viewing as {name}</span>
         </span>
-        <span className="mt-0.5 block truncate opacity-80">
-          Signed in as {impersonator.name ?? impersonator.email}.
-        </span>
+        <span className="mt-0.5 block truncate opacity-80">Signed in as {impersonator.name ?? impersonator.email}.</span>
         <span className="block opacity-80">
           {impersonator.testAccount ? "A test account: changes are saved." : "Nothing can be changed."}
         </span>
@@ -282,25 +279,17 @@ export function UserMenu({
             <Avatar name={name} email={email} image={image} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">{name ?? email}</span>
-              {name && (
-                <span className="block truncate text-xs text-muted-foreground">{email}</span>
-              )}
+              {name && <span className="block truncate text-xs text-muted-foreground">{email}</span>}
             </span>
             <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
           </>
         )}
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent
-        side={variant === "header" ? "bottom" : "right"}
-        align="end"
-        className="min-w-56"
-      >
+      <DropdownMenuContent side={variant === "header" ? "bottom" : "right"} align="end" className="min-w-56">
         <DropdownMenuLabel className="font-normal">
           <span className="block truncate font-medium">{name ?? email}</span>
-          {name && (
-            <span className="block truncate text-xs text-muted-foreground">{email}</span>
-          )}
+          {name && <span className="block truncate text-xs text-muted-foreground">{email}</span>}
           {badges.length > 0 && (
             <span className="mt-1.5 flex flex-wrap gap-1">
               {badges.map((badge) => (
@@ -337,11 +326,7 @@ export function UserMenu({
 
         <div className="flex items-center justify-between gap-2 px-2 py-1.5">
           <span className="text-xs text-muted-foreground">Appearance</span>
-          <DropdownMenuRadioGroup
-            value={theme}
-            onValueChange={chooseTheme}
-            className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5"
-          >
+          <DropdownMenuRadioGroup value={theme} onValueChange={chooseTheme} className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
             {THEME_OPTIONS.map(({ value, label, Icon }) => (
               <DropdownMenuRadioIconItem key={value} value={value} aria-label={label} title={label}>
                 <Icon />
@@ -366,10 +351,7 @@ export function UserMenu({
 
         <DropdownMenuSeparator />
 
-        <div
-          className="px-2 py-1 text-[11px] leading-tight text-muted-foreground"
-          title={buildTitle(build)}
-        >
+        <div className="px-2 py-1 text-[11px] leading-tight text-muted-foreground" title={buildTitle(build)}>
           <span className="font-mono">{build.tag}</span>
           {build.builtAtLabel && <span className="mt-0.5 block">built {build.builtAtLabel}</span>}
         </div>

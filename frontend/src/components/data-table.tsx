@@ -78,9 +78,7 @@ export function TableSearch({
         aria-label={label}
         className="pl-9 pr-9"
       />
-      {pending && (
-        <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-      )}
+      {pending && <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />}
     </div>
   );
 }
@@ -106,10 +104,7 @@ export function SortHeader<S extends string>({
   const active = sort === column;
   const Icon = !active ? ChevronsUpDown : dir === "asc" ? ArrowUp : ArrowDown;
   return (
-    <th
-      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
-      className={cn("px-5 py-2.5 font-medium", className)}
-    >
+    <th aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"} className={cn("px-5 py-2.5 font-medium", className)}>
       <button
         type="button"
         onClick={() => set({ sort: column, dir: active && dir === "asc" ? "desc" : "asc" })}
@@ -127,9 +122,7 @@ export function SortHeader<S extends string>({
 
 /** A plain `<th>` styled like `SortHeader`, for a column that does not sort. */
 export function PlainHeader({ children, className }: { children?: ReactNode; className?: string }) {
-  return (
-    <th className={cn("px-5 py-2.5 font-medium uppercase tracking-wider", className)}>{children}</th>
-  );
+  return <th className={cn("px-5 py-2.5 font-medium uppercase tracking-wider", className)}>{children}</th>;
 }
 
 /** The row class every sortable table's header row uses. */
@@ -180,7 +173,9 @@ export function Pager({ page, noun = "rows", prefix }: { page: Page<unknown>; no
             {from.toLocaleString()}–{to.toLocaleString()} {noun}
           </>
         ) : (
-          <>No {noun} on page {page.page.toLocaleString()}</>
+          <>
+            No {noun} on page {page.page.toLocaleString()}
+          </>
         )}
       </span>
       <div className="flex items-center gap-2">
@@ -193,12 +188,7 @@ export function Pager({ page, noun = "rows", prefix }: { page: Page<unknown>; no
         >
           <ChevronLeft className="size-4" /> Previous
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!page.hasMore || pending}
-          onClick={() => set({ page: String(page.page + 1) })}
-        >
+        <Button variant="outline" size="sm" disabled={!page.hasMore || pending} onClick={() => set({ page: String(page.page + 1) })}>
           Next <ChevronRight className="size-4" />
         </Button>
       </div>

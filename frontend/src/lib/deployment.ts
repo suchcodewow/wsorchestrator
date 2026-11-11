@@ -33,11 +33,7 @@ export function isProduction(): boolean {
 }
 
 /** The runs this deployment created, as a `where` clause. */
-export const localRun = () =>
-  or(
-    isNull(workshopRuns.environment),
-    eq(workshopRuns.environment, deploymentEnvironment()),
-  );
+export const localRun = () => or(isNull(workshopRuns.environment), eq(workshopRuns.environment, deploymentEnvironment()));
 
 /** Whether a run belongs to another deployment and is only a copy here. */
 export function isImportedRun(run: { environment: string | null }): boolean {

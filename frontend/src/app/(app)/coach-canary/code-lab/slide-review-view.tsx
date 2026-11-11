@@ -41,7 +41,17 @@ import { cn } from "@/lib/utils";
 import { ArrowRight, Check, Eye, EyeOff, Flag, MousePointerClick, RotateCcw, X } from "lucide-react";
 import { Geist } from "next/font/google";
 import Image from "next/image";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { recordRun } from "./record-run";
 import { SlideFeedback } from "./slide-feedback";
 import "./slide-review.css";
@@ -118,12 +128,11 @@ function Intro({ onStart }: { onStart: () => void }) {
         </div>
         <div className="flex flex-wrap gap-x-8 gap-y-1 px-5 py-2.5 text-sm">
           <span>
-            <span className="font-semibold text-emerald-600 tabular-nums dark:text-emerald-400">+{POINTS.found}</span> for each
-            mistake you fix
+            <span className="font-semibold text-emerald-600 tabular-nums dark:text-emerald-400">+{POINTS.found}</span> for each mistake you
+            fix
           </span>
           <span>
-            <span className="font-semibold text-destructive tabular-nums">{POINTS.wrongClick}</span> for clicking something that
-            was fine
+            <span className="font-semibold text-destructive tabular-nums">{POINTS.wrongClick}</span> for clicking something that was fine
           </span>
           <span>
             <span className="font-semibold text-destructive tabular-nums">{POINTS.missed}</span> for each mistake you miss
@@ -137,9 +146,7 @@ function Intro({ onStart }: { onStart: () => void }) {
             <li>punctuation problems &amp; extra spaces</li>
             <li>formatting issues</li>
           </ul>
-          <p className="text-muted-foreground">
-            Don’t worry about the content itself. The goal is to practice spotting the issues above.
-          </p>
+          <p className="text-muted-foreground">Don’t worry about the content itself. The goal is to practice spotting the issues above.</p>
         </div>
       </section>
       <Button variant="brand" onClick={onStart}>
@@ -190,7 +197,11 @@ function SlideRound({
 
   const flawOf = (t: Target) => slide.flaws.find((fl) => fl.target === t);
   const missed = slide.flaws.filter((fl) => !fixed.has(fl.target));
-  const score = earlier + (reviewing ? pointsFor({ found: fixed.size, wrongClicks, missed: missed.length }) : fixed.size * POINTS.found + wrongClicks * POINTS.wrongClick);
+  const score =
+    earlier +
+    (reviewing
+      ? pointsFor({ found: fixed.size, wrongClicks, missed: missed.length })
+      : fixed.size * POINTS.found + wrongClicks * POINTS.wrongClick);
 
   const click = (target: Target, at: { x: number; y: number }) => {
     if (reviewing || fixed.has(target)) return;
@@ -221,13 +232,11 @@ function SlideRound({
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <p className="text-sm text-muted-foreground">Slide {number}</p>
         <p className="text-sm">
-          <span className="text-muted-foreground">Fixed on this slide:</span>{" "}
-          <span className="font-medium tabular-nums">{fixed.size}</span>
+          <span className="text-muted-foreground">Fixed on this slide:</span> <span className="font-medium tabular-nums">{fixed.size}</span>
           {reviewing && <span className="text-muted-foreground tabular-nums"> of {slide.flaws.length}</span>}
         </p>
         <p className="text-sm">
-          <span className="text-muted-foreground">Wrong clicks:</span>{" "}
-          <span className="font-medium tabular-nums">{wrongClicks}</span>
+          <span className="text-muted-foreground">Wrong clicks:</span> <span className="font-medium tabular-nums">{wrongClicks}</span>
         </p>
         <PillSwitch label="Show fixed" title="Keep a green edge on everything you have fixed" on={showFixed} onChange={onShowFixed} />
         {reviewing && (
@@ -563,7 +572,13 @@ function Logo() {
 
 function Divider() {
   return (
-    <Piece target="divider" x={L.divider - 4} y={L.columnTop} label="Column divider" style={{ width: 9, height: L.columnBottom - L.columnTop }}>
+    <Piece
+      target="divider"
+      x={L.divider - 4}
+      y={L.columnTop}
+      label="Column divider"
+      style={{ width: 9, height: L.columnBottom - L.columnTop }}
+    >
       <span className="absolute inset-y-0 left-1 w-px" style={{ backgroundColor: RULE }} />
     </Piece>
   );
@@ -585,7 +600,16 @@ function ArrowShape() {
 
 function Mark({ kind, size }: { kind: "check" | "cross"; size: number }) {
   return (
-    <svg viewBox="0 0 12 12" width={size} height={size} className="block" fill="none" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      viewBox="0 0 12 12"
+      width={size}
+      height={size}
+      className="block"
+      fill="none"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       {kind === "cross" ? (
         <path d="M2.5 2.5 L9.5 9.5 M9.5 2.5 L2.5 9.5" stroke="#e5484d" />
       ) : (
@@ -609,6 +633,7 @@ function Column({ side, rows }: { side: Side; rows: Slide["current"] }) {
         x={x - 35 - (headerSize - 22) / 2}
         y={L.headerY + middleOf(L.headerSize) - headerSize / 2}
         label={`${side === "current" ? "Current" : "Future"} state icon`}
+        className="z-10"
       >
         <span
           className="grid place-items-center rounded-full"
@@ -631,15 +656,20 @@ function Column({ side, rows }: { side: Side; rows: Slide["current"] }) {
             </TextPiece>
             <Piece
               target={`${side}.${i as RowIndex}.icon`}
-              // Centred on the outcome line beside it; the 2px is the button's padding.
+              // Centred on the outcome line beside it; the 2px is the button's padding. z-10 keeps a moved or enlarged icon above the text it overlaps, so what is seen is what a click hits.
               x={x + 1 - (size - 13) / 2}
               y={y + L.sub.dy + middleOf(L.sub.size) - size / 2 - 2}
               label={`${side === "current" ? "Cross" : "Tick"} beside “${row.sub}”`}
-              className="p-0.5"
+              className="z-10 p-0.5"
             >
               <Mark kind={iconLook.icon ?? mark} size={size} />
             </Piece>
-            <TextPiece target={`${side}.${i as RowIndex}.sub`} x={x + 19} y={y + L.sub.dy} base={{ font: "geist", size: L.sub.size, italic: true }}>
+            <TextPiece
+              target={`${side}.${i as RowIndex}.sub`}
+              x={x + 19}
+              y={y + L.sub.dy}
+              base={{ font: "geist", size: L.sub.size, italic: true }}
+            >
               {row.sub}
             </TextPiece>
           </span>
@@ -657,10 +687,7 @@ function CapabilitiesBox() {
   );
   return (
     <Piece target="capabilitiesBox" x={L.box.x} y={L.box.y} label="Required capabilities box" style={{ width: w, height: h }}>
-      <span
-        className="absolute inset-0 bg-neutral-50"
-        style={{ border: look.solid ? "2px solid #8a8a86" : "1.5px dashed #dcdcd9" }}
-      />
+      <span className="absolute inset-0 bg-neutral-50" style={{ border: look.solid ? "2px solid #8a8a86" : "1.5px dashed #dcdcd9" }} />
       {corner({ left: -7, top: -7 }, "border-t border-l")}
       {corner({ right: -7, top: -7 }, "border-t border-r")}
       {corner({ left: -7, bottom: -7 }, "border-b border-l")}

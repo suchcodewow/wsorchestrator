@@ -120,10 +120,7 @@ export function RunDetailView({
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild} className="space-y-2">
-        <Link
-          href="/cohort-settings/slack"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
+        <Link href="/cohort-settings/slack" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-3.5" />
           Slack
         </Link>

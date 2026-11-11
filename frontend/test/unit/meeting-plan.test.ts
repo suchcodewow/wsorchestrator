@@ -51,7 +51,10 @@ test("an intermediate meeting is also for anyone who RSVP'd to the bootcamp, and
   const cohort: Member[] = [...COHORT, { email: "ed.sales@harness.io", stage: "bootcamp", track: "sales", rsvpd: true }];
   assert.deepEqual(audienceOf({ stage: "intermediate", track: "sales" }, cohort), ["cy.sales@harness.io", "ed.sales@harness.io"]);
   assert.deepEqual(audienceOf({ stage: "bootcamp", track: "sales" }, cohort), ["ana.sales@harness.io", "ed.sales@harness.io"]);
-  assert.deepEqual(audienceOf({ stage: "bootcamp", track: "sales" }, [{ email: "cy@harness.io", stage: "intermediate", track: "sales", rsvpd: true }]), []);
+  assert.deepEqual(
+    audienceOf({ stage: "bootcamp", track: "sales" }, [{ email: "cy@harness.io", stage: "intermediate", track: "sales", rsvpd: true }]),
+    [],
+  );
 });
 
 test("audiences read as a person would say them", () => {
@@ -76,11 +79,22 @@ test("an intermediate meeting waits until after the bootcamp for anyone at it, a
   const after: InviteWindow = { notBefore: "2026-11-06", cutoff: "2027-02-01" };
   const before: InviteWindow = { notBefore: null, cutoff: "2026-11-02" };
   assert.deepEqual(inviteWindow("intermediate", { stage: "bootcamp" }, BOOTCAMP), after);
-  assert.deepEqual(inviteWindow("intermediate", { stage: "intermediate", btcDate: "2026-11-02" }, BOOTCAMP), after, "graduated at this bootcamp");
-  assert.deepEqual(inviteWindow("intermediate", { stage: "intermediate", btcDate: "2026-08-03" }, BOOTCAMP), before, "takes INT at this bootcamp");
+  assert.deepEqual(
+    inviteWindow("intermediate", { stage: "intermediate", btcDate: "2026-11-02" }, BOOTCAMP),
+    after,
+    "graduated at this bootcamp",
+  );
+  assert.deepEqual(
+    inviteWindow("intermediate", { stage: "intermediate", btcDate: "2026-08-03" }, BOOTCAMP),
+    before,
+    "takes INT at this bootcamp",
+  );
   assert.deepEqual(inviteWindow("intermediate", { stage: "intermediate" }, BOOTCAMP), before);
   assert.deepEqual(inviteWindow("bootcamp", { stage: "bootcamp" }, BOOTCAMP), before);
-  assert.deepEqual(inviteWindow("intermediate", { stage: "bootcamp" }, { ...BOOTCAMP, nextIntermediate: null }), { notBefore: "2026-11-06", cutoff: "9999-12-31" });
+  assert.deepEqual(inviteWindow("intermediate", { stage: "bootcamp" }, { ...BOOTCAMP, nextIntermediate: null }), {
+    notBefore: "2026-11-06",
+    cutoff: "9999-12-31",
+  });
 });
 
 test("a window reads as a person would say it", () => {
@@ -97,7 +111,10 @@ test("each person's window is read from their row in the meeting's own stage", (
     { email: "T@harness.io", stage: "bootcamp", track: "sales", rsvpd: true },
     { email: "t@harness.io", stage: "intermediate", track: "sales" },
   ];
-  assert.deepEqual([...windowsFor({ stage: "intermediate", track: "sales" }, tester, BOOTCAMP)], [["t@harness.io", { notBefore: null, cutoff: "2026-11-02" }]]);
+  assert.deepEqual(
+    [...windowsFor({ stage: "intermediate", track: "sales" }, tester, BOOTCAMP)],
+    [["t@harness.io", { notBefore: null, cutoff: "2026-11-02" }]],
+  );
   assert.deepEqual(
     [...windowsFor({ stage: "intermediate", track: "sales" }, [...tester].reverse(), BOOTCAMP)],
     [["t@harness.io", { notBefore: null, cutoff: "2026-11-02" }]],
@@ -130,7 +147,10 @@ test("a guest's reply survives a sync, whatever case Google spells their email i
 });
 
 test("an invite holding the same people is left alone, since changing it emails every guest", () => {
-  assert.equal(sameGuests([{ email: "B@harness.io" }, { email: "a@harness.io" }], [{ email: "a@harness.io" }, { email: "b@harness.io" }]), true);
+  assert.equal(
+    sameGuests([{ email: "B@harness.io" }, { email: "a@harness.io" }], [{ email: "a@harness.io" }, { email: "b@harness.io" }]),
+    true,
+  );
   assert.equal(sameGuests([{ email: "a@harness.io" }], [{ email: "a@harness.io" }, { email: "b@harness.io" }]), false);
 });
 
@@ -140,7 +160,12 @@ test("an invite holding the same people is left alone, since changing it emails 
 
 const NOW = new Date("2026-10-20T12:00:00Z");
 const CUTOFF = "2026-11-02";
-const occ = (id: string, iso: string, attendanceRead = false): PlanOccurrence => ({ id, startsAt: new Date(iso), startDate: iso.slice(0, 10), attendanceRead });
+const occ = (id: string, iso: string, attendanceRead = false): PlanOccurrence => ({
+  id,
+  startsAt: new Date(iso),
+  startDate: iso.slice(0, 10),
+  attendanceRead,
+});
 const PAST = occ("past", "2026-10-13T16:00:00Z", true);
 const NEXT = occ("next", "2026-10-22T16:00:00Z");
 const LATER = occ("later", "2026-10-29T16:00:00Z");
@@ -235,7 +260,10 @@ test("once moved on from a decline, they hold the next occurrence and nothing ch
 });
 
 test("accepting after all makes the later invite the spare one", () => {
-  const { outcomes, remove } = plan(["a@harness.io"], [{ ...invite("next", "a@harness.io"), responseStatus: "accepted" }, invite("later", "a@harness.io")]);
+  const { outcomes, remove } = plan(
+    ["a@harness.io"],
+    [{ ...invite("next", "a@harness.io"), responseStatus: "accepted" }, invite("later", "a@harness.io")],
+  );
   assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invited", occurrenceId: "next" });
   assert.deepEqual(
     remove.map((r) => r.occurrenceId),
@@ -313,7 +341,15 @@ test("emails are compared lowercased", () => {
 
 test("a window with a first day offers nothing before it", () => {
   const windows = new Map([["a@harness.io", { notBefore: "2026-11-01", cutoff: "9999-12-31" }]]);
-  const { outcomes, invite: added } = planMeeting({ audience: ["a@harness.io"], occurrences: ALL, invites: [], marks: new Map(), now: NOW, cutoff: CUTOFF, windows });
+  const { outcomes, invite: added } = planMeeting({
+    audience: ["a@harness.io"],
+    occurrences: ALL,
+    invites: [],
+    marks: new Map(),
+    now: NOW,
+    cutoff: CUTOFF,
+    windows,
+  });
   assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invite", occurrenceId: "after", afterMiss: false });
   assert.deepEqual(added, [{ email: "a@harness.io", occurrenceId: "after", afterMiss: false }]);
 });
@@ -359,10 +395,7 @@ test("all meetings keeps inviting after a miss, and stops once they attend", () 
   const attended = allOf([invite("past", "a@harness.io", "attended"), invite("next", "a@harness.io"), invite("later", "a@harness.io")]);
   assert.deepEqual(attended.outcomes.get("a@harness.io"), { kind: "attended" });
   assert.deepEqual(attended.invite, []);
-  assert.deepEqual(
-    attended.remove.map((r) => r.occurrenceId).sort(),
-    ["later", "next"],
-  );
+  assert.deepEqual(attended.remove.map((r) => r.occurrenceId).sort(), ["later", "next"]);
 });
 
 test("all meetings takes them off an occurrence outside their window", () => {
@@ -391,11 +424,11 @@ test("one meeting at a time takes them off the extra invites all meetings gave",
 });
 
 test("facilitators go on each occurrence a member is on, and none other", () => {
-  const admins = facilitatorsFor(
-    ["next", "later"],
-    new Map([["next", new Set(["a@harness.io", "admin.two@harness.io"])]]),
-    ["Admin.One@harness.io", "admin.two@harness.io", "admin.one@harness.io"],
-  );
+  const admins = facilitatorsFor(["next", "later"], new Map([["next", new Set(["a@harness.io", "admin.two@harness.io"])]]), [
+    "Admin.One@harness.io",
+    "admin.two@harness.io",
+    "admin.one@harness.io",
+  ]);
   assert.deepEqual(admins.get("next"), ["admin.one@harness.io"]);
   assert.deepEqual(admins.get("later"), []);
 });
@@ -420,7 +453,10 @@ test("the add-on's invite block is replaced whole, and the agenda around it is k
   );
   assert.equal(rewrite.location, NEW_MEETING.url);
   assert.equal(rewrite.clearConference, true);
-  assert.match(rewrite.description, /^<p>Agenda: certification<\/p><p>Join Zoom: <a href="https:\/\/harness-io\.zoom\.us\/j\/94345958761\?pwd=new">/);
+  assert.match(
+    rewrite.description,
+    /^<p>Agenda: certification<\/p><p>Join Zoom: <a href="https:\/\/harness-io\.zoom\.us\/j\/94345958761\?pwd=new">/,
+  );
   assert.match(rewrite.description, /Meeting ID: 94345958761<br>Passcode: 054262<\/p>$/);
   assert.doesNotMatch(rewrite.description, /93816625886|742141|──/);
 });
@@ -429,7 +465,10 @@ test("a bare link in the text is swapped for the new one, and plain text stays p
   const rewrite = rewriteZoomLink({ description: "Certification prep\nJoin: https://zoom.us/j/93816625886" }, NEW_MEETING);
   assert.equal(rewrite.location, undefined);
   assert.equal(rewrite.clearConference, false);
-  assert.equal(rewrite.description, `Certification prep\nJoin:\n\nJoin Zoom: ${NEW_MEETING.url}\nMeeting ID: 94345958761\nPasscode: 054262`);
+  assert.equal(
+    rewrite.description,
+    `Certification prep\nJoin:\n\nJoin Zoom: ${NEW_MEETING.url}\nMeeting ID: 94345958761\nPasscode: 054262`,
+  );
 });
 
 test("a physical location is left alone, and an event whose link is only the add-on's still gets the new details", () => {
@@ -463,7 +502,11 @@ test("the Current tab's mark", () => {
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: false }), "none_left");
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: false, allOccurrences: true }), "finished");
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: true, allOccurrences: true }), "uninvited");
-  assert.equal(meetingMark({ attended: true, response: null, invited: true, anyLeft: true, leaving: true }), "leaving", "over what they did");
+  assert.equal(
+    meetingMark({ attended: true, response: null, invited: true, anyLeft: true, leaving: true }),
+    "leaving",
+    "over what they did",
+  );
   assert.equal(meetingMark({ attended: false, response: "accepted", invited: true, anyLeft: true, leaving: true }), "leaving");
 });
 
@@ -509,7 +552,11 @@ test("the time zone range narrows a meeting's audience", () => {
   ];
   const meeting = { stage: "bootcamp", track: "sales", timezoneFrom: -8, timezoneTo: -7 } as const;
   assert.deepEqual(audienceOf(meeting, cohort, JULY), ["a@harness.io"]);
-  assert.deepEqual(audienceOf({ ...meeting, timezoneFrom: null, timezoneTo: null }, cohort, JULY), ["a@harness.io", "b@harness.io", "c@harness.io"]);
+  assert.deepEqual(audienceOf({ ...meeting, timezoneFrom: null, timezoneTo: null }, cohort, JULY), [
+    "a@harness.io",
+    "b@harness.io",
+    "c@harness.io",
+  ]);
 });
 
 test("a time zone range reads as a person would say it", () => {

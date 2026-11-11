@@ -14,11 +14,5 @@ export default async function IrisSittingPage({ params }: { params: Promise<{ su
   const { subject } = await params;
   if (!isSubjectKey(subject)) notFound();
 
-  return (
-    <SittingScreen
-      subject={subject}
-      name={SUBJECTS[subject].name}
-      mode="live"
-    />
-  );
+  return <SittingScreen subject={subject} name={SUBJECTS[subject].name} mode="live" />;
 }

@@ -76,7 +76,6 @@ export function FeedbackView({
 
   return (
     <motion.div variants={staggerParent(0.04)} initial="hidden" animate="show" className="space-y-6">
-
       <motion.div variants={riseChild}>
         <TableSearch value={query.q} placeholder="Search concepts" label="Search concepts" />
       </motion.div>
@@ -119,10 +118,14 @@ export function FeedbackView({
                           <span className="truncate">{r.label}</span>
                         </button>
                         {!r.inMap ? (
-                          <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">Not on the map</span>
+                          <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
+                            Not on the map
+                          </span>
                         ) : (
                           !r.hasVideo && (
-                            <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-normal text-amber-700 dark:text-amber-400">No video</span>
+                            <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-normal text-amber-700 dark:text-amber-400">
+                              No video
+                            </span>
                           )
                         )}
                       </td>
@@ -196,15 +199,7 @@ const STATUS_STYLES: Record<VideoFeedbackStatus, string> = {
 const STATUS_LABELS: Record<VideoFeedbackStatus, string> = { pending: "", accepted: "Accepted", ignored: "Ignored", applied: "Applied" };
 
 /** One video's feedback from its start to its end, fetched when the row opens and a page at a time after. */
-function Details({
-  conceptId,
-  canModerate,
-  onPlay,
-}: {
-  conceptId: string;
-  canModerate: boolean;
-  onPlay: (row: VideoFeedbackRow) => void;
-}) {
+function Details({ conceptId, canModerate, onPlay }: { conceptId: string; canModerate: boolean; onPlay: (row: VideoFeedbackRow) => void }) {
   const router = useRouter();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [busy, setBusy] = useState(true);
@@ -338,7 +333,11 @@ function Line({
               aria-label="Comment"
             />
             <div className="flex gap-2">
-              <Button size="sm" disabled={saving || !text.trim() || text.trim() === f.comment} onClick={() => void save({ comment: text.trim() })}>
+              <Button
+                size="sm"
+                disabled={saving || !text.trim() || text.trim() === f.comment}
+                onClick={() => void save({ comment: text.trim() })}
+              >
                 {saving ? <Loader2 className="animate-spin" /> : <Check />}
                 Save
               </Button>
@@ -381,11 +380,20 @@ function Line({
       )}
       {canModerate && f.comment !== null && !editing && (
         <div className="flex shrink-0 gap-1">
-          <Button size="icon" className="size-8" variant="ghost" aria-label="Edit comment" title="Edit comment" disabled={saving} onClick={() => setEditing(true)}>
+          <Button
+            size="icon"
+            className="size-8"
+            variant="ghost"
+            aria-label="Edit comment"
+            title="Edit comment"
+            disabled={saving}
+            onClick={() => setEditing(true)}
+          >
             <Pencil />
           </Button>
           <Button
-            size="icon" className="size-8"
+            size="icon"
+            className="size-8"
             variant="ghost"
             aria-label={f.status === "accepted" ? "Clear acceptance" : "Accept comment"}
             title={f.status === "accepted" ? "Clear acceptance" : "Accept"}
@@ -396,7 +404,8 @@ function Line({
             <Check className={f.status === "accepted" ? "text-emerald-600" : ""} />
           </Button>
           <Button
-            size="icon" className="size-8"
+            size="icon"
+            className="size-8"
             variant="ghost"
             aria-label={f.status === "ignored" ? "Clear ignore" : "Ignore comment"}
             title={f.status === "ignored" ? "Clear ignore" : "Ignore"}

@@ -5,11 +5,7 @@ import { HIBOB_SYNC_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { HibobSyncView } from "./sync-view";
 
-export default async function HibobPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function HibobPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const query = parseListQuery(await searchParams, HIBOB_SYNC_LIST);
   const [page, running] = await Promise.all([listHibobSyncRuns(query), syncInProgress()]);
 

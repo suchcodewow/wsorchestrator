@@ -66,8 +66,16 @@ export async function GET(req: Request, { params }: Params) {
 }
 
 const reportSchema = z.object({
-  position: z.number().finite().min(0).max(6 * 3600),
-  duration: z.number().finite().positive().max(6 * 3600),
+  position: z
+    .number()
+    .finite()
+    .min(0)
+    .max(6 * 3600),
+  duration: z
+    .number()
+    .finite()
+    .positive()
+    .max(6 * 3600),
   ended: z.boolean().optional(),
 });
 
@@ -81,7 +89,11 @@ export const PUT = audited(async function PUT(req: Request, { params }: Params) 
   const found = await videoOf(id);
   if (!found) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  const state = await saveVideoProgress(user.id, id, { position: parsed.data.position, duration: parsed.data.duration, ended: parsed.data.ended ?? false });
+  const state = await saveVideoProgress(user.id, id, {
+    position: parsed.data.position,
+    duration: parsed.data.duration,
+    ended: parsed.data.ended ?? false,
+  });
   noteAudit({ target: id, targetLabel: found.name, detail: { completed: state.completed } });
   return NextResponse.json({ state });
 });

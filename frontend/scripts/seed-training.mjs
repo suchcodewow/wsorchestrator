@@ -47,7 +47,9 @@ try {
     const a = await client.query("delete from iris_attempts where question_set = $1", [SEED_SET]);
     const p = await client.query("delete from mimir_concept_progress where updated_at = $1", [SEED_STAMP]);
     const u = await client.query("delete from users where id like 'seed-%' and is_test_account");
-    console.log(`${db[0].name}: removed ${a.rowCount} seeded sittings, ${p.rowCount} seeded concept rows and ${u.rowCount} placeholder accounts.`);
+    console.log(
+      `${db[0].name}: removed ${a.rowCount} seeded sittings, ${p.rowCount} seeded concept rows and ${u.rowCount} placeholder accounts.`,
+    );
     process.exit(0);
   }
 

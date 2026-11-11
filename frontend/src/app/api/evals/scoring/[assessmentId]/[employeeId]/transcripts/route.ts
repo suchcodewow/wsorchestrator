@@ -26,7 +26,11 @@ const MAX_DURATION_MS = 24 * 60 * 60 * 1000;
 
 const fieldsSchema = z.object({
   recordingId: z.string().uuid(),
-  recordedAt: z.coerce.number().int().positive().transform((ms) => new Date(ms)),
+  recordedAt: z.coerce
+    .number()
+    .int()
+    .positive()
+    .transform((ms) => new Date(ms)),
   durationMs: z.coerce.number().int().min(0).max(MAX_DURATION_MS),
 });
 

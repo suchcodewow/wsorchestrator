@@ -145,7 +145,6 @@ export function HeatMap({ view, trends }: { view: CanaryWireView; trends: RepTre
   // The series' short label, "AE", beside a name; the full edition is the tooltip.
   const short = (edition: string) => view.seriesLinks.find((s) => s.edition === edition)?.label ?? edition;
 
-
   const shown = useMemo(
     () =>
       view.teams
@@ -217,7 +216,11 @@ export function HeatMap({ view, trends }: { view: CanaryWireView; trends: RepTre
           )}
           <span className="grow" />
           <span className="inline-flex gap-4">
-            <button type="button" className="cursor-pointer hover:text-foreground" onClick={() => setCollapsed(new Set(view.teams.map((t) => t.manager)))}>
+            <button
+              type="button"
+              className="cursor-pointer hover:text-foreground"
+              onClick={() => setCollapsed(new Set(view.teams.map((t) => t.manager)))}
+            >
               Collapse all
             </button>
             <button type="button" className="cursor-pointer hover:text-foreground" onClick={() => setCollapsed(new Set())}>
@@ -242,125 +245,140 @@ export function HeatMap({ view, trends }: { view: CanaryWireView; trends: RepTre
               <table className={TABLE} style={{ minWidth }}>
                 <Columns labels={labels} />
                 <thead>
-                <tr className="text-left">
-                  <th className={cn(HEAD, PIN_LEFT, "z-30 pl-5 shadow-[inset_-1px_-1px_0_var(--border)]")}>Manager / direct</th>
-                  {labels.map((l) => (
-                    <th
-                      key={l}
-                      title={l}
-                      className={cn(HEAD, "z-20 w-28 min-w-28 text-center align-bottom leading-tight tracking-normal normal-case text-foreground shadow-[inset_0_-1px_0_var(--border)]")}
-                    >
-                      {/* In full, however many lines it takes: a cut-off name is a guess at which module it is. */}
-                      {l}
-                    </th>
-                  ))}
-                  <th className={cn(HEAD, PIN_DONE, "z-30 text-right shadow-[inset_1px_-1px_0_var(--border)]")}>Done</th>
-                  <th className={cn(HEAD, PIN_RATE, "z-30 pr-5 text-right shadow-[inset_0_-1px_0_var(--border)]")}>Complete</th>
-                </tr>
+                  <tr className="text-left">
+                    <th className={cn(HEAD, PIN_LEFT, "z-30 pl-5 shadow-[inset_-1px_-1px_0_var(--border)]")}>Manager / direct</th>
+                    {labels.map((l) => (
+                      <th
+                        key={l}
+                        title={l}
+                        className={cn(
+                          HEAD,
+                          "z-20 w-28 min-w-28 text-center align-bottom leading-tight tracking-normal normal-case text-foreground shadow-[inset_0_-1px_0_var(--border)]",
+                        )}
+                      >
+                        {/* In full, however many lines it takes: a cut-off name is a guess at which module it is. */}
+                        {l}
+                      </th>
+                    ))}
+                    <th className={cn(HEAD, PIN_DONE, "z-30 text-right shadow-[inset_1px_-1px_0_var(--border)]")}>Done</th>
+                    <th className={cn(HEAD, PIN_RATE, "z-30 pr-5 text-right shadow-[inset_0_-1px_0_var(--border)]")}>Complete</th>
+                  </tr>
                 </thead>
               </table>
             </div>
             {/* Sideways overscroll is contained, so a trackpad swipe across the
                 module columns doesn't navigate back. */}
             <TooltipProvider>
-            <div
-              className="overflow-x-auto overscroll-x-contain"
-              onScroll={(e) => {
-                if (headStrip.current) headStrip.current.scrollLeft = e.currentTarget.scrollLeft;
-              }}
-            >
-              <table className={TABLE} style={{ minWidth }}>
-                <Columns labels={labels} />
-                <caption className="sr-only">
-                  {`Canary Wire completion by manager for ${view.month}: Manager / direct, ${labels.join(", ")}, Done, Complete`}
-                </caption>
-              {shown.map(({ team, directs }) => {
-                const closed = collapsed.has(team.manager);
-                const tAssigned = directs.reduce((n, d) => n + d.assigned, 0);
-                const tDone = directs.reduce((n, d) => n + d.completed, 0);
-                const Caret = closed ? ChevronRight : ChevronDown;
-                return (
-                  <tbody key={team.manager}>
-                    <tr className="group cursor-pointer" onClick={() => toggle(team.manager)}>
-                      <td className={cn(PIN_LEFT, MGR_BG, "h-9 border-b py-1 pr-3 pl-3")}>
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <Caret className="size-3.5 shrink-0 text-muted-foreground" />
-                          <span className="truncate font-medium" title={team.manager}>
-                            {team.manager}
-                          </span>
-                          <span className="shrink-0 text-[11px] text-muted-foreground" title={team.roles.join(", ")}>
-                            {team.roles.map(short).join(" · ")}
-                          </span>
-                          {/* The one note a manager row keeps: nothing in the grid can
+              <div
+                className="overflow-x-auto overscroll-x-contain"
+                onScroll={(e) => {
+                  if (headStrip.current) headStrip.current.scrollLeft = e.currentTarget.scrollLeft;
+                }}
+              >
+                <table className={TABLE} style={{ minWidth }}>
+                  <Columns labels={labels} />
+                  <caption className="sr-only">
+                    {`Canary Wire completion by manager for ${view.month}: Manager / direct, ${labels.join(", ")}, Done, Complete`}
+                  </caption>
+                  {shown.map(({ team, directs }) => {
+                    const closed = collapsed.has(team.manager);
+                    const tAssigned = directs.reduce((n, d) => n + d.assigned, 0);
+                    const tDone = directs.reduce((n, d) => n + d.completed, 0);
+                    const Caret = closed ? ChevronRight : ChevronDown;
+                    return (
+                      <tbody key={team.manager}>
+                        <tr className="group cursor-pointer" onClick={() => toggle(team.manager)}>
+                          <td className={cn(PIN_LEFT, MGR_BG, "h-9 border-b py-1 pr-3 pl-3")}>
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              <Caret className="size-3.5 shrink-0 text-muted-foreground" />
+                              <span className="truncate font-medium" title={team.manager}>
+                                {team.manager}
+                              </span>
+                              <span className="shrink-0 text-[11px] text-muted-foreground" title={team.roles.join(", ")}>
+                                {team.roles.map(short).join(" · ")}
+                              </span>
+                              {/* The one note a manager row keeps: nothing in the grid can
                               tell a never-activated rep from one ignoring the training. */}
-                          {team.notActivated > 0 && (
-                            <span className={AMBER_CHIP} title="Reps on this team who have never activated Mindtickle">
-                              {team.notActivated} never activated
-                            </span>
-                          )}
-                        </span>
-                        <CopyButton team={team} directs={directs} view={view} />
-                      </td>
-                      {labels.map((l) => {
-                        const owed = directs.filter((d) => d.cells[l]?.accountable);
-                        const got = owed.filter((d) => stateClass(d.cells[l]!.state) === "completed");
-                        return (
-                          <td key={l} className={cn(MGR_BG, "border-b px-3 text-center text-xs tabular-nums text-muted-foreground")}>
-                            {owed.length ? `${got.length}/${owed.length}` : "—"}
-                          </td>
-                        );
-                      })}
-                      <td className={cn(PIN_DONE, MGR_BG, "border-b px-3 text-right tabular-nums")}>{`${tDone}/${tAssigned}`}</td>
-                      <td className={cn(PIN_RATE, MGR_BG, "border-b pr-5 pl-3")}>
-                        <Meter value={tAssigned ? Math.round((tDone / tAssigned) * 1000) / 10 : null} />
-                      </td>
-                    </tr>
-                    {!closed &&
-                      directs.map((d) => (
-                        <tr key={d.email} className="group">
-                          <td className={cn(PIN_LEFT, ROW_BG, "h-9 border-b border-border/60 py-1 pr-3 pl-9")}>
-                            <span className="flex min-w-0 items-center gap-2">
-                              {/* The title is the tooltip: beside the name it left no room for either. */}
-                              <span className={cn("min-w-0 flex-1 truncate", d.exempt && "text-muted-foreground")} title={d.title || undefined}>
-                                {d.name || d.email}
-                              </span>
-                              {d.exempt && (
-                                <span className={cn(CHIP, "bg-slate-100 text-slate-600 dark:bg-slate-400/15 dark:text-slate-300")} title={exemptTitle(d)}>
-                                  {d.exemptSource === "first_month" ? "New hire" : "Pre-bootcamp"}
+                              {team.notActivated > 0 && (
+                                <span className={AMBER_CHIP} title="Reps on this team who have never activated Mindtickle">
+                                  {team.notActivated} never activated
                                 </span>
                               )}
-                              {d.notActivated && !d.exempt && (
-                                <span
-                                  className={AMBER_CHIP}
-                                  title="Account exists and content is assigned, but this person has never activated Mindtickle — so they cannot have completed anything."
-                                >
-                                  Never activated
-                                </span>
-                              )}
-                              <Trend name={d.name || d.email} email={d.email} trends={trends} month={view.month} />
-                              <span className="w-7 shrink-0 text-[11px] text-muted-foreground" title={d.role}>
-                                {short(d.role)}
-                              </span>
                             </span>
+                            <CopyButton team={team} directs={directs} view={view} />
                           </td>
-                          {labels.map((l) => (
-                            <td key={l} className={cn(ROW_BG, "border-b border-border/60 text-center")}>
-                              <Square rep={d} label={l} cell={d.cells[l]} template={view.moduleUrlTemplate} />
-                            </td>
-                          ))}
-                          <td className={cn(PIN_DONE, ROW_BG, "border-b border-border/60 px-3 text-right tabular-nums text-muted-foreground")}>
-                            {`${d.completed}/${d.assigned}`}
-                          </td>
-                          <td className={cn(PIN_RATE, ROW_BG, "border-b border-border/60 pr-5 pl-3")}>
-                            <Meter value={d.pct} />
+                          {labels.map((l) => {
+                            const owed = directs.filter((d) => d.cells[l]?.accountable);
+                            const got = owed.filter((d) => stateClass(d.cells[l]!.state) === "completed");
+                            return (
+                              <td key={l} className={cn(MGR_BG, "border-b px-3 text-center text-xs tabular-nums text-muted-foreground")}>
+                                {owed.length ? `${got.length}/${owed.length}` : "—"}
+                              </td>
+                            );
+                          })}
+                          <td className={cn(PIN_DONE, MGR_BG, "border-b px-3 text-right tabular-nums")}>{`${tDone}/${tAssigned}`}</td>
+                          <td className={cn(PIN_RATE, MGR_BG, "border-b pr-5 pl-3")}>
+                            <Meter value={tAssigned ? Math.round((tDone / tAssigned) * 1000) / 10 : null} />
                           </td>
                         </tr>
-                      ))}
-                  </tbody>
-                );
-              })}
-              </table>
-            </div>
+                        {!closed &&
+                          directs.map((d) => (
+                            <tr key={d.email} className="group">
+                              <td className={cn(PIN_LEFT, ROW_BG, "h-9 border-b border-border/60 py-1 pr-3 pl-9")}>
+                                <span className="flex min-w-0 items-center gap-2">
+                                  {/* The title is the tooltip: beside the name it left no room for either. */}
+                                  <span
+                                    className={cn("min-w-0 flex-1 truncate", d.exempt && "text-muted-foreground")}
+                                    title={d.title || undefined}
+                                  >
+                                    {d.name || d.email}
+                                  </span>
+                                  {d.exempt && (
+                                    <span
+                                      className={cn(CHIP, "bg-slate-100 text-slate-600 dark:bg-slate-400/15 dark:text-slate-300")}
+                                      title={exemptTitle(d)}
+                                    >
+                                      {d.exemptSource === "first_month" ? "New hire" : "Pre-bootcamp"}
+                                    </span>
+                                  )}
+                                  {d.notActivated && !d.exempt && (
+                                    <span
+                                      className={AMBER_CHIP}
+                                      title="Account exists and content is assigned, but this person has never activated Mindtickle — so they cannot have completed anything."
+                                    >
+                                      Never activated
+                                    </span>
+                                  )}
+                                  <Trend name={d.name || d.email} email={d.email} trends={trends} month={view.month} />
+                                  <span className="w-7 shrink-0 text-[11px] text-muted-foreground" title={d.role}>
+                                    {short(d.role)}
+                                  </span>
+                                </span>
+                              </td>
+                              {labels.map((l) => (
+                                <td key={l} className={cn(ROW_BG, "border-b border-border/60 text-center")}>
+                                  <Square rep={d} label={l} cell={d.cells[l]} template={view.moduleUrlTemplate} />
+                                </td>
+                              ))}
+                              <td
+                                className={cn(
+                                  PIN_DONE,
+                                  ROW_BG,
+                                  "border-b border-border/60 px-3 text-right tabular-nums text-muted-foreground",
+                                )}
+                              >
+                                {`${d.completed}/${d.assigned}`}
+                              </td>
+                              <td className={cn(PIN_RATE, ROW_BG, "border-b border-border/60 pr-5 pl-3")}>
+                                <Meter value={d.pct} />
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    );
+                  })}
+                </table>
+              </div>
             </TooltipProvider>
           </>
         )}

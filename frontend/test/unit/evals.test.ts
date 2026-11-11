@@ -157,10 +157,7 @@ describe("orgUnder", () => {
   });
 
   test("drops a chain that loops or leads to someone not imported", () => {
-    const org = orgUnder(
-      [p("a@x.com", "b@x.com"), p("b@x.com", "a@x.com"), p("c@x.com", "gone@x.com"), p("d@x.com", "")],
-      "root@x.com",
-    );
+    const org = orgUnder([p("a@x.com", "b@x.com"), p("b@x.com", "a@x.com"), p("c@x.com", "gone@x.com"), p("d@x.com", "")], "root@x.com");
     assert.deepEqual(org, []);
   });
 

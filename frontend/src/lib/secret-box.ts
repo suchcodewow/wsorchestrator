@@ -14,13 +14,9 @@ const HKDF_INFO = "workshop-orchestrator/harness-token/v1";
 function key(): Buffer {
   const material = process.env.HARNESS_TOKEN_ENC_KEY || process.env.AUTH_SECRET;
   if (!material) {
-    throw new Error(
-      "Cannot encrypt: set HARNESS_TOKEN_ENC_KEY or AUTH_SECRET.",
-    );
+    throw new Error("Cannot encrypt: set HARNESS_TOKEN_ENC_KEY or AUTH_SECRET.");
   }
-  return Buffer.from(
-    hkdfSync("sha256", material, "workshop-orchestrator", HKDF_INFO, KEY_BYTES),
-  );
+  return Buffer.from(hkdfSync("sha256", material, "workshop-orchestrator", HKDF_INFO, KEY_BYTES));
 }
 
 export function secretsConfigured(): boolean {
@@ -30,10 +26,7 @@ export function secretsConfigured(): boolean {
 export function sealSecret(plaintext: string): Buffer {
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv("aes-256-gcm", key(), iv);
-  const body = Buffer.concat([
-    cipher.update(plaintext, "utf8"),
-    cipher.final(),
-  ]);
+  const body = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   return Buffer.concat([Buffer.from([VERSION]), iv, cipher.getAuthTag(), body]);
 }
 
@@ -48,9 +41,7 @@ export function openSecret(blob: Buffer): string | null {
   try {
     const decipher = createDecipheriv("aes-256-gcm", key(), iv);
     decipher.setAuthTag(tag);
-    return Buffer.concat([decipher.update(body), decipher.final()]).toString(
-      "utf8",
-    );
+    return Buffer.concat([decipher.update(body), decipher.final()]).toString("utf8");
   } catch {
     return null;
   }

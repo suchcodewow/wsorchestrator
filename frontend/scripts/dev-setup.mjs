@@ -30,15 +30,12 @@ if (!fs.existsSync(envFile)) {
 let env = fs.readFileSync(envFile, "utf8");
 if (/^AUTH_SECRET\s*=\s*"?(replace-me)?"?\s*$/m.test(env) || !/^AUTH_SECRET\s*=/m.test(env)) {
   const line = `AUTH_SECRET="${randomBytes(32).toString("base64")}"`;
-  env = /^AUTH_SECRET\s*=/m.test(env)
-    ? env.replace(/^AUTH_SECRET\s*=.*$/m, line)
-    : `${env.trimEnd()}\n${line}\n`;
+  env = /^AUTH_SECRET\s*=/m.test(env) ? env.replace(/^AUTH_SECRET\s*=.*$/m, line) : `${env.trimEnd()}\n${line}\n`;
   fs.writeFileSync(envFile, env);
   console.log("wrote a new AUTH_SECRET into frontend/.env");
 }
 
-const databaseUrl =
-  process.env.DATABASE_URL ?? env.match(/^DATABASE_URL\s*=\s*"?([^"\n]+)"?/m)?.[1];
+const databaseUrl = process.env.DATABASE_URL ?? env.match(/^DATABASE_URL\s*=\s*"?([^"\n]+)"?/m)?.[1];
 if (!databaseUrl) {
   console.error("No DATABASE_URL in frontend/.env.");
   process.exit(1);
@@ -69,9 +66,7 @@ await withClient(urlFor("postgres"), async (client) => {
 for (const name of databases) {
   const url = urlFor(name);
   const tables = await withClient(url, async (client) => {
-    const { rows } = await client.query(
-      "select count(*)::int as n from information_schema.tables where table_schema = 'public'",
-    );
+    const { rows } = await client.query("select count(*)::int as n from information_schema.tables where table_schema = 'public'");
     return rows[0].n;
   });
   if (tables > 0) {

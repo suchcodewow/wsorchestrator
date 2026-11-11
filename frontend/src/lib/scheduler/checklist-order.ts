@@ -18,7 +18,11 @@ export const byPlace = (a: Placed, b: Placed) =>
  * half-day `to`, first at 0, and that half renumbered from 0; past the end is
  * the end. The half it left keeps its numbers, gap and all, as the server does.
  */
-export function placeInHalf<T extends Placed>(list: readonly T[], id: string, to: { day: number; period: ChecklistPeriod; index: number }): T[] {
+export function placeInHalf<T extends Placed>(
+  list: readonly T[],
+  id: string,
+  to: { day: number; period: ChecklistPeriod; index: number },
+): T[] {
   const moving = list.find((i) => i.id === id);
   if (!moving) return [...list];
   const others = list.filter((i) => i.id !== id && i.day === to.day && i.period === to.period).sort(byPlace);

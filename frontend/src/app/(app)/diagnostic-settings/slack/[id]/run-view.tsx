@@ -42,7 +42,10 @@ export function ReminderRunView({
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild}>
-        <Link href="/diagnostic-settings/slack" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+        <Link
+          href="/diagnostic-settings/slack"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="size-4" />
           Slack
         </Link>
@@ -96,7 +99,11 @@ export function ReminderRunView({
                   </td>
                   <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">{OUTCOMES[m.outcome][run.dryRun ? "dry" : "live"]}</td>
                   <td className="px-5 py-3">
-                    {m.outcome === "messaged" ? <SlackMessage text={m.detail} /> : <span className="text-muted-foreground">{m.detail}</span>}
+                    {m.outcome === "messaged" ? (
+                      <SlackMessage text={m.detail} />
+                    ) : (
+                      <span className="text-muted-foreground">{m.detail}</span>
+                    )}
                   </td>
                 </tr>
               ))}

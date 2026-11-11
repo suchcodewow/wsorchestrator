@@ -61,9 +61,7 @@ export function TokenRow({
 
   return (
     <article aria-label={name}>
-      <div
-        className={cn("group/row relative px-5 transition-colors hover:bg-muted/30", hasBody ? "pb-2 pt-4" : "py-4")}
-      >
+      <div className={cn("group/row relative px-5 transition-colors hover:bg-muted/30", hasBody ? "pb-2 pt-4" : "py-4")}>
         {/* Sits under the row so every part of the cell toggles it, including
             the padding — the buttons above take their own clicks back. */}
         <button
@@ -82,9 +80,7 @@ export function TokenRow({
           )}
           <h3 className="min-w-0 truncate font-medium">{name}</h3>
           {token.accountName !== null && (
-            <code className="truncate rounded bg-muted px-1 py-0.5 font-mono text-xs text-muted-foreground">
-              {token.accountId}
-            </code>
+            <code className="truncate rounded bg-muted px-1 py-0.5 font-mono text-xs text-muted-foreground">{token.accountId}</code>
           )}
           {!token.usable && (
             <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-destructive">
@@ -134,9 +130,7 @@ export function TokenRow({
 
       {hasBody && (
         <div className="space-y-2 px-5 pb-4">
-          {form.open && (
-            <DeployForm form={form} token={token} choices={choices} deploying={busy.deploying} scrubDays={scrubDays} />
-          )}
+          {form.open && <DeployForm form={form} token={token} choices={choices} deploying={busy.deploying} scrubDays={scrubDays} />}
           {form.report && <DeployReportPanel report={form.report} onClose={form.dismissReport} />}
           {expanded && (
             <TokenDetails
@@ -169,9 +163,15 @@ function TokenDetails({
 }) {
   const identity = [
     PRINCIPAL_LABEL[token.principalType ?? ""] ?? (token.kind === "sat" ? "Service account" : "Personal token"),
-    token.accountName === null ? <code key="account" className="font-mono">{token.accountId}</code> : null,
+    token.accountName === null ? (
+      <code key="account" className="font-mono">
+        {token.accountId}
+      </code>
+    ) : null,
     token.principal,
-    <code key="tail" className="font-mono">…{token.tail}</code>,
+    <code key="tail" className="font-mono">
+      …{token.tail}
+    </code>,
     token.verifiedAt ? `verified ${shortDate(token.verifiedAt)}` : "not currently valid",
   ].filter(Boolean);
 
@@ -231,23 +231,13 @@ function TokenDetails({
 /** What the last deploy put into the organization, as far as it was recorded. */
 function DeployedContentLine({ content }: { content: DeployedContent | null }) {
   if (content === null) {
-    return (
-      <p className="text-xs text-muted-foreground">That deploy ran before this site kept a record of what went in.</p>
-    );
+    return <p className="text-xs text-muted-foreground">That deploy ran before this site kept a record of what went in.</p>;
   }
 
-  const parts = [
-    ...(content.official ? ["Official content"] : []),
-    ...(content.mySecrets ? ["My secrets"] : []),
-    ...content.myTemplates,
-  ];
+  const parts = [...(content.official ? ["Official content"] : []), ...(content.mySecrets ? ["My secrets"] : []), ...content.myTemplates];
 
   if (parts.length === 0) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        Nothing landed in that organization — every ticked source was skipped.
-      </p>
-    );
+    return <p className="text-xs text-muted-foreground">Nothing landed in that organization — every ticked source was skipped.</p>;
   }
 
   return (
@@ -269,9 +259,7 @@ function PermissionList({ permissions }: { permissions: HarnessTokenSummary["per
   return (
     <div className="space-y-1 pt-0.5">
       <p className="text-xs text-muted-foreground">
-        {permissions.length === 0
-          ? "No permission check recorded"
-          : `${granted} of ${permissions.length} checked permissions granted`}
+        {permissions.length === 0 ? "No permission check recorded" : `${granted} of ${permissions.length} checked permissions granted`}
       </p>
       <ul className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
         {permissions.map((p) => (
@@ -283,9 +271,7 @@ function PermissionList({ permissions }: { permissions: HarnessTokenSummary["per
             {permissionLabel(p.permission)}
           </li>
         ))}
-        {permissions.length === 0 && (
-          <li className="text-muted-foreground">Harness did not answer the permission check for this token.</li>
-        )}
+        {permissions.length === 0 && <li className="text-muted-foreground">Harness did not answer the permission check for this token.</li>}
       </ul>
     </div>
   );

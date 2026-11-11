@@ -2,18 +2,10 @@
 
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
-import {
-  deleteOrgSecret,
-  readOrgSecretForm,
-  STATUS_FOR,
-  updateOrgSecret,
-} from "@/lib/harness-org-secrets";
+import { deleteOrgSecret, readOrgSecretForm, STATUS_FOR, updateOrgSecret } from "@/lib/harness-org-secrets";
 import { audited } from "@/lib/audit";
 
-export const PATCH = audited(async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error, user } = await requireUser(req);
   if (error) return error;
 
@@ -22,33 +14,18 @@ export const PATCH = audited(async function PATCH(
 
   const parsed = await readOrgSecretForm(form);
   if (!parsed.ok) {
-    return NextResponse.json(
-      { error: parsed.error },
-      { status: STATUS_FOR[parsed.error] },
-    );
+    return NextResponse.json({ error: parsed.error }, { status: STATUS_FOR[parsed.error] });
   }
 
   const { id } = await params;
-  const result = await updateOrgSecret(
-    user.id,
-    id,
-    parsed.identifier,
-    parsed.input,
-    user.id,
-  );
+  const result = await updateOrgSecret(user.id, id, parsed.identifier, parsed.input, user.id);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
   return NextResponse.json({ secret: result.secret });
 });
 
-export const DELETE = audited(async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error, user } = await requireUser(req);
   if (error) return error;
 

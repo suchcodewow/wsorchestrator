@@ -15,8 +15,7 @@ export function LabGuideBody({ html }: { html: string }) {
     if (!root) return;
 
     let node: Element | null = root;
-    while (node && !/auto|scroll|overlay/.test(getComputedStyle(node).overflowY))
-      node = node.parentElement;
+    while (node && !/auto|scroll|overlay/.test(getComputedStyle(node).overflowY)) node = node.parentElement;
 
     const target = node ?? document.scrollingElement;
     if (!target) return;
@@ -94,10 +93,7 @@ export function LabGuideBody({ html }: { html: string }) {
       if (!trigger || !root!.contains(trigger)) return;
 
       // Dragging out part of an identifier is a copy of its own; let it stand.
-      if (
-        trigger.dataset.copy === "inline" &&
-        window.getSelection()?.isCollapsed === false
-      ) {
+      if (trigger.dataset.copy === "inline" && window.getSelection()?.isCollapsed === false) {
         return;
       }
 
@@ -119,11 +115,5 @@ export function LabGuideBody({ html }: { html: string }) {
     };
   }, [html]);
 
-  return (
-    <div
-      ref={ref}
-      className="lab-prose"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+  return <div ref={ref} className="lab-prose" dangerouslySetInnerHTML={{ __html: html }} />;
 }

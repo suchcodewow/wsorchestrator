@@ -29,7 +29,10 @@ describe("buildReviewPrompt", () => {
   });
 
   test("names each criterion by id, with its description when it has one", () => {
-    assert.match(user, /<criterion id="11111111-1111-4111-8111-111111111111">\nDiscovery\nAsks open questions about the pain.\n<\/criterion>/);
+    assert.match(
+      user,
+      /<criterion id="11111111-1111-4111-8111-111111111111">\nDiscovery\nAsks open questions about the pain.\n<\/criterion>/,
+    );
     assert.match(user, /<criterion id="22222222-2222-4222-8222-222222222222">\nDemo\n<\/criterion>/);
     assert.match(user, /<attendee>Pat Doe<\/attendee>/);
   });

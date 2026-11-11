@@ -91,8 +91,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
         summary: "Lists component sets, oldest change first.",
         access: "contributor",
         token: true,
-        notes:
-          "An Event Manager sees every set. Anyone else sees only the sets they wrote.",
+        notes: "An Event Manager sees every set. Anyone else sees only the sets they wrote.",
         query: [
           {
             name: "status",
@@ -100,8 +99,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
             note: "filters by status; any other value returns an empty list",
           },
         ],
-        returns:
-          "{ sets: { id, name, status, notes, authorId, updatedAt, componentCount: number, runCount: number }[] }",
+        returns: "{ sets: { id, name, status, notes, authorId, updatedAt, componentCount: number, runCount: number }[] }",
       },
       {
         method: "POST",
@@ -110,7 +108,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
         access: "contributor",
         token: true,
         notes:
-          "The set starts as `testing`. The sandbox run is a real Harness-only event owned by you: \"Sandbox — {name}\", one user, no clouds, torn down after 2 hours. It is started at once; `started: false` means the immediate start failed and the scheduler will pick it up.",
+          'The set starts as `testing`. The sandbox run is a real Harness-only event owned by you: "Sandbox — {name}", one user, no clouds, torn down after 2 hours. It is started at once; `started: false` means the immediate start failed and the scheduler will pick it up.',
         body: {
           kind: "json",
           fields: [
@@ -136,8 +134,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
         summary: "Reads one component set and the components it proposes.",
         access: "contributor",
         token: true,
-        notes:
-          "Only the set's author or an Event Manager can read it; anyone else gets 404.",
+        notes: "Only the set's author or an Event Manager can read it; anyone else gets 404.",
         params: idParam,
         returns:
           "{ set: { id, name, status, authorId, notes, createdAt, updatedAt }, components: { identifier, kind, scope, name, description, spec, requires, dependsOn, versionLabel, builtin }[] }",
@@ -182,15 +179,13 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
         summary: "Offers a tested set for review.",
         access: "contributor",
         token: true,
-        notes:
-          "Only the set's author, an Event Manager included. A set with no sandbox runs can still be submitted; `untested` says so.",
+        notes: "Only the set's author, an Event Manager included. A set with no sandbox runs can still be submitted; `untested` says so.",
         params: idParam,
         body: {
           kind: "json",
           fields: [{ name: "notes", type: "string", note: "for the reviewer; cut to 2,000 characters" }],
         },
-        returns:
-          `{ setId: string, status: "submitted", testedBy: { id, status }[], untested: boolean }`,
+        returns: `{ setId: string, status: "submitted", testedBy: { id, status }[], untested: boolean }`,
         errors: [
           { status: 404, error: "not_found", when: "no such set, or you did not write it" },
           { status: 409, error: "not_submittable", when: "the set is not `testing`" },
@@ -213,9 +208,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
           ],
         },
         returns: `{ setId: string, status: "approved" | "rejected" }`,
-        errors: [
-          { status: 409, error: "not_reviewable", when: "the set is not `submitted`, or does not exist" },
-        ],
+        errors: [{ status: 409, error: "not_reviewable", when: "the set is not `submitted`, or does not exist" }],
       },
     ],
   },
@@ -240,7 +233,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
         access: "manager",
         token: true,
         notes:
-          "The slug is made from the title (up to 40 characters). If it is taken, -2, -3 and so on is added; \"new\" and \"edit\" become \"new-guide\" and \"edit-guide\".",
+          'The slug is made from the title (up to 40 characters). If it is taken, -2, -3 and so on is added; "new" and "edit" become "new-guide" and "edit-guide".',
         body: {
           kind: "json",
           fields: [
@@ -293,8 +286,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
         summary: "Deletes a lab guide.",
         access: "manager",
         token: true,
-        notes:
-          "Irreversible. The guide is also removed from every workshop that included it, without warning. Takes an id only.",
+        notes: "Irreversible. The guide is also removed from every workshop that included it, without warning. Takes an id only.",
         params: idParam,
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "no guide has that id" }],
@@ -393,8 +385,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
         summary: "Serves an image's bytes.",
         access: "public",
         token: true,
-        notes:
-          "Sent inline with its stored Content-Type and cached as immutable for a year, so a deleted image can linger in caches.",
+        notes: "Sent inline with its stored Content-Type and cached as immutable for a year, so a deleted image can linger in caches.",
         params: idParam,
         returns: "the image bytes",
         errors: [{ status: 404, error: "not_found", when: "no image has that id" }],
@@ -423,8 +414,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
         summary: "Deletes an image.",
         access: "manager",
         token: true,
-        notes:
-          "Irreversible. Guides that embed it are not changed and point at nothing; POST /api/lab-guides/image-refs finds them.",
+        notes: "Irreversible. Guides that embed it are not changed and point at nothing; POST /api/lab-guides/image-refs finds them.",
         params: idParam,
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "no image has that id" }],
@@ -444,8 +434,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
         access: "public",
         token: true,
         notes: "An Event Manager also sees unpublished workshops; anyone else sees published ones only.",
-        returns:
-          "{ workshops: { id, slug, title, summary, published, updatedAt, authorName, guideCount: number }[] }",
+        returns: "{ workshops: { id, slug, title, summary, published, updatedAt, authorName, guideCount: number }[] }",
       },
       {
         method: "POST",
@@ -454,7 +443,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
         access: "manager",
         token: true,
         notes:
-          "The slug is made from the title (up to 40 characters). If it is taken, -2, -3 and so on is added; \"new\" and \"guides\" become \"new-workshop\" and \"guides-workshop\".",
+          'The slug is made from the title (up to 40 characters). If it is taken, -2, -3 and so on is added; "new" and "guides" become "new-workshop" and "guides-workshop".',
         body: {
           kind: "json",
           fields: [
@@ -496,7 +485,11 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
             { name: "title", type: "string", required: true, note: "trimmed; 1 to 200 characters" },
             { name: "summary", type: "string", note: `trimmed; up to 300 characters; defaults to ""` },
             { name: "published", type: "boolean", note: "defaults to false" },
-            { name: "guideIds", type: "string[] (uuid)", note: "the full contents in order; up to 50; repeats are dropped; defaults to []" },
+            {
+              name: "guideIds",
+              type: "string[] (uuid)",
+              note: "the full contents in order; up to 50; repeats are dropped; defaults to []",
+            },
           ],
         },
         returns: "{ workshop: Workshop }",

@@ -11,15 +11,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmployeeMatches, useEmployeeSearch, type EmployeeCandidate } from "@/components/employee-picker";
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ASSESSMENTS_ROLES, EVENT_ROLES, TRAINING_ROLES } from "@/db/schema";
 import {
@@ -131,8 +123,7 @@ export function AddUserDialog() {
           <DialogHeader>
             <DialogTitle>Add a user</DialogTitle>
             <DialogDescription>
-              They appear in the table now with these roles, and keep them when
-              they first sign in with Google.
+              They appear in the table now with these roles, and keep them when they first sign in with Google.
             </DialogDescription>
           </DialogHeader>
 

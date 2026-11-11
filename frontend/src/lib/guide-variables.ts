@@ -33,15 +33,13 @@ export const GUIDE_VARIABLES = [
     name: "projectUrl",
     label: "Harness project link",
     hint: "The full address of your project's overview page.",
-    example:
-      "https://app.harness.io/ng/account/wlgELJ0TTre5aZhzEfwsfw/home/orgs/acme_summit/projects/shawn_pearson/details",
+    example: "https://app.harness.io/ng/account/wlgELJ0TTre5aZhzEfwsfw/home/orgs/acme_summit/projects/shawn_pearson/details",
   },
   {
     name: "orgUrl",
     label: "Harness organization link",
     hint: "The full address of the event's organization.",
-    example:
-      "https://app.harness.io/ng/account/wlgELJ0TTre5aZhzEfwsfw/settings/organizations/acme_summit/details",
+    example: "https://app.harness.io/ng/account/wlgELJ0TTre5aZhzEfwsfw/settings/organizations/acme_summit/details",
   },
   {
     name: "email",
@@ -81,15 +79,11 @@ export type GuideVariable = (typeof GUIDE_VARIABLES)[number];
 
 export type GuideValues = Partial<Record<GuideVariableName, string>>;
 
-const BY_NAME = new Map<string, GuideVariable>(
-  GUIDE_VARIABLES.map((variable) => [variable.name, variable]),
-);
+const BY_NAME = new Map<string, GuideVariable>(GUIDE_VARIABLES.map((variable) => [variable.name, variable]));
 
-export const isGuideVariable = (name: string): name is GuideVariableName =>
-  BY_NAME.has(name);
+export const isGuideVariable = (name: string): name is GuideVariableName => BY_NAME.has(name);
 
-export const guideVariable = (name: GuideVariableName): GuideVariable =>
-  BY_NAME.get(name)!;
+export const guideVariable = (name: GuideVariableName): GuideVariable => BY_NAME.get(name)!;
 
 /** What a render found: which blanks a guide has, and which stayed blank. */
 export type GuideVariableReport = {
@@ -124,11 +118,7 @@ const TOKEN = /\{\{\s*([A-Za-z][A-Za-z\d]*)\s*\}\}/g;
  * typo — is left standing, so the page shows what it is waiting for rather than
  * a hole where a project name should be.
  */
-export function fillGuideVariables(
-  text: string,
-  values: GuideValues,
-  tally?: Tally,
-): string {
+export function fillGuideVariables(text: string, values: GuideValues, tally?: Tally): string {
   if (!text.includes("{{")) return text;
 
   return text.replace(TOKEN, (token, name: string) => {
@@ -150,8 +140,7 @@ export function fillGuideVariables(
 }
 
 /** Stand-in values, for showing an author what a filled guide reads like. */
-export const exampleGuideValues = (): GuideValues =>
-  Object.fromEntries(GUIDE_VARIABLES.map((v) => [v.name, v.example]));
+export const exampleGuideValues = (): GuideValues => Object.fromEntries(GUIDE_VARIABLES.map((v) => [v.name, v.example]));
 
 export const GUIDE_CONTEXT_COOKIE = "guide-context";
 
@@ -186,10 +175,7 @@ export function parseGuideContext(raw: string | undefined): GuideContext {
 
   return {
     runId: typeof runId === "string" && isUuid(runId) ? runId : null,
-    accountId:
-      typeof accountId === "number" && Number.isInteger(accountId) && accountId > 0
-        ? accountId
-        : null,
+    accountId: typeof accountId === "number" && Number.isInteger(accountId) && accountId > 0 ? accountId : null,
     typed: readTyped(typed),
   };
 }

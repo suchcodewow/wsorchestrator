@@ -8,14 +8,7 @@
 import { useState } from "react";
 import { Check, Copy, Link2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ASSESSMENTS_ROLES, EVENT_ROLES, INVITE_TTL_MINUTES, TRAINING_ROLES } from "@/db/schema";
 import {
@@ -102,8 +95,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
     }
   }
 
-  const grantsSomething =
-    eventRole !== NONE || trainingRole !== NONE || assessmentsRole !== NONE;
+  const grantsSomething = eventRole !== NONE || trainingRole !== NONE || assessmentsRole !== NONE;
 
   return (
     <>
@@ -125,8 +117,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
             <DialogTitle>{created ? "Invite link ready" : "Create an invite link"}</DialogTitle>
             <DialogDescription className="leading-relaxed">
               {`Anyone who opens the link in the next ${INVITE_TTL_MINUTES} minutes and signs in `}
-              gets these roles, as long as they don&apos;t have access already. It
-              works only for addresses allowed to sign in.
+              gets these roles, as long as they don&apos;t have access already. It works only for addresses allowed to sign in.
             </DialogDescription>
           </DialogHeader>
 
@@ -146,9 +137,8 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Expires at{" "}
-                {created.expiresAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.
-                This is the only time the link is shown.
+                Expires at {created.expiresAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. This is the only time the
+                link is shown.
               </p>
             </div>
           ) : (
@@ -230,11 +220,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
                 <Button variant="ghost" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
-                <Button
-                  variant="brand"
-                  disabled={pending || !grantsSomething}
-                  onClick={() => void create()}
-                >
+                <Button variant="brand" disabled={pending || !grantsSomething} onClick={() => void create()}>
                   {pending && <Loader2 className="animate-spin" />}
                   Create link
                 </Button>
@@ -263,9 +249,7 @@ export function RoleChoice({
 }) {
   return (
     <fieldset className="grid gap-1.5">
-      <legend className="mb-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-        {legend}
-      </legend>
+      <legend className="mb-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{legend}</legend>
       {options.map((o) => (
         <label
           key={o.value}

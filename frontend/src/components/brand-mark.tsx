@@ -23,16 +23,7 @@ export function Gear({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden>
       {TEETH.map((angle) => (
-        <rect
-          key={angle}
-          x="10.78"
-          y="1.1"
-          width="2.44"
-          height="5.6"
-          rx="0.8"
-          fill="currentColor"
-          transform={`rotate(${angle} 12 12)`}
-        />
+        <rect key={angle} x="10.78" y="1.1" width="2.44" height="5.6" rx="0.8" fill="currentColor" transform={`rotate(${angle} 12 12)`} />
       ))}
       <circle cx="12" cy="12" r="6.95" stroke="currentColor" strokeWidth="2.5" />
       <circle cx="12" cy="12" r="1.85" fill="currentColor" opacity="0.45" />

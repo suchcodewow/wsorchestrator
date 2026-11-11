@@ -15,11 +15,7 @@ export const metadata: Metadata = {
 
 const SHELL = "max-w-7xl";
 
-export default async function AttendPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function AttendPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const view = await getAttendeeView(id);
   if (!view) notFound();

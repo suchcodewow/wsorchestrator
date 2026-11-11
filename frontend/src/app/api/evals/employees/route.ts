@@ -21,9 +21,6 @@ export async function GET(req: Request) {
   if (asked && !match) return NextResponse.json({ error: "invalid_match" }, { status: 400 });
 
   const query = parseListQuery(params, EMPLOYEE_LIST);
-  const [{ rows, page, hasMore }, { count, syncedAt }] = await Promise.all([
-    listEmployees(query, match),
-    employeeSummary(),
-  ]);
+  const [{ rows, page, hasMore }, { count, syncedAt }] = await Promise.all([listEmployees(query, match), employeeSummary()]);
   return NextResponse.json({ people: rows, page, hasMore, total: count, syncedAt });
 }

@@ -24,8 +24,7 @@ const DRAFT: Review = { status: "draft", note: "", reviewer: null, updatedAt: nu
 export const ITEMS_BY_ID = new Map(IRIS_ITEMS.map((i) => [i.id, i]));
 
 /** The questions one subject has on one form: at most 38, so one query reads all their reviews. */
-export const itemsOf = (subject: SubjectKey, form: Form) =>
-  IRIS_ITEMS.filter((i) => i.subject === subject && i.form === form);
+export const itemsOf = (subject: SubjectKey, form: Form) => IRIS_ITEMS.filter((i) => i.subject === subject && i.form === form);
 
 /** The current review of each of `items`, by id. */
 export async function reviewsOf(items: readonly IrisItem[]): Promise<Map<string, Review>> {
@@ -42,7 +41,12 @@ export async function reviewsOf(items: readonly IrisItem[]): Promise<Map<string,
     })
     .from(irisItemReviews)
     .leftJoin(users, eq(users.id, irisItemReviews.reviewerId))
-    .where(inArray(irisItemReviews.itemId, items.map((i) => i.id)));
+    .where(
+      inArray(
+        irisItemReviews.itemId,
+        items.map((i) => i.id),
+      ),
+    );
   const byId = new Map(items.map((i) => [i.id, i]));
   for (const r of rows) {
     if (byId.get(r.itemId)?.version !== r.itemVersion) continue;
@@ -116,9 +120,10 @@ export async function setReviews(
         .values(values)
         .onConflictDoUpdate({
           target: irisItemReviews.itemId,
-          set: c.note === undefined
-            ? { itemVersion: values.itemVersion, status: values.status, reviewerId, updatedAt: values.updatedAt }
-            : { itemVersion: values.itemVersion, status: values.status, note: values.note, reviewerId, updatedAt: values.updatedAt },
+          set:
+            c.note === undefined
+              ? { itemVersion: values.itemVersion, status: values.status, reviewerId, updatedAt: values.updatedAt }
+              : { itemVersion: values.itemVersion, status: values.status, note: values.note, reviewerId, updatedAt: values.updatedAt },
         });
     }
   });
@@ -136,4 +141,3 @@ export async function approveDrafts(reviewerId: string, subject: SubjectKey, for
     drafts.map((i) => ({ id: i.id, status: "approved" as const })),
   );
 }
-

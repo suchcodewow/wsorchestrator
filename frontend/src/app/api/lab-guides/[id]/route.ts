@@ -2,14 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { sessionOrToken } from "@/lib/api-auth";
-import {
-  deleteLabGuide,
-  getLabGuideById,
-  getLabGuideBySlug,
-  labGuideSchema,
-  updateLabGuide,
-  workshopsUsingGuide,
-} from "@/lib/lab-guides";
+import { deleteLabGuide, getLabGuideById, getLabGuideBySlug, labGuideSchema, updateLabGuide, workshopsUsingGuide } from "@/lib/lab-guides";
 import { canManageLabGuides } from "@/lib/roles";
 import { audited } from "@/lib/audit";
 
@@ -28,26 +21,17 @@ async function requireEditor(req: Request) {
  * By id or by slug, with its Markdown. Public, like the guide's page; an
  * editor also sees which workshops use it, unpublished ones included.
  */
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const guide = (await getLabGuideById(id)) ?? (await getLabGuideBySlug(id));
   if (!guide) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const caller = await sessionOrToken(req);
-  const usedIn =
-    caller && canManageLabGuides(caller.access)
-      ? await workshopsUsingGuide(guide.id)
-      : undefined;
+  const usedIn = caller && canManageLabGuides(caller.access) ? await workshopsUsingGuide(guide.id) : undefined;
   return NextResponse.json({ guide, usedIn });
 }
 
-export const PATCH = audited(async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireEditor(req);
   if (error) return error;
 
@@ -65,10 +49,7 @@ export const PATCH = audited(async function PATCH(
   return NextResponse.json({ guide: result.guide });
 });
 
-export const DELETE = audited(async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireEditor(req);
   if (error) return error;
 

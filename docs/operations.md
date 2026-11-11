@@ -292,9 +292,11 @@ Each run does the following for each picked meeting
   - Zoom allows about 100 meetings a day; a run that reaches it stops making
     them and the next run carries on.
 - **Attendance.** It reads attendance from Zoom once an occurrence has been
-  over for 30 minutes.
-  - A guest Zoom saw join, by email or by full name, is done.
-  - A guest Zoom did not see is counted as missing. They are invited to the
+  over for 15 minutes, and on every run after that until it has been over for
+  6 hours. Zoom's report can lag, so early reads only credit people.
+  - A guest Zoom saw join, by email or by full name, is done at once.
+  - A guest Zoom has not listed stays unknown until 6 hours after the
+    occurrence, then is counted as missing. They are invited to the
     next occurrence, while one is left before the bootcamp.
   - An administrator's mark on the Current tab overrides Zoom either way.
 

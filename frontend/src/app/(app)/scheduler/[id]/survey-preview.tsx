@@ -93,7 +93,14 @@ function Body({ column, sessions, sent }: { column: BoardColumn; sessions: Sessi
               </p>
               <p className="text-xs text-muted-foreground">{formatClock(s.start)}</p>
             </div>
-            <Rating name={`preview-${s.id}`} question={SURVEY_QUESTIONS.sessionRating} value={undefined} missing={false} onChange={noop} disabled />
+            <Rating
+              name={`preview-${s.id}`}
+              question={SURVEY_QUESTIONS.sessionRating}
+              value={undefined}
+              missing={false}
+              onChange={noop}
+              disabled
+            />
             <Feedback question={SURVEY_QUESTIONS.sessionFeedback} value="" onChange={noop} disabled />
           </div>
         ))}

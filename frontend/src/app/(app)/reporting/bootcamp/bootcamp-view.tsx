@@ -12,23 +12,10 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ChevronRight, Eye, UserCheck, UserX, type LucideIcon } from "lucide-react";
-import {
-  HEADER_ROW,
-  LINK_ROW,
-  Pager,
-  PlainHeader,
-  SortHeader,
-  TableSearch,
-  useRowLink,
-} from "@/components/data-table";
+import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
-import {
-  BOOTCAMP_COHORT_PREFIX,
-  type BootcampCohortSort,
-  type BootcampRecordSort,
-  type HistoryStatus,
-} from "@/lib/list-specs";
+import { BOOTCAMP_COHORT_PREFIX, type BootcampCohortSort, type BootcampRecordSort, type HistoryStatus } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { BootcampRecordCounts, BootcampRecordRow, CardViewer, CohortRow } from "@/lib/reporting/bootcamp";
@@ -191,14 +178,7 @@ function PeopleTable<S extends string>({
             <thead>
               <tr className={HEADER_ROW}>
                 {columns.map(({ column, label, className }) => (
-                  <SortHeader
-                    key={column}
-                    column={column}
-                    sort={query.sort}
-                    dir={query.dir}
-                    prefix={prefix}
-                    className={className}
-                  >
+                  <SortHeader key={column} column={column} sort={query.sort} dir={query.dir} prefix={prefix} className={className}>
                     {label}
                   </SortHeader>
                 ))}
@@ -219,12 +199,8 @@ function PeopleTable<S extends string>({
                     <td className="px-5 py-2.5">
                       <LevelChip level={p.level} />
                     </td>
-                    <td className="px-5 py-2.5 text-right whitespace-nowrap tabular-nums">
-                      {formatWholeScore(p.averageScore)}
-                    </td>
-                    <td className="px-5 py-2.5 whitespace-nowrap tabular-nums text-muted-foreground">
-                      {formatDate(p.date)}
-                    </td>
+                    <td className="px-5 py-2.5 text-right whitespace-nowrap tabular-nums">{formatWholeScore(p.averageScore)}</td>
+                    <td className="px-5 py-2.5 whitespace-nowrap tabular-nums text-muted-foreground">{formatDate(p.date)}</td>
                     <td className="px-3 py-2.5">
                       <ChevronRight className="ml-auto size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                     </td>
@@ -296,12 +272,7 @@ export function BootcampView({
       </motion.div>
 
       <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3">
-        <TableSearch
-          value={query.q}
-          placeholder="Search by name or email"
-          label="Search bootcamp records"
-          className="min-w-56 flex-1"
-        />
+        <TableSearch value={query.q} placeholder="Search by name or email" label="Search bootcamp records" className="min-w-56 flex-1" />
         <div role="group" aria-label="Show" className="flex gap-2">
           {STATUSES.map(({ status: s, label, title, Icon }) => {
             const on = status === s;
@@ -323,16 +294,9 @@ export function BootcampView({
             {cohort.stages.length > 1 && (
               <div role="group" aria-label="Show class" className="flex gap-2">
                 {cohort.stages.map((st) => (
-                  <FilterChip
-                    key={st}
-                    on={cohort.stage === st}
-                    disabled={stageFilter.pending}
-                    onClick={() => stageFilter.toggle(st)}
-                  >
+                  <FilterChip key={st} on={cohort.stage === st} disabled={stageFilter.pending} onClick={() => stageFilter.toggle(st)}>
                     {STAGE_LABELS[st]}
-                    <span className="font-medium tabular-nums text-foreground">
-                      {cohort.counts[st].toLocaleString()}
-                    </span>
+                    <span className="font-medium tabular-nums text-foreground">{cohort.counts[st].toLocaleString()}</span>
                   </FilterChip>
                 ))}
               </div>

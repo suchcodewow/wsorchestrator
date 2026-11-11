@@ -14,12 +14,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  isPolicyDuplicate,
-  missingSecret,
-  policyIsInScope,
-  rescopeYaml,
-} from "../src/org-content.js";
+import { isPolicyDuplicate, missingSecret, policyIsInScope, rescopeYaml } from "../src/org-content.js";
 
 describe("rescopeYaml", () => {
   test("replaces the keys that say where the entity lives", () => {
@@ -124,10 +119,7 @@ describe("rescopeYaml", () => {
   });
 
   test("refuses a root key with nothing under it", () => {
-    assert.throws(
-      () => rescopeYaml("template:\n", "template", { name: "x" }),
-      /expected this template to have indented keys/,
-    );
+    assert.throws(() => rescopeYaml("template:\n", "template", { name: "x" }), /expected this template to have indented keys/);
   });
 
   test("quotes the values it writes", () => {
@@ -150,8 +142,7 @@ describe("missingSecret", () => {
   test("reads the identifier and the scope out of the refusal", () => {
     const body = JSON.stringify({
       status: "ERROR",
-      message:
-        "Invalid request: No secret exists with the id github_token in organization authoring",
+      message: "Invalid request: No secret exists with the id github_token in organization authoring",
     });
 
     assert.deepEqual(missingSecret(body), {
@@ -177,39 +168,23 @@ describe("missingSecret", () => {
  * the clouds are up — would mark every policy that is already there `failed`.
  */
 describe("isPolicyDuplicate", () => {
-  const refusal = (message: string) =>
-    JSON.stringify({ name: "BadRequest", id: "4w215m-9", message });
+  const refusal = (message: string) => JSON.stringify({ name: "BadRequest", id: "4w215m-9", message });
 
   test("reads the policy API's 400 as a duplicate", () => {
-    assert.equal(
-      isPolicyDuplicate(400, refusal("policy identifier must be unique")),
-      true,
-    );
+    assert.equal(isPolicyDuplicate(400, refusal("policy identifier must be unique")), true);
   });
 
   test("reads the policy set API's 400 as a duplicate", () => {
-    assert.equal(
-      isPolicyDuplicate(400, refusal("policy set identifier must be unique")),
-      true,
-    );
+    assert.equal(isPolicyDuplicate(400, refusal("policy set identifier must be unique")), true);
   });
 
   test("still reads the platform APIs' own wording", () => {
-    assert.equal(
-      isPolicyDuplicate(
-        400,
-        JSON.stringify({ code: "DUPLICATE_FIELD", message: "A filter already exists" }),
-      ),
-      true,
-    );
+    assert.equal(isPolicyDuplicate(400, JSON.stringify({ code: "DUPLICATE_FIELD", message: "A filter already exists" })), true);
     assert.equal(isPolicyDuplicate(409, "{}"), true);
   });
 
   test("leaves a real 400 alone", () => {
-    assert.equal(
-      isPolicyDuplicate(400, refusal("rego compilation failed: undefined function")),
-      false,
-    );
+    assert.equal(isPolicyDuplicate(400, refusal("rego compilation failed: undefined function")), false);
   });
 });
 
@@ -227,10 +202,7 @@ describe("policyIsInScope", () => {
   const projectSource = { ...orgSource, project: "content" };
 
   test("keeps a policy from the org the source names", () => {
-    assert.equal(
-      policyIsInScope({ org_id: "authoring", project_id: "" }, orgSource),
-      true,
-    );
+    assert.equal(policyIsInScope({ org_id: "authoring", project_id: "" }, orgSource), true);
   });
 
   test("drops an account-level policy, which reads back looking org-level", () => {
@@ -241,10 +213,7 @@ describe("policyIsInScope", () => {
   });
 
   test("drops a policy from a different org", () => {
-    assert.equal(
-      policyIsInScope({ org_id: "elsewhere", project_id: "" }, orgSource),
-      false,
-    );
+    assert.equal(policyIsInScope({ org_id: "elsewhere", project_id: "" }, orgSource), false);
   });
 
   test("separates an org source from a project one", () => {

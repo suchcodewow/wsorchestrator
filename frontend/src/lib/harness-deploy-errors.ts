@@ -27,31 +27,19 @@ export const STATUS_FOR: Record<DeployError, number> = {
 
 export const MESSAGES: Record<DeployError, string> = {
   not_found: "That token was already removed — reload the page.",
-  unreadable:
-    "This token can no longer be decrypted, so remove it and paste it again.",
-  invalid_token:
-    "Harness rejected that token — it may have been revoked or expired.",
-  not_permitted:
-    "That token no longer administers the account, so it can't create an organization.",
-  invalid_name:
-    "That name needs a letter, digit, or underscore in it.",
-  nothing_selected:
-    "Nothing was ticked to deploy, so pick at least one thing first.",
-  org_exists:
-    "An organization with that identifier already exists, so pick a different name.",
-  org_failed:
-    "Harness would not create the organization, so nothing else was deployed.",
+  unreadable: "This token can no longer be decrypted, so remove it and paste it again.",
+  invalid_token: "Harness rejected that token — it may have been revoked or expired.",
+  not_permitted: "That token no longer administers the account, so it can't create an organization.",
+  invalid_name: "That name needs a letter, digit, or underscore in it.",
+  nothing_selected: "Nothing was ticked to deploy, so pick at least one thing first.",
+  org_exists: "An organization with that identifier already exists, so pick a different name.",
+  org_failed: "Harness would not create the organization, so nothing else was deployed.",
   harness_error: "Harness couldn't answer just now — try again in a moment.",
   unreachable: "Couldn't reach Harness — check the network and try again.",
 };
 
 export function messageFor(error: unknown, status: number, detail?: unknown) {
-  const known =
-    typeof error === "string" && Object.hasOwn(MESSAGES, error)
-      ? MESSAGES[error as DeployError]
-      : undefined;
+  const known = typeof error === "string" && Object.hasOwn(MESSAGES, error) ? MESSAGES[error as DeployError] : undefined;
   if (!known) return `Something went wrong (${status}).`;
-  return typeof detail === "string" && detail.trim().length > 0
-    ? `${known} Harness said: ${detail.trim()}`
-    : known;
+  return typeof detail === "string" && detail.trim().length > 0 ? `${known} Harness said: ${detail.trim()}` : known;
 }

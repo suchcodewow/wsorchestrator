@@ -20,13 +20,7 @@ import assert from "node:assert/strict";
 
 import { pool } from "@/db";
 import { LAB_WORKSHOP_LIMITS } from "@/db/schema";
-import {
-  appendGuideToWorkshop,
-  deleteLabWorkshop,
-  getLabWorkshopById,
-  labWorkshopSchema,
-  updateLabWorkshop,
-} from "@/lib/lab-workshops";
+import { appendGuideToWorkshop, deleteLabWorkshop, getLabWorkshopById, labWorkshopSchema, updateLabWorkshop } from "@/lib/lab-workshops";
 
 const p = pool as unknown as Record<string, unknown>;
 const saved = { connect: p.connect, query: p.query };
@@ -97,10 +91,7 @@ describe("labWorkshopSchema", () => {
   test("allows up to the guide limit and no more", () => {
     const ids = (n: number) => Array.from({ length: n }, (_, i) => uuid(i));
     assert.equal(labWorkshopSchema.safeParse({ title: "t", guideIds: ids(LAB_WORKSHOP_LIMITS.guides) }).success, true);
-    assert.equal(
-      labWorkshopSchema.safeParse({ title: "t", guideIds: ids(LAB_WORKSHOP_LIMITS.guides + 1) }).success,
-      false,
-    );
+    assert.equal(labWorkshopSchema.safeParse({ title: "t", guideIds: ids(LAB_WORKSHOP_LIMITS.guides + 1) }).success, false);
   });
 
   test("drops fields a request must not set", () => {

@@ -19,24 +19,17 @@ afterEach(() => {
 });
 
 function respond(status: number, body: unknown) {
-  globalThis.fetch = (async () =>
-    new Response(JSON.stringify(body), { status })) as typeof fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify(body), { status })) as typeof fetch;
   console.warn = () => {};
 }
 
 describe("photoIsChosen", () => {
   test("a user-provided photo is chosen", () => {
-    assert.equal(
-      photoIsChosen({ photos: [{ url: "u", default: false, metadata: { primary: true } }] }),
-      true,
-    );
+    assert.equal(photoIsChosen({ photos: [{ url: "u", default: false, metadata: { primary: true } }] }), true);
   });
 
   test("Google's generated initial is not", () => {
-    assert.equal(
-      photoIsChosen({ photos: [{ url: "u", default: true, metadata: { primary: true } }] }),
-      false,
-    );
+    assert.equal(photoIsChosen({ photos: [{ url: "u", default: true, metadata: { primary: true } }] }), false);
   });
 
   test("the primary photo decides, wherever it sits", () => {

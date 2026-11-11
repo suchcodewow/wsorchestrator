@@ -85,8 +85,8 @@ export function SlackContactsView({
           <span className="font-medium text-foreground">
             {count.toLocaleString()} {count === 1 ? "contact" : "contacts"}
           </span>{" "}
-          added to every team&apos;s Slack message at the end of a bootcamp, to each Live Sessions channel, and to the
-          message a release sends managers.
+          added to every team&apos;s Slack message at the end of a bootcamp, to each Live Sessions channel, and to the message a release
+          sends managers.
         </p>
       </motion.div>
 

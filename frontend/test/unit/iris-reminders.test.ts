@@ -7,7 +7,11 @@ import { reminderText } from "@/lib/iris/reminder-values";
 
 describe("a Diagnostic reminder", () => {
   test("greets them by first name, counts what is left, and lists each subject by where it stands", () => {
-    const text = reminderText("Ava Rivera", { done: ["sdlc"], started: ["personas"], notStarted: ["companies", "pipegen"] }, "https://x.test/diagnostic/tests");
+    const text = reminderText(
+      "Ava Rivera",
+      { done: ["sdlc"], started: ["personas"], notStarted: ["companies", "pipegen"] },
+      "https://x.test/diagnostic/tests",
+    );
     assert.equal(
       text,
       [

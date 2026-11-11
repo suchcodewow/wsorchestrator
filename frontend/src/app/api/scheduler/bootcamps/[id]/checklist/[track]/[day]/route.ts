@@ -48,10 +48,9 @@ export const POST = audited(async function POST(req: Request, { params }: Params
   const { id, track, day } = parsed.data;
   const result = await addChecklistItem(user.id, id, track, day, input.data);
   if (!result.ok) {
-    return NextResponse.json(
-      result.email ? { error: result.error, email: result.email } : { error: result.error },
-      { status: CHECKLIST_STATUS_FOR[result.error] },
-    );
+    return NextResponse.json(result.email ? { error: result.error, email: result.email } : { error: result.error }, {
+      status: CHECKLIST_STATUS_FOR[result.error],
+    });
   }
   return NextResponse.json(result.value, { status: 201 });
 });

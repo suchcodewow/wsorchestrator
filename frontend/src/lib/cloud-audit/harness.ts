@@ -4,13 +4,7 @@ import "server-only";
 
 import { harnessBaseUrl } from "@/lib/harness-platform";
 import { missingFromCloud, type OwnerMaps } from "./owners";
-import {
-  summarize,
-  type AuditedResource,
-  type AuditUnavailable,
-  type Classification,
-  type CloudAuditResult,
-} from "./types";
+import { summarize, type AuditedResource, type AuditUnavailable, type Classification, type CloudAuditResult } from "./types";
 
 const MANAGED_BY = "workshop-orchestrator";
 
@@ -111,8 +105,7 @@ async function accountName(cfg: HarnessConfig): Promise<string | null> {
 const orgUrl = (cfg: HarnessConfig, identifier: string) =>
   `${cfg.baseUrl}/ng/account/${cfg.accountId}/settings/organizations/${encodeURIComponent(identifier)}/details`;
 
-const orgsUrl = (cfg: HarnessConfig) =>
-  `${cfg.baseUrl}/ng/account/${cfg.accountId}/settings/organizations`;
+const orgsUrl = (cfg: HarnessConfig) => `${cfg.baseUrl}/ng/account/${cfg.accountId}/settings/organizations`;
 
 function createdOn(entry: OrganizationEntry): { label: string; ok: boolean } | null {
   const ms = entry.createdAt;
@@ -122,9 +115,7 @@ function createdOn(entry: OrganizationEntry): { label: string; ok: boolean } | n
 
 function classifyError(err: unknown): AuditUnavailable {
   if (!(err instanceof HarnessError)) return "unavailable";
-  return err.status === 401 || err.status === 403
-    ? "permission_denied"
-    : "unavailable";
+  return err.status === 401 || err.status === 403 ? "permission_denied" : "unavailable";
 }
 
 export async function auditHarness(owners: OwnerMaps): Promise<CloudAuditResult> {
@@ -155,8 +146,7 @@ export async function auditHarness(owners: OwnerMaps): Promise<CloudAuditResult>
       : infra.has(identifier) || entry.harnessManaged
         ? "infra"
         : ours
-          ?
-            "untracked"
+          ? "untracked"
           : "unmanaged";
 
     return [
@@ -184,9 +174,7 @@ export async function auditHarness(owners: OwnerMaps): Promise<CloudAuditResult>
       columns: { id: "Organization", name: "Event name", state: "Created" },
       missing: missingFromCloud(
         known,
-        entries.flatMap((e) =>
-          e.organization?.identifier ? [e.organization.identifier] : [],
-        ),
+        entries.flatMap((e) => (e.organization?.identifier ? [e.organization.identifier] : [])),
         infra,
       ),
       ...summarize(resources),

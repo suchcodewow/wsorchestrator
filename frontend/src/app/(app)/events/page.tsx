@@ -31,17 +31,8 @@ export default async function EventsPage() {
     expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
     userCount: r.userCount,
     clouds: r.clouds,
-    owner:
-      r.ownerId === session.user.id
-        ? null
-        : (r.ownerName ?? r.ownerEmail ?? "Unknown"),
+    owner: r.ownerId === session.user.id ? null : (r.ownerName ?? r.ownerEmail ?? "Unknown"),
   }));
 
-  return (
-    <EventCalendar
-      events={events}
-      canSeeAllEvents={canSeeAllEvents(access)}
-      initialScope={scope}
-    />
-  );
+  return <EventCalendar events={events} canSeeAllEvents={canSeeAllEvents(access)} initialScope={scope} />;
 }

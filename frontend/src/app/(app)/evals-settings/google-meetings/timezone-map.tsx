@@ -11,18 +11,8 @@
  */
 
 import { useState } from "react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  TIMEZONE_HOURS,
-  offsetHour,
-  offsetInRange,
-  timezoneRangeLabel,
-} from "@/lib/evals/meeting-plan";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TIMEZONE_HOURS, offsetHour, offsetInRange, timezoneRangeLabel } from "@/lib/evals/meeting-plan";
 import { cn } from "@/lib/utils";
 import { WORLD_LAND_PATH, WORLD_VIEWBOX } from "./world-land";
 
@@ -50,10 +40,7 @@ const clock = (t: number) => {
 };
 
 const MAP_HOURS = Array.from({ length: 25 }, (_, i) => i - 12);
-const HOURS = Array.from(
-  { length: TIMEZONE_HOURS.max - TIMEZONE_HOURS.min + 1 },
-  (_, i) => TIMEZONE_HOURS.min + i,
-);
+const HOURS = Array.from({ length: TIMEZONE_HOURS.max - TIMEZONE_HOURS.min + 1 }, (_, i) => TIMEZONE_HOURS.min + i);
 
 const SELECT =
   "h-9 w-full rounded-md border border-input bg-field px-2 text-sm text-foreground shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
@@ -61,11 +48,7 @@ const SELECT =
 const hourLabel = (h: number) => `UTC${h < 0 ? "-" : "+"}${Math.abs(h)}`;
 
 /** Dot positions for `n` people in a band: columns filled top to bottom, each centred on the map's middle, packed tighter until they all fit. */
-function dots(
-  x: number,
-  width: number,
-  n: number,
-): { cx: number; cy: number; r: number }[] {
+function dots(x: number, width: number, n: number): { cx: number; cy: number; r: number }[] {
   const middle = BAR_HEIGHT + BAR_GAP + WORLD_VIEWBOX.height / 2;
   const room = WORLD_VIEWBOX.height - 6;
   let step = 7;
@@ -112,17 +95,12 @@ export function TimezoneMap({
 }) {
   const [anchor, setAnchor] = useState<number | null>(null);
   // The bands are UTC offsets, so while the US is on daylight time the land slides one band east to keep each place under its own band.
-  const landShift =
-    offsetHour("America/New_York", meetingAt ?? new Date()) === -4
-      ? 360 / 24
-      : 0;
+  const landShift = offsetHour("America/New_York", meetingAt ?? new Date()) === -4 ? 360 / 24 : 0;
   const counts = coverage?.byHour ?? {};
   const people = coverage?.people ?? {};
   const inRange = (h: number) => offsetInRange(h, from, to);
   const covered = HOURS.filter((h) => (counts[h] ?? 0) > 0);
-  const reached = covered
-    .filter(inRange)
-    .reduce((n, h) => n + (counts[h] ?? 0), 0);
+  const reached = covered.filter(inRange).reduce((n, h) => n + (counts[h] ?? 0), 0);
 
   function pick(hour: number) {
     if (disabled) return;
@@ -155,33 +133,17 @@ export function TimezoneMap({
                 y={0}
                 width={width}
                 height={BAR_HEIGHT}
-                className={
-                  t === null
-                    ? "fill-muted-foreground/20"
-                    : working
-                      ? "fill-green-500"
-                      : "fill-red-500"
-                }
+                className={t === null ? "fill-muted-foreground/20" : working ? "fill-green-500" : "fill-red-500"}
               >
                 <title>
-                  {t === null
-                    ? `${hourLabel(h)}`
-                    : `${hourLabel(h)}: ${clock(t)} local, ${working ? "within" : "outside"} 9 AM–5 PM`}
+                  {t === null ? `${hourLabel(h)}` : `${hourLabel(h)}: ${clock(t)} local, ${working ? "within" : "outside"} 9 AM–5 PM`}
                 </title>
               </rect>
             );
           })}
           <g transform={`translate(0 ${BAR_HEIGHT + BAR_GAP})`}>
-            <path
-              d={WORLD_LAND_PATH}
-              transform={`translate(${landShift} 0)`}
-              className="fill-muted-foreground/30"
-            />
-            <path
-              d={WORLD_LAND_PATH}
-              transform={`translate(${landShift - WORLD_VIEWBOX.width} 0)`}
-              className="fill-muted-foreground/30"
-            />
+            <path d={WORLD_LAND_PATH} transform={`translate(${landShift} 0)`} className="fill-muted-foreground/30" />
+            <path d={WORLD_LAND_PATH} transform={`translate(${landShift - WORLD_VIEWBOX.width} 0)`} className="fill-muted-foreground/30" />
             {MAP_HOURS.map((h) => {
               const { x, width } = band(h);
               const n = counts[h] ?? 0;
@@ -206,9 +168,7 @@ export function TimezoneMap({
                     }}
                     className={cn(
                       "stroke-border/60 outline-none focus-visible:stroke-ring focus-visible:stroke-2",
-                      disabled
-                        ? "cursor-default"
-                        : "cursor-pointer hover:fill-brand/40",
+                      disabled ? "cursor-default" : "cursor-pointer hover:fill-brand/40",
                       selected ? "fill-brand/30" : "fill-transparent",
                     )}
                     strokeWidth={0.4}
@@ -227,9 +187,7 @@ export function TimezoneMap({
                           strokeWidth={0.3}
                         />
                       </TooltipTrigger>
-                      <TooltipContent>
-                        {people[h]?.[i] ?? "Unknown"}
-                      </TooltipContent>
+                      <TooltipContent>{people[h]?.[i] ?? "Unknown"}</TooltipContent>
                     </Tooltip>
                   ))}
                   {h % 3 === 0 && (
@@ -237,12 +195,7 @@ export function TimezoneMap({
                       x={x + width / 2}
                       y={WORLD_VIEWBOX.height + 10}
                       textAnchor="middle"
-                      className={cn(
-                        "pointer-events-none text-[7px]",
-                        selected
-                          ? "fill-foreground font-medium"
-                          : "fill-muted-foreground",
-                      )}
+                      className={cn("pointer-events-none text-[7px]", selected ? "fill-foreground font-medium" : "fill-muted-foreground")}
                     >
                       {h === 0 ? "0" : h > 0 ? `+${h}` : h}
                     </text>

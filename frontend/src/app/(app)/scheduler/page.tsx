@@ -13,11 +13,7 @@ import { SchedulerView } from "./scheduler-view";
 
 export const metadata: Metadata = { title: "Scheduler" };
 
-export default async function SchedulerPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function SchedulerPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   if (!canSeeScheduler(session.user.access)) notFound();

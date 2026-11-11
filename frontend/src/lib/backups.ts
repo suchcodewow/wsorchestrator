@@ -18,10 +18,7 @@ export function backupTarget(): { project: string; instance: string } | null {
 
 let auth: GoogleAuth | null = null;
 
-async function api<T>(
-  path: string,
-  init?: { method?: "GET" | "POST"; data?: unknown },
-): Promise<T> {
+async function api<T>(path: string, init?: { method?: "GET" | "POST"; data?: unknown }): Promise<T> {
   auth ??= new GoogleAuth({
     scopes: ["https://www.googleapis.com/auth/cloud-platform"],
   });
@@ -59,10 +56,7 @@ type BackupRunsResponse = {
   }[];
 };
 
-export type BackupsUnavailable =
-  | "not_configured"
-  | "permission_denied"
-  | "unavailable";
+export type BackupsUnavailable = "not_configured" | "permission_denied" | "unavailable";
 
 function classify(err: unknown): BackupsUnavailable {
   const status = (err as { response?: { status?: number } })?.response?.status;
@@ -76,15 +70,11 @@ function classify(err: unknown): BackupsUnavailable {
  */
 export async function listBackups(
   target: { project: string; instance: string } | null = backupTarget(),
-): Promise<
-  { ok: true; backups: BackupRun[] } | { ok: false; error: BackupsUnavailable }
-> {
+): Promise<{ ok: true; backups: BackupRun[] } | { ok: false; error: BackupsUnavailable }> {
   if (!target) return { ok: false, error: "not_configured" };
 
   try {
-    const data = await api<BackupRunsResponse>(
-      `/projects/${target.project}/instances/${target.instance}/backupRuns?maxResults=50`,
-    );
+    const data = await api<BackupRunsResponse>(`/projects/${target.project}/instances/${target.instance}/backupRuns?maxResults=50`);
 
     const backups = (data.items ?? [])
       .filter((item): item is { id: string } & typeof item => Boolean(item.id))
@@ -106,29 +96,22 @@ export async function listBackups(
   }
 }
 
-export async function createBackup(
-  description: string,
-): Promise<{ ok: true } | { ok: false; error: BackupsUnavailable }> {
+export async function createBackup(description: string): Promise<{ ok: true } | { ok: false; error: BackupsUnavailable }> {
   const target = backupTarget();
   if (!target) return { ok: false, error: "not_configured" };
 
   try {
-    await api(
-      `/projects/${target.project}/instances/${target.instance}/backupRuns`,
-      { method: "POST", data: { description: description.slice(0, 255) } },
-    );
+    await api(`/projects/${target.project}/instances/${target.instance}/backupRuns`, {
+      method: "POST",
+      data: { description: description.slice(0, 255) },
+    });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: classify(err) };
   }
 }
 
-const HOLDS_RESOURCES = [
-  "provisioning",
-  "applying",
-  "ready",
-  "destroying",
-] as const;
+const HOLDS_RESOURCES = ["provisioning", "applying", "ready", "destroying"] as const;
 
 export type StrandedRun = {
   id: string;
@@ -146,25 +129,13 @@ export async function runsStrandedBy(backupTime: Date): Promise<StrandedRun[]> {
       createdAt: workshopRuns.createdAt,
     })
     .from(workshopRuns)
-    .where(
-      and(
-        gte(workshopRuns.createdAt, backupTime),
-        inArray(workshopRuns.status, [...HOLDS_RESOURCES]),
-      ),
-    )
+    .where(and(gte(workshopRuns.createdAt, backupTime), inArray(workshopRuns.status, [...HOLDS_RESOURCES])))
     .orderBy(workshopRuns.createdAt);
 }
 
-export type RestoreError =
-  | BackupsUnavailable
-  | "not_found"
-  | "not_restorable"
-  | "confirmation_mismatch";
+export type RestoreError = BackupsUnavailable | "not_found" | "not_restorable" | "confirmation_mismatch";
 
-export async function restoreBackup(
-  backupId: string,
-  confirmation: string,
-): Promise<{ ok: true } | { ok: false; error: RestoreError }> {
+export async function restoreBackup(backupId: string, confirmation: string): Promise<{ ok: true } | { ok: false; error: RestoreError }> {
   const target = backupTarget();
   if (!target) return { ok: false, error: "not_configured" };
 
@@ -182,19 +153,16 @@ export async function restoreBackup(
   }
 
   try {
-    await api(
-      `/projects/${target.project}/instances/${target.instance}/restoreBackup`,
-      {
-        method: "POST",
-        data: {
-          restoreBackupContext: {
-            backupRunId: backupId,
-            instanceId: target.instance,
-            project: target.project,
-          },
+    await api(`/projects/${target.project}/instances/${target.instance}/restoreBackup`, {
+      method: "POST",
+      data: {
+        restoreBackupContext: {
+          backupRunId: backupId,
+          instanceId: target.instance,
+          project: target.project,
         },
       },
-    );
+    });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: classify(err) };

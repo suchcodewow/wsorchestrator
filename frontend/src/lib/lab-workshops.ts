@@ -3,21 +3,14 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import {
-  LAB_WORKSHOP_LIMITS,
-  labGuides,
-  labWorkshopGuides,
-  labWorkshops,
-  users,
-  type LabWorkshop,
-} from "@/db/schema";
+import { LAB_WORKSHOP_LIMITS, labGuides, labWorkshopGuides, labWorkshops, users, type LabWorkshop } from "@/db/schema";
 import { slugify } from "@/lib/runs";
 import { isUuid } from "@/lib/utils";
 
-export type LabWorkshopSummary = Pick<
-  LabWorkshop,
-  "id" | "slug" | "title" | "summary" | "published" | "updatedAt"
-> & { authorName: string | null; guideCount: number };
+export type LabWorkshopSummary = Pick<LabWorkshop, "id" | "slug" | "title" | "summary" | "published" | "updatedAt"> & {
+  authorName: string | null;
+  guideCount: number;
+};
 
 export type WorkshopGuideEntry = {
   id: string;
@@ -31,9 +24,7 @@ export type LabWorkshopWithGuides = LabWorkshop & {
   guides: WorkshopGuideEntry[];
 };
 
-export async function listLabWorkshops(
-  canEdit: boolean,
-): Promise<LabWorkshopSummary[]> {
+export async function listLabWorkshops(canEdit: boolean): Promise<LabWorkshopSummary[]> {
   return db
     .select({
       id: labWorkshops.id,
@@ -68,9 +59,7 @@ async function guidesOf(workshopId: string): Promise<WorkshopGuideEntry[]> {
     .orderBy(asc(labWorkshopGuides.position));
 }
 
-export async function getLabWorkshopById(
-  id: string,
-): Promise<LabWorkshop | null> {
+export async function getLabWorkshopById(id: string): Promise<LabWorkshop | null> {
   if (!isUuid(id)) return null;
 
   const workshop = await db.query.labWorkshops.findFirst({
@@ -79,10 +68,7 @@ export async function getLabWorkshopById(
   return workshop ?? null;
 }
 
-export async function getLabWorkshopBySlug(
-  slug: string,
-  canEdit: boolean,
-): Promise<LabWorkshopWithGuides | null> {
+export async function getLabWorkshopBySlug(slug: string, canEdit: boolean): Promise<LabWorkshopWithGuides | null> {
   const [workshop] = await db
     .select({
       id: labWorkshops.id,
@@ -97,11 +83,7 @@ export async function getLabWorkshopBySlug(
     })
     .from(labWorkshops)
     .leftJoin(users, eq(users.id, labWorkshops.authorId))
-    .where(
-      canEdit
-        ? eq(labWorkshops.slug, slug)
-        : and(eq(labWorkshops.slug, slug), eq(labWorkshops.published, true)),
-    )
+    .where(canEdit ? eq(labWorkshops.slug, slug) : and(eq(labWorkshops.slug, slug), eq(labWorkshops.published, true)))
     .limit(1);
 
   if (!workshop) return null;
@@ -159,10 +141,7 @@ export const labWorkshopSchema = z.object({
   title: z.string().trim().min(1).max(LAB_WORKSHOP_LIMITS.title),
   summary: z.string().trim().max(LAB_WORKSHOP_LIMITS.summary).default(""),
   published: z.boolean().default(false),
-  guideIds: z
-    .array(z.string().uuid())
-    .max(LAB_WORKSHOP_LIMITS.guides)
-    .default([]),
+  guideIds: z.array(z.string().uuid()).max(LAB_WORKSHOP_LIMITS.guides).default([]),
 });
 
 export type LabWorkshopInput = z.infer<typeof labWorkshopSchema>;
@@ -173,36 +152,23 @@ async function resolveContents(guideIds: string[]): Promise<string[] | null> {
   const ordered = [...new Set(guideIds)];
   if (ordered.length === 0) return ordered;
 
-  const found = await db
-    .select({ id: labGuides.id })
-    .from(labGuides)
-    .where(inArray(labGuides.id, ordered));
+  const found = await db.select({ id: labGuides.id }).from(labGuides).where(inArray(labGuides.id, ordered));
 
   return found.length === ordered.length ? ordered : null;
 }
 
-async function setContents(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-  workshopId: string,
-  ordered: string[],
-): Promise<void> {
-  await tx
-    .delete(labWorkshopGuides)
-    .where(eq(labWorkshopGuides.workshopId, workshopId));
+async function setContents(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], workshopId: string, ordered: string[]): Promise<void> {
+  await tx.delete(labWorkshopGuides).where(eq(labWorkshopGuides.workshopId, workshopId));
 
   if (ordered.length === 0) return;
 
-  await tx
-    .insert(labWorkshopGuides)
-    .values(ordered.map((guideId, position) => ({ workshopId, guideId, position })));
+  await tx.insert(labWorkshopGuides).values(ordered.map((guideId, position) => ({ workshopId, guideId, position })));
 }
 
 export async function createLabWorkshop(
   input: LabWorkshopInput,
   authorId: string,
-): Promise<
-  { ok: true; workshop: LabWorkshop } | { ok: false; error: LabWorkshopError }
-> {
+): Promise<{ ok: true; workshop: LabWorkshop } | { ok: false; error: LabWorkshopError }> {
   const ordered = await resolveContents(input.guideIds);
   if (!ordered) return { ok: false, error: "unknown_guide" };
 
@@ -230,17 +196,14 @@ export async function createLabWorkshop(
 export async function updateLabWorkshop(
   id: string,
   input: LabWorkshopInput,
-): Promise<
-  { ok: true; workshop: LabWorkshop } | { ok: false; error: LabWorkshopError }
-> {
+): Promise<{ ok: true; workshop: LabWorkshop } | { ok: false; error: LabWorkshopError }> {
   const existing = await getLabWorkshopById(id);
   if (!existing) return { ok: false, error: "not_found" };
 
   const ordered = await resolveContents(input.guideIds);
   if (!ordered) return { ok: false, error: "unknown_guide" };
 
-  const renameSlug =
-    !existing.published && input.title.trim() !== existing.title;
+  const renameSlug = !existing.published && input.title.trim() !== existing.title;
   const slug = renameSlug ? await availableSlug(input.title, id) : undefined;
 
   const workshop = await db.transaction(async (tx) => {
@@ -268,9 +231,7 @@ export type AppendGuideError = "not_found" | "unknown_guide" | "full";
 export async function appendGuideToWorkshop(
   workshopId: string,
   guideId: string,
-): Promise<
-  { ok: true; workshop: LabWorkshop } | { ok: false; error: AppendGuideError }
-> {
+): Promise<{ ok: true; workshop: LabWorkshop } | { ok: false; error: AppendGuideError }> {
   const workshop = await getLabWorkshopById(workshopId);
   if (!workshop) return { ok: false, error: "not_found" };
 
@@ -292,10 +253,7 @@ export async function appendGuideToWorkshop(
 
   if (count >= LAB_WORKSHOP_LIMITS.guides) return { ok: false, error: "full" };
 
-  await db
-    .insert(labWorkshopGuides)
-    .values({ workshopId, guideId, position: next })
-    .onConflictDoNothing();
+  await db.insert(labWorkshopGuides).values({ workshopId, guideId, position: next }).onConflictDoNothing();
 
   return { ok: true, workshop };
 }
@@ -303,10 +261,7 @@ export async function appendGuideToWorkshop(
 export async function deleteLabWorkshop(id: string): Promise<boolean> {
   if (!isUuid(id)) return false;
 
-  const deleted = await db
-    .delete(labWorkshops)
-    .where(eq(labWorkshops.id, id))
-    .returning({ id: labWorkshops.id });
+  const deleted = await db.delete(labWorkshops).where(eq(labWorkshops.id, id)).returning({ id: labWorkshops.id });
 
   return deleted.length > 0;
 }

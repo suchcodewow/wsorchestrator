@@ -39,7 +39,11 @@ const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** For matching a header to a title: case, runs of spaces and a trailing colon or question mark don't matter. */
 export function normalizeHeader(text: string): string {
-  return text.toLowerCase().replace(/\s+/g, " ").trim().replace(/[\s:?]+$/, "");
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[\s:?]+$/, "");
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -118,7 +122,9 @@ export function planImport(rows: Cell[][], questions: IntakeQuestion[]): ImportP
   body.forEach((cells, i) => {
     const row = i + 2;
     if (cells.every((c) => c === null || String(c).trim() === "")) return;
-    const email = String(cells[emailAt] ?? "").trim().toLowerCase();
+    const email = String(cells[emailAt] ?? "")
+      .trim()
+      .toLowerCase();
     if (!email) return void problems.push({ row, problem: "no_email" });
     if (!LOOKS_LIKE_EMAIL.test(email)) return void problems.push({ row, problem: "not_an_email" });
 
@@ -134,4 +140,3 @@ export function planImport(rows: Cell[][], questions: IntakeQuestion[]): ImportP
 
   return { columns, entries, problems };
 }
-

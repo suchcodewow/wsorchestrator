@@ -100,7 +100,14 @@ async function participation(score: number) {
     .where(and(eq(evalsAssessments.builtIn, "participation"), eq(evalsAssessments.stage, "bootcamp")));
   await db
     .insert(evalsSubmissions)
-    .values({ bootcampId, assessmentId: built!.id, attendeeEmail: emailOf("newcomer"), assessmentName: built!.name, averageScore: score, ownerId: admin.id })
+    .values({
+      bootcampId,
+      assessmentId: built!.id,
+      attendeeEmail: emailOf("newcomer"),
+      assessmentName: built!.name,
+      averageScore: score,
+      ownerId: admin.id,
+    })
     .onConflictDoNothing();
 }
 
@@ -198,14 +205,18 @@ describe("who a reader sees", () => {
   });
 
   test("follows the reporting lines as the HiBob sync leaves them", async () => {
-    await db.update(employees).set({ reportsToEmail: emailOf("outsider") }).where(eq(employees.id, `${SCOPED}rep`));
+    await db
+      .update(employees)
+      .set({ reportsToEmail: emailOf("outsider") })
+      .where(eq(employees.id, `${SCOPED}rep`));
     try {
       assert.deepEqual(Object.keys(await seen(manager())), [emailOf("lead")]);
-      assert.deepEqual(Object.keys(await seen(readerOf({ access: PERSONAS.nobody, email: emailOf("outsider") }))), [
-        emailOf("rep"),
-      ]);
+      assert.deepEqual(Object.keys(await seen(readerOf({ access: PERSONAS.nobody, email: emailOf("outsider") }))), [emailOf("rep")]);
     } finally {
-      await db.update(employees).set({ reportsToEmail: emailOf("lead") }).where(eq(employees.id, `${SCOPED}rep`));
+      await db
+        .update(employees)
+        .set({ reportsToEmail: emailOf("lead") })
+        .where(eq(employees.id, `${SCOPED}rep`));
     }
   });
 
@@ -226,7 +237,10 @@ describe("who a reader sees", () => {
     assert.equal(person?.classes.intermediate.date, null);
 
     const full = await getBootcampPerson(viewer(), `${SCOPED}rep`);
-    assert.deepEqual(full?.records?.submissions.map((x) => x.id), [repSubmissionId]);
+    assert.deepEqual(
+      full?.records?.submissions.map((x) => x.id),
+      [repSubmissionId],
+    );
   });
 });
 
@@ -256,11 +270,17 @@ describe("releasing a class", () => {
       assert.equal(done.preview, true);
       assert.equal(done.triggeredBy, "admin");
       const page = await listReleaseNoticeMessages(run.runId, { ...RELEASE_NOTICE_MESSAGE_LIST, q: SCOPED, page: 1 });
-      assert.deepEqual(page.rows.map((m) => [m.email, m.action]), [
-        [emailOf("lead"), "messaged"],
-        [emailOf("manager"), "messaged"],
-      ]);
-      assert.match(page.rows[0]!.detail ?? "", /^Feedback has been released for .+ Bootcamp!  <https:\/\/example\.test\/reporting\/bootcamp\?cohort\.stage=bootcamp\|Click here>/);
+      assert.deepEqual(
+        page.rows.map((m) => [m.email, m.action]),
+        [
+          [emailOf("lead"), "messaged"],
+          [emailOf("manager"), "messaged"],
+        ],
+      );
+      assert.match(
+        page.rows[0]!.detail ?? "",
+        /^Feedback has been released for .+ Bootcamp!  <https:\/\/example\.test\/reporting\/bootcamp\?cohort\.stage=bootcamp\|Click here>/,
+      );
       assert.equal(page.rows[0]!.fullName, "Person lead");
       const counts = await countReleaseNoticeMessages(run.runId);
       assert.equal(counts.all, done.messaged + done.notInSlack + done.failures);
@@ -297,11 +317,17 @@ describe("releasing a class", () => {
       .returning({ id: intakeResponses.id });
     try {
       assert.deepEqual(await listed(), [emailOf("newcomer"), emailOf("no-rsvp")]);
-      await db.update(employees).set({ track: "deferred" }).where(eq(employees.id, `${SCOPED}no-rsvp`));
+      await db
+        .update(employees)
+        .set({ track: "deferred" })
+        .where(eq(employees.id, `${SCOPED}no-rsvp`));
       assert.deepEqual(await listed(), [emailOf("newcomer")]);
     } finally {
       await db.delete(intakeResponses).where(eq(intakeResponses.id, rsvp!.id));
-      await db.update(employees).set({ track: "sales" }).where(eq(employees.id, `${SCOPED}no-rsvp`));
+      await db
+        .update(employees)
+        .set({ track: "sales" })
+        .where(eq(employees.id, `${SCOPED}no-rsvp`));
     }
   });
 
@@ -337,7 +363,9 @@ describe("releasing a class", () => {
     assert.ok((await blocked()).noFeedback.names.includes("Person newcomer"));
     assert.deepEqual(await releaseScores(admin.id, "bootcamp"), { ok: false, error: "no_exit_exam" });
 
-    await db.insert(bootcampClassReviews).values({ ...review, entranceExam: 80, exitExam: 92, positiveFeedback: "Strong", constructiveFeedback: "  " });
+    await db
+      .insert(bootcampClassReviews)
+      .values({ ...review, entranceExam: 80, exitExam: 92, positiveFeedback: "Strong", constructiveFeedback: "  " });
     assert.equal((await blocked()).noExitExam.names.includes("Person newcomer"), false);
     assert.ok((await blocked()).noFeedback.names.includes("Person newcomer"), "blank constructive feedback still waits");
     assert.deepEqual(await releaseScores(admin.id, "bootcamp"), { ok: false, error: "no_feedback" });
@@ -363,7 +391,13 @@ describe("releasing a class", () => {
     await db.insert(scorecardViews).values({ attendeeEmail: emailOf("newcomer"), viewerId: admin.id });
     const first = await releaseScores(admin.id, "bootcamp");
     assert.ok(first.ok);
-    assert.deepEqual(await db.select().from(scorecardViews).where(eq(scorecardViews.attendeeEmail, emailOf("newcomer"))), []);
+    assert.deepEqual(
+      await db
+        .select()
+        .from(scorecardViews)
+        .where(eq(scorecardViews.attendeeEmail, emailOf("newcomer"))),
+      [],
+    );
     // The review was only there to let it release; the tests after this start without one.
     await db.delete(bootcampClassReviews).where(eq(bootcampClassReviews.attendeeEmail, emailOf("newcomer")));
     assert.ok(first.written >= 1);
@@ -451,7 +485,10 @@ describe("an administrator's corrections", () => {
     const [shown] = person.records!.submissions;
     assert.equal(shown?.ownerName, "admin");
     assert.equal(shown?.positiveFeedback, "Owned the room");
-    assert.deepEqual(shown?.scores.map((c) => [c.criterionName, c.score, c.comment]), [["Demo", 4, "Outstanding close"]]);
+    assert.deepEqual(
+      shown?.scores.map((c) => [c.criterionName, c.score, c.comment]),
+      [["Demo", 4, "Outstanding close"]],
+    );
 
     assert.deepEqual(
       await editSubmission(admin.id, submissionId, {
@@ -470,11 +507,7 @@ describe("an administrator's corrections", () => {
     const edit = { scores: [], positiveFeedback: "", constructiveFeedback: "", revises };
 
     assert.deepEqual(await editSubmission(admin.id, repSubmissionId, edit), { ok: false, error: "invalid" });
-    assert.equal(
-      submissionEditSchema.safeParse({ ...edit, averageScore: 3.25 }).success,
-      false,
-      "one decimal place at most",
-    );
+    assert.equal(submissionEditSchema.safeParse({ ...edit, averageScore: 3.25 }).success, false, "one decimal place at most");
 
     const saved = await editSubmission(admin.id, repSubmissionId, { ...edit, averageScore: 1.5 });
     assert.ok(saved.ok);
@@ -594,7 +627,13 @@ describe("a class's overall review", () => {
       .select({ score: evalsSubmissions.averageScore })
       .from(evalsSubmissions)
       .innerJoin(evalsAssessments, eq(evalsAssessments.id, evalsSubmissions.assessmentId))
-      .where(and(eq(evalsSubmissions.bootcampId, bootcampId), eq(evalsSubmissions.attendeeEmail, emailOf("newcomer")), eq(evalsAssessments.stage, "bootcamp")));
+      .where(
+        and(
+          eq(evalsSubmissions.bootcampId, bootcampId),
+          eq(evalsSubmissions.attendeeEmail, emailOf("newcomer")),
+          eq(evalsAssessments.stage, "bootcamp"),
+        ),
+      );
     const counted = scores.flatMap((x) => (x.score === null ? [] : [x.score]));
 
     const saved = await saveClassReview(admin.id, `${SCOPED}newcomer`, {
@@ -624,7 +663,10 @@ describe("a class's overall review", () => {
       [inCohort.stage, inCohort.averageScore, inCohort.scored, inCohort.date],
     );
 
-    assert.deepEqual((await listCohort(viewer(), bootcamp, query, "bootcamp")).rows.map((r) => r.email), [emailOf("newcomer")]);
+    assert.deepEqual(
+      (await listCohort(viewer(), bootcamp, query, "bootcamp")).rows.map((r) => r.email),
+      [emailOf("newcomer")],
+    );
     assert.deepEqual((await listCohort(viewer(), bootcamp, query, "intermediate")).rows, []);
     const counts = await cohortCounts(viewer(), bootcamp);
     assert.ok(counts.bootcamp >= 1);
@@ -674,7 +716,11 @@ describe("Claude's overall feedback", () => {
     const before = await pendingOverall(bootcamp, "bootcamp");
 
     await db.update(evalsSubmissions).set({ positiveFeedback: "Calm presenter" }).where(eq(evalsSubmissions.id, submissionId));
-    assert.equal(await pendingOverall(bootcamp, "bootcamp"), before + 1, "the positive side, and not the constructive with nothing to sum up");
+    assert.equal(
+      await pendingOverall(bootcamp, "bootcamp"),
+      before + 1,
+      "the positive side, and not the constructive with nothing to sum up",
+    );
 
     await db
       .insert(bootcampClassReviews)

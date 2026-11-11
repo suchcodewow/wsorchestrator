@@ -49,12 +49,7 @@ const CHANGES: RoleChange[] = [
 ];
 
 /** The rules, restated independently of `setUserRole`. */
-function expected(
-  actor: Access,
-  target: Access & { bootstrap: boolean },
-  change: RoleChange,
-  sameUser: boolean,
-): "ok" | SetRoleError {
+function expected(actor: Access, target: Access & { bootstrap: boolean }, change: RoleChange, sameUser: boolean): "ok" | SetRoleError {
   if (sameUser) return "self";
   const administers =
     change.area === "platform"
@@ -77,8 +72,7 @@ function applied(change: RoleChange, before: Access): Access {
   return { ...before, platform: change.value };
 }
 
-const describeChange = (c: RoleChange) =>
-  c.area === "platform" ? `platform=${c.value}` : `${c.area}=${c.role ?? "none"}`;
+const describeChange = (c: RoleChange) => (c.area === "platform" ? `platform=${c.value}` : `${c.area}=${c.role ?? "none"}`);
 
 let savedAdmins: string | undefined;
 before(async () => {
@@ -106,11 +100,7 @@ describe("every actor, every target, every change", () => {
       for (const t of TARGETS) {
         for (const change of CHANGES) {
           // Reset the target each time, so every change starts from the same roles.
-          const target = await scope.createUser(
-            t.key,
-            t.access,
-            t.bootstrap ? BOOTSTRAP_EMAIL : undefined,
-          );
+          const target = await scope.createUser(t.key, t.access, t.bootstrap ? BOOTSTRAP_EMAIL : undefined);
           const want = expected(actor.access, { ...t.access, bootstrap: t.bootstrap }, change, false);
           const result = await setUserRole(actor, target.id, change);
           const got = result.ok ? "ok" : result.error;
@@ -253,7 +243,10 @@ describe("listSiteUsers", () => {
 
     const page = await listSiteUsers({ ...USER_LIST, q: "list_", page: 1 });
     const listed = new Map(page.rows.map((u) => [u.id, u]));
-    assert.ok(page.rows.every((u) => `${u.name} ${u.email}`.includes("list_")), "the search narrows the page");
+    assert.ok(
+      page.rows.every((u) => `${u.name} ${u.email}`.includes("list_")),
+      "the search narrows the page",
+    );
     assert.deepEqual(
       {
         eventRole: listed.get(plain.id)?.eventRole,
@@ -279,8 +272,7 @@ describe("listSiteUsers", () => {
   test("sorts by any column in the database, and pages", async () => {
     const manager = await scope.createUser("sort_manager", PERSONAS.manager);
     const nobody = await scope.createUser("sort_nobody", PERSONAS.nobody);
-    const ids = async (dir: "asc" | "desc") =>
-      (await listSiteUsers({ q: "sort_", sort: "eventRole", dir, page: 1 })).rows.map((u) => u.id);
+    const ids = async (dir: "asc" | "desc") => (await listSiteUsers({ q: "sort_", sort: "eventRole", dir, page: 1 })).rows.map((u) => u.id);
     assert.deepEqual(await ids("desc"), [manager.id, nobody.id]);
     assert.deepEqual(await ids("asc"), [nobody.id, manager.id]);
 
@@ -292,7 +284,10 @@ describe("listSiteUsers", () => {
     const real = await scope.createUser("first_a_real", PERSONAS.nobody);
     const testB = await scope.createUser("first_b_test", PERSONAS.nobody);
     const testC = await scope.createUser("first_c_test", PERSONAS.manager);
-    await db.update(users).set({ isTestAccount: true }).where(inArray(users.id, [testB.id, testC.id]));
+    await db
+      .update(users)
+      .set({ isTestAccount: true })
+      .where(inArray(users.id, [testB.id, testC.id]));
     const ids = async (sort: "user" | "eventRole", dir: "asc" | "desc") =>
       (await listSiteUsers({ q: "first_", sort, dir, page: 1 })).rows.map((u) => u.id);
     assert.deepEqual(await ids("user", "asc"), [testB.id, testC.id, real.id]);
@@ -300,4 +295,3 @@ describe("listSiteUsers", () => {
     assert.deepEqual(await ids("eventRole", "asc"), [testB.id, testC.id, real.id]);
   });
 });
-

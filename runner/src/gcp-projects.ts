@@ -53,10 +53,7 @@ export type DeleteGuard = {
  * folder and that label are not enough on their own. The `run_id` label is
  * what tells a run's project apart, and the sandbox carries none.
  */
-export function projectDeleteRefusal(
-  project: GcpProject,
-  guard: DeleteGuard,
-): string | null {
+export function projectDeleteRefusal(project: GcpProject, guard: DeleteGuard): string | null {
   const id = project.projectId;
   if (id === guard.adminProjectId) return `${id} is the admin project`;
   if (guard.sandboxProjectId && id === guard.sandboxProjectId) {
@@ -107,10 +104,7 @@ const auth = new GoogleAuth({
   scopes: ["https://www.googleapis.com/auth/cloud-platform"],
 });
 
-async function call<T>(
-  url: string,
-  method: "GET" | "DELETE" = "GET",
-): Promise<T> {
+async function call<T>(url: string, method: "GET" | "DELETE" = "GET"): Promise<T> {
   const client = await auth.getClient();
   const res = await client.request<T>({ url, method });
   return res.data;
@@ -143,13 +137,9 @@ function toProject(p: ProjectResource): GcpProject {
 export async function getProject(projectId: string): Promise<GcpProject | null> {
   try {
     return toProject(
-      await withRetry(
-        () =>
-          call<ProjectResource>(
-            `${RESOURCE_MANAGER_API}/projects/${encodeURIComponent(projectId)}`,
-          ),
-        { label: `Resource Manager (get project ${projectId})` },
-      ),
+      await withRetry(() => call<ProjectResource>(`${RESOURCE_MANAGER_API}/projects/${encodeURIComponent(projectId)}`), {
+        label: `Resource Manager (get project ${projectId})`,
+      }),
     );
   } catch (err) {
     const status = httpStatusOf(err);
@@ -164,10 +154,7 @@ export async function getProject(projectId: string): Promise<GcpProject | null> 
  * lost is still found. Search is eventually consistent, which is why this is
  * unioned with the ids the run computes and never replaces them.
  */
-export async function searchRunProjects(
-  runId: string,
-  folderId: string,
-): Promise<string[]> {
+export async function searchRunProjects(runId: string, folderId: string): Promise<string[]> {
   const query = `parent:folders/${folderId} labels.run_id:${runLabel(runId)} state:ACTIVE`;
   const ids: string[] = [];
   let pageToken: string | undefined;
@@ -175,10 +162,7 @@ export async function searchRunProjects(
     const qs = new URLSearchParams({ query, pageSize: "100" });
     if (pageToken) qs.set("pageToken", pageToken);
     const data = await withRetry(
-      () =>
-        call<{ projects?: ProjectResource[]; nextPageToken?: string }>(
-          `${RESOURCE_MANAGER_API}/projects:search?${qs}`,
-        ),
+      () => call<{ projects?: ProjectResource[]; nextPageToken?: string }>(`${RESOURCE_MANAGER_API}/projects:search?${qs}`),
       { label: "Resource Manager (search projects)" },
     );
     for (const p of data.projects ?? []) if (p.projectId) ids.push(p.projectId);
@@ -198,14 +182,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  */
 export async function deleteProject(projectId: string): Promise<void> {
   const label = `Resource Manager (delete project ${projectId})`;
-  let op = await withRetry(
-    () =>
-      call<Operation>(
-        `${RESOURCE_MANAGER_API}/projects/${encodeURIComponent(projectId)}`,
-        "DELETE",
-      ),
-    { label },
-  );
+  let op = await withRetry(() => call<Operation>(`${RESOURCE_MANAGER_API}/projects/${encodeURIComponent(projectId)}`, "DELETE"), { label });
   const started = Date.now();
   while (!op.done && op.name) {
     if (Date.now() - started > 5 * 60_000) {
@@ -223,20 +200,14 @@ export async function deleteProject(projectId: string): Promise<void> {
 }
 
 /** Every object name under `prefix` in `bucket`. */
-export async function listStateObjects(
-  bucket: string,
-  prefix: string,
-): Promise<string[]> {
+export async function listStateObjects(bucket: string, prefix: string): Promise<string[]> {
   const names: string[] = [];
   let pageToken: string | undefined;
   do {
     const qs = new URLSearchParams({ prefix, fields: "items(name),nextPageToken" });
     if (pageToken) qs.set("pageToken", pageToken);
     const data = await withRetry(
-      () =>
-        call<{ items?: Array<{ name?: string }>; nextPageToken?: string }>(
-          `${STORAGE_API}/b/${encodeURIComponent(bucket)}/o?${qs}`,
-        ),
+      () => call<{ items?: Array<{ name?: string }>; nextPageToken?: string }>(`${STORAGE_API}/b/${encodeURIComponent(bucket)}/o?${qs}`),
       { label: "Cloud Storage (list state)" },
     );
     for (const o of data.items ?? []) if (o.name) names.push(o.name);
@@ -251,14 +222,9 @@ export async function listStateObjects(
  */
 export async function deleteStateObject(bucket: string, name: string): Promise<void> {
   try {
-    await withRetry(
-      () =>
-        call<unknown>(
-          `${STORAGE_API}/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(name)}`,
-          "DELETE",
-        ),
-      { label: `Cloud Storage (delete ${name})` },
-    );
+    await withRetry(() => call<unknown>(`${STORAGE_API}/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(name)}`, "DELETE"), {
+      label: `Cloud Storage (delete ${name})`,
+    });
   } catch (err) {
     if (httpStatusOf(err) === 404) return;
     throw err;

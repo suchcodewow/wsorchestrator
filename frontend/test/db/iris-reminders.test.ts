@@ -25,13 +25,7 @@ import { IRIS_SETTINGS_KEYS, irisItemReviews, irisReminderMessages, irisReminder
 import { answer, setTrack, startSitting } from "@/lib/iris/attempts";
 import { IDK } from "@/lib/iris/engine";
 import { approveDrafts } from "@/lib/iris/reviews";
-import {
-  dueParticipants,
-  getReminderRun,
-  listReminderMessages,
-  runDiagnosticReminders,
-  setRemindersLive,
-} from "@/lib/iris/reminders";
+import { dueParticipants, getReminderRun, listReminderMessages, runDiagnosticReminders, setRemindersLive } from "@/lib/iris/reminders";
 import { IRIS_REMINDER_MESSAGE_LIST } from "@/lib/list-specs";
 import { slackToken } from "@/lib/slack";
 import { PERSONAS } from "../support/access";
@@ -90,9 +84,7 @@ describe("Diagnostic reminders", () => {
     await approveDrafts(admin.id, "sdlc", "A");
     const { assigned, due } = await dueParticipants();
     assert.deepEqual(assigned, ["sdlc"]);
-    assert.deepEqual(mine(due), [
-      { email: taker.email, fullName: "taker", status: { done: [], started: [], notStarted: ["sdlc"] } },
-    ]);
+    assert.deepEqual(mine(due), [{ email: taker.email, fullName: "taker", status: { done: [], started: [], notStarted: ["sdlc"] } }]);
   });
 
   test("not live, a run is a dry run that logs the message it would send", async () => {

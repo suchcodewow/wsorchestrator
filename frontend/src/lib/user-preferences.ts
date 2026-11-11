@@ -6,14 +6,7 @@ import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import {
-  CALENDAR_SCOPES,
-  THEME_PREFERENCES,
-  users,
-  type CalendarScope,
-  type FavoriteTab,
-  type ThemePreference,
-} from "@/db/schema";
+import { CALENDAR_SCOPES, THEME_PREFERENCES, users, type CalendarScope, type FavoriteTab, type ThemePreference } from "@/db/schema";
 import { parseFavoriteTabs } from "@/lib/favorite-tabs";
 import { VIDEO_LANGUAGES, type VideoLanguage } from "@/lib/mimir/map/schema";
 import { canSeeAllEvents, type Access } from "@/lib/roles";
@@ -32,23 +25,21 @@ const DEFAULTS: UserPreferences = {
   videoLanguage: "en",
 };
 
-export const getUserPreferences = cache(
-  async (): Promise<UserPreferences> => {
-    const session = await auth();
-    if (!session?.user?.id) return DEFAULTS;
-    const shown = await preferencesOf(session.user.id);
-    if (!session.impersonator) return shown;
+export const getUserPreferences = cache(async (): Promise<UserPreferences> => {
+  const session = await auth();
+  if (!session?.user?.id) return DEFAULTS;
+  const shown = await preferencesOf(session.user.id);
+  if (!session.impersonator) return shown;
 
-    // Viewing as someone else shows their calendar, in your own theme and favorites.
-    const own = await preferencesOf(session.impersonator.id);
-    return {
-      ...shown,
-      themePreference: own.themePreference,
-      favoriteTabs: own.favoriteTabs,
-      videoLanguage: own.videoLanguage,
-    };
-  },
-);
+  // Viewing as someone else shows their calendar, in your own theme and favorites.
+  const own = await preferencesOf(session.impersonator.id);
+  return {
+    ...shown,
+    themePreference: own.themePreference,
+    favoriteTabs: own.favoriteTabs,
+    videoLanguage: own.videoLanguage,
+  };
+});
 
 export async function preferencesOf(userId: string): Promise<UserPreferences> {
   const row = await db.query.users.findFirst({

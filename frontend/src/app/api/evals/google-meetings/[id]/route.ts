@@ -24,10 +24,7 @@ const idSchema = z.string().uuid();
 // Taking invites back is a call to Google for each upcoming occurrence.
 export const maxDuration = 60;
 
-export const PATCH = audited(async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireEvalsAdministrator(req);
   if (error) return error;
 
@@ -60,10 +57,7 @@ export const PATCH = audited(async function PATCH(
   return NextResponse.json(result.meeting);
 });
 
-export const DELETE = audited(async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireEvalsAdministrator(req);
   if (error) return error;
 

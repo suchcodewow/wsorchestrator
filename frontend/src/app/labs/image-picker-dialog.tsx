@@ -3,25 +3,10 @@
 /** Browses the image library and puts one in a guide. */
 
 import { useEffect, useRef, useState } from "react";
-import {
-  ImageIcon,
-  Loader2,
-  Pencil,
-  Search,
-  Trash2,
-  Upload,
-  X,
-} from "lucide-react";
+import { ImageIcon, Loader2, Pencil, Search, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { LAB_IMAGE_LIMITS } from "@/db/schema";
 import { uploadImageFile, type PickerImage } from "@/lib/lab-image-upload";
 import { cn } from "@/lib/utils";
@@ -37,11 +22,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function ImagePickerDialog({
-  onInsert,
-}: {
-  onInsert: (image: InsertedImage) => void;
-}) {
+export function ImagePickerDialog({ onInsert }: { onInsert: (image: InsertedImage) => void }) {
   const [open, setOpen] = useState(false);
   const [images, setImages] = useState<PickerImage[]>([]);
   const [query, setQuery] = useState("");
@@ -66,15 +47,10 @@ export function ImagePickerDialog({
       async () => {
         setLoading(true);
         try {
-          const res = await fetch(
-            `/api/lab-images?q=${encodeURIComponent(query)}`,
-            { signal: controller.signal },
-          );
+          const res = await fetch(`/api/lab-images?q=${encodeURIComponent(query)}`, { signal: controller.signal });
           if (!res.ok) {
             const body = await res.json().catch(() => null);
-            throw new Error(
-              body?.message ?? `Could not load images (${res.status})`,
-            );
+            throw new Error(body?.message ?? `Could not load images (${res.status})`);
           }
           const data = await res.json();
           setImages(data.images);
@@ -157,7 +133,12 @@ export function ImagePickerDialog({
 
   async function remove(image: PickerImage) {
     if (
-      !(await confirmDialog({ title: `Delete "${image.name}"?`, description: "Any guide using it is left with a broken image.", confirmLabel: "Delete", destructive: true }))
+      !(await confirmDialog({
+        title: `Delete "${image.name}"?`,
+        description: "Any guide using it is left with a broken image.",
+        confirmLabel: "Delete",
+        destructive: true,
+      }))
     ) {
       return;
     }
@@ -177,13 +158,7 @@ export function ImagePickerDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          title="Insert an image"
-          className="text-muted-foreground hover:text-foreground"
-        >
+        <Button type="button" variant="ghost" size="sm" title="Insert an image" className="text-muted-foreground hover:text-foreground">
           <ImageIcon />
           Image
         </Button>
@@ -205,10 +180,7 @@ export function ImagePickerDialog({
       >
         <DialogHeader>
           <DialogTitle>Insert an image</DialogTitle>
-          <DialogDescription>
-            Click one to drop it into the guide (PNG, JPEG, GIF or WebP, up to{" "}
-            {MAX_MB} MB).
-          </DialogDescription>
+          <DialogDescription>Click one to drop it into the guide (PNG, JPEG, GIF or WebP, up to {MAX_MB} MB).</DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center gap-2">
@@ -256,13 +228,7 @@ export function ImagePickerDialog({
               placeholder="Name it — this is what search finds"
               className="h-8 min-w-48 flex-1 text-sm"
             />
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={!file || uploading}
-              onClick={() => void upload()}
-            >
+            <Button type="button" size="sm" variant="outline" disabled={!file || uploading} onClick={() => void upload()}>
               {uploading ? <Loader2 className="animate-spin" /> : <Upload />}
               {uploading ? "Uploading…" : "Upload"}
             </Button>
@@ -270,18 +236,12 @@ export function ImagePickerDialog({
           {file && (
             <p className="text-xs text-muted-foreground">
               {file.name} · {formatBytes(file.size)}
-              {file.size > LAB_IMAGE_LIMITS.bytes && (
-                <span className="text-destructive"> · over {MAX_MB} MB</span>
-              )}
+              {file.size > LAB_IMAGE_LIMITS.bytes && <span className="text-destructive"> · over {MAX_MB} MB</span>}
             </p>
           )}
         </div>
 
-        {error && (
-          <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2.5 text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2.5 text-sm text-destructive">{error}</p>}
 
         <div className="max-h-[45vh] min-h-40 overflow-y-auto pr-1">
           {loading ? (
@@ -290,14 +250,10 @@ export function ImagePickerDialog({
               Loading…
             </p>
           ) : error ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              The library could not be loaded.
-            </p>
+            <p className="py-8 text-center text-sm text-muted-foreground">The library could not be loaded.</p>
           ) : images.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              {query.trim()
-                ? "No image matches that name."
-                : "No images yet."}
+              {query.trim() ? "No image matches that name." : "No images yet."}
             </p>
           ) : (
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -319,14 +275,8 @@ export function ImagePickerDialog({
                       loading="lazy"
                       className="h-24 w-full bg-muted object-contain"
                     />
-                    {renaming !== image.id && (
-                      <span className="block truncate px-2.5 pt-2 text-xs font-medium">
-                        {image.name}
-                      </span>
-                    )}
-                    <span className="block px-2.5 pb-2 text-xs text-muted-foreground">
-                      {formatBytes(image.bytes)}
-                    </span>
+                    {renaming !== image.id && <span className="block truncate px-2.5 pt-2 text-xs font-medium">{image.name}</span>}
+                    <span className="block px-2.5 pb-2 text-xs text-muted-foreground">{formatBytes(image.bytes)}</span>
                   </button>
 
                   {renaming === image.id && (

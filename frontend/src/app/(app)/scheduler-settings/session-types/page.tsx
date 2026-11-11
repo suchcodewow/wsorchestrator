@@ -5,11 +5,7 @@ import { parseListQuery } from "@/lib/paging";
 import { listSessionTypes } from "@/lib/scheduler/session-types";
 import { SessionTypesView } from "./session-types-view";
 
-export default async function SessionTypesPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function SessionTypesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const query = parseListQuery(await searchParams, SESSION_TYPE_LIST);
   return <SessionTypesView query={query} page={await listSessionTypes(query)} />;
 }

@@ -40,10 +40,7 @@ export const MAX_QUERY_LENGTH = 200;
 /** The last page anyone could reach by paging; anything past it is a typo or an attack on OFFSET. */
 export const MAX_PAGE = 10_000;
 
-type ParamSource =
-  | URLSearchParams
-  | Record<string, string | string[] | undefined>
-  | undefined;
+type ParamSource = URLSearchParams | Record<string, string | string[] | undefined> | undefined;
 
 function read(params: ParamSource, key: string): string | undefined {
   if (!params) return undefined;
@@ -67,22 +64,14 @@ export function listParam(name: "q" | "sort" | "dir" | "page", prefix = ""): str
  * hand-typed URL never errors. `prefix` picks one table's parameters on a
  * page that has several; see `listParam`.
  */
-export function parseListQuery<S extends string>(
-  params: ParamSource,
-  spec: ListSpec<S>,
-  prefix = "",
-): ListQuery<S> {
+export function parseListQuery<S extends string>(params: ParamSource, spec: ListSpec<S>, prefix = ""): ListQuery<S> {
   const q = (read(params, "q") ?? "").trim().slice(0, MAX_QUERY_LENGTH);
 
   const askedSort = read(params, listParam("sort", prefix));
   const sort = spec.sorts.includes(askedSort as S) ? (askedSort as S) : spec.sort;
 
   const askedDir = read(params, listParam("dir", prefix));
-  const dir = SORT_DIRS.includes(askedDir as SortDir)
-    ? (askedDir as SortDir)
-    : sort === spec.sort
-      ? spec.dir
-      : "asc";
+  const dir = SORT_DIRS.includes(askedDir as SortDir) ? (askedDir as SortDir) : sort === spec.sort ? spec.dir : "asc";
 
   const asked = Number.parseInt(read(params, listParam("page", prefix)) ?? "", 10);
   const page = Number.isFinite(asked) ? Math.min(Math.max(asked, 1), MAX_PAGE) : 1;

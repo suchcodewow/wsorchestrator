@@ -99,8 +99,8 @@ export function AttendeesView({
             <p key={`${r.track}:${r.day}:${r.start}`} className="flex items-center gap-2 text-sm text-muted-foreground">
               <DoorOpen className="size-4 shrink-0" />
               <span>
-                Your room is <span className="font-medium text-foreground">{r.roomName}</span> for {r.sessionName}, Day{" "}
-                {r.day} at {formatClock(r.start)}
+                Your room is <span className="font-medium text-foreground">{r.roomName}</span> for {r.sessionName}, Day {r.day} at{" "}
+                {formatClock(r.start)}
               </span>
             </p>
           ))}
@@ -108,12 +108,7 @@ export function AttendeesView({
       </motion.div>
 
       <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3">
-        <TableSearch
-          value={query.q}
-          placeholder="Search by name, email or title"
-          label="Search attendees"
-          className="min-w-56 flex-1"
-        />
+        <TableSearch value={query.q} placeholder="Search by name, email or title" label="Search attendees" className="min-w-56 flex-1" />
         {bootcamp && (
           <button
             type="button"

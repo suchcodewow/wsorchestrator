@@ -49,10 +49,7 @@ export const PATCH = audited(async function PATCH(req: Request) {
 
   const result = await savePreferences(user, rest);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: result.error === "forbidden" ? 403 : 400 },
-    );
+    return NextResponse.json({ error: result.error }, { status: result.error === "forbidden" ? 403 : 400 });
   }
   return NextResponse.json({ preferences: await preferencesOf(user.id) });
 });

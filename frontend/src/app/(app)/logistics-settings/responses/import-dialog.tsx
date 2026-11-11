@@ -21,7 +21,8 @@ const ERRORS: Record<string, string> = {
   too_large: "That file is over 2 MB, or has more than 2,000 rows.",
   unreadable: "That file could not be read. Download the responses sheet as .csv or .xlsx and try again.",
   empty: "That file has no responses in it.",
-  no_email_column: "There is no Email Address column. Turn on collecting emails in the Google Form, or add the column, and download it again.",
+  no_email_column:
+    "There is no Email Address column. Turn on collecting emails in the Google Form, or add the column, and download it again.",
   forbidden: "Your own role changed — reload the page.",
 };
 
@@ -100,15 +101,14 @@ export function ImportResponsesDialog({
             <div className="space-y-2 py-2 text-sm">
               <p className="flex items-center gap-2 font-medium">
                 <CheckCircle2 className="size-4 text-brand" />
-                Imported {summary.added.toLocaleString()} {summary.added === 1 ? "response" : "responses"} into{" "}
-                {INTAKE_FORM_LABELS[form]}
+                Imported {summary.added.toLocaleString()} {summary.added === 1 ? "response" : "responses"} into {INTAKE_FORM_LABELS[form]}
               </p>
               {summary.alreadyThere > 0 && (
                 <p className="text-muted-foreground">{summary.alreadyThere.toLocaleString()} were already here and left as they were.</p>
               )}
               <p className="text-muted-foreground">
-                {summary.inCohort.toLocaleString()} of {summary.people.toLocaleString()} people are in the current cohort, so
-                show on Dietary needs.
+                {summary.inCohort.toLocaleString()} of {summary.people.toLocaleString()} people are in the current cohort, so show on
+                Dietary needs.
               </p>
             </div>
           ) : (
@@ -148,16 +148,16 @@ export function ImportResponsesDialog({
                   }}
                 />
                 <p className="text-xs text-muted-foreground">
-                  In the Google Form&apos;s responses sheet: File → Download → .csv or .xlsx. Columns are matched to questions
-                  by their titles.
+                  In the Google Form&apos;s responses sheet: File → Download → .csv or .xlsx. Columns are matched to questions by their
+                  titles.
                 </p>
               </div>
 
               {summary && (
                 <div className="divide-y overflow-hidden rounded-xl border text-sm">
                   <div className="px-4 py-3">
-                    <span className="font-medium">{summary.added.toLocaleString()}</span> to import from{" "}
-                    {summary.people.toLocaleString()} {summary.people === 1 ? "person" : "people"}
+                    <span className="font-medium">{summary.added.toLocaleString()}</span> to import from {summary.people.toLocaleString()}{" "}
+                    {summary.people === 1 ? "person" : "people"}
                     {summary.alreadyThere > 0 && <>, {summary.alreadyThere.toLocaleString()} already here</>}.{" "}
                     <span className="text-muted-foreground">
                       {summary.inCohort.toLocaleString()} are in the current cohort, so will show on Dietary needs.

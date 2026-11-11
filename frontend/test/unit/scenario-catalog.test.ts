@@ -118,17 +118,15 @@ describe("needsClusterScenario", () => {
 
 describe("withClusterScenario", () => {
   test("adds the cloud's cluster when a scenario needs it, and sorts it first", () => {
-    assert.deepEqual(
-      withClusterScenario(["gcp-delegate-blocked-manager", "gcp-connectivity-egress"], ["gcp"]),
-      ["gcp-cluster", "gcp-connectivity-egress", "gcp-delegate-blocked-manager"],
-    );
+    assert.deepEqual(withClusterScenario(["gcp-delegate-blocked-manager", "gcp-connectivity-egress"], ["gcp"]), [
+      "gcp-cluster",
+      "gcp-connectivity-egress",
+      "gcp-delegate-blocked-manager",
+    ]);
   });
 
   test("does not duplicate a cluster already selected", () => {
-    assert.deepEqual(withClusterScenario(["gcp-connectivity-egress", "gcp-cluster"], ["gcp"]), [
-      "gcp-cluster",
-      "gcp-connectivity-egress",
-    ]);
+    assert.deepEqual(withClusterScenario(["gcp-connectivity-egress", "gcp-cluster"], ["gcp"]), ["gcp-cluster", "gcp-connectivity-egress"]);
   });
 
   test("leaves a cluster-only selection alone, and an empty one empty", () => {
@@ -142,17 +140,16 @@ describe("withClusterScenario", () => {
   });
 
   test("handles several clouds at once", () => {
-    assert.deepEqual(
-      withClusterScenario(["azure-connectivity-egress", "aws-connectivity-egress"], ["aws", "azure"]),
-      ["aws-cluster", "aws-connectivity-egress", "azure-cluster", "azure-connectivity-egress"],
-    );
+    assert.deepEqual(withClusterScenario(["azure-connectivity-egress", "aws-connectivity-egress"], ["aws", "azure"]), [
+      "aws-cluster",
+      "aws-connectivity-egress",
+      "azure-cluster",
+      "azure-connectivity-egress",
+    ]);
   });
 
   test("drops ids that are not in the catalog", () => {
-    assert.deepEqual(withClusterScenario(["made-up", "gcp-connectivity-binauthz"], ["gcp"]), [
-      "gcp-cluster",
-      "gcp-connectivity-binauthz",
-    ]);
+    assert.deepEqual(withClusterScenario(["made-up", "gcp-connectivity-binauthz"], ["gcp"]), ["gcp-cluster", "gcp-connectivity-binauthz"]);
   });
 
   test("is idempotent", () => {

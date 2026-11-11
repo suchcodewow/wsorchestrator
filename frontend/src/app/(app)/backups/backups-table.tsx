@@ -5,25 +5,10 @@
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  DatabaseBackup,
-  Loader2,
-  RotateCcw,
-  XCircle,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, DatabaseBackup, Loader2, RotateCcw, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -40,10 +25,8 @@ export type BackupRun = {
 };
 
 const UNAVAILABLE: Record<string, string> = {
-  not_configured:
-    "This deployment has no Cloud SQL instance configured, so there is nothing to list.",
-  permission_denied:
-    "The app's service account needs roles/cloudsql.editor to read backups.",
+  not_configured: "This deployment has no Cloud SQL instance configured, so there is nothing to list.",
+  permission_denied: "The app's service account needs roles/cloudsql.editor to read backups.",
   unavailable: "Could not reach the Cloud SQL API — try again in a moment.",
 };
 
@@ -52,8 +35,7 @@ const when = new Intl.DateTimeFormat("en", {
   timeStyle: "short",
 });
 
-export const format = (iso: string | null) =>
-  iso ? when.format(new Date(iso)) : "—";
+export const format = (iso: string | null) => (iso ? when.format(new Date(iso)) : "—");
 
 function freshness(iso: string | null): { text: string; stale: boolean } | null {
   if (!iso) return null;
@@ -128,9 +110,7 @@ export function BackupsTable({
         body: JSON.stringify({}),
       });
       if (!res.ok) throw new Error(`Could not start a backup (${res.status})`);
-      setNotice(
-        "Backup started — refresh in a minute to see it listed below.",
-      );
+      setNotice("Backup started — refresh in a minute to see it listed below.");
       await refresh();
     } catch (err) {
       setFailure(err instanceof Error ? err.message : "Could not start a backup");
@@ -146,12 +126,7 @@ export function BackupsTable({
           <h1 className="text-2xl font-medium tracking-tight">Backups</h1>
         </div>
 
-        <Button
-          variant="outline"
-          className="shrink-0"
-          disabled={backingUp || error !== null}
-          onClick={() => void backUpNow()}
-        >
+        <Button variant="outline" className="shrink-0" disabled={backingUp || error !== null} onClick={() => void backUpNow()}>
           {backingUp ? <Loader2 className="animate-spin" /> : <DatabaseBackup />}
           {backingUp ? "Starting…" : "Back up now"}
         </Button>
@@ -172,9 +147,7 @@ export function BackupsTable({
           <div
             className={cn(
               "mt-6 flex items-center gap-3 rounded-xl border p-4 text-sm",
-              age?.stale
-                ? "border-destructive/40 bg-destructive/5"
-                : "border-brand-border/60 bg-brand/5",
+              age?.stale ? "border-destructive/40 bg-destructive/5" : "border-brand-border/60 bg-brand/5",
             )}
           >
             {age?.stale ? (
@@ -185,9 +158,7 @@ export function BackupsTable({
             <span>
               {latest ? (
                 <>
-                  Last good backup{" "}
-                  <span className="font-medium">{age?.text}</span> —{" "}
-                  {format(latest.startTime)}.
+                  Last good backup <span className="font-medium">{age?.text}</span> — {format(latest.startTime)}.
                   {age?.stale && " That is older than the daily schedule allows."}
                 </>
               ) : (
@@ -196,24 +167,13 @@ export function BackupsTable({
             </span>
           </div>
 
-          {notice && (
-            <p className="mt-4 rounded-lg border border-brand-border/60 bg-brand/5 p-3 text-sm">
-              {notice}
-            </p>
-          )}
+          {notice && <p className="mt-4 rounded-lg border border-brand-border/60 bg-brand/5 p-3 text-sm">{notice}</p>}
           {failure && <p className="mt-4 text-sm text-destructive">{failure}</p>}
 
           {backups.length === 0 ? (
-            <p className="mt-8 rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-              No backups recorded yet.
-            </p>
+            <p className="mt-8 rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">No backups recorded yet.</p>
           ) : (
-            <motion.ul
-              variants={staggerParent()}
-              initial="hidden"
-              animate="show"
-              className="mt-6 grid gap-2"
-            >
+            <motion.ul variants={staggerParent()} initial="hidden" animate="show" className="mt-6 grid gap-2">
               {backups.map((backup) => (
                 <motion.li
                   key={backup.id}
@@ -222,20 +182,12 @@ export function BackupsTable({
                 >
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2.5">
-                      <span className="tnum text-sm font-medium">
-                        {format(backup.startTime)}
-                      </span>
-                      <Badge variant="secondary">
-                        {backup.type === "AUTOMATED" ? "Daily" : "On demand"}
-                      </Badge>
+                      <span className="tnum text-sm font-medium">{format(backup.startTime)}</span>
+                      <Badge variant="secondary">{backup.type === "AUTOMATED" ? "Daily" : "On demand"}</Badge>
                     </span>
                     <span className="mt-1 flex items-center gap-3">
                       <StatusChip status={backup.status} />
-                      {backup.error && (
-                        <span className="truncate text-xs text-destructive">
-                          {backup.error}
-                        </span>
-                      )}
+                      {backup.error && <span className="truncate text-xs text-destructive">{backup.error}</span>}
                     </span>
                   </span>
 
@@ -307,9 +259,7 @@ function RestoreDialog({
 
   async function loadStranded(since: string) {
     try {
-      const res = await fetch(
-        `/api/runs/stranded?since=${encodeURIComponent(since)}`,
-      );
+      const res = await fetch(`/api/runs/stranded?since=${encodeURIComponent(since)}`);
       setStranded(res.ok ? (await res.json()).runs : []);
     } catch {
       setStranded([]);
@@ -354,8 +304,7 @@ function RestoreDialog({
             <DialogHeader>
               <DialogTitle>Restore started</DialogTitle>
               <DialogDescription className="leading-relaxed">
-                The database goes offline for a few minutes and you will be
-                signed out.
+                The database goes offline for a few minutes and you will be signed out.
               </DialogDescription>
             </DialogHeader>
 
@@ -382,10 +331,8 @@ function RestoreDialog({
                 Restore over the live database
               </DialogTitle>
               <DialogDescription className="leading-relaxed">
-                This replaces <strong>everything</strong> on{" "}
-                <code>{instance}</code> with the backup from{" "}
-                <strong>{format(backup?.startTime ?? null)}</strong>, losing
-                anything written since.
+                This replaces <strong>everything</strong> on <code>{instance}</code> with the backup from{" "}
+                <strong>{format(backup?.startTime ?? null)}</strong>, losing anything written since.
               </DialogDescription>
             </DialogHeader>
 
@@ -403,13 +350,10 @@ function RestoreDialog({
             ) : stranded.length > 0 ? (
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
                 <p className="text-sm font-medium text-destructive">
-                  {stranded.length === 1
-                    ? "1 event would be stranded"
-                    : `${stranded.length} events would be stranded`}
+                  {stranded.length === 1 ? "1 event would be stranded" : `${stranded.length} events would be stranded`}
                 </p>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  Their records go, but their cloud resources keep running and
-                  will need deleting by hand.
+                  Their records go, but their cloud resources keep running and will need deleting by hand.
                 </p>
                 <ul className="mt-2 grid gap-1 text-xs">
                   {stranded.map((run) => (
@@ -423,16 +367,12 @@ function RestoreDialog({
                 </ul>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                No events were provisioned after this backup, so nothing will
-                be stranded.
-              </p>
+              <p className="text-sm text-muted-foreground">No events were provisioned after this backup, so nothing will be stranded.</p>
             )}
 
             <div className="grid gap-1.5">
               <label htmlFor="restore-confirm" className="text-sm font-medium">
-                Type <code className="text-foreground">{instance}</code> to
-                confirm
+                Type <code className="text-foreground">{instance}</code> to confirm
               </label>
               <Input
                 id="restore-confirm"
@@ -450,11 +390,7 @@ function RestoreDialog({
               <Button variant="ghost" onClick={onClose} disabled={pending}>
                 Cancel
               </Button>
-              <Button
-                variant="destructive"
-                disabled={!armed}
-                onClick={() => void restore()}
-              >
+              <Button variant="destructive" disabled={!armed} onClick={() => void restore()}>
                 {pending ? <Loader2 className="animate-spin" /> : <RotateCcw />}
                 {pending ? "Starting…" : "Restore over live data"}
               </Button>

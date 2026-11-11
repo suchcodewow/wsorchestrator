@@ -3,10 +3,7 @@
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
 import { TemplatesView } from "@/components/templates-view";
-import {
-  checkTemplateSources,
-  listTemplateSources,
-} from "@/lib/harness-templates";
+import { checkTemplateSources, listTemplateSources } from "@/lib/harness-templates";
 import { secretsConfigured } from "@/lib/secret-box";
 import { canSeeMySettingsTab } from "../tabs";
 
@@ -17,12 +14,5 @@ export default async function MyTemplateSourcesPage() {
 
   const sources = await listTemplateSources(session.user.id);
 
-  return (
-    <TemplatesView
-      mine
-      sources={sources}
-      status={await checkTemplateSources(sources)}
-      configured={secretsConfigured()}
-    />
-  );
+  return <TemplatesView mine sources={sources} status={await checkTemplateSources(sources)} configured={secretsConfigured()} />;
 }

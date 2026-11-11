@@ -18,16 +18,7 @@ import assert from "node:assert/strict";
 
 import type { ThemePreference } from "@/db/schema";
 import { FRAMED_ATTR, isFramed } from "@/lib/framed";
-import {
-  DARK_CLASS,
-  DARK_QUERY,
-  THEME_COOKIE,
-  applyTheme,
-  isDark,
-  parseScheme,
-  themeScript,
-  type ResolvedScheme,
-} from "@/lib/theme";
+import { DARK_CLASS, DARK_QUERY, THEME_COOKIE, applyTheme, isDark, parseScheme, themeScript, type ResolvedScheme } from "@/lib/theme";
 
 type FakeEnv = {
   document: {

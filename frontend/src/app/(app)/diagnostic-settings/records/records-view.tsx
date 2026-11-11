@@ -160,21 +160,13 @@ export function RecordsView({
                       {OPEN_SUBJECT_KEYS.map((k) => (
                         <td key={k} className="px-3 py-3">
                           {r.placements[k] ? (
-                            <ScoreMenu
-                              userId={r.userId}
-                              subject={k}
-                              form="A"
-                              level={r.placements[k]}
-                              who={r.name || r.email}
-                            />
+                            <ScoreMenu userId={r.userId} subject={k} form="A" level={r.placements[k]} who={r.name || r.email} />
                           ) : (
                             <span className="text-muted-foreground/60">—</span>
                           )}
                         </td>
                       ))}
-                      <td className="px-5 py-3 whitespace-nowrap text-muted-foreground tnum">
-                        {r.finishedAt ? day(r.finishedAt) : "—"}
-                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap text-muted-foreground tnum">{r.finishedAt ? day(r.finishedAt) : "—"}</td>
                     </tr>
                   );
                 })}

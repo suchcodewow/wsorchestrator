@@ -76,21 +76,11 @@ describe("parseDomainList", () => {
   });
 
   test("splits on commas, spaces, tabs and newlines", () => {
-    assert.deepEqual(parseDomainList("a.com,B.com  c.com\td.com\ne.com, f.com"), [
-      "a.com",
-      "b.com",
-      "c.com",
-      "d.com",
-      "e.com",
-      "f.com",
-    ]);
+    assert.deepEqual(parseDomainList("a.com,B.com  c.com\td.com\ne.com, f.com"), ["a.com", "b.com", "c.com", "d.com", "e.com", "f.com"]);
   });
 
   test("drops invalid entries and keeps the rest", () => {
-    assert.deepEqual(parseDomainList("good.com, localhost, *.bad.com, @also.good.com"), [
-      "good.com",
-      "also.good.com",
-    ]);
+    assert.deepEqual(parseDomainList("good.com, localhost, *.bad.com, @also.good.com"), ["good.com", "also.good.com"]);
   });
 });
 
@@ -116,13 +106,7 @@ describe("emailAllowedBy", () => {
   });
 
   test("matches the whole domain, not a suffix or a prefix", () => {
-    for (const email of [
-      "a@sub.example.com",
-      "a@evilexample.com",
-      "a@example.com.evil.example",
-      "a@example.co",
-      "a@harness.io.",
-    ]) {
+    for (const email of ["a@sub.example.com", "a@evilexample.com", "a@example.com.evil.example", "a@example.co", "a@harness.io."]) {
       assert.equal(emailAllowedBy(email, domains), false, email);
     }
   });

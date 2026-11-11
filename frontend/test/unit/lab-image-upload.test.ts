@@ -16,12 +16,7 @@
 import { afterEach, beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  IMAGE_MAX_WIDTH,
-  downscaleImage,
-  imageFromTransfer,
-  uploadImageFile,
-} from "@/lib/lab-image-upload";
+import { IMAGE_MAX_WIDTH, downscaleImage, imageFromTransfer, uploadImageFile } from "@/lib/lab-image-upload";
 
 const g = globalThis as Record<string, unknown>;
 const STUBBED = ["createImageBitmap", "document", "fetch"] as const;
@@ -36,8 +31,7 @@ afterEach(() => {
   }
 });
 
-const file = (name: string, type: string, size = 1000) =>
-  new File([new Uint8Array(size)], name, { type });
+const file = (name: string, type: string, size = 1000) => new File([new Uint8Array(size)], name, { type });
 
 type Canvas = {
   width: number;
@@ -217,8 +211,7 @@ describe("uploadImageFile", () => {
 
 describe("imageFromTransfer", () => {
   type Item = { kind: string; type: string; getAsFile: () => File | null };
-  const transfer = (files: File[], items: Item[] = []) =>
-    ({ files, items }) as unknown as DataTransfer;
+  const transfer = (files: File[], items: Item[] = []) => ({ files, items }) as unknown as DataTransfer;
   const item = (kind: string, type: string, f: File | null): Item => ({ kind, type, getAsFile: () => f });
 
   test("is null for no transfer or an empty one", () => {
@@ -235,10 +228,7 @@ describe("imageFromTransfer", () => {
 
   test("falls back to a pasted image item", () => {
     const pasted = file("image.png", "image/png");
-    assert.equal(
-      imageFromTransfer(transfer([], [item("string", "text/html", null), item("file", "image/png", pasted)])),
-      pasted,
-    );
+    assert.equal(imageFromTransfer(transfer([], [item("string", "text/html", null), item("file", "image/png", pasted)])), pasted);
   });
 
   test("skips items that are not image files, or yield no file", () => {
@@ -260,9 +250,6 @@ describe("imageFromTransfer", () => {
   });
 
   test("is null when nothing is an image", () => {
-    assert.equal(
-      imageFromTransfer(transfer([file("a.txt", "text/plain")], [item("string", "text/plain", null)])),
-      null,
-    );
+    assert.equal(imageFromTransfer(transfer([file("a.txt", "text/plain")], [item("string", "text/plain", null)])), null);
   });
 });

@@ -4,28 +4,25 @@ import type { EndpointGroup } from "./types";
 
 /** One checklist item, as the Scheduler's routes and the inbox return it. */
 export const CHECKLIST_ITEM_ROW =
-  "{ id, track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, period: \"am\" | \"pm\", position: number, name, alarm: number | null, ownerEmail: string | null, ownerName, done: boolean, doneAt: string | null, doneByName, createdBy: string | null, createdByName, createdByEmail, createdAt, mentions: { email, fullName }[] }";
+  '{ id, track: "btc" | "int" | "btc_se" | "int_se", day: number, period: "am" | "pm", position: number, name, alarm: number | null, ownerEmail: string | null, ownerName, done: boolean, doneAt: string | null, doneByName, createdBy: string | null, createdByName, createdByEmail, createdAt, mentions: { email, fullName }[] }';
 
 const ORG_SECRET_SEARCH = "the id, the file name, the kind or who last stored it";
 
 const ORG_SECRET_ROW =
-  "{ id, identifier, kind: \"text\" | \"file\", fileName: string | null, bytes: number, createdAt, updatedAt, updatedBy: string | null, usable: boolean }";
+  '{ id, identifier, kind: "text" | "file", fileName: string | null, bytes: number, createdAt, updatedAt, updatedBy: string | null, usable: boolean }';
 
 const TEMPLATE_SOURCE_ROW =
   "{ id, accountId, accountName: string | null, orgIdentifier, orgName: string | null, projectIdentifier: string | null, projectName: string | null, tail, createdAt, addedBy: string | null, usable: boolean, mine: boolean }";
 
-const SOURCE_STATUS =
-  "{ tokenOk: boolean, orgOk: boolean, projectOk: boolean | null, ok: boolean, detail?: string }";
+const SOURCE_STATUS = "{ tokenOk: boolean, orgOk: boolean, projectOk: boolean | null, ok: boolean, detail?: string }";
 
 const HARNESS_TOKEN_SUMMARY =
-  "{ id, kind: \"pat\" | \"sat\", accountId, accountName: string | null, principal: string | null, principalType: string | null, tail, permissions: { permission, resourceType, permitted: boolean }[], verifiedAt: string | null, createdAt, usable: boolean, lastDeploy: { orgName, orgIdentifier, orgUrl, at, content: { official: boolean, mySecrets: boolean, myTemplates: string[] } | null } | null, scrub: { pending, scrubbed, skipped, failed, dueAt: string | null, scrubbedAt: string | null, orgs: string[], problems: { secretIdentifier, orgIdentifier, status, note: string | null }[] } }";
+  '{ id, kind: "pat" | "sat", accountId, accountName: string | null, principal: string | null, principalType: string | null, tail, permissions: { permission, resourceType, permitted: boolean }[], verifiedAt: string | null, createdAt, usable: boolean, lastDeploy: { orgName, orgIdentifier, orgUrl, at, content: { official: boolean, mySecrets: boolean, myTemplates: string[] } | null } | null, scrub: { pending, scrubbed, skipped, failed, dueAt: string | null, scrubbedAt: string | null, orgs: string[], problems: { secretIdentifier, orgIdentifier, status, note: string | null }[] } }';
 
 const SCRUB_RUN =
-  "{ scrubbed: number, skipped: number, failed: number, problems: { secretIdentifier, status: \"skipped\" | \"failed\", note: string | null }[] }";
+  '{ scrubbed: number, skipped: number, failed: number, problems: { secretIdentifier, status: "skipped" | "failed", note: string | null }[] }';
 
-const ID_PARAM = (what: string) => [
-  { name: "id", type: "string", required: true, note: `UUID of the ${what}` },
-];
+const ID_PARAM = (what: string) => [{ name: "id", type: "string", required: true, note: `UUID of the ${what}` }];
 
 const ORG_SECRET_FORM = [
   {
@@ -34,7 +31,7 @@ const ORG_SECRET_FORM = [
     required: true,
     note: "Harness identifier: a letter or _ first, then letters, digits, _ $ -; 128 characters at most; trimmed",
   },
-  { name: "kind", type: "\"text\" | \"file\"", required: true },
+  { name: "kind", type: '"text" | "file"', required: true },
   {
     name: "value",
     type: "string",
@@ -75,7 +72,11 @@ const TEMPLATE_SOURCE_ERRORS = [
 
 const LOOKUP_BODY = [
   { name: "token", type: "string", required: true, note: "a Harness pat. or sat. token; not stored" },
-  { name: "org", type: "string", note: "an organization identifier; when given, lists its projects instead of the account's organizations" },
+  {
+    name: "org",
+    type: "string",
+    note: "an organization identifier; when given, lists its projects instead of the account's organizations",
+  },
 ];
 
 const LOOKUP_ERRORS = [
@@ -99,7 +100,7 @@ const REPO_BODY = [
   },
   {
     name: "scope",
-    type: "\"org\" | \"project\"",
+    type: '"org" | "project"',
     required: true,
     note: "import once into the event's organization, or into every attendee's project",
   },
@@ -124,8 +125,9 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         returns:
-          "{ id, email: string | null, access: { event, training: string | null, assessments: string | null, iris: string | null, platform: boolean, judging: boolean, manager: boolean }, preferences: { themePreference: \"light\" | \"dark\" | \"system\", calendarScope: \"own\" | \"all\", favoriteTabs: { href: string, label: string }[], videoLanguage: \"en\" | \"es\" }, preferredName: string | null, nameOnRecord: string | null }",
-        notes: "preferredName is the first name you chose, null if none; nameOnRecord is the full name the app shows for you, null if you are not an employee.",
+          '{ id, email: string | null, access: { event, training: string | null, assessments: string | null, iris: string | null, platform: boolean, judging: boolean, manager: boolean }, preferences: { themePreference: "light" | "dark" | "system", calendarScope: "own" | "all", favoriteTabs: { href: string, label: string }[], videoLanguage: "en" | "es" }, preferredName: string | null, nameOnRecord: string | null }',
+        notes:
+          "preferredName is the first name you chose, null if none; nameOnRecord is the full name the app shows for you, null if you are not an employee.",
       },
       {
         method: "PATCH",
@@ -133,20 +135,27 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         summary: "Saves whichever preferences you send.",
         access: "signedIn",
         token: true,
-        notes:
-          "Every field is checked before anything is saved, so one bad field saves nothing. An empty object changes nothing.",
+        notes: "Every field is checked before anything is saved, so one bad field saves nothing. An empty object changes nothing.",
         body: {
           kind: "json",
           fields: [
-            { name: "themePreference", type: "\"light\" | \"dark\" | \"system\"" },
-            { name: "calendarScope", type: "\"own\" | \"all\"", note: "Event Manager or above only" },
+            { name: "themePreference", type: '"light" | "dark" | "system"' },
+            { name: "calendarScope", type: '"own" | "all"', note: "Event Manager or above only" },
             {
               name: "favoriteTabs",
               type: "{ href: string, label: string }[]",
               note: "replaces the whole list shown under Favorites in the sidebar; 25 at most; href is an in-app path, label 80 characters at most",
             },
-            { name: "videoLanguage", type: "\"en\" | \"es\"", note: "the language Coach Canary videos play in; one not yet in it plays in English" },
-            { name: "preferredName", type: "string", note: "the first name the app shows for you in place of the one HiBob has, as the Pre-Bootcamp form sets it; empty clears it; 100 characters at most" },
+            {
+              name: "videoLanguage",
+              type: '"en" | "es"',
+              note: "the language Coach Canary videos play in; one not yet in it plays in English",
+            },
+            {
+              name: "preferredName",
+              type: "string",
+              note: "the first name the app shows for you in place of the one HiBob has, as the Pre-Bootcamp form sets it; empty clears it; 100 characters at most",
+            },
           ],
         },
         returns: "{ preferences: { themePreference, calendarScope, favoriteTabs, videoLanguage } }",
@@ -160,23 +169,25 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/welcome/live-training",
-        summary: "Returns what the Welcome page's Running a Live Training Session steps show: the active bootcamp, the current cohort, the active schedule, how far scoring has got, and which classes have been released.",
+        summary:
+          "Returns what the Welcome page's Running a Live Training Session steps show: the active bootcamp, the current cohort, the active schedule, how far scoring has got, and which classes have been released.",
         access: "signedIn",
         token: true,
         notes:
           "training is null below Training Viewer, and assessments below Assessments Viewer. attendees counts everyone on the Cohorts page's Current tab. sessions and issues are null with no bootcamp active; a track the active bootcamp does not hold has null sessions, and issues counts what the schedule page's warning button lists. In assessments, total is one for each attendee on each active assessment that applies to them and scored those with a submission at the active bootcamp; btc and int are sales attendees, btc_se and int_se engineers. feedback is null with no bootcamp active; each of its released values is when that class's scores were released to managers on Reporting → Live Sessions, or null until then.",
         returns:
-          "{ training: { active: { id, startDate: \"YYYY-MM-DD\", btcDays: number, intDays: number | null } | null, attendees: { bootcamp: number, intermediate: number }, sessions: { btc, int, btc_se, int_se: number | null } | null, issues: number | null } | null, assessments: { btc, int, btc_se, int_se: { scored: number, total: number } } | null, feedback: { intermediate: boolean, released: { bootcamp: string | null, intermediate: string | null } } | null }",
+          '{ training: { active: { id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null } | null, attendees: { bootcamp: number, intermediate: number }, sessions: { btc, int, btc_se, int_se: number | null } | null, issues: number | null } | null, assessments: { btc, int, btc_se, int_se: { scored: number, total: number } } | null, feedback: { intermediate: boolean, released: { bootcamp: string | null, intermediate: string | null } } | null }',
       },
       {
         method: "GET",
         path: "/api/welcome/upcoming-sessions",
-        summary: "Returns what the Welcome page's Upcoming Sessions card shows: every bootcamp that is not complete and has not ended, soonest first.",
+        summary:
+          "Returns what the Welcome page's Upcoming Sessions card shows: every bootcamp that is not complete and has not ended, soonest first.",
         access: "signedIn",
         token: true,
         notes:
           "At most 12. A bootcamp has ended once its last day is before today; its last day is the longer class's, since day N of Bootcamp and of Intermediate is the same calendar day. intDays is null for a bootcamp with no intermediate class.",
-        returns: "{ sessions: { id, startDate: \"YYYY-MM-DD\", endDate: \"YYYY-MM-DD\", intDays: number | null }[] }",
+        returns: '{ sessions: { id, startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD", intDays: number | null }[] }',
       },
       {
         method: "GET",
@@ -200,8 +211,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
           kind: "json",
           fields: [{ name: "email", type: "string", required: true, note: "an employee's or a test account's email; case is ignored" }],
         },
-        returns:
-          "{ impersonating: { id, email, name: string | null }, impersonator: { id, email: string | null, name: string | null } }",
+        returns: "{ impersonating: { id, email, name: string | null }, impersonator: { id, email: string | null, name: string | null } }",
         errors: [
           { status: 400, error: "invalid_email", when: "email is missing or blank" },
           { status: 404, error: "not_found", when: "no employee has that email, nor, outside production, any test account" },
@@ -256,7 +266,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         token: false,
         notes: "Session only: a personal access token gets 401. The token values are never returned.",
         returns:
-          "{ tokens: { id, name, source: \"manual\" | \"bundle\", prefix, status: \"active\" | \"expired\" | \"revoked\", createdAt, expiresAt: string | null, lastUsedAt: string | null }[] }",
+          '{ tokens: { id, name, source: "manual" | "bundle", prefix, status: "active" | "expired" | "revoked", createdAt, expiresAt: string | null, lastUsedAt: string | null }[] }',
       },
       {
         method: "POST",
@@ -268,9 +278,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
           "Session only, so a token cannot mint its own replacement. The token never expires (expiresAt is null); it lasts until revoked or its owner is deleted. Its value is in this response only; just its SHA-256 is stored. You can hold 5 active tokens; old bundle tokens do not count.",
         body: {
           kind: "json",
-          fields: [
-            { name: "name", type: "string", required: true, note: "trimmed; cut to 80 characters" },
-          ],
+          fields: [{ name: "name", type: "string", required: true, note: "trimmed; cut to 80 characters" }],
         },
         returns: "201 { token: { id, name, prefix, expiresAt: null, token } }",
         errors: [
@@ -286,10 +294,8 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         token: false,
         notes: "Session only. Takes effect on the next request made with that token.",
         params: ID_PARAM("token"),
-        returns: "{ id, status: \"revoked\" }",
-        errors: [
-          { status: 404, error: "not_found", when: "no such token of yours, or it is already revoked" },
-        ],
+        returns: '{ id, status: "revoked" }',
+        errors: [{ status: 404, error: "not_found", when: "no such token of yours, or it is already revoked" }],
       },
     ],
   },
@@ -306,7 +312,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "Open wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&mip_opt_out=true with the WebSocket subprotocols [\"bearer\", token]. The token need only be valid while the socket opens; an open socket outlives it. No body.",
+          'Open wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&mip_opt_out=true with the WebSocket subprotocols ["bearer", token]. The token need only be valid while the socket opens; an open socket outlives it. No body.',
         returns: "{ token, expiresIn: number }",
         errors: [
           { status: 502, error: "upstream", when: "Deepgram refused the key or could not be reached" },
@@ -319,7 +325,8 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         summary: "Returns the transcript of a whole recording.",
         access: "signedIn",
         token: true,
-        notes: "Deepgram's nova-3 model, with punctuation, number formatting and a blank line between paragraphs; when more than one voice is heard, each change of speaker starts a paragraph with \"Speaker 1:\", \"Speaker 2:\" and so on. The audio is passed through and not kept.",
+        notes:
+          'Deepgram\'s nova-3 model, with punctuation, number formatting and a blank line between paragraphs; when more than one voice is heard, each change of speaker starts a paragraph with "Speaker 1:", "Speaker 2:" and so on. The audio is passed through and not kept.',
         body: {
           kind: "multipart",
           fields: [
@@ -357,7 +364,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         notes:
           "date is the day the item is for; for Prep Day (btc, day 0), the day before the bootcamp starts. open counts every item of yours still to do, whatever the search or status. Tick one with PATCH /api/scheduler/bootcamps/{id}/checklist/items/{itemId}.",
         query: [
-          { name: "status", type: "\"open\" | \"done\" | \"all\"", note: "default open" },
+          { name: "status", type: '"open" | "done" | "all"', note: "default open" },
           ...listQuery(MY_CHECKLIST_LIST.sorts, "the name or who wrote it"),
         ],
         returns: `{ items: (${CHECKLIST_ITEM_ROW} & { bootcampId, bootcampStartDate, date })[], ${PAGE_FIELDS}, open: number }`,
@@ -389,8 +396,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "configured is false when secrets encryption isn't set up. scrubDays is how long a deployed secret keeps its real value (default 7).",
-        returns:
-          `{ tokens: ${HARNESS_TOKEN_SUMMARY}[], choices: { official: { secrets: number, sources: number }, mySecrets: number, myTemplates: ${TEMPLATE_SOURCE_ROW}[] }, configured: boolean, scrubDays: number }`,
+        returns: `{ tokens: ${HARNESS_TOKEN_SUMMARY}[], choices: { official: { secrets: number, sources: number }, mySecrets: number, myTemplates: ${TEMPLATE_SOURCE_ROW}[] }, configured: boolean, scrubDays: number }`,
       },
       {
         method: "POST",
@@ -402,9 +408,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
           "Calls the Harness account the token belongs to (ACL check, account name, current user) to record its permissions. You can save 10 tokens. Error bodies carry Harness's message in detail when it gave one.",
         body: {
           kind: "json",
-          fields: [
-            { name: "token", type: "string", required: true, note: "pat.<account>.<id>.<secret> or sat.…" },
-          ],
+          fields: [{ name: "token", type: "string", required: true, note: "pat.<account>.<id>.<secret> or sat.…" }],
         },
         returns: `201 { token: ${HARNESS_TOKEN_SUMMARY} }`,
         errors: [
@@ -423,8 +427,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         summary: "Re-checks a saved token with Harness and refreshes its permissions.",
         access: "signedIn",
         token: true,
-        notes:
-          "Calls the token's Harness account. If Harness rejects it, the token is marked unverified (verifiedAt becomes null).",
+        notes: "Calls the token's Harness account. If Harness rejects it, the token is marked unverified (verifiedAt becomes null).",
         params: ID_PARAM("saved Harness token"),
         returns: `{ token: ${HARNESS_TOKEN_SUMMARY} }`,
         errors: [
@@ -466,7 +469,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
           ],
         },
         returns:
-          "{ report: { orgIdentifier, orgName, orgUrl, steps: { scope, kind, identifier, outcome: \"created\" | \"existed\" | \"failed\" | \"skipped\", detail?: string }[], counts: { created, existed, failed, skipped }, sources: number } }",
+          '{ report: { orgIdentifier, orgName, orgUrl, steps: { scope, kind, identifier, outcome: "created" | "existed" | "failed" | "skipped", detail?: string }[], counts: { created, existed, failed, skipped }, sources: number } }',
         errors: [
           { status: 400, error: "invalid_name", when: "org is missing, or has no letter, digit or underscore in it" },
           { status: 400, error: "nothing_selected", when: "official, mySecrets and myTemplates are all off or empty" },
@@ -519,7 +522,8 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         summary: "Adds one of your own org secrets, encrypted.",
         access: "signedIn",
         token: true,
-        notes: "Write-only: the value is never returned. A deploy that ticks mySecrets writes it, and it wins over a site secret with the same identifier.",
+        notes:
+          "Write-only: the value is never returned. A deploy that ticks mySecrets writes it, and it wins over a site secret with the same identifier.",
         body: { kind: "multipart", fields: ORG_SECRET_FORM },
         returns: `201 { secret: ${ORG_SECRET_ROW} }`,
         errors: ORG_SECRET_ERRORS,
@@ -534,10 +538,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         params: ID_PARAM("org secret"),
         body: { kind: "multipart", fields: ORG_SECRET_FORM },
         returns: `{ secret: ${ORG_SECRET_ROW} }`,
-        errors: [
-          ...ORG_SECRET_ERRORS,
-          { status: 404, error: "not_found", when: "no such secret of yours" },
-        ],
+        errors: [...ORG_SECRET_ERRORS, { status: 404, error: "not_found", when: "no such secret of yours" }],
       },
       {
         method: "DELETE",
@@ -547,7 +548,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         token: true,
         notes: "Copies already deployed into Harness are not touched.",
         params: ID_PARAM("org secret"),
-        returns: "{ id, status: \"removed\" }",
+        returns: '{ id, status: "removed" }',
         errors: [{ status: 404, error: "not_found", when: "no such secret of yours" }],
       },
       {
@@ -557,9 +558,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes: "With ?status=1 it checks each source live with Harness, which is slow. The stored tokens are never returned.",
-        query: [
-          { name: "status", type: "\"1\"", note: "add a live check of each source" },
-        ],
+        query: [{ name: "status", type: '"1"', note: "add a live check of each source" }],
         returns: `{ sources: ${TEMPLATE_SOURCE_ROW}[], status?: Record<id, ${SOURCE_STATUS}>, configured: boolean }`,
       },
       {
@@ -582,7 +581,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         token: true,
         notes: "Only the saved token goes; nothing changes in Harness.",
         params: ID_PARAM("template source"),
-        returns: "{ id, status: \"removed\" }",
+        returns: '{ id, status: "removed" }',
         errors: [{ status: 404, error: "not_found", when: "no such source of yours" }],
       },
       {
@@ -636,10 +635,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         params: ID_PARAM("org secret"),
         body: { kind: "multipart", fields: ORG_SECRET_FORM },
         returns: `{ secret: ${ORG_SECRET_ROW} }`,
-        errors: [
-          ...ORG_SECRET_ERRORS,
-          { status: 404, error: "not_found", when: "no such site secret" },
-        ],
+        errors: [...ORG_SECRET_ERRORS, { status: 404, error: "not_found", when: "no such site secret" }],
       },
       {
         method: "DELETE",
@@ -648,7 +644,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "eventAdmin",
         token: true,
         params: ID_PARAM("org secret"),
-        returns: "{ id, status: \"removed\" }",
+        returns: '{ id, status: "removed" }',
         errors: [{ status: 404, error: "not_found", when: "no such site secret" }],
       },
       {
@@ -658,9 +654,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "eventAdmin",
         token: true,
         notes: "With ?status=1 it checks each source live with Harness, which is slow. The stored tokens are never returned.",
-        query: [
-          { name: "status", type: "\"1\"", note: "add a live check of each source" },
-        ],
+        query: [{ name: "status", type: '"1"', note: "add a live check of each source" }],
         returns: `{ sources: ${TEMPLATE_SOURCE_ROW}[], status?: Record<id, ${SOURCE_STATUS}>, configured: boolean }`,
       },
       {
@@ -683,7 +677,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         token: true,
         notes: "Only the saved token goes; nothing changes in Harness.",
         params: ID_PARAM("template source"),
-        returns: "{ id, status: \"removed\" }",
+        returns: '{ id, status: "removed" }',
         errors: [{ status: 404, error: "not_found", when: "no such site source" }],
       },
       {
@@ -727,10 +721,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         params: ID_PARAM("repository"),
         body: { kind: "json", fields: REPO_BODY },
         returns: "{ ok: true }",
-        errors: [
-          ...REPO_ERRORS,
-          { status: 404, error: "not_found", when: "no such repository" },
-        ],
+        errors: [...REPO_ERRORS, { status: 404, error: "not_found", when: "no such repository" }],
       },
       {
         method: "DELETE",
@@ -750,7 +741,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "platform",
         token: true,
         notes:
-          "A fixed handful of jobs, all in one response. via \"dispatcher\" is one of the app's own jobs, started by POST /api/settings/timed-jobs/tick on the schedule PATCH sets; via \"cloud-scheduler\" is the reaper or the scheduler, whose schedule is set in Terraform. cron, timeZone and schedule are what the job runs on; defaultCron and defaultTimeZone what it runs on unless changed, and custom whether it has been. nextRunAt is null when it does not fall due in the coming year. A job that has never run has null last-run fields.",
+          'A fixed handful of jobs, all in one response. via "dispatcher" is one of the app\'s own jobs, started by POST /api/settings/timed-jobs/tick on the schedule PATCH sets; via "cloud-scheduler" is the reaper or the scheduler, whose schedule is set in Terraform. cron, timeZone and schedule are what the job runs on; defaultCron and defaultTimeZone what it runs on unless changed, and custom whether it has been. nextRunAt is null when it does not fall due in the coming year. A job that has never run has null last-run fields.',
         returns:
           '{ jobs: { key, name, summary, via: "dispatcher" | "cloud-scheduler", cron, timeZone, schedule, defaultCron, defaultTimeZone, custom: boolean, nextRunAt: string | null, resource, offWarning?: string, enabled: boolean, lastStartedAt: string | null, lastFinishedAt: string | null, lastStatus: "running" | "succeeded" | "failed" | "skipped" | null, lastDetail: string | null }[] }',
       },
@@ -761,7 +752,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "platform",
         token: true,
         notes:
-          "A job that is off still falls due and answers { skipped: \"off\" }; it does nothing and shows as Skipped. schedule is a five-field cron, numbers only, read in an IANA time zone; every minute it names must be a multiple of 5, since jobs are started every five minutes, and it must fall due within the coming year. null, or the job's default, puts it back on the default. A new schedule counts from now: a time already past is not caught up on. Only a job with via \"dispatcher\" takes one. Intake form reminders follow the HiBob sync's cohort Slack sync, so they keep its schedule.",
+          'A job that is off still falls due and answers { skipped: "off" }; it does nothing and shows as Skipped. schedule is a five-field cron, numbers only, read in an IANA time zone; every minute it names must be a multiple of 5, since jobs are started every five minutes, and it must fall due within the coming year. null, or the job\'s default, puts it back on the default. A new schedule counts from now: a time already past is not caught up on. Only a job with via "dispatcher" takes one. Intake form reminders follow the HiBob sync\'s cohort Slack sync, so they keep its schedule.',
         params: [{ name: "key", type: "string", required: true, note: "the job's key, as GET /api/settings/timed-jobs lists it" }],
         body: {
           kind: "json",

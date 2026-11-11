@@ -4,14 +4,7 @@ import "server-only";
 
 import { count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  employees,
-  users,
-  workshopRuns,
-  type AssessmentsRole,
-  type EventRole,
-  type TrainingRole,
-} from "@/db/schema";
+import { employees, users, workshopRuns, type AssessmentsRole, type EventRole, type TrainingRole } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
 import { canAddUsers, canDeleteUsers, canManageRoles, type Access } from "@/lib/roles";
 import type { UserSort } from "@/lib/list-specs";
@@ -63,10 +56,7 @@ export async function listSiteUsers(query: ListQuery<UserSort>): Promise<Page<Si
     })
     .from(users)
     .where(searchAny(query.q, [users.name, users.email]))
-    .orderBy(
-      desc(users.isTestAccount),
-      ...orderFor(USER_SORT_COLUMNS[query.sort], query.dir, users.email, users.id),
-    )
+    .orderBy(desc(users.isTestAccount), ...orderFor(USER_SORT_COLUMNS[query.sort], query.dir, users.email, users.id))
     .limit(limit)
     .offset(offset);
 
@@ -106,11 +96,7 @@ export async function addUser(
   const address = email.trim().toLowerCase();
   noteAudit({ targetLabel: address });
 
-  const [employee] = await db
-    .select({ fullName: employees.fullName })
-    .from(employees)
-    .where(eq(employees.email, address))
-    .limit(1);
+  const [employee] = await db.select({ fullName: employees.fullName }).from(employees).where(eq(employees.email, address)).limit(1);
   if (!employee) return { ok: false, error: "not_employee" };
 
   // Google hands Auth.js the address in whatever case it has it.
@@ -148,12 +134,7 @@ export type RoleChange =
  *                       next sign-in, so removing it would only look like it
  *                       worked.
  */
-export type SetRoleError =
-  | "not_found"
-  | "self"
-  | "forbidden"
-  | "platform_target"
-  | "bootstrap";
+export type SetRoleError = "not_found" | "self" | "forbidden" | "platform_target" | "bootstrap";
 
 export async function setUserRole(
   actor: { id: string; access: Access },
@@ -188,11 +169,7 @@ export async function setUserRole(
           ? { assessmentsRole: change.role }
           : { isPlatformAdmin: change.value };
 
-  const updated = await db
-    .update(users)
-    .set(set)
-    .where(eq(users.id, targetUserId))
-    .returning({ id: users.id });
+  const updated = await db.update(users).set(set).where(eq(users.id, targetUserId)).returning({ id: users.id });
 
   if (updated.length === 0) return { ok: false, error: "not_found" };
   return { ok: true };
@@ -207,12 +184,7 @@ export async function setUserRole(
  * - `owns_events` — events keep their owner, and carry cloud resources that
  *                   are torn down through the event, not by deleting a person.
  */
-export type DeleteUserError =
-  | "not_found"
-  | "self"
-  | "forbidden"
-  | "bootstrap"
-  | "owns_events";
+export type DeleteUserError = "not_found" | "self" | "forbidden" | "bootstrap" | "owns_events";
 
 /** Removes an account, its sessions and its own settings; what they authored stays, unattributed. */
 export async function deleteUser(
@@ -222,26 +194,17 @@ export async function deleteUser(
   if (actor.id === targetUserId) return { ok: false, error: "self" };
   if (!canDeleteUsers(actor.access)) return { ok: false, error: "forbidden" };
 
-  const [target] = await db
-    .select({ email: users.email })
-    .from(users)
-    .where(eq(users.id, targetUserId));
+  const [target] = await db.select({ email: users.email }).from(users).where(eq(users.id, targetUserId));
 
   if (!target) return { ok: false, error: "not_found" };
   noteAudit({ targetLabel: target.email ?? undefined });
   if (isBootstrapAdmin(target.email)) return { ok: false, error: "bootstrap" };
 
-  const [{ events }] = await db
-    .select({ events: count() })
-    .from(workshopRuns)
-    .where(eq(workshopRuns.userId, targetUserId));
+  const [{ events }] = await db.select({ events: count() }).from(workshopRuns).where(eq(workshopRuns.userId, targetUserId));
   if (events > 0) return { ok: false, error: "owns_events" };
 
   try {
-    const deleted = await db
-      .delete(users)
-      .where(eq(users.id, targetUserId))
-      .returning({ id: users.id });
+    const deleted = await db.delete(users).where(eq(users.id, targetUserId)).returning({ id: users.id });
     if (deleted.length === 0) return { ok: false, error: "not_found" };
   } catch (err) {
     // An event created since the count above still holds its owner.

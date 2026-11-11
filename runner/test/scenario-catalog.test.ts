@@ -65,8 +65,7 @@ function manifestsOnDisk(): Map<string, Manifest> {
     const file = path.join(SCENARIOS_DIR, entry.name, "scenario.json");
     assert.ok(
       fs.existsSync(file),
-      `terraform/scenarios/${entry.name} has no scenario.json — either add one ` +
-        `or move the directory out of scenarios/`,
+      `terraform/scenarios/${entry.name} has no scenario.json — either add one ` + `or move the directory out of scenarios/`,
     );
     found.set(entry.name, JSON.parse(fs.readFileSync(file, "utf8")) as Manifest);
   }
@@ -78,21 +77,14 @@ describe("scenario manifests", () => {
     // The id is the Terraform state prefix and the value stored on a run, so a
     // manifest whose id drifts from its directory silently orphans live state.
     for (const [dir, manifest] of manifestsOnDisk()) {
-      assert.equal(
-        manifest.id,
-        dir,
-        `terraform/scenarios/${dir}/scenario.json declares id ${JSON.stringify(manifest.id)}`,
-      );
+      assert.equal(manifest.id, dir, `terraform/scenarios/${dir}/scenario.json declares id ${JSON.stringify(manifest.id)}`);
     }
   });
 
   test("every manifest names a real cloud and has a label", () => {
     for (const [dir, m] of manifestsOnDisk()) {
       assert.ok(CLOUDS.includes(m.cloud), `${dir}: cloud ${m.cloud} is not a cloud`);
-      assert.ok(
-        typeof m.label === "string" && m.label.length > 0,
-        `${dir}: needs a label — it is what the checkbox says`,
-      );
+      assert.ok(typeof m.label === "string" && m.label.length > 0, `${dir}: needs a label — it is what the checkbox says`);
       assert.ok(
         typeof m.description === "string" && m.description.length > 0,
         `${dir}: needs a description — it is what the checkbox says underneath`,
@@ -106,10 +98,7 @@ describe("scenario manifests", () => {
     for (const [dir, m] of manifestsOnDisk()) {
       if (m.providesCluster) continue;
       for (const file of ["main.tf", "variables.tf", "backend.tf"]) {
-        assert.ok(
-          fs.existsSync(path.join(SCENARIOS_DIR, dir, file)),
-          `terraform/scenarios/${dir} is missing ${file}`,
-        );
+        assert.ok(fs.existsSync(path.join(SCENARIOS_DIR, dir, file)), `terraform/scenarios/${dir} is missing ${file}`);
       }
     }
   });
@@ -120,14 +109,8 @@ describe("scenario manifests", () => {
     // nothing — the runner skips the apply step for these entirely.
     for (const [dir, m] of manifestsOnDisk()) {
       if (!m.providesCluster) continue;
-      const stray = fs
-        .readdirSync(path.join(SCENARIOS_DIR, dir))
-        .filter((f) => f.endsWith(".tf"));
-      assert.deepEqual(
-        stray,
-        [],
-        `${dir} provides the cluster, so it must have no .tf files — the runner never applies it`,
-      );
+      const stray = fs.readdirSync(path.join(SCENARIOS_DIR, dir)).filter((f) => f.endsWith(".tf"));
+      assert.deepEqual(stray, [], `${dir} provides the cluster, so it must have no .tf files — the runner never applies it`);
     }
   });
 
@@ -135,26 +118,16 @@ describe("scenario manifests", () => {
     // Otherwise the dependency has nothing to resolve to: the checkbox would
     // tick something that does not exist, and the cluster would never be built.
     const manifests = [...manifestsOnDisk().values()];
-    const breaks = new Set(
-      manifests.filter((m) => m.requiresCluster).map((m) => m.cloud),
-    );
-    const builds = new Set(
-      manifests.filter((m) => m.providesCluster).map((m) => m.cloud),
-    );
+    const breaks = new Set(manifests.filter((m) => m.requiresCluster).map((m) => m.cloud));
+    const builds = new Set(manifests.filter((m) => m.providesCluster).map((m) => m.cloud));
     for (const cloud of breaks) {
-      assert.ok(
-        builds.has(cloud),
-        `${cloud} has a scenario needing a cluster but none providing one`,
-      );
+      assert.ok(builds.has(cloud), `${cloud} has a scenario needing a cluster but none providing one`);
     }
   });
 
   test("a scenario does not both provide and require a cluster", () => {
     for (const [dir, m] of manifestsOnDisk()) {
-      assert.ok(
-        !(m.providesCluster && m.requiresCluster),
-        `${dir}: providesCluster and requiresCluster are mutually exclusive`,
-      );
+      assert.ok(!(m.providesCluster && m.requiresCluster), `${dir}: providesCluster and requiresCluster are mutually exclusive`);
     }
   });
 
@@ -182,20 +155,9 @@ describe("scenario manifests", () => {
       const vars = declaredVars(dir);
 
       if (m.perCompetitor) {
-        assert.ok(
-          vars.has("attendee_email"),
-          `${dir}: perCompetitor, so it must declare attendee_email`,
-        );
-        for (const plural of [
-          "attendee_projects",
-          "attendee_resource_groups",
-          "node_tags",
-          "network_names",
-        ]) {
-          assert.ok(
-            !vars.has(plural),
-            `${dir}: perCompetitor roots get one competitor, so ${plural} would never be filled in`,
-          );
+        assert.ok(vars.has("attendee_email"), `${dir}: perCompetitor, so it must declare attendee_email`);
+        for (const plural of ["attendee_projects", "attendee_resource_groups", "node_tags", "network_names"]) {
+          assert.ok(!vars.has(plural), `${dir}: perCompetitor roots get one competitor, so ${plural} would never be filled in`);
         }
         continue;
       }
@@ -204,10 +166,7 @@ describe("scenario manifests", () => {
         vars.has("attendee_projects") || vars.has("attendee_resource_groups"),
         `${dir}: a roster scenario must declare the map it for_eaches over`,
       );
-      assert.ok(
-        !vars.has("attendee_email"),
-        `${dir}: attendee_email is only filled in for perCompetitor roots`,
-      );
+      assert.ok(!vars.has("attendee_email"), `${dir}: attendee_email is only filled in for perCompetitor roots`);
     }
   });
 
@@ -218,10 +177,7 @@ describe("scenario manifests", () => {
     // AWS scenario cannot work.
     for (const [dir, m] of manifestsOnDisk()) {
       if (m.cloud !== "aws" || m.providesCluster) continue;
-      assert.ok(
-        m.perCompetitor,
-        `${dir}: an AWS scenario needs perCompetitor — one assumed-role provider per account`,
-      );
+      assert.ok(m.perCompetitor, `${dir}: an AWS scenario needs perCompetitor — one assumed-role provider per account`);
     }
   });
 });
@@ -248,11 +204,7 @@ describe("the frontend catalog mirrors the manifests", () => {
       assert.ok(m, `${entry.id}: no manifest`);
       assert.equal(entry.label, m.label, `${entry.id}: label differs`);
       assert.equal(entry.cloud, m.cloud, `${entry.id}: cloud differs`);
-      assert.equal(
-        entry.description,
-        m.description,
-        `${entry.id}: description differs — the manifest is the source of truth`,
-      );
+      assert.equal(entry.description, m.description, `${entry.id}: description differs — the manifest is the source of truth`);
     }
   });
 
@@ -266,16 +218,8 @@ describe("the frontend catalog mirrors the manifests", () => {
     for (const entry of SCENARIOS) {
       const m = manifests.get(entry.id);
       assert.ok(m, `${entry.id}: no manifest`);
-      assert.equal(
-        "providesCluster" in entry,
-        m.providesCluster === true,
-        `${entry.id}: providesCluster differs from the manifest`,
-      );
-      assert.equal(
-        "requiresCluster" in entry,
-        m.requiresCluster === true,
-        `${entry.id}: requiresCluster differs from the manifest`,
-      );
+      assert.equal("providesCluster" in entry, m.providesCluster === true, `${entry.id}: providesCluster differs from the manifest`);
+      assert.equal("requiresCluster" in entry, m.requiresCluster === true, `${entry.id}: requiresCluster differs from the manifest`);
     }
   });
 

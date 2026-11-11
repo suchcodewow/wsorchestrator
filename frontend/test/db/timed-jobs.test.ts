@@ -57,7 +57,10 @@ describe("dispatchTimedJobs", () => {
     assert.deepEqual(await dispatchTimedJobs(new Date("2026-10-22T07:00:30Z"), CTX), []);
     assert.deepEqual(await dispatchTimedJobs(new Date("2026-10-22T07:05:00Z"), CTX), []);
 
-    const [row] = await db.select().from(timedJobs).where(inArray(timedJobs.key, ["hibob-sync"]));
+    const [row] = await db
+      .select()
+      .from(timedJobs)
+      .where(inArray(timedJobs.key, ["hibob-sync"]));
     assert.equal(row?.scheduledFor?.toISOString(), "2026-10-22T07:00:00.000Z");
     assert.equal(row?.lastStatus, "skipped");
   });
@@ -76,7 +79,10 @@ describe("dispatchTimedJobs", () => {
 
     // The time it was set in has already passed, so it is not run late.
     const now = new Date();
-    assert.deepEqual((await dispatchTimedJobs(now, CTX)).filter((r) => r.key === "google-meetings-sync"), []);
+    assert.deepEqual(
+      (await dispatchTimedJobs(now, CTX)).filter((r) => r.key === "google-meetings-sync"),
+      [],
+    );
     const later = new Date(now.getTime() + 5 * 60_000);
     assert.deepEqual(
       (await dispatchTimedJobs(later, CTX)).filter((r) => r.key === "google-meetings-sync").map((r) => r.status),
@@ -97,7 +103,10 @@ describe("setTimedJobSchedule", () => {
     assert.equal((await listTimedJobs()).find((j) => j.key === "hibob-sync")?.schedule, "Weekdays at 6:00 AM Central");
 
     await setTimedJobSchedule(actor, "hibob-sync", { cron: " 0  3 * * * ", timeZone: "America/New_York" });
-    const [row] = await db.select().from(timedJobs).where(inArray(timedJobs.key, ["hibob-sync"]));
+    const [row] = await db
+      .select()
+      .from(timedJobs)
+      .where(inArray(timedJobs.key, ["hibob-sync"]));
     assert.equal(row?.cron, null);
     assert.equal(row?.timeZone, null);
     assert.equal((await listTimedJobs()).find((j) => j.key === "hibob-sync")?.custom, false);

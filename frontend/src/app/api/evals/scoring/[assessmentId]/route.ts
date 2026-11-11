@@ -12,7 +12,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ assessme
   const { error, user } = await requireCaller(req, canSeeEvals);
   if (error) return error;
 
-  const id = z.string().uuid().safeParse((await params).assessmentId);
+  const id = z
+    .string()
+    .uuid()
+    .safeParse((await params).assessmentId);
   const assessment = id.success ? await scoringAssessment(id.data) : null;
   if (!assessment) return NextResponse.json({ error: "not_found" }, { status: 404 });
 

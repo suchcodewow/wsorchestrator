@@ -40,7 +40,11 @@ function isoDate(value: unknown): string | null {
 
 /** A word as an email spells it: letters only, lowercased, without accents. */
 function bare(word: string): string {
-  return word.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z]/g, "");
+  return word
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
 }
 
 /** What HiBob puts where it has no name: "LNU", "FNU", or a lone "." or "-". */

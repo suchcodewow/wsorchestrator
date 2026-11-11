@@ -6,10 +6,7 @@ import { getLabGuideById } from "@/lib/lab-guides";
 import { renderMarkdown } from "@/lib/markdown";
 import { canManageLabGuides } from "@/lib/roles";
 
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const caller = await sessionOrToken(req);
   if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

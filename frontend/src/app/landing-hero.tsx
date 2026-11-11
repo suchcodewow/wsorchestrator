@@ -21,11 +21,7 @@ function drawPath(tl: gsap.core.Timeline, path: HTMLElement, wide: boolean) {
   tl.from(pq('[data-timeline="heading"]'), { opacity: 0, y: 10, duration: 0.5 }, "rail-=0.3");
 
   if (!wide) {
-    tl.from(
-      pq('[data-timeline="rail"]'),
-      { scaleY: 0, duration: STEP * stages.length, ease: "power1.inOut" },
-      "rail",
-    );
+    tl.from(pq('[data-timeline="rail"]'), { scaleY: 0, duration: STEP * stages.length, ease: "power1.inOut" }, "rail");
   }
 
   stages.forEach((stage, i) => {
@@ -43,18 +39,9 @@ function drawPath(tl: gsap.core.Timeline, path: HTMLElement, wide: boolean) {
     // Inside the card: a lab guide fills in its reader's project, rooms and
     // the room fill up, and a learner's checks land one by one before the cheer.
     const ticks = sq('[data-timeline="tick"]');
-    tl.fromTo(
-      sq('[data-timeline="var-from"]'),
-      { opacity: 1 },
-      { opacity: 0, duration: 0.25, ease: "none" },
-      `${at}+=0.75`,
-    )
+    tl.fromTo(sq('[data-timeline="var-from"]'), { opacity: 1 }, { opacity: 0, duration: 0.25, ease: "none" }, `${at}+=0.75`)
       .from(sq('[data-timeline="var-to"]'), { opacity: 0, duration: 0.3, ease: "none" }, `${at}+=0.85`)
-      .from(
-        sq('[data-timeline="fill"]'),
-        { scaleX: 0, duration: 1.1, ease: "power2.out", stagger: 0.12 },
-        `${at}+=0.2`,
-      )
+      .from(sq('[data-timeline="fill"]'), { scaleX: 0, duration: 1.1, ease: "power2.out", stagger: 0.12 }, `${at}+=0.2`)
       .from(ticks, { opacity: 0, x: -6, duration: 0.35, stagger: 0.18 }, `${at}+=0.45`)
       .from(
         sq('[data-timeline="cheer"]'),

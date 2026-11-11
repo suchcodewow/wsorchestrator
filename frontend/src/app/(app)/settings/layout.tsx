@@ -5,11 +5,7 @@ import { auth, signInPath } from "@/auth";
 import { canManageSettings } from "@/lib/roles";
 import { SiteSettingsTabs } from "./settings-tabs";
 
-export default async function SiteSettingsLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function SiteSettingsLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   if (!canManageSettings(session.user.access)) notFound();

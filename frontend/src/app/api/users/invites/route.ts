@@ -40,13 +40,7 @@ export const POST = audited(async function POST(req: Request) {
     { eventRole: eventRole === "none" ? null : eventRole, trainingRole, assessmentsRole },
   );
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
-  return NextResponse.json(
-    { path: `/invite/${result.token}`, expiresAt: result.expiresAt.toISOString() },
-    { status: 201 },
-  );
+  return NextResponse.json({ path: `/invite/${result.token}`, expiresAt: result.expiresAt.toISOString() }, { status: 201 });
 });

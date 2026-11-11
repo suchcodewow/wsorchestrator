@@ -109,7 +109,12 @@ async function tokenRequest(app: ZoomApp, params: Record<string, string>): Promi
     error?: string;
   };
   if (!res.ok || !body.access_token || !body.refresh_token) {
-    throw new ZoomError(res.status, null, `Zoom refused the app's credentials: ${body.reason ?? body.error ?? `HTTP ${res.status}`}`, body.error ?? null);
+    throw new ZoomError(
+      res.status,
+      null,
+      `Zoom refused the app's credentials: ${body.reason ?? body.error ?? `HTTP ${res.status}`}`,
+      body.error ?? null,
+    );
   }
   return {
     accessToken: body.access_token,
@@ -183,7 +188,11 @@ export function zoomClient(accessToken: () => Promise<string>): ZoomClient {
         }
         if (!res.ok) {
           const error = json as { code?: number; message?: string } | null;
-          throw new ZoomError(res.status, error?.code ?? null, `Zoom ${method} ${path} answered ${res.status}: ${error?.message ?? text.slice(0, 200)}`);
+          throw new ZoomError(
+            res.status,
+            error?.code ?? null,
+            `Zoom ${method} ${path} answered ${res.status}: ${error?.message ?? text.slice(0, 200)}`,
+          );
         }
         return json as T;
       }

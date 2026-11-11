@@ -12,26 +12,9 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  ENGINE,
-  confidenceOf,
-  drawItem,
-  newRunState,
-  placementOf,
-  submit,
-  type Asked,
-  type Level,
-} from "@/lib/iris/engine";
+import { ENGINE, confidenceOf, drawItem, newRunState, placementOf, submit, type Asked, type Level } from "@/lib/iris/engine";
 import { IRIS_ITEMS } from "@/lib/iris/items";
-import {
-  OPEN_SUBJECT_KEYS,
-  SUBJECTS,
-  SUBJECT_KEYS,
-  TRACKS,
-  TRACK_WEIGHTS,
-  compositeOf,
-  isSubjectKey,
-} from "@/lib/iris/subjects";
+import { OPEN_SUBJECT_KEYS, SUBJECTS, SUBJECT_KEYS, TRACKS, TRACK_WEIGHTS, compositeOf, isSubjectKey } from "@/lib/iris/subjects";
 import { PROFILES, longestOption, runOnce, seeded } from "../support/iris-sim";
 
 const RUNS = 2000;

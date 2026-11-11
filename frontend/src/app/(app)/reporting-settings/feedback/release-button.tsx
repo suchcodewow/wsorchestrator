@@ -12,14 +12,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
 import type { ReleaseBlockers, Waiting } from "@/lib/reporting/bootcamp";
 import { RELEASE_LABELS, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
@@ -96,9 +89,7 @@ export function ReleaseButton({
     }
   }
 
-  const waits = blockers
-    ? (Object.keys(WAITING_ON) as (keyof ReleaseBlockers)[]).filter((k) => blockers[k].total > 0)
-    : [];
+  const waits = blockers ? (Object.keys(WAITING_ON) as (keyof ReleaseBlockers)[]).filter((k) => blockers[k].total > 0) : [];
   const blocked = waits.length > 0;
 
   return (
@@ -128,10 +119,10 @@ export function ReleaseButton({
           <DialogHeader>
             <DialogTitle>{RELEASE_LABELS[stage]}?</DialogTitle>
             <DialogDescription>
-              Managers will see the {label} results of the bootcamp starting {formatDate(startDate)} for the people
-              in their org, on Live Sessions and each person&apos;s page. Everyone scored in {label} gets{" "}
-              {formatDate(startDate)} as their {label} date in bootcamp history, with their scores, which completes
-              the class. Everyone in their management chains, and the Additional Slack Contacts,{" "}
+              Managers will see the {label} results of the bootcamp starting {formatDate(startDate)} for the people in their org, on Live
+              Sessions and each person&apos;s page. Everyone scored in {label} gets {formatDate(startDate)} as their {label} date in
+              bootcamp history, with their scores, which completes the class. Everyone in their management chains, and the Additional Slack
+              Contacts,{" "}
               {slackLive
                 ? "gets a Slack message linking to Live Sessions."
                 : "would get a Slack message linking to Live Sessions, but Slack is in dry run, so it is only logged."}{" "}

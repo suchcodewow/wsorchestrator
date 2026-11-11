@@ -97,9 +97,7 @@ export function groupByCohort<T extends { month: string }>(
   const empties = emptyMonths.filter(
     (m) =>
       !shown.has(m) &&
-      (first === undefined || last === undefined
-        ? page.first
-        : (page.first || !before(m, first)) && (page.last || !before(last, m))),
+      (first === undefined || last === undefined ? page.first : (page.first || !before(m, first)) && (page.last || !before(last, m))),
   );
   return [...groups, ...empties.map((month) => ({ month, rows: [] as T[] }))].sort((a, b) =>
     a.month === b.month ? 0 : before(a.month, b.month) ? -1 : 1,

@@ -21,9 +21,7 @@ const updated = new Intl.DateTimeFormat("en", {
 
 export default async function GuideLibraryPage() {
   const session = await auth();
-  const canEdit = session?.user
-    ? canManageLabGuides(session.user.access)
-    : false;
+  const canEdit = session?.user ? canManageLabGuides(session.user.access) : false;
 
   const guides = await listLabGuides();
 
@@ -59,9 +57,7 @@ export default async function GuideLibraryPage() {
           </span>
           <p className="mt-4 text-sm font-medium">No guides yet</p>
           <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">
-            {canEdit
-              ? "Write the first one, then put it in a workshop."
-              : "Nothing has been written yet."}
+            {canEdit ? "Write the first one, then put it in a workshop." : "Nothing has been written yet."}
           </p>
         </div>
       ) : (
@@ -72,15 +68,9 @@ export default async function GuideLibraryPage() {
                 href={`/labs/guides/${guide.slug}`}
                 className="group block rounded-2xl border bg-card/60 dark:bg-card p-5 backdrop-blur-sm transition-colors outline-none hover:border-brand-border/70 hover:bg-accent/40 dark:hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
-                <h2 className="text-base font-medium tracking-tight group-hover:text-brand">
-                  {guide.title}
-                </h2>
+                <h2 className="text-base font-medium tracking-tight group-hover:text-brand">{guide.title}</h2>
 
-                {guide.summary && (
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                    {guide.summary}
-                  </p>
-                )}
+                {guide.summary && <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{guide.summary}</p>}
 
                 <p className="mt-3 text-xs text-muted-foreground">
                   Updated {updated.format(guide.updatedAt)}

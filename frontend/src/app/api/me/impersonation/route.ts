@@ -8,11 +8,7 @@ import { NextResponse } from "next/server";
 import type { Session } from "next-auth";
 import { auth } from "@/auth";
 import { audited, noteAudit } from "@/lib/audit";
-import {
-  impersonationRefusal,
-  impersonationTarget,
-  setImpersonation,
-} from "@/lib/impersonation";
+import { impersonationRefusal, impersonationTarget, setImpersonation } from "@/lib/impersonation";
 import { canImpersonate } from "@/lib/roles";
 
 const unauthorized = () => NextResponse.json({ error: "unauthorized" }, { status: 401 });

@@ -53,7 +53,10 @@ export async function listCardViewers(
       .where(eq(scorecardViews.attendeeEmail, email))
       .orderBy(desc(scorecardViews.lastViewedAt))
       .limit(VIEWERS_MAX),
-    db.select({ n: sql<number>`count(*)::int` }).from(scorecardViews).where(eq(scorecardViews.attendeeEmail, email)),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(scorecardViews)
+      .where(eq(scorecardViews.attendeeEmail, email)),
   ]);
   return { viewers: rows.map((r) => ({ ...r, at: r.at.toISOString() })), total: count?.n ?? 0 };
 }

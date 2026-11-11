@@ -42,14 +42,7 @@ export function WallClock({ secondsLeft, total }: { secondsLeft: number; total: 
         {Array.from({ length: 60 }, (_, i) => {
           const major = i % 5 === 0;
           return (
-            <line
-              key={i}
-              y1={-(major ? 40 : 45)}
-              y2={-48}
-              stroke="#2b2118"
-              strokeWidth={major ? 2 : 0.8}
-              transform={`rotate(${i * 6})`}
-            />
+            <line key={i} y1={-(major ? 40 : 45)} y2={-48} stroke="#2b2118" strokeWidth={major ? 2 : 0.8} transform={`rotate(${i * 6})`} />
           );
         })}
         {[12, 3, 6, 9].map((n) => {

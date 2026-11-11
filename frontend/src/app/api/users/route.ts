@@ -20,10 +20,7 @@ export async function GET(req: Request) {
   if (error) return error;
 
   const query = parseListQuery(new URL(req.url).searchParams, USER_LIST);
-  const [{ rows, page, hasMore }, pendingAdmins] = await Promise.all([
-    listSiteUsers(query),
-    pendingBootstrapAdmins(),
-  ]);
+  const [{ rows, page, hasMore }, pendingAdmins] = await Promise.all([listSiteUsers(query), pendingBootstrapAdmins()]);
   return NextResponse.json({ users: rows, page, hasMore, pendingAdmins });
 }
 

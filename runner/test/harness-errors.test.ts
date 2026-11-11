@@ -18,11 +18,7 @@ import assert from "node:assert/strict";
 
 import { isDuplicate } from "../src/harness.js";
 import { isDuplicate as isDuplicateFrontend } from "../../frontend/src/lib/harness-retry.ts";
-import {
-  PRODUCTION_FAILURES,
-  expecting,
-  failure,
-} from "./fixtures/production-failures.js";
+import { PRODUCTION_FAILURES, expecting, failure } from "./fixtures/production-failures.js";
 
 /** The two copies that have to stay in step. */
 const IMPLEMENTATIONS = [
@@ -35,11 +31,7 @@ describe("isDuplicate", () => {
     describe(impl.name, () => {
       for (const f of expecting("already-satisfied")) {
         test(`treats ${f.id} (${f.run}, ${f.date}) as already done`, () => {
-          assert.equal(
-            impl.isDuplicate(f.status ?? 400, f.message),
-            true,
-            f.because,
-          );
+          assert.equal(impl.isDuplicate(f.status ?? 400, f.message), true, f.because);
         });
       }
 
@@ -50,15 +42,8 @@ describe("isDuplicate", () => {
 
       test("still reads the shapes it always did", () => {
         assert.equal(impl.isDuplicate(409, ""), true, "a bare 409 is a conflict");
-        assert.equal(
-          impl.isDuplicate(400, '{"code":"DUPLICATE_FIELD"}'),
-          true,
-          "Harness's own duplicate code",
-        );
-        assert.equal(
-          impl.isDuplicate(400, "Organization already exists"),
-          true,
-        );
+        assert.equal(impl.isDuplicate(400, '{"code":"DUPLICATE_FIELD"}'), true, "Harness's own duplicate code");
+        assert.equal(impl.isDuplicate(400, "Organization already exists"), true);
       });
 
       test("does not read an unrelated 400 as success", () => {
@@ -80,8 +65,7 @@ describe("isDuplicate", () => {
       assert.equal(
         isDuplicate(status, f.message),
         isDuplicateFrontend(status, f.message),
-        `runner and frontend disagree about ${f.id} — the two copies of ` +
-          `isDuplicate have drifted; see the note in harness-retry.ts`,
+        `runner and frontend disagree about ${f.id} — the two copies of ` + `isDuplicate have drifted; see the note in harness-retry.ts`,
       );
     }
   });

@@ -22,7 +22,7 @@ const person = (over: Partial<OverallPerson> = {}): OverallPerson => ({
 describe("buildOverallPrompt", () => {
   test("sends each piece of feedback escaped, under the person's id, with the sides to write", () => {
     const { user } = buildOverallPrompt([
-      person({ positive: [{ exercise: "SDA \"Whiteboard\"", text: "<b>Bold</b> & clear" }], writeConstructive: false }),
+      person({ positive: [{ exercise: 'SDA "Whiteboard"', text: "<b>Bold</b> & clear" }], writeConstructive: false }),
     ]);
     assert.match(user, /<person id="p1" name="Rick" write="positive">/);
     assert.match(user, /<feedback exercise="SDA &quot;Whiteboard&quot;">&lt;b&gt;Bold&lt;\/b&gt; &amp; clear<\/feedback>/);
@@ -47,10 +47,7 @@ describe("readOverall", () => {
   });
 
   test("leaves out someone missing a side they were asked for, or missing altogether", () => {
-    const written = readOverall(
-      [{ id: "p1", positive: "Good.", constructive: " " }],
-      [person(), person({ id: "p2" })],
-    );
+    const written = readOverall([{ id: "p1", positive: "Good.", constructive: " " }], [person(), person({ id: "p2" })]);
     assert.equal(written.size, 0);
   });
 });

@@ -38,10 +38,7 @@ export const POST = audited(async function POST(req: Request, { params }: Params
     return NextResponse.json({ error: target.error }, { status: target.error === "not_found" ? 404 : 409 });
   }
   const filing = { bootcampId: target.bootcamp.id, assessmentId: target.assessment.id, attendeeEmail: target.attendee.email };
-  const [transcript, criteria] = await Promise.all([
-    getTranscript(filing, transcriptKey.data),
-    askedCriteria(target.assessment.id),
-  ]);
+  const [transcript, criteria] = await Promise.all([getTranscript(filing, transcriptKey.data), askedCriteria(target.assessment.id)]);
   if (!transcript) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (!transcript.text.trim()) return NextResponse.json({ error: "empty" }, { status: 409 });
   if (criteria.length === 0) return NextResponse.json({ error: "no_criteria" }, { status: 409 });

@@ -71,7 +71,11 @@ describe("the halves of a checklist day", () => {
         { track: "btc", day: 1, period: "pm", total: 2, done: 1 },
       ],
     );
-    assert.deepEqual((await listDayItems(id, "btc", 1)).map((i) => i.period), ["am", "pm", "pm"], "a day is read whole, both halves");
+    assert.deepEqual(
+      (await listDayItems(id, "btc", 1)).map((i) => i.period),
+      ["am", "pm", "pm"],
+      "a day is read whole, both halves",
+    );
     assert.equal(checklistDayLabel("btc", 1, "pm"), "Bootcamp, Day 1 · Evening");
     assert.equal(checklistDayLabel("btc", 0, "am"), "Prep Day · Day");
   });
@@ -113,7 +117,13 @@ describe("moving an item", () => {
     assert.deepEqual(await moveChecklistItem(id, item.id, { track: "btc_se", day: 0 }), { ok: false, error: "no_day" });
 
     await db.insert(scheduleChecklistItems).values(
-      Array.from({ length: 100 }, (_, n) => ({ bootcampId: id, track: "btc" as const, day: 2, period: "pm" as const, name: `Filler ${n}` })),
+      Array.from({ length: 100 }, (_, n) => ({
+        bootcampId: id,
+        track: "btc" as const,
+        day: 2,
+        period: "pm" as const,
+        name: `Filler ${n}`,
+      })),
     );
     assert.deepEqual(await moveChecklistItem(id, item.id, { day: 2, period: "am" }), { ok: false, error: "full" });
     const halved = await moveChecklistItem(id, item.id, { period: "pm" });

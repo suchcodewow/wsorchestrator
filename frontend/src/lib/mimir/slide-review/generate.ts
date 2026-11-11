@@ -121,7 +121,10 @@ function elementsOf(current: Row[], future: Row[], capabilities: Capability[], s
     { target: "divider", slot: "divider" },
     { target: "extra", slot: "extra" },
   ];
-  for (const [side, rows] of [["current", current], ["future", future]] as const) {
+  for (const [side, rows] of [
+    ["current", current],
+    ["future", future],
+  ] as const) {
     rows.forEach((row, i) => {
       const group = `${side}.${i}`;
       const at = (part: "head" | "sub" | "icon"): Target => `${side}.${i as RowIndex}.${part}`;
@@ -262,8 +265,30 @@ const MISCASED: Record<string, string> = {
 
 /** Words that end in "s" where an apostrophe would be right, or that aren't plurals at all. */
 const NOT_PLURAL = new Set([
-  "is", "has", "was", "this", "us", "its", "does", "less", "unless", "across", "always", "status", "process",
-  "analysis", "towards", "perhaps", "various", "focus", "plus", "yes", "access", "success", "business", "minus",
+  "is",
+  "has",
+  "was",
+  "this",
+  "us",
+  "its",
+  "does",
+  "less",
+  "unless",
+  "across",
+  "always",
+  "status",
+  "process",
+  "analysis",
+  "towards",
+  "perhaps",
+  "various",
+  "focus",
+  "plus",
+  "yes",
+  "access",
+  "success",
+  "business",
+  "minus",
 ]);
 
 const SMALL_WORDS = new Set(["a", "an", "and", "as", "at", "by", "for", "in", "of", "on", "or", "the", "to", "via", "vs"]);
@@ -317,7 +342,13 @@ const COLORS: { color: string; name: string }[] = [
   { color: "#d4d4d0", name: "So pale it is hard to read:" },
 ];
 
-const STICKIES = ["TODO: check metric w/ Priya", "Confirm numbers with Dana?", "Is this still true?", "Ask Tomas re: pricing", "Swap for the new logo"];
+const STICKIES = [
+  "TODO: check metric w/ Priya",
+  "Confirm numbers with Dana?",
+  "Is this still true?",
+  "Ask Tomas re: pricing",
+  "Swap for the new logo",
+];
 
 const markName = (side: Side) => (side === "current" ? "cross" : "tick");
 
@@ -381,11 +412,19 @@ const RULES: Rule[] = [
       }
       // ...or one added to a word that only ends in s.
       const plural = words.find(
-        (w) => w.word.length >= 5 && /[a-z]s$/.test(w.word) && !/ss$/.test(w.word) && !w.word.includes("’") && !NOT_PLURAL.has(w.word.toLowerCase()),
+        (w) =>
+          w.word.length >= 5 &&
+          /[a-z]s$/.test(w.word) &&
+          !/ss$/.test(w.word) &&
+          !w.word.includes("’") &&
+          !NOT_PLURAL.has(w.word.toLowerCase()),
       );
       if (!plural) return null;
       const wrong = `${plural.word.slice(0, -1)}’s`;
-      return { look: t.set(replaceWord(t.text, plural, wrong)), note: `An apostrophe has crept into “${wrong}”: nothing here belongs to anyone.` };
+      return {
+        look: t.set(replaceWord(t.text, plural, wrong)),
+        note: `An apostrophe has crept into “${wrong}”: nothing here belongs to anyone.`,
+      };
     },
   },
   // ------------------------------------------------ capitalization
@@ -435,7 +474,8 @@ const RULES: Rule[] = [
     make: (el, rng) => {
       const t = textOf(el, rng);
       if (!t) return null;
-      if (t.text.includes("zero-day")) return { look: t.set(t.text.replace("zero-day", "0-day")), note: "“0-day”, where the slide’s style is “zero-day”." };
+      if (t.text.includes("zero-day"))
+        return { look: t.set(t.text.replace("zero-day", "0-day")), note: "“0-day”, where the slide’s style is “zero-day”." };
       return null;
     },
   },
@@ -451,7 +491,10 @@ const RULES: Rule[] = [
         { look: { metric: "" }, note: "No measure: every other capability says how it will be tracked." },
       ];
       if (el.metric?.startsWith("# of ")) {
-        choices.push({ look: { metric: `Number of ${el.metric.slice(5)}` }, note: "“Number of” spelled out where the other measures use “#”." });
+        choices.push({
+          look: { metric: `Number of ${el.metric.slice(5)}` },
+          note: "“Number of” spelled out where the other measures use “#”.",
+        });
       }
       return rng.pick(choices);
     },
@@ -500,7 +543,10 @@ const RULES: Rule[] = [
               { look: { weight: 700 }, note: "Bold, where the other outcome lines are regular weight." },
             ]
           : [
-              { look: { weight: 800 }, note: `Bold, where the other ${lineName(el)} are ${el.slot === "head" ? "medium" : "regular"} weight.` },
+              {
+                look: { weight: 800 },
+                note: `Bold, where the other ${lineName(el)} are ${el.slot === "head" ? "medium" : "regular"} weight.`,
+              },
               { look: { italic: true }, note: `Italic, unlike the other ${lineName(el)}.` },
             ];
       return rng.pick(choices);
@@ -522,7 +568,12 @@ const RULES: Rule[] = [
     moves: true,
     make: (el) => ({
       look: { dx: el.slot === "subtitle" ? 28 : 24 },
-      note: el.slot === "capsTitle" ? "Indented from the capabilities below it." : el.slot === "subtitle" ? "Indented from the title’s left edge." : "Indented from the slide’s left margin.",
+      note:
+        el.slot === "capsTitle"
+          ? "Indented from the capabilities below it."
+          : el.slot === "subtitle"
+            ? "Indented from the title’s left edge."
+            : "Indented from the slide’s left margin.",
     }),
   },
   {
@@ -551,7 +602,8 @@ const RULES: Rule[] = [
     make: (el, rng) => {
       const mark = markName(el.side!);
       return rng.pick<Made>([
-        { look: { dx: 14 }, note: `This ${mark} sits right of the others.` },
+        // Never right: the outcome text starts 18px from the icon, so a rightward shift lands on it.
+        { look: { dy: -9 }, note: `This ${mark} sits higher than its line.` },
         { look: { dx: -12 }, note: `This ${mark} sits left of the others.` },
         { look: { dy: 9 }, note: `This ${mark} sits lower than its line.` },
       ]);
@@ -584,7 +636,10 @@ const RULES: Rule[] = [
       const at = rng.pick(gaps);
       const before = t.text.slice(0, at).split(" ").at(-1);
       const after = t.text.slice(at + 1).split(" ")[0];
-      return { look: t.set(`${t.text.slice(0, at)}     ${t.text.slice(at + 1)}`), note: `A run of extra spaces between “${before}” and “${after}”.` };
+      return {
+        look: t.set(`${t.text.slice(0, at)}     ${t.text.slice(at + 1)}`),
+        note: `A run of extra spaces between “${before}” and “${after}”.`,
+      };
     },
   },
   {
@@ -667,9 +722,21 @@ const RULES: Rule[] = [
     slots: ["extra"],
     make: (_el, rng) =>
       rng.pick<Made>([
-        { look: {}, note: "An empty “Click to add text” box was left on the slide.", extra: { text: "Click to add text", x: 960, y: 566, style: "placeholder" } },
-        { look: {}, note: "A “[Customer logo]” placeholder was never filled in or removed.", extra: { text: "[Customer logo]", x: 900, y: 66, style: "placeholder" } },
-        { look: {}, note: "A sticky note from a review was never deleted.", extra: { text: rng.pick(STICKIES), x: 690, y: 44, style: "sticky" } },
+        {
+          look: {},
+          note: "An empty “Click to add text” box was left on the slide.",
+          extra: { text: "Click to add text", x: 960, y: 566, style: "placeholder" },
+        },
+        {
+          look: {},
+          note: "A “[Customer logo]” placeholder was never filled in or removed.",
+          extra: { text: "[Customer logo]", x: 900, y: 66, style: "placeholder" },
+        },
+        {
+          look: {},
+          note: "A sticky note from a review was never deleted.",
+          extra: { text: rng.pick(STICKIES), x: 690, y: 44, style: "sticky" },
+        },
       ]),
   },
 ];

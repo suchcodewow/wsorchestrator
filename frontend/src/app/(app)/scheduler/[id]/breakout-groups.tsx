@@ -119,8 +119,7 @@ function AssessmentPick({
   if (!editable) {
     return (
       <p className="text-sm">
-        <span className="font-medium">Assessment:</span>{" "}
-        {picked ? name(picked) : <span className="text-muted-foreground">None</span>}
+        <span className="font-medium">Assessment:</span> {picked ? name(picked) : <span className="text-muted-foreground">None</span>}
       </p>
     );
   }
@@ -146,7 +145,9 @@ function AssessmentPick({
         ))}
       </select>
       {!value && offered.length > 0 && (
-        <p className="text-xs text-amber-700 dark:text-amber-400">Pick one so each instructor finds their group under Assigned to me in eVals.</p>
+        <p className="text-xs text-amber-700 dark:text-amber-400">
+          Pick one so each instructor finds their group under Assigned to me in eVals.
+        </p>
       )}
     </div>
   );
@@ -226,7 +227,9 @@ function Groups({
 
   const people = new Map<string, Person>([
     ...cls.attendees.map((a) => [a.email, { ...a, inClass: true }] as const),
-    ...groups.filter((g) => !inClass.has(g.email)).map((g) => [g.email, { email: g.email, fullName: g.fullName, title: "", track: null, inClass: false }] as const),
+    ...groups
+      .filter((g) => !inClass.has(g.email))
+      .map((g) => [g.email, { email: g.email, fullName: g.fullName, title: "", track: null, inClass: false }] as const),
   ]);
   // Someone in a box who has left the class stays there; out of one, they are gone.
   const pool = cls.attendees.filter((a) => !placedAt.has(a.email)).map((a) => people.get(a.email)!);
@@ -300,7 +303,13 @@ function Groups({
   const held = dragging ? people.get(dragging) : null;
 
   return (
-    <DndContext id={`groups-${sessionId ?? "new"}`} sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
+    <DndContext
+      id={`groups-${sessionId ?? "new"}`}
+      sensors={sensors}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragCancel={() => setDragging(null)}
+    >
       <div className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm tabular-nums">
@@ -326,7 +335,9 @@ function Groups({
         </div>
         {note && <p className="-mt-2 text-xs text-red-700 dark:text-red-400">{note}</p>}
         {!hasFacility && (
-          <p className="-mt-2 text-xs text-muted-foreground">Pick a facility for this bootcamp on the Scheduler to give each instructor a room.</p>
+          <p className="-mt-2 text-xs text-muted-foreground">
+            Pick a facility for this bootcamp on the Scheduler to give each instructor a room.
+          </p>
         )}
 
         {total === 0 ? (
@@ -439,7 +450,11 @@ function Box({
 function DraggableChip({ person, editable }: { person: Person; editable: boolean }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: person.email, disabled: !editable });
   return (
-    <div ref={setNodeRef} {...(editable ? { ...attributes, ...listeners } : {})} className={cn(editable && "cursor-grab touch-none", isDragging && "opacity-30")}>
+    <div
+      ref={setNodeRef}
+      {...(editable ? { ...attributes, ...listeners } : {})}
+      className={cn(editable && "cursor-grab touch-none", isDragging && "opacity-30")}
+    >
       <Chip person={person} />
     </div>
   );
@@ -448,7 +463,9 @@ function DraggableChip({ person, editable }: { person: Person; editable: boolean
 function Chip({ person: p, lifted }: { person: Person; lifted?: boolean }) {
   return (
     <span
-      title={p.inClass ? [p.email, p.track && TRACK_NAMES[p.track], p.title].filter(Boolean).join(" · ") : `${p.email} · no longer in this class`}
+      title={
+        p.inClass ? [p.email, p.track && TRACK_NAMES[p.track], p.title].filter(Boolean).join(" · ") : `${p.email} · no longer in this class`
+      }
       className={cn(
         "flex w-full min-w-0 items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs",
         lifted && "cursor-grabbing shadow-lg ring-2 ring-brand/50",
@@ -496,7 +513,11 @@ function RoomSelect({
       <option value="">No room</option>
       {rooms.map((r) => {
         const theirs = busy.get(r.id) ?? [];
-        const why = free.has(r.id) ? `holds ${r.capacity}` : theirs.length > 0 ? `busy: ${describeClash(theirs[0]!)}` : "another instructor's";
+        const why = free.has(r.id)
+          ? `holds ${r.capacity}`
+          : theirs.length > 0
+            ? `busy: ${describeClash(theirs[0]!)}`
+            : "another instructor's";
         return (
           <option key={r.id} value={r.id} disabled={r.id !== value && !free.has(r.id)}>
             {r.name} ({why})

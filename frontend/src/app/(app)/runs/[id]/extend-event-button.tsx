@@ -9,20 +9,13 @@ import type { RunStatus, WorkshopRun } from "@/db/schema";
 
 const ERRORS: Record<string, string> = {
   not_found: "This event no longer exists.",
-  not_extendable:
-    "This event is being torn down, so there is nothing left to extend.",
+  not_extendable: "This event is being torn down, so there is nothing left to extend.",
   unauthorized: "Sign in again to extend this event.",
 };
 
 const GONE = new Set<RunStatus>(["destroying", "destroyed", "failed"]);
 
-export function ExtendEventButton({
-  run,
-  onExtended,
-}: {
-  run: WorkshopRun;
-  onExtended: () => void;
-}) {
+export function ExtendEventButton({ run, onExtended }: { run: WorkshopRun; onExtended: () => void }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,9 +28,7 @@ export function ExtendEventButton({
       const res = await fetch(`/api/runs/${run.id}/extend`, { method: "POST" });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(
-          ERRORS[body?.error] ?? `Could not extend (${res.status})`,
-        );
+        throw new Error(ERRORS[body?.error] ?? `Could not extend (${res.status})`);
       }
       onExtended();
     } catch (err) {

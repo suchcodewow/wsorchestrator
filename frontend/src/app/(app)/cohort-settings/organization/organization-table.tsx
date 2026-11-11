@@ -88,8 +88,8 @@ export function OrganizationTable({
         <p className="text-sm leading-relaxed text-muted-foreground">
           {leaderEmail ? (
             <>
-              <span className="font-medium text-foreground">{count.toLocaleString()} people</span> report
-              up to {leaderName ?? leaderEmail}, as of the last HiBob sync.
+              <span className="font-medium text-foreground">{count.toLocaleString()} people</span> report up to {leaderName ?? leaderEmail},
+              as of the last HiBob sync.
             </>
           ) : (
             <>
@@ -114,11 +114,7 @@ export function OrganizationTable({
       </motion.div>
 
       <motion.div variants={riseChild}>
-        <TableSearch
-          value={query.q}
-          placeholder="Search by name, email, title, department or manager"
-          label="Search the organization"
-        />
+        <TableSearch value={query.q} placeholder="Search by name, email, title, department or manager" label="Search the organization" />
       </motion.div>
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -147,9 +143,7 @@ export function OrganizationTable({
                     >
                       <td className="px-5 py-2.5 font-medium">
                         <span className="inline-flex items-center gap-1">
-                          <ChevronRight
-                            className={`size-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`}
-                          />
+                          <ChevronRight className={`size-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
                           {m.fullName}
                         </span>
                       </td>

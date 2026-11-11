@@ -1,7 +1,6 @@
 /** Reads and matches email domains. */
 
-const DOMAIN_RE =
-  /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
+const DOMAIN_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
 
 export function normalizeDomain(value: string): string | null {
   const trimmed = value.trim().toLowerCase();
@@ -17,10 +16,7 @@ export function parseDomainList(value: string | undefined): string[] {
     .filter((d): d is string => d !== null);
 }
 
-export function emailAllowedBy(
-  email: string | null | undefined,
-  domains: string[],
-): boolean {
+export function emailAllowedBy(email: string | null | undefined, domains: string[]): boolean {
   if (domains.length === 0) return true;
   if (!email) return false;
 

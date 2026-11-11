@@ -11,26 +11,28 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  RECORDING_MIME_TYPES,
-  extensionFor,
-  formatBytes,
-  formatDuration,
-  microphoneProblem,
-  pickMimeType,
-} from "@/lib/recording/format";
+import { RECORDING_MIME_TYPES, extensionFor, formatBytes, formatDuration, microphoneProblem, pickMimeType } from "@/lib/recording/format";
 
 describe("pickMimeType", () => {
   test("Chrome, Edge and Firefox get Opus in WebM", () => {
-    assert.equal(pickMimeType(() => true), "audio/webm;codecs=opus");
+    assert.equal(
+      pickMimeType(() => true),
+      "audio/webm;codecs=opus",
+    );
   });
 
   test("Safari, which records only MP4, gets MP4", () => {
-    assert.equal(pickMimeType((t) => t === "audio/mp4"), "audio/mp4");
+    assert.equal(
+      pickMimeType((t) => t === "audio/mp4"),
+      "audio/mp4",
+    );
   });
 
   test("a browser that records none of them gets null", () => {
-    assert.equal(pickMimeType(() => false), null);
+    assert.equal(
+      pickMimeType(() => false),
+      null,
+    );
   });
 
   test("every candidate has a download extension", () => {

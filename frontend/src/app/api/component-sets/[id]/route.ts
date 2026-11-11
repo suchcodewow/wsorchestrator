@@ -5,34 +5,20 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { sessionOrToken } from "@/lib/api-auth";
 import { harnessComponentSets } from "@/db/schema";
-import {
-  canContributeComponents,
-  canPublishComponents,
-  type Access,
-} from "@/lib/roles";
-import {
-  listSetComponents,
-  replaceSetComponents,
-  setStatus,
-} from "@/lib/components/catalog";
+import { canContributeComponents, canPublishComponents, type Access } from "@/lib/roles";
+import { listSetComponents, replaceSetComponents, setStatus } from "@/lib/components/catalog";
 import { validateSet } from "@/lib/components/validate";
 import { audited } from "@/lib/audit";
 
 async function readable(setId: string, userId: string, access: Access) {
-  const [set] = await db
-    .select()
-    .from(harnessComponentSets)
-    .where(eq(harnessComponentSets.id, setId));
+  const [set] = await db.select().from(harnessComponentSets).where(eq(harnessComponentSets.id, setId));
 
   if (!set) return null;
   if (canPublishComponents(access)) return set;
   return set.authorId === userId ? set : null;
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const viewer = await sessionOrToken(req);
   if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -48,10 +34,7 @@ export async function GET(
   return NextResponse.json({ set, components: await listSetComponents(id) });
 }
 
-export const PUT = audited(async function PUT(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const PUT = audited(async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const viewer = await sessionOrToken(req);
   if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -90,10 +73,7 @@ export const PUT = audited(async function PUT(
   return NextResponse.json({ setId: id, components: valid.length });
 });
 
-export const DELETE = audited(async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const viewer = await sessionOrToken(req);
   if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

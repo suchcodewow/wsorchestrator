@@ -146,10 +146,7 @@ const rating = z.number().int().min(1).max(5);
 
 export const surveySubmissionSchema = z
   .object({
-    sessions: z.record(
-      z.string().max(64),
-      z.object({ rating, feedback: z.string().max(SURVEY_LIMITS.answer).default("") }).strict(),
-    ),
+    sessions: z.record(z.string().max(64), z.object({ rating, feedback: z.string().max(SURVEY_LIMITS.answer).default("") }).strict()),
     dayRating: rating,
     dayChange: z.string().max(SURVEY_LIMITS.answer).default(""),
   })
@@ -167,8 +164,7 @@ export type SurveyAnswerProblem = { problem: "required" | "unknown_session"; ses
 export function checkSurveyAnswers(
   sessions: readonly Pick<SurveySession, "id">[],
   submission: SurveySubmission,
-):
-  { ok: true; sessions: SurveySessionAnswers; dayRating: number; dayChange: string } | { ok: false; error: SurveyAnswerProblem } {
+): { ok: true; sessions: SurveySessionAnswers; dayRating: number; dayChange: string } | { ok: false; error: SurveyAnswerProblem } {
   const ids = new Set(sessions.map((s) => s.id));
   const extra = Object.keys(submission.sessions).find((id) => !ids.has(id));
   if (extra) return { ok: false, error: { problem: "unknown_session", sessionId: extra } };

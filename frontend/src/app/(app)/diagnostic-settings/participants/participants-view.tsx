@@ -304,9 +304,7 @@ export function ParticipantsView({
                     <span className="block font-medium">{r.name || r.email}</span>
                     {r.name && <span className="block truncate text-xs text-muted-foreground">{r.email}</span>}
                   </td>
-                  <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">
-                    {r.manual ? (r.addedBy ?? "—") : "Bootcamp"}
-                  </td>
+                  <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">{r.manual ? (r.addedBy ?? "—") : "Bootcamp"}</td>
                   <td className="px-5 py-3 text-muted-foreground">{r.track ?? "—"}</td>
                   <td className="px-5 py-3 text-muted-foreground tnum">
                     {r.completed} of {OPEN_SUBJECT_KEYS.length}

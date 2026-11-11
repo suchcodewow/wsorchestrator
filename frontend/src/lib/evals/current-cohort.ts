@@ -59,16 +59,7 @@ export type CurrentCohortFilter = { stage: CandidateStage | null; track: Candida
 
 export type CurrentCohortMember = Pick<
   Employee,
-  | "id"
-  | "email"
-  | "fullName"
-  | "title"
-  | "department"
-  | "site"
-  | "reportsToEmail"
-  | "reportsToName"
-  | "startDate"
-  | "activeEffectiveDate"
+  "id" | "email" | "fullName" | "title" | "department" | "site" | "reportsToEmail" | "reportsToName" | "startDate" | "activeEffectiveDate"
 > & {
   track: CandidateTrack;
   /** Whether an administrator set that track by hand. */
@@ -360,13 +351,7 @@ export async function cohortStageOf(email: string): Promise<CandidateStage | nul
   const [row] = await db
     .select({ stage: candidateStage })
     .from(e)
-    .where(
-      and(
-        sql`lower(${e.email}) = ${email.trim().toLowerCase()}`,
-        isCandidate(cutoffs),
-        inArray(e.track, [...ATTENDING]),
-      ),
-    )
+    .where(and(sql`lower(${e.email}) = ${email.trim().toLowerCase()}`, isCandidate(cutoffs), inArray(e.track, [...ATTENDING])))
     .limit(1);
   return row?.stage ?? null;
 }

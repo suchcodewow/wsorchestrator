@@ -21,7 +21,17 @@ type Toy = {
 };
 
 const TOYS: Toy[] = [
-  { emoji: "🪩", label: "disco ball", top: "-4%", left: "20%", size: "clamp(5rem, 14vw, 11rem)", tilt: 0, duration: 9, delay: 0, spin: true },
+  {
+    emoji: "🪩",
+    label: "disco ball",
+    top: "-4%",
+    left: "20%",
+    size: "clamp(5rem, 14vw, 11rem)",
+    tilt: 0,
+    duration: 9,
+    delay: 0,
+    spin: true,
+  },
   { emoji: "🦄", label: "unicorn", top: "2%", left: "78%", size: "clamp(5rem, 15vw, 12rem)", tilt: -12, duration: 7, delay: 0.6 },
   { emoji: "📣", label: "megaphone", top: "34%", left: "44%", size: "clamp(5rem, 13vw, 10rem)", tilt: -18, duration: 5.5, delay: 0.3 },
   { emoji: "🍩", label: "doughnut", top: "62%", left: "-3%", size: "clamp(6rem, 18vw, 14rem)", tilt: 10, duration: 8, delay: 1.1 },
@@ -48,9 +58,7 @@ export function Toybox() {
           found
         </h1>
         <ReturnHome className="relative z-30" />
-        <p className="text-sm font-medium tracking-wide text-black/60">
-          psst, the toys are throwable
-        </p>
+        <p className="text-sm font-medium tracking-wide text-black/60">psst, the toys are throwable</p>
       </div>
 
       {TOYS.map((toy) => (

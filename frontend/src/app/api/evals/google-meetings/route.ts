@@ -35,6 +35,10 @@ export const POST = audited(async function POST(req: Request) {
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
-  noteAudit({ target: result.meeting.id, targetLabel: result.meeting.name, detail: { stage: parsed.data.stage, track: parsed.data.track } });
+  noteAudit({
+    target: result.meeting.id,
+    targetLabel: result.meeting.name,
+    detail: { stage: parsed.data.stage, track: parsed.data.track },
+  });
   return NextResponse.json(result.meeting);
 });

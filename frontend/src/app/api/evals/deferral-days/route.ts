@@ -8,9 +8,7 @@ import { DEFERRAL_DAYS_LIMITS } from "@/db/schema";
 import { getDeferralDays, setDeferralDays } from "@/lib/evals/settings";
 import { nextBootcampStart, retrackOrg } from "@/lib/evals/tracks";
 
-const bodySchema = z
-  .object({ days: z.number().int().min(DEFERRAL_DAYS_LIMITS.min).max(DEFERRAL_DAYS_LIMITS.max) })
-  .strict();
+const bodySchema = z.object({ days: z.number().int().min(DEFERRAL_DAYS_LIMITS.min).max(DEFERRAL_DAYS_LIMITS.max) }).strict();
 
 export async function GET(req: Request) {
   const { error } = await requireEvalsAdministrator(req);

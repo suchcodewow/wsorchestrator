@@ -13,34 +13,21 @@ async function viewerCanEdit(): Promise<boolean> {
   return session?.user ? canManageLabGuides(session.user.access) : false;
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ workshopSlug: string; guideSlug: string }>;
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ workshopSlug: string; guideSlug: string }> }): Promise<Metadata> {
   const { workshopSlug, guideSlug } = await params;
   const canEdit = await viewerCanEdit();
 
-  const [found, guide] = await Promise.all([
-    getWorkshopGuide(workshopSlug, guideSlug, canEdit),
-    getLabGuideBySlug(guideSlug),
-  ]);
+  const [found, guide] = await Promise.all([getWorkshopGuide(workshopSlug, guideSlug, canEdit), getLabGuideBySlug(guideSlug)]);
   if (!found || !guide) return { title: "Lab guide" };
 
   return {
     title: `${guide.title} — ${found.workshop.title}`,
     description: guide.summary || undefined,
-    ...(found.workshop.published
-      ? {}
-      : { robots: { index: false, follow: false } }),
+    ...(found.workshop.published ? {} : { robots: { index: false, follow: false } }),
   };
 }
 
-export default async function WorkshopGuidePage({
-  params,
-}: {
-  params: Promise<{ workshopSlug: string; guideSlug: string }>;
-}) {
+export default async function WorkshopGuidePage({ params }: { params: Promise<{ workshopSlug: string; guideSlug: string }> }) {
   const { workshopSlug, guideSlug } = await params;
   const canEdit = await viewerCanEdit();
 

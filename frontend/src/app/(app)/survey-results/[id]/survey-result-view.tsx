@@ -124,15 +124,7 @@ export function SurveyResultView({
   );
 }
 
-function ResponseDialog({
-  survey,
-  response,
-  onClose,
-}: {
-  survey: SurveyResult;
-  response: SurveyResponseRow | null;
-  onClose: () => void;
-}) {
+function ResponseDialog({ survey, response, onClose }: { survey: SurveyResult; response: SurveyResponseRow | null; onClose: () => void }) {
   return (
     <Dialog open={response !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-2xl">
@@ -178,17 +170,9 @@ function ResponseDialog({
 }
 
 function Score({ value }: { value: number | undefined }) {
-  return (
-    <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums">
-      {value ?? "—"} / 5
-    </span>
-  );
+  return <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums">{value ?? "—"} / 5</span>;
 }
 
 function Said({ text }: { text: string | undefined }) {
-  return text ? (
-    <p className="text-sm whitespace-pre-line">{text}</p>
-  ) : (
-    <p className="text-sm text-muted-foreground">No comment.</p>
-  );
+  return text ? <p className="text-sm whitespace-pre-line">{text}</p> : <p className="text-sm text-muted-foreground">No comment.</p>;
 }

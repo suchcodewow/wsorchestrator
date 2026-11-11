@@ -36,10 +36,7 @@ async function canEdit(req: Request): Promise<boolean> {
 }
 
 /** By id or by slug, with its guides in order. */
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const editor = await canEdit(req);
   const slug = (await getLabWorkshopById(id))?.slug ?? id;
@@ -49,10 +46,7 @@ export async function GET(
   return NextResponse.json({ workshop });
 }
 
-export const PATCH = audited(async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireEditor(req);
   if (error) return error;
 
@@ -64,19 +58,13 @@ export const PATCH = audited(async function PATCH(
   const { id } = await params;
   const result = await updateLabWorkshop(id, parsed.data);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
 
   return NextResponse.json({ workshop: result.workshop });
 });
 
-export const DELETE = audited(async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireEditor(req);
   if (error) return error;
 

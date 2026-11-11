@@ -385,7 +385,8 @@ export function planMeeting(input: {
       invite.push(...adding.map((o) => ({ email, occurrenceId: o.id, afterMiss })));
       const kept = future.find(({ invite }) => wanted.has(invite.occurrenceId));
       if (attended) outcomes.set(email, { kind: "attended" });
-      else if (kept && (adding.length === 0 || kept.at.startsAt < adding[0]!.startsAt)) outcomes.set(email, { kind: "invited", occurrenceId: kept.invite.occurrenceId });
+      else if (kept && (adding.length === 0 || kept.at.startsAt < adding[0]!.startsAt))
+        outcomes.set(email, { kind: "invited", occurrenceId: kept.invite.occurrenceId });
       else if (adding.length > 0) outcomes.set(email, { kind: "invite", occurrenceId: adding[0]!.id, afterMiss });
       else outcomes.set(email, { kind: "finished" });
       continue;
@@ -408,7 +409,9 @@ export function planMeeting(input: {
     // An administrator's "missed" stands for every occurrence that has begun, whatever Zoom said or has yet to say.
     const begun = mine.filter(({ at }) => at.startsAt <= input.now);
     const pending =
-      mark === false ? [] : begun.filter(({ invite, at }) => invite.attendance === null && !at.attendanceRead && invite.responseStatus !== "declined");
+      mark === false
+        ? []
+        : begun.filter(({ invite, at }) => invite.attendance === null && !at.attendanceRead && invite.responseStatus !== "declined");
     if (pending.length > 0) {
       outcomes.set(email, { kind: "waiting", occurrenceId: pending[0]!.invite.occurrenceId });
       continue;
@@ -518,10 +521,7 @@ export type ZoomParticipant = { name?: string; user_email?: string };
  * name that matches someone's full name. Names are compared lowercased with
  * their spaces collapsed.
  */
-export function joinedFrom(
-  participants: readonly ZoomParticipant[],
-  invited: readonly { email: string; fullName: string }[],
-): Set<string> {
+export function joinedFrom(participants: readonly ZoomParticipant[], invited: readonly { email: string; fullName: string }[]): Set<string> {
   const name = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
   const emails = new Set(participants.map((p) => normal(p.user_email ?? "")).filter(Boolean));
   const names = new Set(participants.map((p) => name(p.name ?? "")).filter(Boolean));

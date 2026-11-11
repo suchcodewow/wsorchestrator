@@ -20,7 +20,10 @@ export default async function DiagnosticReminderRunPage({
   if (!session?.user) redirect(await signInPath());
   if (!canManageIris(session.user.access)) notFound();
 
-  const id = z.string().uuid().safeParse((await params).id);
+  const id = z
+    .string()
+    .uuid()
+    .safeParse((await params).id);
   const run = id.success ? await getReminderRun(id.data) : null;
   if (!run) notFound();
 

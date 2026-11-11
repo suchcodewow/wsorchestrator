@@ -16,10 +16,7 @@ async function refusal() {
   return null;
 }
 
-export const PATCH = audited(async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const refused = await refusal();
   if (refused) return refused;
 
@@ -38,10 +35,7 @@ export const PATCH = audited(async function PATCH(
   return NextResponse.json({ ok: true });
 });
 
-export const DELETE = audited(async function DELETE(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const refused = await refusal();
   if (refused) return refused;
 

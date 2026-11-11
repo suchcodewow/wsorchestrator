@@ -18,14 +18,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  INVITE_TTL_MINUTES,
-  userInvites,
-  users,
-  type AssessmentsRole,
-  type EventRole,
-  type TrainingRole,
-} from "@/db/schema";
+import { INVITE_TTL_MINUTES, userInvites, users, type AssessmentsRole, type EventRole, type TrainingRole } from "@/db/schema";
 import { canManageRoles, type Access } from "@/lib/roles";
 
 /** What a link grants; null leaves that area without access. */
@@ -39,8 +32,7 @@ const TOKEN_BYTES = 24;
 /** base64url of TOKEN_BYTES, so anything else is refused before a lookup. */
 const TOKEN_SHAPE = /^[A-Za-z0-9_-]{32}$/;
 
-const sha256 = (value: string) =>
-  createHash("sha256").update(value, "utf8").digest("hex");
+const sha256 = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
 
 /** Whether `access` administers every area `grant` hands out. */
 export function mayGrant(access: Access, grant: InviteGrant): boolean {
@@ -60,10 +52,7 @@ export type CreateInviteError = "empty" | "forbidden";
 export async function createInvite(
   actor: { id: string; access: Access },
   grant: InviteGrant,
-): Promise<
-  | { ok: true; token: string; expiresAt: Date }
-  | { ok: false; error: CreateInviteError }
-> {
+): Promise<{ ok: true; token: string; expiresAt: Date } | { ok: false; error: CreateInviteError }> {
   if (grant.eventRole === null && grant.trainingRole === null && grant.assessmentsRole === null) {
     return { ok: false, error: "empty" };
   }
@@ -98,9 +87,7 @@ export type Invite = {
  */
 export type InviteError = "not_found" | "expired" | "revoked";
 
-export async function readInvite(
-  token: string,
-): Promise<{ ok: true; invite: Invite } | { ok: false; error: InviteError }> {
+export async function readInvite(token: string): Promise<{ ok: true; invite: Invite } | { ok: false; error: InviteError }> {
   if (!TOKEN_SHAPE.test(token)) return { ok: false, error: "not_found" };
 
   const [row] = await db
@@ -158,10 +145,7 @@ export async function readInvite(
 export async function acceptInvite(
   userId: string,
   token: string,
-): Promise<
-  | { ok: true; applied: boolean; grant: InviteGrant }
-  | { ok: false; error: InviteError }
-> {
+): Promise<{ ok: true; applied: boolean; grant: InviteGrant } | { ok: false; error: InviteError }> {
   const read = await readInvite(token);
   if (!read.ok) return read;
   const { invite } = read;

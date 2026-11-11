@@ -63,8 +63,7 @@ export type UploadTarget = {
 type StoredChunk = { recordingId: string; seq: number; data: ArrayBuffer };
 
 /** The subject an attendee's recordings on one assessment are filed under. */
-export const evalSubject = (assessmentId: string, employeeId: string) =>
-  `eval:${assessmentId}:${employeeId}`;
+export const evalSubject = (assessmentId: string, employeeId: string) => `eval:${assessmentId}:${employeeId}`;
 
 export const CHECK_PC_SUBJECT = "check-pc";
 
@@ -194,9 +193,7 @@ export async function markStopped(id: string): Promise<void> {
 }
 
 function withStaleness(recording: StoredRecording, now: number): StoredRecording {
-  return recording.status === "recording" && now - recording.updatedAt > STALE_MS
-    ? { ...recording, status: "interrupted" }
-    : recording;
+  return recording.status === "recording" && now - recording.updatedAt > STALE_MS ? { ...recording, status: "interrupted" } : recording;
 }
 
 /** `ownerId`'s recordings, newest first; only `subject`'s when given. */
@@ -205,9 +202,7 @@ export async function listRecordings(ownerId: string, subject?: string): Promise
   const tx = db.transaction(RECORDINGS, "readonly");
   const store = tx.objectStore(RECORDINGS);
   const rows = (await result(
-    subject === undefined
-      ? store.index("owner").getAll(ownerId)
-      : store.index("owner_subject").getAll([ownerId, subject]),
+    subject === undefined ? store.index("owner").getAll(ownerId) : store.index("owner_subject").getAll([ownerId, subject]),
   )) as StoredRecording[];
   const now = Date.now();
   return rows.map((r) => withStaleness(r, now)).sort((a, b) => b.startedAt - a.startedAt);

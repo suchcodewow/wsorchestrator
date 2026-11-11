@@ -54,10 +54,7 @@ export function LevelMeter({ level, className }: { level: number; className?: st
       aria-valuenow={Math.round(level * 100)}
       className={cn("h-2 overflow-hidden rounded-full bg-muted", className)}
     >
-      <div
-        className="h-full rounded-full bg-brand transition-[width] duration-75"
-        style={{ width: `${Math.round(level * 100)}%` }}
-      />
+      <div className="h-full rounded-full bg-brand transition-[width] duration-75" style={{ width: `${Math.round(level * 100)}%` }} />
     </div>
   );
 }

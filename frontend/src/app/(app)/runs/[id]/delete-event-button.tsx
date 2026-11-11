@@ -6,20 +6,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { RunStatus, WorkshopRun } from "@/db/schema";
 
 const ERRORS: Record<string, string> = {
   not_found: "This event no longer exists.",
-  in_flight:
-    "This event can only be deleted once provisioning has finished.",
+  in_flight: "This event can only be deleted once provisioning has finished.",
   unauthorized: "Sign in again to delete this event.",
 };
 
@@ -31,49 +23,36 @@ function consequence(run: WorkshopRun): {
   switch (run.status as RunStatus) {
     case "scheduled":
       return {
-        blurb:
-          "Nothing has been provisioned yet, so this only takes it off the calendar.",
+        blurb: "Nothing has been provisioned yet, so this only takes it off the calendar.",
         confirm: "Delete event",
       };
     case "destroyed":
       return {
-        blurb:
-          "This event is already torn down, so only its record and build log are removed.",
+        blurb: "This event is already torn down, so only its record and build log are removed.",
         confirm: "Delete event",
       };
     case "requested":
     case "provisioning":
     case "applying":
       return {
-        blurb:
-          "Provisioning is still running, so wait for it to finish before deleting.",
+        blurb: "Provisioning is still running, so wait for it to finish before deleting.",
         confirm: "Delete event",
         disabled: true,
       };
     case "destroying":
       return {
-        blurb:
-          "Teardown is already running, so the event is removed as soon as it finishes.",
+        blurb: "Teardown is already running, so the event is removed as soon as it finishes.",
         confirm: "Delete when torn down",
       };
     default:
       return {
-        blurb:
-          "Everything this event created is torn down first, which takes a few minutes.",
+        blurb: "Everything this event created is torn down first, which takes a few minutes.",
         confirm: "Tear down and delete",
       };
   }
 }
 
-export function DeleteEventButton({
-  run,
-  owned,
-  onRequested,
-}: {
-  run: WorkshopRun;
-  owned: boolean;
-  onRequested: () => void;
-}) {
+export function DeleteEventButton({ run, owned, onRequested }: { run: WorkshopRun; owned: boolean; onRequested: () => void }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -88,9 +67,7 @@ export function DeleteEventButton({
       const res = await fetch(`/api/runs/${run.id}`, { method: "DELETE" });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(
-          ERRORS[body?.error] ?? `Could not delete (${res.status})`,
-        );
+        throw new Error(ERRORS[body?.error] ?? `Could not delete (${res.status})`);
       }
 
       setOpen(false);
@@ -131,26 +108,17 @@ export function DeleteEventButton({
 
           {!owned && (
             <p className="rounded-lg border border-amber-500/40 bg-amber-500/8 px-3 py-2 text-sm">
-              This event belongs to someone else and they are not asked
-              first.
+              This event belongs to someone else and they are not asked first.
             </p>
           )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setOpen(false)}
-              disabled={pending}
-            >
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={submit}
-              disabled={pending || disabled}
-            >
+            <Button variant="destructive" onClick={submit} disabled={pending || disabled}>
               {pending && <Loader2 className="animate-spin" />}
               {pending ? "Deleting…" : confirm}
             </Button>

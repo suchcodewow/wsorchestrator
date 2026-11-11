@@ -13,10 +13,7 @@ import { canManageTrainingSettings } from "@/lib/roles";
 
 const idSchema = z.string().uuid();
 
-export const PUT = audited(async function PUT(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const PUT = audited(async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error, user } = await requireCaller(req, canManageTrainingSettings);
   if (error) return error;
 

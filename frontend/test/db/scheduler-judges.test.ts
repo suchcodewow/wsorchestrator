@@ -71,6 +71,9 @@ describe("mayReadBootcamp", () => {
 describe("listBootcamps for a judge", () => {
   test("lists the active bootcamp and nothing else", async () => {
     const page = await listBootcamps(parseListQuery({}, BOOTCAMP_LIST), true, true);
-    assert.deepEqual(page.rows.map((r) => r.id), [activeId]);
+    assert.deepEqual(
+      page.rows.map((r) => r.id),
+      [activeId],
+    );
   });
 });

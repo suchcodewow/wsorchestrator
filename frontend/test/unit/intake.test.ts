@@ -108,19 +108,13 @@ describe("the default form", () => {
       DEFAULT_INTAKE_FORM.questions.filter((q) => q.required).map((q) => q.id),
       [],
     );
-    assert.deepEqual(
-      withoutAutomaticQuestions("bootcamp", DEFAULT_INTAKE_FORM.questions),
-      DEFAULT_INTAKE_FORM.questions,
-    );
+    assert.deepEqual(withoutAutomaticQuestions("bootcamp", DEFAULT_INTAKE_FORM.questions), DEFAULT_INTAKE_FORM.questions);
   });
 
   test("is Pre-Bootcamp's, with the Google Form's introduction", () => {
     assert.equal(DEFAULT_INTAKE_FORMS.bootcamp, DEFAULT_INTAKE_FORM);
     assert.ok(intakeFormSchema.safeParse(DEFAULT_INTAKE_FORM).success);
-    assert.match(
-      DEFAULT_INTAKE_FORM.introduction,
-      /^Sales Bootcamp takes place from Tuesday November 17/,
-    );
+    assert.match(DEFAULT_INTAKE_FORM.introduction, /^Sales Bootcamp takes place from Tuesday November 17/);
     assert.match(DEFAULT_INTAKE_FORM.introduction, /"All or Nothing"/);
   });
 });
@@ -134,8 +128,7 @@ describe("the Pre-Bootcamp dates line", () => {
   });
 
   test("is one day long when the class runs one day or the count is missing", () => {
-    const one =
-      "Bootcamp takes place from **8:00AM Tuesday, November 17** to **12:00PM Tuesday, November 17**.";
+    const one = "Bootcamp takes place from **8:00AM Tuesday, November 17** to **12:00PM Tuesday, November 17**.";
     assert.equal(bootcampDatesLine("2026-11-17", 1), one);
     assert.equal(bootcampDatesLine("2026-11-17", 0), one);
   });
@@ -171,10 +164,7 @@ describe("the Pre-Intermediate dates line", () => {
   test("leads the introduction, and stands alone without one or without a next class", () => {
     const next = { startDate: "2026-11-17", intDays: 3 };
     const line = intermediateDatesLine(next.startDate, next.intDays);
-    assert.equal(
-      withIntermediateDates("Welcome.", next),
-      `${line}\n\nWelcome.`,
-    );
+    assert.equal(withIntermediateDates("Welcome.", next), `${line}\n\nWelcome.`);
     assert.equal(withIntermediateDates("", next), line);
     assert.equal(withIntermediateDates("Welcome.", null), "Welcome.");
   });
@@ -182,16 +172,13 @@ describe("the Pre-Intermediate dates line", () => {
 
 describe("bold markup", () => {
   test("splits text wrapped in double asterisks from the rest", () => {
-    assert.deepEqual(
-      splitBold("Starts **8:00AM Tuesday** and ends **noon**."),
-      [
-        { text: "Starts ", bold: false },
-        { text: "8:00AM Tuesday", bold: true },
-        { text: " and ends ", bold: false },
-        { text: "noon", bold: true },
-        { text: ".", bold: false },
-      ],
-    );
+    assert.deepEqual(splitBold("Starts **8:00AM Tuesday** and ends **noon**."), [
+      { text: "Starts ", bold: false },
+      { text: "8:00AM Tuesday", bold: true },
+      { text: " and ends ", bold: false },
+      { text: "noon", bold: true },
+      { text: ".", bold: false },
+    ]);
   });
 
   test("leaves plain text, and an unmatched marker, as written", () => {
@@ -267,9 +254,7 @@ describe("a form's introduction", () => {
 describe("saving a form", () => {
   test("drops options and Other from a question that does not use them", () => {
     const parsed = intakeFormSchema.parse({
-      questions: [
-        { id: "a", kind: "short", title: "A", options: ["x"], other: true },
-      ],
+      questions: [{ id: "a", kind: "short", title: "A", options: ["x"], other: true }],
     });
     assert.deepEqual(parsed.questions[0]!.options, []);
     assert.equal(parsed.questions[0]!.other, false);
@@ -277,9 +262,7 @@ describe("saving a form", () => {
 
   test("keeps Other off a dropdown", () => {
     const parsed = intakeFormSchema.parse({
-      questions: [
-        { id: "a", kind: "dropdown", title: "A", options: ["x"], other: true },
-      ],
+      questions: [{ id: "a", kind: "dropdown", title: "A", options: ["x"], other: true }],
     });
     assert.equal(parsed.questions[0]!.other, false);
   });
@@ -311,10 +294,7 @@ describe("saving a form", () => {
   });
 
   test("refuses a title or description: each form's heading is its stage's", () => {
-    assert.ok(
-      !intakeFormSchema.safeParse({ title: "T", questions: FORM.questions })
-        .success,
-    );
+    assert.ok(!intakeFormSchema.safeParse({ title: "T", questions: FORM.questions }).success);
     assert.ok(
       !intakeFormSchema.safeParse({
         description: "D",
@@ -346,30 +326,22 @@ describe("an attendee's answers", () => {
   });
 
   test("take one free-text answer where a question offers Other, and none where it does not", () => {
-    assert.ok(
-      checkAnswers(FORM, { name: "Sam", attend: "Maybe the second day" }).ok,
-    );
+    assert.ok(checkAnswers(FORM, { name: "Sam", attend: "Maybe the second day" }).ok);
     assert.deepEqual(checkAnswers(FORM, { name: "Sam", diet: "Sometimes" }), {
       ok: false,
       error: { questionId: "diet", problem: "not_an_option" },
     });
-    assert.deepEqual(
-      checkAnswers(FORM, { name: "Sam", langs: ["Go", "Zig"] }),
-      {
-        ok: false,
-        error: { questionId: "langs", problem: "not_an_option" },
-      },
-    );
+    assert.deepEqual(checkAnswers(FORM, { name: "Sam", langs: ["Go", "Zig"] }), {
+      ok: false,
+      error: { questionId: "langs", problem: "not_an_option" },
+    });
   });
 
   test("give a single-answer question one answer", () => {
-    assert.deepEqual(
-      checkAnswers(FORM, { name: "Sam", attend: ["Yes", "No"] }),
-      {
-        ok: false,
-        error: { questionId: "attend", problem: "not_an_option" },
-      },
-    );
+    assert.deepEqual(checkAnswers(FORM, { name: "Sam", attend: ["Yes", "No"] }), {
+      ok: false,
+      error: { questionId: "attend", problem: "not_an_option" },
+    });
     assert.deepEqual(checkAnswers(FORM, { name: ["Sam", "Alex"] }), {
       ok: false,
       error: { questionId: "name", problem: "not_an_option" },
@@ -397,28 +369,14 @@ describe("an attendee's answers", () => {
 describe("the Slack reminder", () => {
   test("greets them by first name, names their form, and links to it", () => {
     assert.equal(
-      intakeReminderText(
-        "Sam Rivera",
-        "intermediate",
-        "https://app.test/intake",
-      ),
+      intakeReminderText("Sam Rivera", "intermediate", "https://app.test/intake"),
       "Hi Sam! You haven't filled in your *Intermediate Registration* yet. It only takes a few minutes: <https://app.test/intake|complete it here>.",
     );
   });
 
   test("keeps a name from reading as Slack markup", () => {
-    assert.match(
-      intakeReminderText(
-        "<!channel> & co",
-        "bootcamp",
-        "https://app.test/intake",
-      ),
-      /^Hi &lt;!channel&gt;!/,
-    );
-    assert.match(
-      intakeReminderText("  ", "bootcamp", "https://app.test/intake"),
-      /^Hi! .*Bootcamp Registration/,
-    );
+    assert.match(intakeReminderText("<!channel> & co", "bootcamp", "https://app.test/intake"), /^Hi &lt;!channel&gt;!/);
+    assert.match(intakeReminderText("  ", "bootcamp", "https://app.test/intake"), /^Hi! .*Bootcamp Registration/);
   });
 });
 
@@ -448,55 +406,33 @@ describe("the name question", () => {
   });
 
   test("takes one first name, as people spell them", () => {
-    for (const name of ["Sam", "Mary-Kate", "José", "O'Neil", "Sam.", " Sam "])
-      assert.ok(isFirstName(name), name);
+    for (const name of ["Sam", "Mary-Kate", "José", "O'Neil", "Sam.", " Sam "]) assert.ok(isFirstName(name), name);
   });
 
   test("refuses a name with a space in it, or anything not a name", () => {
-    for (const name of [
-      "Sam Rivera",
-      "Mary Kate",
-      "Sam 3",
-      "Sam_Rivera",
-      "3",
-      "",
-      "  ",
-    ])
-      assert.ok(!isFirstName(name), name);
+    for (const name of ["Sam Rivera", "Mary Kate", "Sam 3", "Sam_Rivera", "3", "", "  "]) assert.ok(!isFirstName(name), name);
   });
 
   test("closes up stray spaces around the name, and stores the answer that way", () => {
     assert.equal(normalizeName("  Sam   Rivera "), "Sam Rivera");
-    assert.deepEqual(
-      checkAnswers(NAMED, { [INTAKE_NAME_QUESTION_ID]: "  Sam " }),
-      {
-        ok: true,
-        answers: { [INTAKE_NAME_QUESTION_ID]: "Sam" },
-      },
-    );
+    assert.deepEqual(checkAnswers(NAMED, { [INTAKE_NAME_QUESTION_ID]: "  Sam " }), {
+      ok: true,
+      answers: { [INTAKE_NAME_QUESTION_ID]: "Sam" },
+    });
   });
 
   test("is refused when it is more than a first name", () => {
-    assert.deepEqual(
-      checkAnswers(NAMED, { [INTAKE_NAME_QUESTION_ID]: "Sam Rivera" }),
-      {
-        ok: false,
-        error: { questionId: INTAKE_NAME_QUESTION_ID, problem: "not_a_name" },
-      },
-    );
+    assert.deepEqual(checkAnswers(NAMED, { [INTAKE_NAME_QUESTION_ID]: "Sam Rivera" }), {
+      ok: false,
+      error: { questionId: INTAKE_NAME_QUESTION_ID, problem: "not_a_name" },
+    });
   });
 
   test("replaces the first name on record and keeps the rest", () => {
     assert.equal(preferredFullName("Samuel Rivera", "Sam"), "Sam Rivera");
-    assert.equal(
-      preferredFullName("Samuel Van Der Berg", "Sam"),
-      "Sam Van Der Berg",
-    );
+    assert.equal(preferredFullName("Samuel Van Der Berg", "Sam"), "Sam Van Der Berg");
     assert.equal(preferredFullName("Samuel", "Sam"), "Sam");
-    assert.equal(
-      preferredFullName(" Samuel   Rivera ", "Samuel"),
-      "Samuel Rivera",
-    );
+    assert.equal(preferredFullName(" Samuel   Rivera ", "Samuel"), "Samuel Rivera");
   });
 
   test("starts from the first name of an answer or a name saved as a full one", () => {
@@ -516,25 +452,13 @@ describe("the automatic questions", () => {
   ];
 
   test("lead Pre-Bootcamp as it is asked: the name, the time zone, the dietary checklist, then its own questions", () => {
-    const asked = withAutomaticQuestions(
-      "bootcamp",
-      DEFAULT_INTAKE_FORM.questions,
-    );
-    assert.deepEqual(asked.slice(0, 3), [
-      PREFERRED_NAME_QUESTION,
-      TIMEZONE_QUESTION,
-      DIETARY_QUESTION,
-    ]);
+    const asked = withAutomaticQuestions("bootcamp", DEFAULT_INTAKE_FORM.questions);
+    assert.deepEqual(asked.slice(0, 3), [PREFERRED_NAME_QUESTION, TIMEZONE_QUESTION, DIETARY_QUESTION]);
     assert.deepEqual(asked.slice(3), DEFAULT_INTAKE_FORM.questions);
   });
 
   test("are asked once, whatever a saved form still holds of them", () => {
-    assert.deepEqual(withAutomaticQuestions("bootcamp", saved), [
-      PREFERRED_NAME_QUESTION,
-      TIMEZONE_QUESTION,
-      DIETARY_QUESTION,
-      attend,
-    ]);
+    assert.deepEqual(withAutomaticQuestions("bootcamp", saved), [PREFERRED_NAME_QUESTION, TIMEZONE_QUESTION, DIETARY_QUESTION, attend]);
   });
 
   test("are left out of what the form builder keeps", () => {
@@ -542,15 +466,8 @@ describe("the automatic questions", () => {
   });
 
   test("lead Pre-Intermediate the same way", () => {
-    assert.deepEqual(withAutomaticQuestions("intermediate", saved), [
-      PREFERRED_NAME_QUESTION,
-      TIMEZONE_QUESTION,
-      DIETARY_QUESTION,
-      attend,
-    ]);
-    assert.deepEqual(withoutAutomaticQuestions("intermediate", saved), [
-      attend,
-    ]);
+    assert.deepEqual(withAutomaticQuestions("intermediate", saved), [PREFERRED_NAME_QUESTION, TIMEZONE_QUESTION, DIETARY_QUESTION, attend]);
+    assert.deepEqual(withoutAutomaticQuestions("intermediate", saved), [attend]);
   });
 
   test("ask for an IANA time zone, though the question stores no options, and nothing else", () => {
@@ -611,24 +528,15 @@ describe("the dietary checklist", () => {
       ok: false,
       error: { questionId: restrictions, problem: "not_an_option" },
     };
-    assert.deepEqual(
-      checkAnswers(form, { [restrictions]: ["Dairy", "Mustard"] }),
-      notAnOption,
-    );
-    assert.deepEqual(
-      checkAnswers(form, { [restrictions]: ["Dairy"], [critical]: ["Eggs"] }),
-      notAnOption,
-    );
+    assert.deepEqual(checkAnswers(form, { [restrictions]: ["Dairy", "Mustard"] }), notAnOption);
+    assert.deepEqual(checkAnswers(form, { [restrictions]: ["Dairy"], [critical]: ["Eggs"] }), notAnOption);
   });
 
   test("needs words for Other where it is checked, and drops them where it is not", () => {
-    assert.deepEqual(
-      checkAnswers(form, { [restrictions]: [DIETARY_OTHER], [other]: "  " }),
-      {
-        ok: false,
-        error: { questionId: restrictions, problem: "required" },
-      },
-    );
+    assert.deepEqual(checkAnswers(form, { [restrictions]: [DIETARY_OTHER], [other]: "  " }), {
+      ok: false,
+      error: { questionId: restrictions, problem: "required" },
+    });
     assert.deepEqual(
       checkAnswers(form, {
         [restrictions]: [DIETARY_OTHER],
@@ -644,10 +552,10 @@ describe("the dietary checklist", () => {
         },
       },
     );
-    assert.deepEqual(
-      checkAnswers(form, { [restrictions]: ["Dairy"], [other]: "Cilantro" }),
-      { ok: true, answers: { [restrictions]: ["Dairy"] } },
-    );
+    assert.deepEqual(checkAnswers(form, { [restrictions]: ["Dairy"], [other]: "Cilantro" }), {
+      ok: true,
+      answers: { [restrictions]: ["Dairy"] },
+    });
   });
 
   test("takes one write-in, not several", () => {
@@ -687,21 +595,12 @@ describe("what Pre-Intermediate carries over from Pre-Bootcamp", () => {
   });
 
   test("is nothing for a form that does not ask the checklist, and leaves out an answer never given", () => {
-    assert.deepEqual(
-      carriedAnswers(DEFAULT_INTAKE_FORMS.intermediate, bootcampAnswers),
-      {},
-    );
-    assert.deepEqual(
-      carriedAnswers(asked, { [DIETARY_KEYS.restrictions]: ["Dairy"] }),
-      { [DIETARY_KEYS.restrictions]: ["Dairy"] },
-    );
+    assert.deepEqual(carriedAnswers(DEFAULT_INTAKE_FORMS.intermediate, bootcampAnswers), {});
+    assert.deepEqual(carriedAnswers(asked, { [DIETARY_KEYS.restrictions]: ["Dairy"] }), { [DIETARY_KEYS.restrictions]: ["Dairy"] });
   });
 
   test("is only answers Pre-Bootcamp's automatic checklist stores", () => {
-    assert.deepEqual(
-      [...CARRIED_TO_INTERMEDIATE].sort(),
-      Object.values(DIETARY_KEYS).sort(),
-    );
+    assert.deepEqual([...CARRIED_TO_INTERMEDIATE].sort(), Object.values(DIETARY_KEYS).sort());
   });
 });
 
@@ -714,10 +613,7 @@ describe("listing both forms' responses together", () => {
   });
 
   test("has a column for every question either form asks, one for each a both ask", () => {
-    const columns = questionsOfBoth(
-      DEFAULT_INTAKE_FORMS.bootcamp.questions,
-      DEFAULT_INTAKE_FORMS.intermediate.questions,
-    );
+    const columns = questionsOfBoth(DEFAULT_INTAKE_FORMS.bootcamp.questions, DEFAULT_INTAKE_FORMS.intermediate.questions);
     const ids = columns.map((q) => q.id);
     assert.equal(new Set(ids).size, ids.length);
     assert.deepEqual(
@@ -734,10 +630,7 @@ describe("listing both forms' responses together", () => {
       id: "hotel-nights",
       title: "Hotel nights",
     };
-    const columns = questionsOfBoth(DEFAULT_INTAKE_FORMS.bootcamp.questions, [
-      ...DEFAULT_INTAKE_FORMS.intermediate.questions,
-      hotel,
-    ]);
+    const columns = questionsOfBoth(DEFAULT_INTAKE_FORMS.bootcamp.questions, [...DEFAULT_INTAKE_FORMS.intermediate.questions, hotel]);
     assert.equal(columns.at(-1)!.id, "hotel-nights");
   });
 });

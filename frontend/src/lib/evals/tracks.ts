@@ -30,7 +30,14 @@ export async function addedTracks(emails?: readonly string[]): Promise<Map<strin
   const rows = await db
     .select({ email: cohortAdditions.email, track: cohortAdditions.track })
     .from(cohortAdditions)
-    .where(emails ? inArray(cohortAdditions.email, emails.map((x) => x.toLowerCase())) : undefined);
+    .where(
+      emails
+        ? inArray(
+            cohortAdditions.email,
+            emails.map((x) => x.toLowerCase()),
+          )
+        : undefined,
+    );
   return new Map(rows.map((r) => [r.email, { track: r.track }]));
 }
 
@@ -56,12 +63,7 @@ export async function nextBootcamp(): Promise<{ startDate: string; btcDays: numb
   const [next] = await db
     .select({ startDate: bootcamps.startDate, btcDays: bootcamps.btcDays })
     .from(bootcamps)
-    .where(
-      or(
-        eq(bootcamps.status, "active"),
-        and(eq(bootcamps.status, "scheduled"), gte(bootcamps.startDate, sql`current_date`)),
-      ),
-    )
+    .where(or(eq(bootcamps.status, "active"), and(eq(bootcamps.status, "scheduled"), gte(bootcamps.startDate, sql`current_date`))))
     .orderBy(sql`(${bootcamps.status} = 'active') desc`, asc(bootcamps.startDate))
     .limit(1);
   return next ?? null;
@@ -79,10 +81,7 @@ export async function nextIntermediate(): Promise<{ startDate: string; intDays: 
     .where(
       and(
         isNotNull(bootcamps.intDays),
-        or(
-          eq(bootcamps.status, "active"),
-          and(eq(bootcamps.status, "scheduled"), gte(bootcamps.startDate, sql`current_date`)),
-        ),
+        or(eq(bootcamps.status, "active"), and(eq(bootcamps.status, "scheduled"), gte(bootcamps.startDate, sql`current_date`))),
       ),
     )
     .orderBy(sql`(${bootcamps.status} = 'active') desc`, asc(bootcamps.startDate))
@@ -184,10 +183,7 @@ async function holdersOf(title: string): Promise<string[]> {
     .select({ email: employees.email })
     .from(employees)
     .where(
-      and(
-        isNotNull(employees.orgDepth),
-        sql`lower(btrim(regexp_replace(${employees.title}, '\\s+', ' ', 'g'))) = ${titleKey(title)}`,
-      ),
+      and(isNotNull(employees.orgDepth), sql`lower(btrim(regexp_replace(${employees.title}, '\\s+', ' ', 'g'))) = ${titleKey(title)}`),
     );
   return rows.map((r) => r.email);
 }

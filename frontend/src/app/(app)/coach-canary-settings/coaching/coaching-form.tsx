@@ -81,7 +81,9 @@ export function CoachingForm({ settings }: { settings: Settings }) {
           <label htmlFor="mimir-naming" className="text-sm font-medium">
             Naming
           </label>
-          <p className="text-xs text-muted-foreground">Added to the end of every prompt, so the coach uses Harness&apos;s names: agents and capabilities, never modules.</p>
+          <p className="text-xs text-muted-foreground">
+            Added to the end of every prompt, so the coach uses Harness&apos;s names: agents and capabilities, never modules.
+          </p>
           <Textarea
             id="mimir-naming"
             value={namingGuard}
