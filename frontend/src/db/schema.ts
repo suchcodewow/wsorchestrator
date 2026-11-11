@@ -2895,6 +2895,18 @@ export const mimirProfiles = pgTable(
   ],
 );
 
+/**
+ * Training → Games: each game's setup, one row per game (`guess_who`), saved
+ * from Games settings. A game with no row plays its defaults. The shape of
+ * `config` is the game's own, validated by its schema in `lib/games/`.
+ */
+export const trainingGames = pgTable("training_games", {
+  key: text("key").primaryKey(),
+  config: jsonb("config").$type<Record<string, unknown>>().notNull(),
+  updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Mimir-wide settings, one row per key; a key with no row reads as its default. */
 export const mimirSettings = pgTable("mimir_settings", {
   key: text("key").primaryKey(),

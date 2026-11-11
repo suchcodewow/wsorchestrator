@@ -78,6 +78,8 @@ import { MIMIR_TABS } from "@/app/(app)/coach-canary/tabs";
 import { MIMIR_SETTINGS_TABS } from "@/app/(app)/coach-canary-settings/tabs";
 import { SCHEDULER_SETTINGS_TABS } from "@/app/(app)/scheduler-settings/tabs";
 import { LOGISTICS_SETTINGS_TABS } from "@/app/(app)/logistics-settings/tabs";
+import { GAMES_TABS } from "@/app/(app)/games/tabs";
+import { GAMES_SETTINGS_TABS } from "@/app/(app)/games-settings/tabs";
 import { LOGISTICS_TABS } from "@/app/(app)/logistics/tabs";
 import { EVALS_TABS } from "@/app/(app)/evals/tabs";
 import { visibleReportingTabs } from "@/app/(app)/reporting/tabs";
@@ -239,6 +241,13 @@ const PAGES: Record<string, PageCase> = {
   },
   "/logistics/food-orders": { path: () => "/logistics/food-orders?q=x&sort=vendor", expect: gated(canUseTraining) },
   "/recordings": { path: () => "/recordings?q=x&sort=contributor", expect: gated(canUseTraining) },
+  "/games": { path: () => "/games", expect: (a) => (canManageTrainingSettings(a) ? { to: GAMES_TABS[0]!.href } : 404) },
+  "/games/guess-who": { path: () => "/games/guess-who", expect: gated(canManageTrainingSettings) },
+  "/games-settings": {
+    path: () => "/games-settings",
+    expect: (a) => (canManageTrainingSettings(a) ? { to: GAMES_SETTINGS_TABS[0]!.href } : 404),
+  },
+  "/games-settings/guess-who": { path: () => "/games-settings/guess-who", expect: gated(canManageTrainingSettings) },
   "/recordings/<unknown>": { path: () => `/recordings/${MISSING}`, expect: () => 404 },
   "/logistics/food-orders/print": { path: () => "/logistics/food-orders/print", expect: gated(canUseTraining) },
   "/logistics/food-orders/print?<unknown>": { path: () => `/logistics/food-orders/print?id=${MISSING}`, expect: () => 404 },
@@ -724,6 +733,9 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/surveys`, allowed: canUseTraining },
   { method: "POST", path: `/api/scheduler/bootcamps/${MISSING}/surveys`, allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: "/api/survey-results", allowed: canUseTraining },
+  { method: "GET", path: "/api/games/guess-who", allowed: canManageTrainingSettings },
+  { method: "PUT", path: "/api/games/guess-who", allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "DELETE", path: "/api/games/guess-who", allowed: canManageTrainingSettings },
   { method: "GET", path: `/api/survey-results/${MISSING}`, allowed: canUseTraining },
   { method: "GET", path: "/api/scheduler/facilities", allowed: canUseTraining },
   { method: "POST", path: "/api/scheduler/facilities", allowed: canManageTrainingSettings, body: () => ({}) },

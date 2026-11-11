@@ -44,6 +44,8 @@ const TRAINING_ADMIN = [
   "Logistics settings",
   "Async Recordings",
   "Survey Results",
+  "Games",
+  "Games settings",
 ];
 const MIMIR_ADMIN = ["Coach Canary", "Coach Canary Settings"];
 
