@@ -27,12 +27,7 @@ type OnLine = (line: TfLine) => void | Promise<void>;
  */
 const DIAGNOSTIC_LINES = 12;
 
-function exec(
-  args: string[],
-  cwd: string,
-  onLine?: OnLine,
-  tee = true,
-): Promise<void> {
+function exec(args: string[], cwd: string, onLine?: OnLine, tee = true): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(TF_BIN, args, { cwd, env: process.env });
 
@@ -68,51 +63,25 @@ function exec(
     child.on("close", (code) => {
       if (code === 0) return resolve();
       const summary = `${TF_BIN} ${args[0]} exited with code ${code}`;
-      reject(
-        new Error(
-          diagnostics.length > 0
-            ? `${summary}\n${diagnostics.join("\n")}`
-            : summary,
-        ),
-      );
+      reject(new Error(diagnostics.length > 0 ? `${summary}\n${diagnostics.join("\n")}` : summary));
     });
   });
 }
 
-export function tfInit(
-  cwd: string,
-  bucket: string,
-  prefix: string,
-  onLine?: OnLine,
-) {
+export function tfInit(cwd: string, bucket: string, prefix: string, onLine?: OnLine) {
   return exec(
-    [
-      "init",
-      "-input=false",
-      "-no-color",
-      "-reconfigure",
-      `-backend-config=bucket=${bucket}`,
-      `-backend-config=prefix=${prefix}`,
-    ],
+    ["init", "-input=false", "-no-color", "-reconfigure", `-backend-config=bucket=${bucket}`, `-backend-config=prefix=${prefix}`],
     cwd,
     onLine,
   );
 }
 
 export function tfApply(cwd: string, onLine?: OnLine) {
-  return exec(
-    ["apply", "-input=false", "-no-color", "-auto-approve", "-var-file=terraform.tfvars.json"],
-    cwd,
-    onLine,
-  );
+  return exec(["apply", "-input=false", "-no-color", "-auto-approve", "-var-file=terraform.tfvars.json"], cwd, onLine);
 }
 
 export function tfDestroy(cwd: string, onLine?: OnLine) {
-  return exec(
-    ["destroy", "-input=false", "-no-color", "-auto-approve", "-var-file=terraform.tfvars.json"],
-    cwd,
-    onLine,
-  );
+  return exec(["destroy", "-input=false", "-no-color", "-auto-approve", "-var-file=terraform.tfvars.json"], cwd, onLine);
 }
 
 /**
@@ -145,11 +114,7 @@ const WORK_DIR = ".work";
  * unaffected — which is what lets a retry, or the reaper, pick the same prefix
  * up again from a fresh copy.
  */
-export async function withWorkDir<T>(
-  source: string,
-  name: string,
-  fn: (workDir: string) => Promise<T>,
-): Promise<T> {
+export async function withWorkDir<T>(source: string, name: string, fn: (workDir: string) => Promise<T>): Promise<T> {
   const from = path.join(TF_ROOT, source);
   const to = path.join(TF_ROOT, WORK_DIR, name);
 
@@ -185,11 +150,7 @@ export async function withWorkDir<T>(
  * that follows will hit the same problem and report it with the competitor it
  * belongs to.
  */
-export async function warmProviderCache(
-  source: string,
-  bucket: string,
-  prefix: string,
-): Promise<void> {
+export async function warmProviderCache(source: string, bucket: string, prefix: string): Promise<void> {
   try {
     await tfInit(path.join(TF_ROOT, source), bucket, prefix);
   } catch {

@@ -45,7 +45,13 @@ import { retrackEmployees } from "@/lib/evals/tracks";
 import type { BootcampCohortSort, BootcampRecordSort, HistoryStatus } from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
-import { getPersonCoachCanary, getPersonDiagnostic, userIdOf, type PersonCoachCanary, type PersonDiagnostic } from "@/lib/reporting/person-training";
+import {
+  getPersonCoachCanary,
+  getPersonDiagnostic,
+  userIdOf,
+  type PersonCoachCanary,
+  type PersonDiagnostic,
+} from "@/lib/reporting/person-training";
 import {
   NOT_ATTENDED,
   RELEASE_STAGES,
@@ -108,9 +114,7 @@ export const VIEWERS_SHOWN = 20;
 
 /** Whether the reader has opened `email`'s card themself; until they have, they see no one who did. */
 export const readerViewed = (reader: BootcampReader, email: SQL) =>
-  reader.id
-    ? sql`exists (select 1 from ${scorecardViews} w where w.attendee_email = ${email} and w.viewer_id = ${reader.id})`
-    : sql`false`;
+  reader.id ? sql`exists (select 1 from ${scorecardViews} w where w.attendee_email = ${email} and w.viewer_id = ${reader.id})` : sql`false`;
 
 /**
  * Who has opened `email`'s card, newest first, as JSON `{ name, at }[]`, at
@@ -339,7 +343,10 @@ async function cohortSql(bootcamp: { id: string; startDate: string }, stages: Re
       left join lateral (
         select ${assessedTrackOf("n")} as track from ${employees} n where n.email = c.email order by n.active desc, n.id limit 1
       ) e on true
-     where c.stage in (${sql.join(stages.map((st) => sql`${st}`), sql`, `)})
+     where c.stage in (${sql.join(
+       stages.map((st) => sql`${st}`),
+       sql`, `,
+     )})
        and exists (select 1 from ${intakeResponses} i where i.form = c.stage and i.email = lower(c.email))
      -- Someone scored in both classes is listed once, at the further.
      order by c.email, c.stage desc`;
@@ -427,11 +434,7 @@ export type ReleaseBlockers = { unscored: Waiting; noExitExam: Waiting; noFeedba
  * `complete`; someone with no review fails it too. At most 100 names, and
  * how many in all.
  */
-async function cohortWithoutReview(
-  bootcamp: { id: string; startDate: string },
-  stage: ReleaseStage,
-  complete: SQL,
-): Promise<Waiting> {
+async function cohortWithoutReview(bootcamp: { id: string; startDate: string }, stage: ReleaseStage, complete: SQL): Promise<Waiting> {
   const { rows } = await db.execute<{ name: string; total: number }>(sql`
     with cohort as (${await cohortSql(bootcamp, [stage])})
     select coalesce(${nameOf(sql`c.email`)}, c.email) as name, count(*) over ()::int as total
@@ -547,9 +550,7 @@ export async function releaseScores(
 
   const now = new Date();
   const [atColumn, byColumn] =
-    stage === "bootcamp"
-      ? (["btcReleasedAt", "btcReleasedBy"] as const)
-      : (["intReleasedAt", "intReleasedBy"] as const);
+    stage === "bootcamp" ? (["btcReleasedAt", "btcReleasedBy"] as const) : (["intReleasedAt", "intReleasedBy"] as const);
   const result = await db.transaction(async (tx) => {
     const [row] = await tx
       .update(bootcamps)
@@ -918,7 +919,7 @@ export async function editSubmission(
       return { ok: false as const, error: "invalid" as const };
     }
     // Scored on criteria, the average is theirs; scored on none, it is the one given.
-    if ((scored.length > 0) === (input.averageScore !== undefined)) return { ok: false as const, error: "invalid" as const };
+    if (scored.length > 0 === (input.averageScore !== undefined)) return { ok: false as const, error: "invalid" as const };
 
     const average = scored.length > 0 ? averageScore(input.scores.map((sc) => sc.score))! : input.averageScore!;
     const needed = scored.length > 0 ? requiredFeedback(wholeScore(average)) : null;

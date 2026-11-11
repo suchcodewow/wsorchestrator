@@ -8,15 +8,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  appUrl,
-  buildPageUrl,
-  escapeSlack,
-  failedText,
-  readyText,
-  startedText,
-  userPageUrl,
-} from "../src/slack-notice.js";
+import { appUrl, buildPageUrl, escapeSlack, failedText, readyText, startedText, userPageUrl } from "../src/slack-notice.js";
 
 const BASE = "https://app.example.com";
 const RUN = "7d0c6a52-1b64-4c4e-9a43-0d6a1c1f2b11";

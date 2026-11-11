@@ -70,12 +70,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const dark = theme === "dark" || (theme !== "light" && cookieScheme === "dark");
 
   return (
-    <html
-      lang="en"
-      className={dark ? DARK_CLASS : undefined}
-      style={{ colorScheme: dark ? "dark" : "light" }}
-      suppressHydrationWarning
-    >
+    <html lang="en" className={dark ? DARK_CLASS : undefined} style={{ colorScheme: dark ? "dark" : "light" }} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript(theme, cookieScheme) }} />
       </head>

@@ -3,13 +3,7 @@
 import type { LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
-export function ComingSoon({
-  title,
-  Icon,
-}: {
-  title: string;
-  Icon: LucideIcon;
-}) {
+export function ComingSoon({ title, Icon }: { title: string; Icon: LucideIcon }) {
   return (
     <div className="space-y-8">
       <h1 className="text-3xl font-medium tracking-tight">{title}</h1>

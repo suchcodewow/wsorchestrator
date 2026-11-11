@@ -216,8 +216,8 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
           <motion.p variants={riseChild} className="text-xs leading-relaxed text-muted-foreground">
             Your password works as-is
             {hasAwsPassword && <>, except on AWS, which has its own in your row&rsquo;s details</>}
-            {hasAccessPass && <>, and on Azure, which asks for your access pass</>}, and these accounts are deleted when the{" "}
-            {data.mode} ends.
+            {hasAccessPass && <>, and on Azure, which asks for your access pass</>}, and these accounts are deleted when the {data.mode}{" "}
+            ends.
           </motion.p>
         </>
       )}
@@ -395,9 +395,7 @@ function Credential({ value, label }: { value: string; label: string }) {
         aria-hidden
         className={cn(
           "shrink-0 py-0.5 text-muted-foreground transition-opacity",
-          copied
-            ? "opacity-100"
-            : "opacity-0 group-hover:opacity-70 group-focus-visible:opacity-70 [@media(hover:none)]:opacity-70",
+          copied ? "opacity-100" : "opacity-0 group-hover:opacity-70 group-focus-visible:opacity-70 [@media(hover:none)]:opacity-70",
         )}
       >
         {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}

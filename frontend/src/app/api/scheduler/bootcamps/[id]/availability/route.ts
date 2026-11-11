@@ -12,7 +12,11 @@ const idSchema = z.string().uuid();
 const slotSchema = z.object({
   day: z.coerce.number().int().min(1).max(BOOTCAMP_LIMITS.maxDays),
   /** Minutes after midnight. */
-  start: z.coerce.number().int().min(0).max(24 * 60),
+  start: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(24 * 60),
   minutes: z.coerce.number().int().min(SCHEDULE_LIMITS.slot).max(SCHEDULE_LIMITS.maxMinutes),
   /** A session to leave out: the one being edited. */
   exclude: z.string().uuid().optional(),
@@ -31,5 +35,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!slot.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
   const { day, start, minutes, exclude } = slot.data;
-  return NextResponse.json({ day, start, end: start + minutes, ...(await availability(bootcamp, { day, start, minutes, excludeId: exclude })) });
+  return NextResponse.json({
+    day,
+    start,
+    end: start + minutes,
+    ...(await availability(bootcamp, { day, start, minutes, excludeId: exclude })),
+  });
 }

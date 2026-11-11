@@ -42,9 +42,7 @@ export function ApiTokensCard({
   const [minted, setMinted] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const atLimit =
-    tokens.filter((t) => t.status === "active" && t.source === "manual").length >=
-    MAX_TOKENS_PER_USER;
+  const atLimit = tokens.filter((t) => t.status === "active" && t.source === "manual").length >= MAX_TOKENS_PER_USER;
 
   async function call(key: string, path: string, init: RequestInit) {
     setBusy(key);
@@ -56,9 +54,7 @@ export function ApiTokensCard({
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(
-          (body as { message?: string })?.message ?? `Request failed (${res.status})`,
-        );
+        throw new Error((body as { message?: string })?.message ?? `Request failed (${res.status})`);
       }
       return body as unknown;
     } catch (err) {
@@ -113,13 +109,9 @@ export function ApiTokensCard({
 
         {minted && (
           <div className="space-y-2 rounded-md border border-brand/40 bg-brand/5 p-3">
-            <p className="text-sm font-medium">
-              Copy this now — it will not be shown again.
-            </p>
+            <p className="text-sm font-medium">Copy this now — it will not be shown again.</p>
             <div className="flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded bg-background px-2 py-1.5 font-mono text-xs">
-                {minted}
-              </code>
+              <code className="min-w-0 flex-1 truncate rounded bg-background px-2 py-1.5 font-mono text-xs">{minted}</code>
               <Button variant="outline" size="sm" onClick={() => copy(minted)}>
                 {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
                 {copied ? "Copied" : "Copy"}
@@ -139,49 +131,27 @@ export function ApiTokensCard({
             className="max-w-64"
             disabled={atLimit}
           />
-          <Button
-            onClick={create}
-            disabled={busy === "mint" || name.trim().length === 0 || atLimit}
-          >
-            {busy === "mint" ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Plus className="size-4" />
-            )}
+          <Button onClick={create} disabled={busy === "mint" || name.trim().length === 0 || atLimit}>
+            {busy === "mint" ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
             Create
           </Button>
           {atLimit && (
-            <span className="text-sm text-muted-foreground">
-              {MAX_TOKENS_PER_USER} active tokens is the limit — revoke one first.
-            </span>
+            <span className="text-sm text-muted-foreground">{MAX_TOKENS_PER_USER} active tokens is the limit — revoke one first.</span>
           )}
         </div>
 
         {tokens.length > 0 && (
           <div className="divide-y divide-border/70 border-t border-border/70 text-sm">
             {tokens.map((t) => (
-              <div
-                key={t.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5"
-              >
+              <div key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
                 <span className="font-medium">{t.name}</span>
                 {t.source === "bundle" && (
-                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                    in a download
-                  </span>
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">in a download</span>
                 )}
-                <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-muted-foreground">
-                  {t.prefix}…
-                </code>
-                <span className={cn("text-xs", TOKEN_TINT[t.status])}>
-                  {t.status}
-                </span>
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-muted-foreground">{t.prefix}…</code>
+                <span className={cn("text-xs", TOKEN_TINT[t.status])}>{t.status}</span>
                 <span className="text-xs text-muted-foreground">
-                  {t.status === "revoked"
-                    ? "revoked"
-                    : t.expiresAt
-                      ? `expires ${shortDate(t.expiresAt)}`
-                      : "never expires"}
+                  {t.status === "revoked" ? "revoked" : t.expiresAt ? `expires ${shortDate(t.expiresAt)}` : "never expires"}
                   {" · "}
                   {t.lastUsedAt ? `last used ${shortDate(t.lastUsedAt)}` : "never used"}
                 </span>
@@ -193,11 +163,7 @@ export function ApiTokensCard({
                     onClick={() => revoke(t.id)}
                     disabled={busy === t.id}
                   >
-                    {busy === t.id ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="size-4" />
-                    )}
+                    {busy === t.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
                     Revoke
                   </Button>
                 )}

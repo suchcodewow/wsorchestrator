@@ -7,11 +7,7 @@ import { parseListQuery } from "@/lib/paging";
 import { canManageTrainingSettings } from "@/lib/roles";
 import { FoodOrdersView } from "./food-orders-view";
 
-export default async function FoodOrdersPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function FoodOrdersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await auth();
   const query = parseListQuery(await searchParams, FOOD_ORDER_LIST);
   return (

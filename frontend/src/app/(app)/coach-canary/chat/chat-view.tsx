@@ -21,7 +21,13 @@ import { ChevronDown, ChevronUp, Circle, CircleCheck, Loader2, Play, RotateCcw, 
 import { CoachCanaryAvatar } from "@/components/coach-canary-art";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import {
   MIMIR_COACH_NAMES,
@@ -117,7 +123,12 @@ export function ChatView({
   const stick = useRef(true);
   const greeted = useRef(false);
   // What the coach is sent on opening the tab, read once, before the parameter comes off the address.
-  const opening = useRef(openingFor(concepts.find((c) => c.id === params.get("ask")), initial.needsGreeting));
+  const opening = useRef(
+    openingFor(
+      concepts.find((c) => c.id === params.get("ask")),
+      initial.needsGreeting,
+    ),
+  );
   const busy = replying || resetting;
   const nameOf = (id: string) => concepts.find((c) => c.id === id)?.name ?? id;
 
@@ -212,7 +223,10 @@ export function ChatView({
       const page = (await fetch(`/api/mimir/coach?before=${first.seq}`).then((r) => r.json())) as View;
       const older = page.conversation;
       if (older) {
-        setView((v) => ({ ...v, conversation: v.conversation && { earlier: older.earlier, messages: [...older.messages, ...v.conversation.messages] } }));
+        setView((v) => ({
+          ...v,
+          conversation: v.conversation && { earlier: older.earlier, messages: [...older.messages, ...v.conversation.messages] },
+        }));
       }
     } finally {
       setLoadingEarlier(false);
@@ -220,7 +234,15 @@ export function ChatView({
   }
 
   async function resetMemory() {
-    if (!(await confirmDialog({ title: "Reset chat memory?", description: "The coach forgets this conversation and it is deleted; your progress, mastery and videos watched stay.", confirmLabel: "Reset", destructive: true }))) return;
+    if (
+      !(await confirmDialog({
+        title: "Reset chat memory?",
+        description: "The coach forgets this conversation and it is deleted; your progress, mastery and videos watched stay.",
+        confirmLabel: "Reset",
+        destructive: true,
+      }))
+    )
+      return;
     setResetting(true);
     setError(null);
     try {
@@ -246,7 +268,11 @@ export function ChatView({
     setPrefs(next);
     setPrefsError(null);
     try {
-      const res = await fetch("/api/mimir/me", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
+      const res = await fetch("/api/mimir/me", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
       if (res.ok) return true;
       setPrefsError(res.status === 403 ? "You can't change this while viewing as someone else." : `Could not save (${res.status}).`);
     } catch {
@@ -270,7 +296,11 @@ export function ChatView({
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <CoachCanaryAvatar className="size-7" />
-            <PersonalityMenu value={prefs.coachPersonality} disabled={busy} onChoose={(coachPersonality) => void pickStyle(coachPersonality)} />
+            <PersonalityMenu
+              value={prefs.coachPersonality}
+              disabled={busy}
+              onChoose={(coachPersonality) => void pickStyle(coachPersonality)}
+            />
           </div>
           <CoachOptions
             profile={prefs}
@@ -282,7 +312,14 @@ export function ChatView({
           />
         </div>
         <div className="space-y-1.5">
-          <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={view.progress.total} aria-valuenow={view.progress.mastered} aria-label="Concepts mastered">
+          <div
+            className="h-1.5 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={view.progress.total}
+            aria-valuenow={view.progress.mastered}
+            aria-label="Concepts mastered"
+          >
             <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${pct}%` }} />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -292,7 +329,10 @@ export function ChatView({
             {next ? (
               <span className="flex items-center gap-2">
                 Next: <span className="font-medium text-foreground">{next.name}</span>
-                <Link href={next.hasVideo ? `/coach-canary/map?play=${encodeURIComponent(next.id)}` : "/coach-canary/map"} className="inline-flex items-center gap-1 font-medium text-brand hover:underline">
+                <Link
+                  href={next.hasVideo ? `/coach-canary/map?play=${encodeURIComponent(next.id)}` : "/coach-canary/map"}
+                  className="inline-flex items-center gap-1 font-medium text-brand hover:underline"
+                >
                   <Play className="size-3 fill-current" />
                   {next.hasVideo ? "Play video" : "Open the map"}
                 </Link>
@@ -340,7 +380,10 @@ export function ChatView({
             <Bubble role={m.role} html={m.html} text={m.text} />
             {notices[m.seq]?.map((n) =>
               n.kind === "covered" ? (
-                <p key={`${n.kind}${n.id}`} className="flex items-start gap-1.5 px-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                <p
+                  key={`${n.kind}${n.id}`}
+                  className="flex items-start gap-1.5 px-1 text-xs font-medium text-emerald-700 dark:text-emerald-400"
+                >
                   <CircleCheck className="mt-px size-3.5 shrink-0" />
                   <span>
                     {nameOf(n.id)}: {n.points.join("; ")}
@@ -351,7 +394,13 @@ export function ChatView({
                   </span>
                 </p>
               ) : (
-                <p key={`${n.kind}${n.id}`} className={cn("flex items-center gap-1.5 px-1 text-xs font-medium", n.kind === "mastered" ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400")}>
+                <p
+                  key={`${n.kind}${n.id}`}
+                  className={cn(
+                    "flex items-center gap-1.5 px-1 text-xs font-medium",
+                    n.kind === "mastered" ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400",
+                  )}
+                >
                   {n.kind === "mastered" ? <Check className="size-3.5" strokeWidth={3} /> : <Star className="size-3.5 fill-current" />}
                   {n.kind === "mastered" ? `${nameOf(n.id)} marked as mastered.` : `${nameOf(n.id)} flagged as Recommended on the map.`}
                 </p>
@@ -362,7 +411,12 @@ export function ChatView({
         {pending && <Bubble role="user" html={null} text={pending} />}
         {replying &&
           (streaming ? (
-            <Bubble role="assistant" html={null} text={streaming.replace(/\[(?:MASTERED|RECOMMEND|POINTS|COVERED):[^\]]*\]?/gi, "").trimEnd()} live />
+            <Bubble
+              role="assistant"
+              html={null}
+              text={streaming.replace(/\[(?:MASTERED|RECOMMEND|POINTS|COVERED):[^\]]*\]?/gi, "").trimEnd()}
+              live
+            />
           ) : (
             <div className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
@@ -432,7 +486,11 @@ function Checklist({ points }: { points: Point[] }) {
         <ul className="grid gap-x-4 gap-y-0.5 text-xs sm:grid-cols-2" aria-label="Main points of the next concept">
           {points.map((p, i) => (
             <li key={i} className={cn("flex items-start gap-1.5", p.covered ? "text-foreground" : "text-muted-foreground")}>
-              {p.covered ? <CircleCheck className="mt-px size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <Circle className="mt-px size-3.5 shrink-0" />}
+              {p.covered ? (
+                <CircleCheck className="mt-px size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              ) : (
+                <Circle className="mt-px size-3.5 shrink-0" />
+              )}
               <span>{p.text}</span>
               <span className="sr-only">{p.covered ? "(covered)" : "(open)"}</span>
             </li>
@@ -454,7 +512,11 @@ function Bubble({ role, html, text, live }: { role: MimirMessageRole; html: stri
         )}
         aria-live={live ? "polite" : undefined}
       >
-        {html !== null ? <div className="lab-prose text-sm" dangerouslySetInnerHTML={{ __html: html }} /> : <p className="whitespace-pre-wrap">{text}</p>}
+        {html !== null ? (
+          <div className="lab-prose text-sm" dangerouslySetInnerHTML={{ __html: html }} />
+        ) : (
+          <p className="whitespace-pre-wrap">{text}</p>
+        )}
       </div>
     </div>
   );
@@ -463,7 +525,15 @@ function Bubble({ role, html, text, live }: { role: MimirMessageRole; html: stri
 type Profile = { role: MimirRepRole | null; coachStyle: MimirCoachStyle; coachPersonality: MimirCoachPersonality };
 
 /** Whose voice the coach speaks in: the "Coach style" menu. Picking one has the coach introduce itself in it. */
-function PersonalityMenu({ value, disabled, onChoose }: { value: MimirCoachPersonality; disabled: boolean; onChoose: (p: MimirCoachPersonality) => void }) {
+function PersonalityMenu({
+  value,
+  disabled,
+  onChoose,
+}: {
+  value: MimirCoachPersonality;
+  disabled: boolean;
+  onChoose: (p: MimirCoachPersonality) => void;
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -505,7 +575,11 @@ function CoachOptions({
   const [open, setOpen] = useState(false);
   const { role, coachStyle: style } = profile;
   const save = (next: Pick<Profile, "role" | "coachStyle">) => onSave({ ...profile, ...next });
-  const option = (on: boolean) => cn("rounded-md border px-3 py-1.5 text-sm", on ? "border-brand bg-brand-subtle font-medium text-foreground" : "text-muted-foreground hover:bg-muted");
+  const option = (on: boolean) =>
+    cn(
+      "rounded-md border px-3 py-1.5 text-sm",
+      on ? "border-brand bg-brand-subtle font-medium text-foreground" : "text-muted-foreground hover:bg-muted",
+    );
   const labels: Record<MimirCoachStyle, string> = { socratic: "Ask me questions", direct: "Be direct" };
 
   return (
@@ -524,11 +598,22 @@ function CoachOptions({
           <p className="text-sm font-medium">Your role</p>
           <div className="flex flex-wrap gap-1.5">
             {MIMIR_REP_ROLES.map((r) => (
-              <button key={r} type="button" aria-pressed={role === r} className={option(role === r)} onClick={() => save({ role: r, coachStyle: style })}>
+              <button
+                key={r}
+                type="button"
+                aria-pressed={role === r}
+                className={option(role === r)}
+                onClick={() => save({ role: r, coachStyle: style })}
+              >
                 {r}
               </button>
             ))}
-            <button type="button" aria-pressed={role === null} className={option(role === null)} onClick={() => save({ role: null, coachStyle: style })}>
+            <button
+              type="button"
+              aria-pressed={role === null}
+              className={option(role === null)}
+              onClick={() => save({ role: null, coachStyle: style })}
+            >
               Not saying
             </button>
           </div>
@@ -537,7 +622,13 @@ function CoachOptions({
           <p className="text-sm font-medium">How to coach you</p>
           <div className="flex flex-wrap gap-1.5">
             {MIMIR_COACH_STYLES.map((s) => (
-              <button key={s} type="button" aria-pressed={style === s} className={option(style === s)} onClick={() => save({ role, coachStyle: s })}>
+              <button
+                key={s}
+                type="button"
+                aria-pressed={style === s}
+                className={option(style === s)}
+                onClick={() => save({ role, coachStyle: s })}
+              >
                 {labels[s]}
               </button>
             ))}

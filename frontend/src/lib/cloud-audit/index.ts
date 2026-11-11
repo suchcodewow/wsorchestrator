@@ -16,15 +16,13 @@ export async function auditClouds(): Promise<CloudStatusReport> {
   const owners = await resourceOwners();
 
   const settled = await Promise.all(
-    [auditGcp, auditAws, auditAzure, auditHarness].map(
-      async (audit): Promise<CloudAuditResult> => {
-        try {
-          return await audit(owners);
-        } catch {
-          return { ok: false, error: "unavailable" };
-        }
-      },
-    ),
+    [auditGcp, auditAws, auditAzure, auditHarness].map(async (audit): Promise<CloudAuditResult> => {
+      try {
+        return await audit(owners);
+      } catch {
+        return { ok: false, error: "unavailable" };
+      }
+    }),
   );
 
   const [gcp, aws, azure, harness] = settled;

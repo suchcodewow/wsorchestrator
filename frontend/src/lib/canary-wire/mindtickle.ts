@@ -123,7 +123,11 @@ export class Mindtickle {
       try {
         res = await fetch(url, {
           method,
-          headers: { authorization: `Bearer ${this.token}`, accept: "application/json", ...(body ? { "content-type": "application/json" } : {}) },
+          headers: {
+            authorization: `Bearer ${this.token}`,
+            accept: "application/json",
+            ...(body ? { "content-type": "application/json" } : {}),
+          },
           body: body ? JSON.stringify(body) : undefined,
           signal: AbortSignal.timeout(TIMEOUT_MS),
         });

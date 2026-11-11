@@ -7,11 +7,7 @@ import { RecordingsView } from "./recordings-view";
 
 export const dynamic = "force-dynamic";
 
-export default async function RecordingsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function RecordingsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const query = parseListQuery(await searchParams, RECORDING_LIST);
   return <RecordingsView query={query} page={await listTakes(query)} />;
 }

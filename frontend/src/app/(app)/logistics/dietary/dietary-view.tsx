@@ -24,12 +24,7 @@ import {
 } from "@/lib/list-specs";
 import { DIETARY_OTHER } from "@/lib/logistics/intake-values";
 import type { IntakeFormId } from "@/db/schema";
-import type {
-  DietaryCounts,
-  DietaryItemCount,
-  UnregisteredRow,
-  WriteInRow,
-} from "@/lib/logistics/responses";
+import type { DietaryCounts, DietaryItemCount, UnregisteredRow, WriteInRow } from "@/lib/logistics/responses";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
@@ -64,9 +59,7 @@ export function DietaryView({
   unregistered: Page<UnregisteredRow>;
 }) {
   // The not-registered group starts folded, so the needs sit together near the top; a search, sort or page turn opens it.
-  const [unregisteredToggled, setShowUnregistered] = useState(
-    unregisteredQuery.page > 1 || unregisteredQuery.sort !== "name",
-  );
+  const [unregisteredToggled, setShowUnregistered] = useState(unregisteredQuery.page > 1 || unregisteredQuery.sort !== "name");
   const showUnregistered = unregisteredToggled || unregisteredQuery.q !== "";
   const otherCount = (items: DietaryItemCount[]) => items.find((c) => c.item === DIETARY_OTHER)?.count ?? 0;
 
@@ -78,13 +71,9 @@ export function DietaryView({
           <StageToggle stage={stage} />
         </div>
         <p className="text-sm text-muted-foreground">
-          <span className="text-base font-semibold text-foreground">
-            {plural(counts.responded, "attendee", "attendees")}
-          </span>{" "}
-          registered · <span className="font-medium text-foreground">{counts.withNeeds.toLocaleString()}</span> with
-          dietary restrictions, of whom{" "}
-          <span className="font-medium text-foreground">{counts.withCritical.toLocaleString()}</span> marked something
-          critical
+          <span className="text-base font-semibold text-foreground">{plural(counts.responded, "attendee", "attendees")}</span> registered ·{" "}
+          <span className="font-medium text-foreground">{counts.withNeeds.toLocaleString()}</span> with dietary restrictions, of whom{" "}
+          <span className="font-medium text-foreground">{counts.withCritical.toLocaleString()}</span> marked something critical
           {counts.notRegistered > 0 && (
             <>
               {" "}
@@ -94,8 +83,8 @@ export function DietaryView({
                 onClick={() => setShowUnregistered(true)}
                 className="underline underline-offset-2 hover:text-foreground"
               >
-                {plural(counts.notRegistered, "more", "more")} in the current cohort{" "}
-                {counts.notRegistered === 1 ? "hasn't" : "haven't"} registered yet
+                {plural(counts.notRegistered, "more", "more")} in the current cohort {counts.notRegistered === 1 ? "hasn't" : "haven't"}{" "}
+                registered yet
               </a>
             </>
           )}
@@ -143,11 +132,7 @@ export function DietaryView({
           {showUnregistered && (
             <>
               <div className="px-5 py-3">
-                <TableSearch
-                  value={unregisteredQuery.q}
-                  placeholder="Search by name or email"
-                  label="Search people not registered yet"
-                />
+                <TableSearch value={unregisteredQuery.q} placeholder="Search by name or email" label="Search people not registered yet" />
               </div>
               <div className="overflow-x-auto border-t">
                 <table className="w-full text-sm">

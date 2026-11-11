@@ -3,11 +3,7 @@
 import { auth } from "@/auth";
 import { AppShell } from "@/components/app-shell";
 
-export default async function LabsLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function LabsLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
 
   return (

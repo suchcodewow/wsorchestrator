@@ -33,7 +33,8 @@ const EXPERIENCES: Experience[] = [
   {
     id: "developer",
     name: "Day in the Life: Developer",
-    summary: "Pick up a ticket at the Greenleaf Shop and take it all the way to production: change the code, commit, push, open a pull request and merge it.",
+    summary:
+      "Pick up a ticket at the Greenleaf Shop and take it all the way to production: change the code, commit, push, open a pull request and merge it.",
     minutes: "5–7 minutes",
     Icon: Laptop,
     render: (author) => <CodeLabView author={author} />,

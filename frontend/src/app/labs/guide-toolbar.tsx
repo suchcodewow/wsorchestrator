@@ -34,13 +34,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { GUIDE_VARIABLES } from "@/lib/guide-variables";
 import { cn } from "@/lib/utils";
 
@@ -72,11 +66,7 @@ type Tool = {
   options: ToolOption[];
 };
 
-export function GuideToolbar({
-  onInsert,
-}: {
-  onInsert: (insert: ToolInsert) => void;
-}) {
+export function GuideToolbar({ onInsert }: { onInsert: (insert: ToolInsert) => void }) {
   return (
     <>
       {TOOLS.map((tool) =>
@@ -101,13 +91,7 @@ export function GuideToolbar({
   );
 }
 
-function ToolMenu({
-  tool,
-  onInsert,
-}: {
-  tool: Tool;
-  onInsert: (insert: ToolInsert) => void;
-}) {
+function ToolMenu({ tool, onInsert }: { tool: Tool; onInsert: (insert: ToolInsert) => void }) {
   /* Which option the preview is showing. Radix focuses an item on hover as well
      as by keyboard, so focus alone tracks both ways of looking down a menu; the
      last one looked at stays up, so the pane never blinks empty on the way out. */
@@ -123,10 +107,7 @@ function ToolMenu({
           size="sm"
           title={`Insert ${tool.label.toLowerCase()}`}
           aria-label={`Insert ${tool.label.toLowerCase()}`}
-          className={cn(
-            "h-8 gap-0.5 text-muted-foreground hover:text-foreground",
-            tool.named ? "px-2" : "px-1.5",
-          )}
+          className={cn("h-8 gap-0.5 text-muted-foreground hover:text-foreground", tool.named ? "px-2" : "px-1.5")}
         >
           <tool.icon />
           {tool.named && <span className="ml-1">{tool.label}</span>}
@@ -136,35 +117,17 @@ function ToolMenu({
 
       {/* The insert puts the caret back in the body itself, so Radix must not
           pull focus to the trigger as the menu closes. */}
-      <DropdownMenuContent
-        align="start"
-        className="w-80 p-0"
-        onCloseAutoFocus={(e) => e.preventDefault()}
-      >
+      <DropdownMenuContent align="start" className="w-80 p-0" onCloseAutoFocus={(e) => e.preventDefault()}>
         {/* Long menus scroll; the preview below them does not scroll away. */}
         <div className="max-h-72 overflow-y-auto p-1">
           {/* Named triggers say it already. */}
-          {!tool.named && (
-            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-              {tool.label}
-            </DropdownMenuLabel>
-          )}
+          {!tool.named && <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">{tool.label}</DropdownMenuLabel>}
 
           {tool.options.map((option, index) => (
-            <DropdownMenuItem
-              key={option.label}
-              onFocus={() => setShown(index)}
-              onSelect={() => onInsert(option)}
-            >
-              {option.icon && (
-                <option.icon className="shrink-0 text-muted-foreground" />
-              )}
+            <DropdownMenuItem key={option.label} onFocus={() => setShown(index)} onSelect={() => onInsert(option)}>
+              {option.icon && <option.icon className="shrink-0 text-muted-foreground" />}
               <span className="min-w-0 flex-1 truncate">{option.label}</span>
-              {option.token && (
-                <code className="shrink-0 font-mono text-[11px] text-muted-foreground">
-                  {option.token}
-                </code>
-              )}
+              {option.token && <code className="shrink-0 font-mono text-[11px] text-muted-foreground">{option.token}</code>}
             </DropdownMenuItem>
           ))}
         </div>
@@ -174,20 +137,10 @@ function ToolMenu({
             sitting on. */}
         {(preview.detail || preview.preview) && (
           <div className="border-t bg-background px-3 py-2.5">
-            {preview.detail && (
-              <p className="text-xs leading-snug text-muted-foreground">
-                {preview.detail}
-              </p>
-            )}
+            {preview.detail && <p className="text-xs leading-snug text-muted-foreground">{preview.detail}</p>}
             {/* Decoration: the menu is the control, this is only what it makes. */}
             {preview.preview && (
-              <div
-                aria-hidden="true"
-                className={cn(
-                  "lab-prose pointer-events-none select-none",
-                  preview.detail && "mt-2",
-                )}
-              >
+              <div aria-hidden="true" className={cn("lab-prose pointer-events-none select-none", preview.detail && "mt-2")}>
                 {preview.preview}
               </div>
             )}
@@ -207,13 +160,7 @@ function ToolMenu({
  * rest are styled where they sit.
  */
 
-const heading = (
-  level: 2 | 3 | 4,
-  label: string,
-  title: string,
-  detail: string,
-  icon: LucideIcon,
-): ToolOption => ({
+const heading = (level: 2 | 3 | 4, label: string, title: string, detail: string, icon: LucideIcon): ToolOption => ({
   label,
   token: "#".repeat(level),
   detail,
@@ -222,25 +169,13 @@ const heading = (
   select: title,
   preview: (
     <>
-      {level === 2 ? (
-        <h2>{title}</h2>
-      ) : level === 3 ? (
-        <h3>{title}</h3>
-      ) : (
-        <h4>{title}</h4>
-      )}
+      {level === 2 ? <h2>{title}</h2> : level === 3 ? <h3>{title}</h3> : <h4>{title}</h4>}
       <p>How the step begins.</p>
     </>
   ),
 });
 
-const callout = (
-  name: string,
-  label: string,
-  title: string,
-  body: string,
-  Icon: LucideIcon,
-): ToolOption => ({
+const callout = (name: string, label: string, title: string, body: string, Icon: LucideIcon): ToolOption => ({
   label,
   token: `:::${name}`,
   icon: Icon,
@@ -260,12 +195,7 @@ const callout = (
   ),
 });
 
-const fenced = (
-  label: string,
-  lang: string,
-  body: string,
-  title?: string,
-): ToolOption => ({
+const fenced = (label: string, lang: string, body: string, title?: string): ToolOption => ({
   label,
   token: lang,
   snippet: `\`\`\`${lang}${title ? ` title="${title}"` : ""}\n${body}\n\`\`\``,
@@ -281,21 +211,12 @@ const fenced = (
       </figcaption>
       {/* A line wider than the menu trails off, rather than ending mid-word as
           though it had been cut. */}
-      <pre className="mask-r-from-85% overflow-hidden px-3.5 py-3 font-mono text-[0.8125rem] leading-[1.65]">
-        {body}
-      </pre>
+      <pre className="mask-r-from-85% overflow-hidden px-3.5 py-3 font-mono text-[0.8125rem] leading-[1.65]">{body}</pre>
     </figure>
   ),
 });
 
-const collapsible = (
-  label: string,
-  token: string,
-  detail: string,
-  title: string,
-  body: string,
-  open: boolean,
-): ToolOption => ({
+const collapsible = (label: string, token: string, detail: string, title: string, body: string, open: boolean): ToolOption => ({
   label,
   token,
   detail,
@@ -323,27 +244,9 @@ const TOOLS: Tool[] = [
     label: "Heading",
     icon: Heading,
     options: [
-      heading(
-        2,
-        "Section",
-        "Section title",
-        "A main step, listed in the contents.",
-        Heading2,
-      ),
-      heading(
-        3,
-        "Sub-section",
-        "Sub-step title",
-        "Nested under a section, also listed in the contents.",
-        Heading3,
-      ),
-      heading(
-        4,
-        "Minor heading",
-        "Detail",
-        "A break inside a step, left out of the contents.",
-        Heading4,
-      ),
+      heading(2, "Section", "Section title", "A main step, listed in the contents.", Heading2),
+      heading(3, "Sub-section", "Sub-step title", "Nested under a section, also listed in the contents.", Heading3),
+      heading(4, "Minor heading", "Detail", "A break inside a step, left out of the contents.", Heading4),
     ],
   },
   {
@@ -412,8 +315,12 @@ const TOOLS: Tool[] = [
       fenced("TypeScript", "typescript", `console.log("hello");`),
       fenced("Go", "go", `fmt.Println("hello")`),
       fenced("SQL", "sql", "select count(*) from pipelines;"),
-      fenced("Diff", "diff", `-  replicas: 1
-+  replicas: 2`),
+      fenced(
+        "Diff",
+        "diff",
+        `-  replicas: 1
++  replicas: 2`,
+      ),
       fenced("Plain text", "text", "Paste the output you expect to see."),
     ],
   },
@@ -421,41 +328,11 @@ const TOOLS: Tool[] = [
     label: "Callout",
     icon: Info,
     options: [
-      callout(
-        "note",
-        "Note",
-        "Worth knowing",
-        "Something to keep in mind as you go.",
-        PencilLine,
-      ),
-      callout(
-        "tip",
-        "Tip",
-        "A shortcut",
-        "A faster way to get the same result.",
-        Info,
-      ),
-      callout(
-        "success",
-        "Success",
-        "That worked",
-        "How to tell it worked, and what you should be looking at.",
-        CircleCheck,
-      ),
-      callout(
-        "warning",
-        "Warning",
-        "Take care here",
-        "Something that is easy to get wrong at this step.",
-        TriangleAlert,
-      ),
-      callout(
-        "danger",
-        "Caution",
-        "Do not skip this",
-        "What will break the rest of the lab if it is wrong.",
-        OctagonAlert,
-      ),
+      callout("note", "Note", "Worth knowing", "Something to keep in mind as you go.", PencilLine),
+      callout("tip", "Tip", "A shortcut", "A faster way to get the same result.", Info),
+      callout("success", "Success", "That worked", "How to tell it worked, and what you should be looking at.", CircleCheck),
+      callout("warning", "Warning", "Take care here", "Something that is easy to get wrong at this step.", TriangleAlert),
+      callout("danger", "Caution", "Do not skip this", "What will break the rest of the lab if it is wrong.", OctagonAlert),
     ],
   },
   {

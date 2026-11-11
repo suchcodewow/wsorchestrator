@@ -17,13 +17,7 @@ export function endpointFor(method: string, pathname: string): Endpoint | null {
     .map((endpoint) => {
       const segments = endpoint.path.split("/");
       const pattern = segments
-        .map((s) =>
-          /^\{\.\.\..+\}$/.test(s)
-            ? ".+"
-            : /^\{.+\}$/.test(s)
-              ? "[^/]+"
-              : s.replace(/[.*+?^$()|[\]\\]/g, "\\$&"),
-        )
+        .map((s) => (/^\{\.\.\..+\}$/.test(s) ? ".+" : /^\{.+\}$/.test(s) ? "[^/]+" : s.replace(/[.*+?^$()|[\]\\]/g, "\\$&")))
         .join("/");
       return {
         endpoint,
@@ -35,10 +29,7 @@ export function endpointFor(method: string, pathname: string): Endpoint | null {
     .sort((a, b) => b.literal - a.literal);
 
   const path = pathname.replace(/\/+$/, "") || "/";
-  return (
-    matchers.find((m) => m.endpoint.method === method && m.pattern.test(path))
-      ?.endpoint ?? null
-  );
+  return matchers.find((m) => m.endpoint.method === method && m.pattern.test(path))?.endpoint ?? null;
 }
 
 /** Keys whose string values are secrets, or close enough not to keep. */
@@ -58,24 +49,15 @@ export function redact(value: unknown, key?: string, depth = 0): unknown {
   if (typeof value === "boolean" || typeof value === "number") return value;
   if (key && SECRET_KEY.test(key)) return "[redacted]";
   if (typeof value === "string") {
-    return value.length > MAX_STRING
-      ? `${value.slice(0, MAX_STRING)}… (${value.length} characters)`
-      : value;
+    return value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}… (${value.length} characters)` : value;
   }
   if (depth >= MAX_DEPTH) return "[…]";
   if (Array.isArray(value)) {
     const kept = value.slice(0, MAX_ITEMS).map((v) => redact(v, key, depth + 1));
-    return value.length > MAX_ITEMS
-      ? [...kept, `… and ${value.length - MAX_ITEMS} more`]
-      : kept;
+    return value.length > MAX_ITEMS ? [...kept, `… and ${value.length - MAX_ITEMS} more`] : kept;
   }
   if (typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([k, v]) => [
-        k,
-        redact(v, k, depth + 1),
-      ]),
-    );
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, redact(v, k, depth + 1)]));
   }
   return String(value);
 }
@@ -93,9 +75,7 @@ function labelOf(obj: Record<string, unknown>): string | undefined {
  * What a successful creation made, from its response: a top-level `id`, or
  * the `id` of the first object in it — `{ run: { id, name } }`.
  */
-export function createdTarget(
-  body: Record<string, unknown>,
-): { target?: string; targetLabel?: string } {
+export function createdTarget(body: Record<string, unknown>): { target?: string; targetLabel?: string } {
   if (typeof body.id === "string" || typeof body.id === "number") {
     return { target: String(body.id), targetLabel: labelOf(body) };
   }

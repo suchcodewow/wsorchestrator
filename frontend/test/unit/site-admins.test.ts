@@ -30,12 +30,7 @@ describe("bootstrapAdminEmails", () => {
 
   test("splits on commas, spaces and newlines, and lowercases", () => {
     process.env.SITE_ADMIN_EMAILS = "A@Example.com, b@example.com\nc@example.com  d@example.com";
-    assert.deepEqual(bootstrapAdminEmails(), [
-      "a@example.com",
-      "b@example.com",
-      "c@example.com",
-      "d@example.com",
-    ]);
+    assert.deepEqual(bootstrapAdminEmails(), ["a@example.com", "b@example.com", "c@example.com", "d@example.com"]);
   });
 
   test("is read on every call, not once at import", () => {

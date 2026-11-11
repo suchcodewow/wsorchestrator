@@ -21,13 +21,7 @@ import { canaryWirePulls, users, type CanaryWirePullStatus, type CanaryWirePullT
 import { EDITIONS, EXCLUDE_MODULES, INCLUDE_USER_STATES } from "@/lib/canary-wire/config";
 import { Mindtickle, MindtickleAuthError, MindtickleError, mindtickleConfig } from "@/lib/canary-wire/mindtickle";
 import { bestProgress, learnerFrom, matchesAll, matchesAny, splitMonth, type MtRecord } from "@/lib/canary-wire/records";
-import {
-  canaryWireSnapshotSchema,
-  norm,
-  type ProgressEntry,
-  type SnapshotLearner,
-  type SnapshotModule,
-} from "@/lib/canary-wire/snapshot";
+import { canaryWireSnapshotSchema, norm, type ProgressEntry, type SnapshotLearner, type SnapshotModule } from "@/lib/canary-wire/snapshot";
 import { saveSnapshot } from "@/lib/canary-wire/store";
 
 /** How long one step works before saving and letting go; routes allow 300 s. */
@@ -157,12 +151,7 @@ async function claim(): Promise<{ id: string; state: PullState | null; startedBy
     // Outlasts a step (STEP_MS) but not its route (300 s), so a step that
     // died is free to take up again soon after.
     .set({ leasedUntil: sql`now() + interval '290 seconds'` })
-    .where(
-      and(
-        eq(canaryWirePulls.status, "running"),
-        or(isNull(canaryWirePulls.leasedUntil), lt(canaryWirePulls.leasedUntil, sql`now()`)),
-      ),
-    )
+    .where(and(eq(canaryWirePulls.status, "running"), or(isNull(canaryWirePulls.leasedUntil), lt(canaryWirePulls.leasedUntil, sql`now()`))))
     .returning({ id: canaryWirePulls.id, state: canaryWirePulls.state, startedBy: canaryWirePulls.startedBy });
   return row ? { id: row.id, state: row.state as PullState | null, startedBy: row.startedBy } : null;
 }
@@ -199,7 +188,10 @@ async function setup(mt: Mindtickle, say: (message: string) => Promise<void>): P
   const series = EDITIONS.map((e) => {
     const matched = hits.filter((h) => matchesAll(name(h), e.match));
     if (matched.length !== 1) {
-      const canary = hits.map(name).filter((n) => norm(n).includes("canary")).sort();
+      const canary = hits
+        .map(name)
+        .filter((n) => norm(n).includes("canary"))
+        .sort();
       throw new MindtickleError(
         matched.length
           ? `${matched.length} series match the ${e.edition} edition: ${matched.map(name).join(", ")}.`
@@ -214,7 +206,9 @@ async function setup(mt: Mindtickle, say: (message: string) => Promise<void>): P
   const byName = new Map([...groups].map(([id, n]) => [norm(n), id]));
   const found = series.filter((s) => {
     if (byName.has(norm(s.group))) return true;
-    state.notes.push(`${s.edition}: the group "${s.group}" isn't on Mindtickle, so this edition is missing entirely. Group names must match exactly.`);
+    state.notes.push(
+      `${s.edition}: the group "${s.group}" isn't on Mindtickle, so this edition is missing entirely. Group names must match exactly.`,
+    );
     return false;
   });
   if (!found.length) throw new MindtickleError(`None of the role groups exist on Mindtickle: ${series.map((s) => s.group).join(", ")}.`);
@@ -227,7 +221,15 @@ async function setup(mt: Mindtickle, say: (message: string) => Promise<void>): P
       const [month, label] = splitMonth(full);
       // The series is kept so a square links where this rep is enrolled: the
       // same module id sits under several series.
-      state.modules.push({ module_id: String(m.id), name: full, label, month, edition: s.edition, series_id: s.seriesId, type: String(m.moduleType ?? "") });
+      state.modules.push({
+        module_id: String(m.id),
+        name: full,
+        label,
+        month,
+        edition: s.edition,
+        series_id: s.seriesId,
+        type: String(m.moduleType ?? ""),
+      });
     }
     if (!state.modules.some((m) => m.edition === s.edition && m.month)) {
       state.notes.push(`${s.edition}: no module name carries a "Month YYYY -" prefix, so its content can't be filed under a month.`);
@@ -318,7 +320,10 @@ export async function advancePull(budgetMs = STEP_MS): Promise<PullSummary | nul
     await finish(id, { status: "succeeded", message: `Pulled ${state.learners.length} learners` });
   } catch (err) {
     console.error("canary-wire: pull failed", err);
-    await finish(id, { status: "failed", error: err instanceof MindtickleError ? err.message : "Something went wrong talking to Mindtickle." });
+    await finish(id, {
+      status: "failed",
+      error: err instanceof MindtickleError ? err.message : "Something went wrong talking to Mindtickle.",
+    });
   }
   return latestPull();
 }

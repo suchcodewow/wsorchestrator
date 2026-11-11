@@ -13,10 +13,7 @@ const STATUS_FOR: Record<ResetTestAccountError, number> = {
   owns_events: 409,
 };
 
-export const POST = audited(async function POST(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const POST = audited(async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!canImpersonate(session.user.access)) return NextResponse.json({ error: "forbidden" }, { status: 403 });

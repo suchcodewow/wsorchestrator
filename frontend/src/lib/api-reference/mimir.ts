@@ -1,10 +1,6 @@
 /** Coach Canary: the coach's profile, the hands-on experiences, the coaching settings, the studio and the map. */
 
-import {
-  MIMIR_MESSAGE_MAX,
-  MIMIR_SETTING_MAX,
-  VIDEO_FEEDBACK_LIMITS,
-} from "@/db/schema";
+import { MIMIR_MESSAGE_MAX, MIMIR_SETTING_MAX, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { EXPERIENCE_REPORT_LIST, SLIDE_FEEDBACK_LIST, MAP_VERSION_LIST, MIMIR_STUDIO_JOB_LIST } from "@/lib/list-specs";
 import { EXPERIENCE_IDS, RECENT_SLIDES, WRONG_CLICKS_MAX } from "@/lib/mimir/experiences";
 import { SEED_MAX } from "@/lib/mimir/slide-review/generate";
@@ -21,7 +17,8 @@ const SLIDE_FEEDBACK_SHAPE = `{ id, seed: number, theme, rating: "up" | "down", 
 const MESSAGE_SHAPE = `{ seq, role: "user" | "assistant", text, html: string | null, at }`;
 const JOB_ID: Field = { name: "id", type: "string", required: true, note: "the job's id" };
 const JOB_SHAPE = `{ id, kind: "deck" | "video", status: "uploading" | "queued" | "running" | "ready" | "succeeded" | "failed" | "published" | "discarded", conceptId: string | null, label, input, result: object | null, progress: string | null, error: string | null, requestedBy: string | null, createdAt, startedAt: string | null, finishedAt: string | null, updatedAt }`;
-const DIFF_SHAPE = "{ added: { id, name, level }[], removed: { id, name, hadVideo }[], changed: { id, name, was: string | null, what: string[] }[], unchanged: number, slides: { was, now } }";
+const DIFF_SHAPE =
+  "{ added: { id, name, level }[], removed: { id, name, hadVideo }[], changed: { id, name, was: string | null, what: string[] }[], unchanged: number, slides: { was, now } }";
 
 export const MIMIR_GROUPS: EndpointGroup[] = [
   {
@@ -60,10 +57,12 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/mimir/experiences",
-        summary: "Returns your finished runs of the hands-on experiences: the Developer and Enterprise Security Team experiences, and your latest slides of the slide review.",
+        summary:
+          "Returns your finished runs of the hands-on experiences: the Developer and Enterprise Security Team experiences, and your latest slides of the slide review.",
         access: "signedIn",
         token: true,
-        notes: "An experience you have never finished has no row in progress. bestScore is null for the Developer experience, which keeps only that it was finished. slides is your latest 100 slides of the slide review, newest first; a slide's seed rebuilds it exactly.",
+        notes:
+          "An experience you have never finished has no row in progress. bestScore is null for the Developer experience, which keeps only that it was finished. slides is your latest 100 slides of the slide review, newest first; a slide's seed rebuilds it exactly.",
         returns: `{ progress: ${EXPERIENCE_PROGRESS_SHAPE}[], slides: ${SLIDE_RUN_SHAPE}[] }`,
       },
       {
@@ -89,7 +88,8 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/mimir/experiences/report",
-        summary: "Lists everyone with an account, with their concept videos watched to the end, the concepts the coach has marked them as knowing, and their hands-on experiences, a page at a time.",
+        summary:
+          "Lists everyone with an account, with their concept videos watched to the end, the concepts the coach has marked them as knowing, and their hands-on experiences, a page at a time.",
         access: "assessmentsAdmin",
         token: true,
         notes: `videos counts concept videos watched to the end, and mastered the concepts the coach in Chat has marked as known. developerCompletedAt is when they first finished the Developer experience, or null. securityAttempts and securityBest are their finished runs of the Enterprise Security Team and the best total of them. slidesDone is how many slides of the slide review they have finished, slidesScore their points on all of them, and slidesFound and slidesTotal the mistakes they found out of how many there were. recentSlides is their latest ${RECENT_SLIDES} slides, newest first, each with the seed that rebuilds it. Sorting by security sorts by securityBest, by developer by developerCompletedAt, and by slides by slidesDone.`,
@@ -99,10 +99,12 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/mimir/slide-feedback",
-        summary: "Lists the smiley and confused ratings given to slide review slides, with any comment, a page at a time, the newest first.",
+        summary:
+          "Lists the smiley and confused ratings given to slide review slides, with any comment, a page at a time, the newest first.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "seed rebuilds the slide the rating was about, exactly as it was dealt; theme is the theme that seed makes. user is null once the account that gave it is deleted.",
+        notes:
+          "seed rebuilds the slide the rating was about, exactly as it was dealt; theme is the theme that seed makes. user is null once the account that gave it is deleted.",
         query: listQuery(SLIDE_FEEDBACK_LIST.sorts, "the comment, or the name or email of who gave it", "desc"),
         returns: `{ feedback: ${SLIDE_FEEDBACK_SHAPE}[], ${PAGE_FIELDS} }`,
       },
@@ -143,8 +145,18 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         body: {
           kind: "json",
           fields: [
-            { name: "platformContext", type: "string", required: true, note: `up to ${MIMIR_SETTING_MAX} characters; in the agent, capability, competitive and use-case prompts` },
-            { name: "namingGuard", type: "string", required: true, note: `up to ${MIMIR_SETTING_MAX} characters; at the end of every prompt` },
+            {
+              name: "platformContext",
+              type: "string",
+              required: true,
+              note: `up to ${MIMIR_SETTING_MAX} characters; in the agent, capability, competitive and use-case prompts`,
+            },
+            {
+              name: "namingGuard",
+              type: "string",
+              required: true,
+              note: `up to ${MIMIR_SETTING_MAX} characters; at the end of every prompt`,
+            },
           ],
         },
         returns: "{ ok: true }",
@@ -204,7 +216,8 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         summary: "Redirects to one slide's picture in a deck's draft.",
         access: "mimirStudio",
         token: true,
-        notes: "The redirect goes to a signed Cloud Storage link, good for an hour. The pictures go once the draft is published or thrown away.",
+        notes:
+          "The redirect goes to a signed Cloud Storage link, good for an hour. The pictures go once the draft is published or thrown away.",
         params: [JOB_ID, { name: "n", type: "number", required: true, note: "the slide's number, 1 to 200" }],
         returns: "a 302 to the JPEG",
         errors: [
@@ -282,7 +295,8 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         summary: "Returns one Coach Canary Studio job and, for a deck ready to publish, what publishing it would change.",
         access: "mimirStudio",
         token: true,
-        notes: "diff is null unless the job is a deck that is ready. A ready deck's result holds the draft map, its slide count and Claude's summary of what changed; a finished video's, its object, length in seconds and Claude's report.",
+        notes:
+          "diff is null unless the job is a deck that is ready. A ready deck's result holds the draft map, its slide count and Claude's summary of what changed; a finished video's, its object, length in seconds and Claude's report.",
         params: [JOB_ID],
         returns: `{ job: ${JOB_SHAPE}, diff: ${DIFF_SHAPE} | null }`,
         errors: [{ status: 404, error: "not_found", when: "no job has that id" }],
@@ -340,7 +354,8 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         summary: "Returns one version of the concept map's structure.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "The structure only: sections, slides, levels, groups and concepts, without videos, which are kept apart and belong to each concept whichever version is live. Send it back, changed, as the content of a new version.",
+        notes:
+          "The structure only: sections, slides, levels, groups and concepts, without videos, which are kept apart and belong to each concept whichever version is live. Send it back, changed, as the content of a new version.",
         params: [{ name: "version", type: "number", required: true, note: "the version's number" }],
         returns: "{ version, source, createdAt, content: { version, title, sections, slides, levels, buckets, concepts } }",
         errors: [{ status: 404, error: "not_found", when: "there is no such version, or it no longer fits the map's shape" }],
@@ -396,7 +411,8 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         summary: "Redirects to a slide's picture, which the map shows when you point at the slide.",
         access: "signedIn",
         token: true,
-        notes: "The redirect goes to a signed Cloud Storage link, good for an hour, and may be cached for most of that. The pictures are uploaded per environment, so a slide can have none.",
+        notes:
+          "The redirect goes to a signed Cloud Storage link, good for an hour, and may be cached for most of that. The pictures are uploaded per environment, so a slide can have none.",
         params: [{ name: "n", type: "number", required: true, note: "the slide's number, 1 to 200" }],
         returns: "a 302 to the JPEG",
         errors: [
@@ -451,7 +467,11 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
           kind: "json",
           fields: [
             { name: "message", type: "string", note: `up to ${MIMIR_MESSAGE_MAX} characters; give this, open or introduce` },
-            { name: "focus", type: "string", note: "optional, with message: a concept id; the coach turns to that concept now, ahead of the course order, as the map's chat button asks it to. An id not in the course is ignored" },
+            {
+              name: "focus",
+              type: "string",
+              note: "optional, with message: a concept id; the coach turns to that concept now, ahead of the course order, as the map's chat button asks it to. An id not in the course is ignored",
+            },
             { name: "open", type: "true", note: "ask the coach to greet you instead of saying something" },
             { name: "introduce", type: "true", note: "ask the coach to introduce itself in your coach style instead of saying something" },
           ],

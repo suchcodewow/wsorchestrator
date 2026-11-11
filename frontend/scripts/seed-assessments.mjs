@@ -43,7 +43,13 @@ const CONSTRUCTIVE = [
   "Practice the close; ask for the next step directly.",
   "Leaned on slides; try leading with the customer's problem.",
 ];
-const NOTES = ["", "", "Attended every session.", "Asked to be paired with a mentor.", "Missed the first morning; caught up on the recording."];
+const NOTES = [
+  "",
+  "",
+  "Attended every session.",
+  "Asked to be paired with a mentor.",
+  "Missed the first morning; caught up on the recording.",
+];
 
 function databaseUrl() {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
@@ -120,7 +126,16 @@ try {
           `insert into evals_submissions (bootcamp_id, assessment_id, attendee_email, assessment_name, average_score, positive_feedback, constructive_feedback, submitted_at, updated_at)
            values ($1, $2, $3, $4, $5, $6, $7, now(), $8)
            on conflict do nothing returning id`,
-          [bootcamp.id, a.id, person.email, a.name, average, chance(0.7) ? pick(POSITIVE) : "", chance(0.7) ? pick(CONSTRUCTIVE) : "", SEED_STAMP],
+          [
+            bootcamp.id,
+            a.id,
+            person.email,
+            a.name,
+            average,
+            chance(0.7) ? pick(POSITIVE) : "",
+            chance(0.7) ? pick(CONSTRUCTIVE) : "",
+            SEED_STAMP,
+          ],
         );
         if (!made) continue;
         submissions++;
@@ -142,7 +157,9 @@ try {
     }
   }
   await client.query("commit");
-  console.log(`${db[0].name}: ${summary.join(", ")} at the ${bootcamp.start_date.toISOString().slice(0, 10)} bootcamp; added ${submissions} submissions and ${reviews} reviews.`);
+  console.log(
+    `${db[0].name}: ${summary.join(", ")} at the ${bootcamp.start_date.toISOString().slice(0, 10)} bootcamp; added ${submissions} submissions and ${reviews} reviews.`,
+  );
 } catch (err) {
   await client.query("rollback").catch(() => undefined);
   throw err;

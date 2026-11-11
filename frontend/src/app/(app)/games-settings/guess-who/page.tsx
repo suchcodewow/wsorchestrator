@@ -6,10 +6,6 @@ import { GuessWhoSettingsForm } from "./guess-who-settings";
 export default async function GuessWhoSettingsPage() {
   const settings = await getGuessWho();
   return (
-    <GuessWhoSettingsForm
-      config={settings.config}
-      updatedAt={settings.updatedAt?.toISOString() ?? null}
-      updatedBy={settings.updatedBy}
-    />
+    <GuessWhoSettingsForm config={settings.config} updatedAt={settings.updatedAt?.toISOString() ?? null} updatedBy={settings.updatedBy} />
   );
 }

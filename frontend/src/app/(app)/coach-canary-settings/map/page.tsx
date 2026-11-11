@@ -15,7 +15,9 @@ import { MapSettingsView } from "./map-settings-view";
 
 export default async function MapSettingsPage() {
   const [map, session] = await Promise.all([getMap(), auth()]);
-  const videos = map?.content.concepts.flatMap((c) => (c.video ? [{ id: c.id, name: c.name, object: c.video.object, seconds: c.video.seconds }] : [])) ?? [];
+  const videos =
+    map?.content.concepts.flatMap((c) => (c.video ? [{ id: c.id, name: c.name, object: c.video.object, seconds: c.video.seconds }] : [])) ??
+    [];
   const access = session?.user?.access;
   const canStudio = Boolean(access && canRunMimirStudio(access));
   const [present, job] = await Promise.all([videosPresent(videos.map((v) => v.object)), canStudio ? latestDeckJob() : null]);
@@ -30,7 +32,9 @@ export default async function MapSettingsPage() {
 
   return (
     <MapSettingsView
-      summary={map && { importedAt: map.importedAt.toISOString(), concepts: map.content.concepts.length, slides: map.content.slides.length }}
+      summary={
+        map && { importedAt: map.importedAt.toISOString(), concepts: map.content.concepts.length, slides: map.content.slides.length }
+      }
       videos={videos.map((v) => ({ ...v, present: present ? present[v.object]! : null }))}
       studio={
         canStudio

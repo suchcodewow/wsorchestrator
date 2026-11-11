@@ -184,9 +184,7 @@ describe("building a target from a pick", () => {
 
   test("the structural path starts at the nearest anchored ancestor, numbering only repeated tags", () => {
     const pick = node("span", {}, "Third");
-    node("body", {}, "", [
-      node("section", { id: "runs" }, "", [node("div"), node("div", {}, "", [node("p"), node("span"), pick])]),
-    ]);
+    node("body", {}, "", [node("section", { id: "runs" }, "", [node("div"), node("div", {}, "", [node("p"), node("span"), pick])])]);
     assert.equal(structuralPath(pick), '[id="runs"] > div:nth-of-type(2) > span:nth-of-type(2)');
 
     const loose = node("em");

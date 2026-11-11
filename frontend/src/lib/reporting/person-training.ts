@@ -78,6 +78,10 @@ export async function getPersonCoachCanary(userId: string): Promise<PersonCoachC
 
 /** The account behind an email, which the Diagnostic and Coach Canary key their records by; null before they sign in. */
 export async function userIdOf(email: string): Promise<string | null> {
-  const [row] = await db.select({ id: users.id }).from(users).where(eq(sql`lower(${users.email})`, email.toLowerCase())).limit(1);
+  const [row] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(sql`lower(${users.email})`, email.toLowerCase()))
+    .limit(1);
   return row?.id ?? null;
 }

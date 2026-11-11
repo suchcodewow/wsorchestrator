@@ -70,9 +70,7 @@ export function ScenarioPicker({
               transition={SPRING_SNAPPY}
               className={cn(
                 "flex items-start gap-3 rounded-lg border p-3 text-left text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                inert
-                  ? "cursor-not-allowed"
-                  : "cursor-pointer hover:border-brand-border/60 hover:bg-accent/40",
+                inert ? "cursor-not-allowed" : "cursor-pointer hover:border-brand-border/60 hover:bg-accent/40",
                 disabled && "opacity-60",
                 on && "border-brand-border bg-brand/8",
               )}
@@ -80,17 +78,11 @@ export function ScenarioPicker({
               <span
                 className={cn(
                   "mt-0.5 flex size-4.5 shrink-0 items-center justify-center rounded-[5px] border transition-colors",
-                  on
-                    ? "border-brand bg-brand text-brand-foreground"
-                    : "border-input",
+                  on ? "border-brand bg-brand text-brand-foreground" : "border-input",
                 )}
               >
                 {on && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={SPRING_SNAPPY}
-                  >
+                  <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING_SNAPPY}>
                     <Check className="size-3" strokeWidth={3} />
                   </motion.span>
                 )}
@@ -105,18 +97,14 @@ export function ScenarioPicker({
                   )}
                 </span>
                 <span className="text-xs leading-relaxed text-muted-foreground">
-                  {locked
-                    ? "Turn off every scenario that needs a cluster to remove this."
-                    : scenario.description}
+                  {locked ? "Turn off every scenario that needs a cluster to remove this." : scenario.description}
                 </span>
               </span>
             </motion.button>
           );
         })}
       </div>
-      {hint && (
-        <p className="text-xs leading-relaxed text-muted-foreground">{hint}</p>
-      )}
+      {hint && <p className="text-xs leading-relaxed text-muted-foreground">{hint}</p>}
     </fieldset>
   );
 }

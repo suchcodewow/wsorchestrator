@@ -13,11 +13,7 @@
 import { NextResponse } from "next/server";
 import { OAuth2Client } from "google-auth-library";
 import { auditBackupAction } from "@/lib/backups";
-import {
-  finishProductionImport,
-  finishSchema,
-  productionImportAvailable,
-} from "@/lib/production-import";
+import { finishProductionImport, finishSchema, productionImportAvailable } from "@/lib/production-import";
 import { audited } from "@/lib/audit";
 
 // Every migration, then the clean-up. The job waits up to this long.
@@ -63,9 +59,7 @@ export const POST = audited(async function POST(req: Request) {
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(
-      JSON.stringify({ severity: "ERROR", component: "production-import", message }),
-    );
+    console.error(JSON.stringify({ severity: "ERROR", component: "production-import", message }));
     return NextResponse.json({ error: "finish_failed", detail: message }, { status: 500 });
   }
 });

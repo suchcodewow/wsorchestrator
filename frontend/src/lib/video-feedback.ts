@@ -216,9 +216,7 @@ const SUMMARY_SORT_COLUMNS = {
 };
 
 /** Every concept on the Mimir map, and any other with feedback, a page at a time, with its counts; searched by the concept's name. */
-export async function listVideoFeedbackSummary(
-  query: ListQuery<VideoFeedbackSummarySort>,
-): Promise<Page<VideoFeedbackSummaryRow>> {
+export async function listVideoFeedbackSummary(query: ListQuery<VideoFeedbackSummarySort>): Promise<Page<VideoFeedbackSummaryRow>> {
   const { limit, offset } = pageWindow(query.page);
   const where = and(sql`true`, searchAny(query.q, [sql`r.label`]));
   const order = orderFor(SUMMARY_SORT_COLUMNS[query.sort], query.dir, sql`r."conceptId"`);

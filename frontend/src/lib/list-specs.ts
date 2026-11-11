@@ -224,7 +224,7 @@ export type AssessmentSort = (typeof ASSESSMENT_LIST.sorts)[number];
 export const ASSESSMENT_ATTENDEE_LIST = spec(["fullName", "email", "title", "track", "averageScore"]);
 export type AssessmentAttendeeSort = (typeof ASSESSMENT_ATTENDEE_LIST.sorts)[number];
 
-export const HIBOB_SYNC_LIST =spec(["startedAt", "triggeredBy", "status"], "desc");
+export const HIBOB_SYNC_LIST = spec(["startedAt", "triggeredBy", "status"], "desc");
 export type HibobSyncSort = (typeof HIBOB_SYNC_LIST.sorts)[number];
 
 export const DOMAIN_LIST = spec(["domain", "note", "addedBy"]);

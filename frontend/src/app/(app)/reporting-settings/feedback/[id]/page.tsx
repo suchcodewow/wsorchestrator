@@ -19,17 +19,17 @@ export default async function ReleaseNoticePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const id = z.string().uuid().safeParse((await params).id);
+  const id = z
+    .string()
+    .uuid()
+    .safeParse((await params).id);
   const run = id.success ? await getReleaseNotice(id.data) : null;
   if (!run) notFound();
 
   const asked = await searchParams;
   const query = parseListQuery(asked, RELEASE_NOTICE_MESSAGE_LIST);
   const kind = isReleaseNoticeKind(asked.kind) ? asked.kind : null;
-  const [page, counts] = await Promise.all([
-    listReleaseNoticeMessages(run.id, query, kind),
-    countReleaseNoticeMessages(run.id),
-  ]);
+  const [page, counts] = await Promise.all([listReleaseNoticeMessages(run.id, query, kind), countReleaseNoticeMessages(run.id)]);
   return (
     <NoticeRunView
       run={{ ...run, startedAt: run.startedAt.toISOString(), finishedAt: run.finishedAt?.toISOString() ?? null }}

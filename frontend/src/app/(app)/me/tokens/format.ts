@@ -30,8 +30,7 @@ export function until(iso: string): string {
 
 export const plural = (n: number, many = "s", one = "") => (n === 1 ? one : many);
 
-export const countOf = (n: number, one: string, many = `${one}s`) =>
-  `${n} ${n === 1 ? one : many}`;
+export const countOf = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 export const tokenName = (t: HarnessTokenSummary) => t.accountName ?? t.accountId;
 

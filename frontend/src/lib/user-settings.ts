@@ -29,16 +29,12 @@ async function recordPreference(
   });
 }
 
-export async function setThemePreference(
-  preference: ThemePreference,
-): Promise<void> {
+export async function setThemePreference(preference: ThemePreference): Promise<void> {
   const session = await auth();
   if (!session?.user?.id) return;
 
   // The theme is whoever is at the screen's, even while viewing as someone else.
-  const user = session.impersonator
-    ? { ...session.impersonator, access: session.user.access }
-    : session.user;
+  const user = session.impersonator ? { ...session.impersonator, access: session.user.access } : session.user;
   const result = await savePreferences(user, { themePreference: preference });
   await recordPreference(user, "Set their theme.", { themePreference: preference }, result);
 }
@@ -58,9 +54,7 @@ export async function setFavoriteTabs(tabs: FavoriteTab[]): Promise<void> {
   const session = await auth();
   if (!session?.user?.id) return;
 
-  const user = session.impersonator
-    ? { ...session.impersonator, access: session.user.access }
-    : session.user;
+  const user = session.impersonator ? { ...session.impersonator, access: session.user.access } : session.user;
   const result = await savePreferences(user, { favoriteTabs: tabs });
   await recordPreference(user, "Changed their favorite tabs.", { favoriteTabs: tabs }, result);
 }

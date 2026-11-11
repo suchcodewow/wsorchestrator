@@ -144,7 +144,8 @@ export function DiagnosticSlackView({
       next &&
       !(await confirmDialog({
         title: "Put reminders live?",
-        description: "From the next run, the daily schedule's and Remind Now's, every Participant with tests left gets a Slack message. Until then each run only logs what it would send.",
+        description:
+          "From the next run, the daily schedule's and Remind Now's, every Participant with tests left gets a Slack message. Until then each run only logs what it would send.",
         confirmLabel: "Go live",
       }))
     ) {

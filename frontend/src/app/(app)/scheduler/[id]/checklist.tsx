@@ -333,12 +333,7 @@ function HalfButton({
     >
       <Icon className="size-3.5" />
       {count.total > 0 && (
-        <span
-          className={cn(
-            "rounded-full px-1 py-px text-[11px] font-medium tabular-nums",
-            allDone ? "bg-emerald-500/15" : look.badge,
-          )}
-        >
+        <span className={cn("rounded-full px-1 py-px text-[11px] font-medium tabular-nums", allDone ? "bg-emerald-500/15" : look.badge)}>
           {count.done}/{count.total}
         </span>
       )}
@@ -355,7 +350,6 @@ function boardDays(track: ChecklistTrack, bootcamp: Omit<BootcampDays, "startDat
 }
 
 const sectionKey = (day: number, period: ChecklistPeriod) => `${day}:${period}`;
-
 
 /** One track's items, loaded together so they never belong to another. */
 type Loaded = { track: ChecklistTrack; items: Item[] };
@@ -564,7 +558,12 @@ function ChecklistBoard({
   }
 
   async function copy(item: Item, day: number, period: ChecklistPeriod) {
-    await add(day, period, { name: item.name, alarm: item.alarm, ownerEmail: item.ownerEmail, mentions: item.mentions.map((m) => m.email) });
+    await add(day, period, {
+      name: item.name,
+      alarm: item.alarm,
+      ownerEmail: item.ownerEmail,
+      mentions: item.mentions.map((m) => m.email),
+    });
   }
 
   // ── Dragging ──────────────────────────────────────────────────────────────
@@ -608,9 +607,7 @@ function ChecklistBoard({
 
   const onDragMove = (event: DragMoveEvent) => {
     const next = landingFor(event);
-    setLanding((prev) =>
-      prev?.day === next?.day && prev?.period === next?.period && prev?.index === next?.index ? prev : next,
-    );
+    setLanding((prev) => (prev?.day === next?.day && prev?.period === next?.period && prev?.index === next?.index ? prev : next));
   };
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -624,9 +621,7 @@ function ChecklistBoard({
     // Let go outside every half: it stays where it was.
     const at = landingFor(event);
     if (!at || !items) return;
-    const wasAt = items
-      .filter((i) => i.day === what.item.day && i.period === what.item.period)
-      .findIndex((i) => i.id === what.item.id);
+    const wasAt = items.filter((i) => i.day === what.item.day && i.period === what.item.period).findIndex((i) => i.id === what.item.id);
     const sameHalf = what.item.day === at.day && what.item.period === at.period;
     if (!sameHalf || wasAt !== at.index) void move(what.item, at.day, at.period, at.index);
   };
@@ -796,7 +791,10 @@ function DayProgress({ items }: { items: Item[] }) {
   if (items.length === 0) return null;
   const done = items.filter((i) => i.done).length;
   return (
-    <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums" title={`${done} of ${items.length} done`}>
+    <div
+      className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums"
+      title={`${done} of ${items.length} done`}
+    >
       <div className="h-1.5 w-12 overflow-hidden rounded-full bg-foreground/10">
         <motion.div
           className={cn("h-full rounded-full", done === items.length ? "bg-emerald-500" : "bg-brand")}
@@ -875,11 +873,7 @@ function HalfSection({
         setNodeRef(el);
         register(el);
       }}
-      animate={
-        lit
-          ? { boxShadow: [shine(0, 0, 0), shine(4, 28, 1), shine(0, 0, 0)], scale: [1, 1.025, 1] }
-          : undefined
-      }
+      animate={lit ? { boxShadow: [shine(0, 0, 0), shine(4, 28, 1), shine(0, 0, 0)], scale: [1, 1.025, 1] } : undefined}
       transition={{ duration: 0.9, ease: "easeInOut" }}
       className={cn(
         "relative flex min-h-0 flex-1 basis-0 flex-col overflow-hidden rounded-xl border",
@@ -1111,7 +1105,10 @@ function ChecklistCard({
           <>
             <GlowTrace duration={CARD_TRACE_MS} blur={4} />
             {/* The trace draws nothing for someone who asks for less motion; they get a still ring instead. */}
-            <span aria-hidden className="pointer-events-none absolute inset-0 hidden rounded-lg ring-2 ring-emerald-500 motion-reduce:block" />
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 hidden rounded-lg ring-2 ring-emerald-500 motion-reduce:block"
+            />
           </>
         )}
         {canManage && (
@@ -1225,7 +1222,10 @@ function AlarmTime({ alarm, applies }: { alarm: number; applies: boolean }) {
 
 /** "AR" for Ana Ruiz, "A" for ana@example.com. */
 function initials(name: string): string {
-  const words = name.split("@")[0]!.split(/[\s._-]+/).filter(Boolean);
+  const words = name
+    .split("@")[0]!
+    .split(/[\s._-]+/)
+    .filter(Boolean);
   return ((words[0]?.[0] ?? "") + (words.length > 1 ? (words.at(-1)?.[0] ?? "") : "")).toUpperCase() || "?";
 }
 
@@ -1397,7 +1397,8 @@ function AlarmPicker({
   const pm = h24 >= 12;
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
   const set = (hour12: number, min: number, afternoon: boolean) => onChange(((hour12 % 12) + (afternoon ? 12 : 0)) * 60 + min);
-  const picker = "h-8 cursor-pointer appearance-none rounded-md border border-input bg-background px-2 text-sm tabular-nums shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed dark:bg-input/30";
+  const picker =
+    "h-8 cursor-pointer appearance-none rounded-md border border-input bg-background px-2 text-sm tabular-nums shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed dark:bg-input/30";
   return (
     <div className={cn("flex items-center gap-1.5", disabled && "opacity-50")} title={disabled ? ALARM_UNUSED : undefined}>
       <label

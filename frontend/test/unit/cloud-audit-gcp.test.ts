@@ -11,20 +11,10 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  auditGcp,
-  billingAccountId,
-  infraProjectIds,
-  isUnmanagedProject,
-} from "@/lib/cloud-audit/gcp";
+import { auditGcp, billingAccountId, infraProjectIds, isUnmanagedProject } from "@/lib/cloud-audit/gcp";
 import { ownerMaps, withCleanEnv } from "../support/cloud-audit";
 
-withCleanEnv([
-  "GCP_BILLING_ACCOUNT_ID",
-  "GCP_ADMIN_PROJECT_ID",
-  "GCP_SANDBOX_PROJECT_ID",
-  "GCP_INFRA_PROJECT_IDS",
-]);
+withCleanEnv(["GCP_BILLING_ACCOUNT_ID", "GCP_ADMIN_PROJECT_ID", "GCP_SANDBOX_PROJECT_ID", "GCP_INFRA_PROJECT_IDS"]);
 
 describe("infraProjectIds", () => {
   test("is empty when nothing is configured", () => {
@@ -35,10 +25,7 @@ describe("infraProjectIds", () => {
     process.env.GCP_ADMIN_PROJECT_ID = "admin-project";
     process.env.GCP_SANDBOX_PROJECT_ID = "sbx-admin-project";
     process.env.GCP_INFRA_PROJECT_IDS = " other-admin , sbx-other-admin,,admin-project ";
-    assert.deepEqual(
-      [...infraProjectIds()].sort(),
-      ["admin-project", "other-admin", "sbx-admin-project", "sbx-other-admin"],
-    );
+    assert.deepEqual([...infraProjectIds()].sort(), ["admin-project", "other-admin", "sbx-admin-project", "sbx-other-admin"]);
   });
 });
 

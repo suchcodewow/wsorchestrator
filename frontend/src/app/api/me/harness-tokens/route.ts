@@ -39,10 +39,7 @@ export const POST = audited(async function POST(req: Request) {
   const result = await saveHarnessToken(caller.id, body.token);
 
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, detail: result.detail },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error, detail: result.detail }, { status: STATUS_FOR[result.error] });
   }
 
   return NextResponse.json({ token: result.token }, { status: 201 });

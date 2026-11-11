@@ -49,10 +49,9 @@ export const PUT = audited(async function PUT(req: Request, { params }: Params) 
 
   const result = await saveSubmission(user.id, id.data, employee.data, parsed.data);
   if (!result.ok) {
-    return NextResponse.json(
-      result.email ? { error: result.error, email: result.email } : { error: result.error },
-      { status: SUBMISSION_STATUS_FOR[result.error] },
-    );
+    return NextResponse.json(result.email ? { error: result.error, email: result.email } : { error: result.error }, {
+      status: SUBMISSION_STATUS_FOR[result.error],
+    });
   }
   const { submission } = result;
   noteAudit({

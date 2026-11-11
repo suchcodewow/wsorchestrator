@@ -63,9 +63,7 @@ export function SurveyFiller({ survey }: { survey: MySurvey }) {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessions: Object.fromEntries(
-            survey.sessions.map((s) => [s.id, { rating: ratings[s.id], feedback: feedback[s.id] ?? "" }]),
-          ),
+          sessions: Object.fromEntries(survey.sessions.map((s) => [s.id, { rating: ratings[s.id], feedback: feedback[s.id] ?? "" }])),
           dayRating: ratings[DAY],
           dayChange: feedback[DAY] ?? "",
         }),
@@ -97,14 +95,7 @@ export function SurveyFiller({ survey }: { survey: MySurvey }) {
   const write = (id: string) => (value: string) => setFeedback((f) => ({ ...f, [id]: value }));
 
   return (
-    <motion.form
-      variants={staggerParent(0.05)}
-      initial="hidden"
-      animate="show"
-      onSubmit={submit}
-      noValidate
-      className="space-y-6"
-    >
+    <motion.form variants={staggerParent(0.05)} initial="hidden" animate="show" onSubmit={submit} noValidate className="space-y-6">
       <motion.div variants={riseChild} className="space-y-2">
         <h1 className="text-3xl font-medium tracking-tight">Day {survey.day} Survey</h1>
         <p className="text-sm text-muted-foreground">
@@ -115,11 +106,7 @@ export function SurveyFiller({ survey }: { survey: MySurvey }) {
 
       <motion.div variants={staggerParent(0.04)} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
         {survey.sessions.map((s) => (
-          <motion.fieldset
-            key={s.id}
-            variants={riseChild}
-            className={cn("space-y-4 px-5 py-4", missing.has(s.id) && "bg-destructive/5")}
-          >
+          <motion.fieldset key={s.id} variants={riseChild} className={cn("space-y-4 px-5 py-4", missing.has(s.id) && "bg-destructive/5")}>
             <legend className="sr-only">{s.name}</legend>
             <div className="space-y-0.5">
               <p className="text-base font-medium">
@@ -138,10 +125,7 @@ export function SurveyFiller({ survey }: { survey: MySurvey }) {
             <Feedback question={SURVEY_QUESTIONS.sessionFeedback} value={feedback[s.id] ?? ""} onChange={write(s.id)} />
           </motion.fieldset>
         ))}
-        <motion.fieldset
-          variants={riseChild}
-          className={cn("space-y-4 px-5 py-4", missing.has(DAY) && "bg-destructive/5")}
-        >
+        <motion.fieldset variants={riseChild} className={cn("space-y-4 px-5 py-4", missing.has(DAY) && "bg-destructive/5")}>
           <legend className="sr-only">The day overall</legend>
           <p className="text-base font-medium">The day overall</p>
           <Rating

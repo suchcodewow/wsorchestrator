@@ -34,8 +34,13 @@ export function PillSwitch({
         )}
       >
         {label}
-        <span aria-hidden className={cn("flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors", on ? "bg-brand" : "bg-input")}>
-          <span className={cn("size-3 rounded-full bg-background shadow-xs transition-transform duration-200 ease-out", on && "translate-x-3")} />
+        <span
+          aria-hidden
+          className={cn("flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors", on ? "bg-brand" : "bg-input")}
+        >
+          <span
+            className={cn("size-3 rounded-full bg-background shadow-xs transition-transform duration-200 ease-out", on && "translate-x-3")}
+          />
         </span>
       </button>
     </div>

@@ -37,7 +37,9 @@ export function TourControls() {
                 onClick={page.play}
               >
                 <CircleHelp />
-                {page.beckon && <GlowTrace key={page.beckon} duration={page.beckon} blur={4} count={TRACE_COUNT} onDone={page.stopBeckoning} />}
+                {page.beckon && (
+                  <GlowTrace key={page.beckon} duration={page.beckon} blur={4} count={TRACE_COUNT} onDone={page.stopBeckoning} />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent>Show this page&apos;s tour</TooltipContent>
@@ -46,7 +48,15 @@ export function TourControls() {
         {page.canEdit && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-8" aria-label={editLabel} aria-pressed={page.editing} disabled={page.editing} onClick={page.edit}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                aria-label={editLabel}
+                aria-pressed={page.editing}
+                disabled={page.editing}
+                onClick={page.edit}
+              >
                 <Pencil />
               </Button>
             </TooltipTrigger>

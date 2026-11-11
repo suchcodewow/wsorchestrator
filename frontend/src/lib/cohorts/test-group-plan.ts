@@ -47,14 +47,11 @@ export function testGroupAsCohort(members: readonly TestGroupMember[]) {
 }
 
 /** Members lowercased, each email once, in the order given. */
-export function dedupeMembers(
-  members: readonly (Omit<TestGroupMember, "stage"> & { stage?: TestGroupStage })[],
-): TestGroupMember[] {
+export function dedupeMembers(members: readonly (Omit<TestGroupMember, "stage"> & { stage?: TestGroupStage })[]): TestGroupMember[] {
   const seen = new Map<string, TestGroupMember>();
   for (const m of members) {
     const email = m.email.trim().toLowerCase();
-    if (email && !seen.has(email))
-      seen.set(email, { email, fullName: m.fullName.trim(), stage: m.stage ?? "both" });
+    if (email && !seen.has(email)) seen.set(email, { email, fullName: m.fullName.trim(), stage: m.stage ?? "both" });
   }
   return [...seen.values()];
 }

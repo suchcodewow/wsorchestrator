@@ -28,13 +28,7 @@ import { db } from "@/db";
 import { irisAttempts, irisTakers, users } from "@/db/schema";
 import { setTrack, startSitting } from "@/lib/iris/attempts";
 import { impersonationTarget } from "@/lib/impersonation";
-import {
-  TEST_ACCOUNT_DOMAIN,
-  createTestAccount,
-  resetTestAccount,
-  searchTestAccounts,
-  suggestTestAccountName,
-} from "@/lib/test-accounts";
+import { TEST_ACCOUNT_DOMAIN, createTestAccount, resetTestAccount, searchTestAccounts, suggestTestAccountName } from "@/lib/test-accounts";
 import { CHARACTER_NAMES } from "@/lib/test-account-names";
 import { PERSONAS } from "../support/access";
 import { createRun, testScope, type TestUser } from "../support/seed";
@@ -185,7 +179,10 @@ describe("finding one to view as", () => {
     const real = await scope.createUser("findable", PERSONAS.nobody);
 
     const found = await searchTestAccounts("findable");
-    assert.deepEqual(found.map((a) => a.id), [account.id]);
+    assert.deepEqual(
+      found.map((a) => a.id),
+      [account.id],
+    );
 
     const target = await impersonationTarget(account.email.toUpperCase());
     assert.deepEqual([target?.id, target?.testAccount], [account.id, true]);
@@ -215,7 +212,10 @@ describe("suggestTestAccountName", () => {
     const taken = CHARACTER_NAMES.filter((n) => n !== free);
     for (const [i, name] of taken.entries()) {
       const user = await scope.createUser(`named${i}`, PERSONAS.nobody);
-      await db.update(users).set({ name: i === 0 ? name.toUpperCase() : name }).where(eq(users.id, user.id));
+      await db
+        .update(users)
+        .set({ name: i === 0 ? name.toUpperCase() : name })
+        .where(eq(users.id, user.id));
     }
     assert.equal(await suggestTestAccountName(), free);
     // Asked for another, with none left but the one shown, there is none.

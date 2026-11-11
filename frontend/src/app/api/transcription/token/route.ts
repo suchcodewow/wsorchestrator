@@ -12,10 +12,7 @@ export const POST = audited(async function POST(req: Request) {
   const got = await grantToken();
   if ("error" in got) {
     if (got.detail) noteAudit({ detail: { upstream: got.detail } });
-    return NextResponse.json(
-      { error: got.error },
-      { status: got.error === "unconfigured" ? 503 : 502 },
-    );
+    return NextResponse.json({ error: got.error }, { status: got.error === "unconfigured" ? 503 : 502 });
   }
   return NextResponse.json({ token: got.token, expiresIn: got.expiresIn });
 });

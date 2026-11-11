@@ -24,12 +24,7 @@ import { GoogleAuth } from "google-auth-library";
 import pg from "pg";
 import { z } from "zod";
 import { db } from "@/db";
-import {
-  backupTarget,
-  listBackups,
-  type BackupRun,
-  type BackupsUnavailable,
-} from "@/lib/backups";
+import { backupTarget, listBackups, type BackupRun, type BackupsUnavailable } from "@/lib/backups";
 import { deploymentEnvironment, isProduction } from "@/lib/deployment";
 
 /** Where production's backups are, or null when this deployment cannot import. */
@@ -48,9 +43,7 @@ export function productionImportAvailable(): boolean {
   return productionSource() !== null && backupTarget() !== null;
 }
 
-export async function listProductionBackups(): Promise<
-  { ok: true; backups: BackupRun[] } | { ok: false; error: BackupsUnavailable }
-> {
+export async function listProductionBackups(): Promise<{ ok: true; backups: BackupRun[] } | { ok: false; error: BackupsUnavailable }> {
   const source = productionSource();
   if (!source) return { ok: false, error: "not_configured" };
   return listBackups(source);
@@ -62,9 +55,7 @@ export async function listProductionBackups(): Promise<
  * same rule as `runsHoldingResources` in `runner/src/db.ts`, which checks
  * again once the reaper is paused.
  */
-export async function localRunsHoldingResources(): Promise<
-  { id: string; name: string; status: string }[]
-> {
+export async function localRunsHoldingResources(): Promise<{ id: string; name: string; status: string }[]> {
   const { rows } = await db.execute<{ id: string; name: string; status: string }>(sql`
     select id, name, status::text as status
       from workshop_runs
@@ -74,12 +65,7 @@ export async function localRunsHoldingResources(): Promise<
   return rows;
 }
 
-export type ImportError =
-  | BackupsUnavailable
-  | "not_found"
-  | "not_restorable"
-  | "confirmation_mismatch"
-  | "runs_hold_resources";
+export type ImportError = BackupsUnavailable | "not_found" | "not_restorable" | "confirmation_mismatch" | "runs_hold_resources";
 
 /** Start the import job. Its progress is in the job's logs, not here. */
 export async function startProductionImport(input: {
@@ -87,8 +73,7 @@ export async function startProductionImport(input: {
   confirmation: string;
   actorEmail: string;
 }): Promise<
-  | { ok: true; execution: string | null }
-  | { ok: false; error: ImportError; holding?: { id: string; name: string; status: string }[] }
+  { ok: true; execution: string | null } | { ok: false; error: ImportError; holding?: { id: string; name: string; status: string }[] }
 > {
   const target = backupTarget();
   const appUrl = process.env.AUTH_URL?.replace(/\/+$/, "");
@@ -235,7 +220,10 @@ export async function finishProductionImport(
 ): Promise<FinishResult> {
   const dir = options.migrationsDir ?? path.join(process.cwd(), "drizzle");
   const files = fs.existsSync(dir)
-    ? fs.readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()
+    ? fs
+        .readdirSync(dir)
+        .filter((f) => f.endsWith(".sql"))
+        .sort()
     : [];
   if (files.length === 0) throw new Error(`no migrations found in ${dir}`);
 
@@ -266,14 +254,7 @@ export async function finishProductionImport(
       let usersRestored = 0;
       let usersAdded = 0;
       for (const user of input.snapshot) {
-        const roles = [
-          user.eventRole,
-          user.trainingRole,
-          user.evalsRole,
-          user.irisRole,
-          user.isPlatformAdmin,
-          user.calendarScope,
-        ];
+        const roles = [user.eventRole, user.trainingRole, user.evalsRole, user.irisRole, user.isPlatformAdmin, user.calendarScope];
         const existing = await client.query<{ id: string }>(
           `update users
               set site_role = $2::site_role, training_role = $3::training_role,

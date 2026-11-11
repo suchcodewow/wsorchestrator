@@ -36,10 +36,12 @@ export type MeetingChangeListing = {
 const ACTIONS: Record<MeetingSyncAction, { live: string; dry: string }> = {
   invited: { live: "Invited", dry: "Would invite" },
   removed: { live: "Took off", dry: "Would take off" },
-  attended: { live: "Attended", dry: "Attended" },
-  missed: { live: "Missed", dry: "Missed" },
+  attended: { live: "Attended", dry: "Would mark attended" },
+  missed: { live: "Missed", dry: "Would mark missed" },
   none_left: { live: "None left before bootcamp", dry: "None left before bootcamp" },
   cancelled: { live: "Cancelled the old meeting", dry: "Would cancel the old meeting" },
+  zoom_replaced: { live: "Moved to our Zoom meeting", dry: "Would move to our Zoom meeting" },
+  zoom_hosts: { live: "Added as a Zoom host", dry: "Would add as a Zoom host" },
   failed: { live: "Failed", dry: "Failed" },
 };
 

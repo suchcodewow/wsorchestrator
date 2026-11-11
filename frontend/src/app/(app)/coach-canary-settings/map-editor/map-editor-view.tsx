@@ -108,7 +108,8 @@ function Editor({ live }: { live: NonNullable<Live> }) {
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string; live?: number; message?: string; path?: string };
       if (res.status === 409) setError({ kind: "conflict", live: body.live ?? live.version });
-      else if (body.error === "invalid") setError({ kind: "invalid", message: `${body.message ?? "Invalid"}${body.path ? ` (at ${body.path})` : ""}` });
+      else if (body.error === "invalid")
+        setError({ kind: "invalid", message: `${body.message ?? "Invalid"}${body.path ? ` (at ${body.path})` : ""}` });
       else if (!res.ok) setError({ kind: "other", message: `Couldn't save it (${res.status}).` });
       else router.refresh();
     } catch {
@@ -157,7 +158,8 @@ function Editor({ live }: { live: NonNullable<Live> }) {
               )}
               {error?.kind === "conflict" && (
                 <p role="alert" className="text-destructive">
-                  Version {error.live} was saved after you opened this one, so this would overwrite it. Discard your changes to load it, then make them again.
+                  Version {error.live} was saved after you opened this one, so this would overwrite it. Discard your changes to load it,
+                  then make them again.
                 </p>
               )}
               {error && error.kind !== "conflict" && (
@@ -299,7 +301,8 @@ function Groups({ draft, update }: { draft: MapContent; update: Update }) {
               <Textarea rows={2} value={g.blurb} maxLength={400} onChange={(e) => set(i, { blurb: e.target.value })} />
             </Field>
             <p className="text-xs text-muted-foreground">
-              {g.concepts.length === 1 ? "1 concept" : `${g.concepts.length} concepts`}: {g.concepts.map((id) => names.get(id) ?? id).join(", ")}
+              {g.concepts.length === 1 ? "1 concept" : `${g.concepts.length} concepts`}:{" "}
+              {g.concepts.map((id) => names.get(id) ?? id).join(", ")}
             </p>
           </div>
         ))}
@@ -353,7 +356,10 @@ function ConceptForm({ id, draft, update }: { id: string; draft: MapContent; upd
   const moveTo = (to: number) =>
     update((m) => ({
       ...m,
-      buckets: m.buckets.map((g, j) => ({ ...g, concepts: j === to ? [...g.concepts.filter((x) => x !== id), id] : g.concepts.filter((x) => x !== id) })),
+      buckets: m.buckets.map((g, j) => ({
+        ...g,
+        concepts: j === to ? [...g.concepts.filter((x) => x !== id), id] : g.concepts.filter((x) => x !== id),
+      })),
     }));
   const toggle = (rid: string, on: boolean) => {
     const now = concept.requires ?? [];
@@ -398,7 +404,11 @@ function ConceptForm({ id, draft, update }: { id: string; draft: MapContent; upd
           <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
             {lower.map((r) => (
               <label key={r.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                <input type="checkbox" checked={concept.requires?.includes(r.id) ?? false} onChange={(e) => toggle(r.id, e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={concept.requires?.includes(r.id) ?? false}
+                  onChange={(e) => toggle(r.id, e.target.checked)}
+                />
                 <span className="truncate">{r.name}</span>
               </label>
             ))}
@@ -409,7 +419,15 @@ function ConceptForm({ id, draft, update }: { id: string; draft: MapContent; upd
   );
 }
 
-function VersionHistory({ live, query, versions }: { live: number | null; query: ListQuery<MapVersionSort>; versions: Page<MapVersionRow> }) {
+function VersionHistory({
+  live,
+  query,
+  versions,
+}: {
+  live: number | null;
+  query: ListQuery<MapVersionSort>;
+  versions: Page<MapVersionRow>;
+}) {
   const router = useRouter();
   // The row stays when the dialog closes, so its words do not change while it fades out.
   const [restoring, setRestoring] = useState<MapVersionRow | null>(null);
@@ -473,10 +491,16 @@ function VersionHistory({ live, query, versions }: { live: number | null; query:
               <tr key={v.version} className="border-b align-top last:border-b-0">
                 <td className="px-5 py-3 tnum">
                   {v.version}
-                  {v.live && <span className="ml-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-400">Live</span>}
+                  {v.live && (
+                    <span className="ml-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-400">
+                      Live
+                    </span>
+                  )}
                 </td>
                 <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">{formatWhen(v.createdAt)}</td>
-                <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">{v.createdBy ? v.createdBy.name || v.createdBy.email : "—"}</td>
+                <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">
+                  {v.createdBy ? v.createdBy.name || v.createdBy.email : "—"}
+                </td>
                 <td className="max-w-xl px-5 py-3">
                   <span className="mr-2 text-xs text-muted-foreground">{SOURCE_LABELS[v.source]}</span>
                   <span className="wrap-break-word">{v.summary}</span>
@@ -511,8 +535,8 @@ function VersionHistory({ live, query, versions }: { live: number | null; query:
           <DialogHeader>
             <DialogTitle>Restore version {restoring?.version}?</DialogTitle>
             <DialogDescription>
-              Its sections, groups and concepts become the live map as version {(live ?? 0) + 1}. Every concept keeps the video it has now, and the versions after it
-              stay in the history.
+              Its sections, groups and concepts become the live map as version {(live ?? 0) + 1}. Every concept keeps the video it has now,
+              and the versions after it stay in the history.
             </DialogDescription>
           </DialogHeader>
           {error && <p className="text-sm text-destructive">{error}</p>}

@@ -49,9 +49,7 @@ async function accessToken(): Promise<string> {
 
   const cfg = azureCfg();
   if (!cfg.clientId || !cfg.clientSecret) {
-    throw new Error(
-      "ARM_CLIENT_ID and ARM_CLIENT_SECRET must be set to call Microsoft Graph",
-    );
+    throw new Error("ARM_CLIENT_ID and ARM_CLIENT_SECRET must be set to call Microsoft Graph");
   }
 
   const body = new URLSearchParams({
@@ -72,10 +70,7 @@ async function accessToken(): Promise<string> {
 
   const text = await res.text();
   if (!res.ok) {
-    throw new GraphError(
-      `Entra token request failed (${res.status}): ${text.slice(0, 300)}`,
-      res.status,
-    );
+    throw new GraphError(`Entra token request failed (${res.status}): ${text.slice(0, 300)}`, res.status);
   }
 
   const json = JSON.parse(text) as { access_token: string; expires_in: number };
@@ -93,11 +88,7 @@ async function accessToken(): Promise<string> {
  * non-transient unchanged), which is what lets the callers below treat "no pass
  * to delete" and "user not visible yet" as the ordinary conditions they are.
  */
-async function graph<T>(
-  method: "GET" | "POST" | "DELETE",
-  path: string,
-  body?: unknown,
-): Promise<T | undefined> {
+async function graph<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<T | undefined> {
   return withRetry(
     async () => {
       const res = await fetch(`${GRAPH}${path}`, {
@@ -159,10 +150,7 @@ export async function tapPolicy(): Promise<TapPolicy | undefined> {
     minimumLifetimeInMinutes?: number;
     maximumLifetimeInMinutes?: number;
     isUsableOnce?: boolean;
-  }>(
-    "GET",
-    "/policies/authenticationMethodsPolicy/authenticationMethodConfigurations/TemporaryAccessPass",
-  );
+  }>("GET", "/policies/authenticationMethodsPolicy/authenticationMethodConfigurations/TemporaryAccessPass");
   if (!policy) return undefined;
 
   return {
@@ -196,10 +184,7 @@ export type IssuedPass = {
  * that only starts later would be a support question from whoever tries it
  * early.
  */
-export async function issueAccessPass(
-  upn: string,
-  opts: { lifetimeInMinutes: number; oneTime: boolean },
-): Promise<IssuedPass> {
+export async function issueAccessPass(upn: string, opts: { lifetimeInMinutes: number; oneTime: boolean }): Promise<IssuedPass> {
   const base = `/users/${encodeURIComponent(upn)}/authentication/temporaryAccessPassMethods`;
 
   // Clear whatever is there. A 404 means the user has no pass — or, just after
@@ -230,9 +215,7 @@ export async function issueAccessPass(
     throw new Error(`Entra returned no access pass for ${upn}`);
   }
 
-  const startedAt = created.startDateTime
-    ? new Date(created.startDateTime)
-    : new Date();
+  const startedAt = created.startDateTime ? new Date(created.startDateTime) : new Date();
   const minutes = created.lifetimeInMinutes ?? opts.lifetimeInMinutes;
 
   return {

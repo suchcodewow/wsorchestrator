@@ -50,9 +50,11 @@ const ERRORS: Record<string, string> = {
 };
 
 const CALENDAR_ERRORS: Record<string, string> = {
-  not_connected: "No Google account is connected, so the calendar can't be read. A platform administrator connects one under Admin Settings → External Connectors.",
+  not_connected:
+    "No Google account is connected, so the calendar can't be read. A platform administrator connects one under Admin Settings → External Connectors.",
   not_configured: "The app's Google OAuth client is not set up here, so the calendar can't be read.",
-  revoked: "Google no longer accepts the connected account's token. A platform administrator connects it again under Admin Settings → External Connectors.",
+  revoked:
+    "Google no longer accepts the connected account's token. A platform administrator connects it again under Admin Settings → External Connectors.",
 };
 
 const SELECT =
@@ -196,7 +198,11 @@ export function MeetingDialog({
     if (
       editing &&
       meetingKey(name) !== meetingKey(editing.name) &&
-      !(await confirmDialog({ title: `Change it to “${name}”?`, description: `Everyone the sync invited to “${editing.name}” is taken off its upcoming invites, and told.`, confirmLabel: "Rename" }))
+      !(await confirmDialog({
+        title: `Change it to “${name}”?`,
+        description: `Everyone the sync invited to “${editing.name}” is taken off its upcoming invites, and told.`,
+        confirmLabel: "Rename",
+      }))
     ) {
       return;
     }
@@ -206,7 +212,15 @@ export function MeetingDialog({
       const res = await fetch(editing ? `/api/evals/google-meetings/${editing.id}` : "/api/evals/google-meetings", {
         method: editing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, stage, track, timezoneFrom: filterZones ? zoneFrom : null, timezoneTo: filterZones ? zoneTo : null, minDaysAfterStart: minDays, allOccurrences: count === "all" }),
+        body: JSON.stringify({
+          name,
+          stage,
+          track,
+          timezoneFrom: filterZones ? zoneFrom : null,
+          timezoneTo: filterZones ? zoneTo : null,
+          minDaysAfterStart: minDays,
+          allOccurrences: count === "all",
+        }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
@@ -270,7 +284,9 @@ export function MeetingDialog({
                     </option>
                   ))}
                 </select>
-                {names === null && <Loader2 className="pointer-events-none absolute top-2.5 right-8 size-4 animate-spin text-muted-foreground" />}
+                {names === null && (
+                  <Loader2 className="pointer-events-none absolute top-2.5 right-8 size-4 animate-spin text-muted-foreground" />
+                )}
               </div>
               {calendarError && <p className="text-xs text-destructive">{calendarError}</p>}
             </motion.div>
@@ -294,19 +310,21 @@ export function MeetingDialog({
               </label>
               <div className="flex items-center gap-2">
                 <input
-                id="gm-min-days"
-                type="number"
-                min={0}
-                max={365}
-                step={1}
-                value={minDays}
-                disabled={pending}
-                onChange={(e) => setMinDays(Math.min(365, Math.max(0, Math.trunc(Number(e.target.value)) || 0)))}
-                className={cn(SELECT, "w-28 tabular-nums")}
-              />
+                  id="gm-min-days"
+                  type="number"
+                  min={0}
+                  max={365}
+                  step={1}
+                  value={minDays}
+                  disabled={pending}
+                  onChange={(e) => setMinDays(Math.min(365, Math.max(0, Math.trunc(Number(e.target.value)) || 0)))}
+                  className={cn(SELECT, "w-28 tabular-nums")}
+                />
                 <span className="text-sm text-muted-foreground">days</span>
               </div>
-              <p className="text-xs text-muted-foreground">Tenure rule is ignored if it would leave someone no meeting to attend before their class.</p>
+              <p className="text-xs text-muted-foreground">
+                Tenure rule is ignored if it would leave someone no meeting to attend before their class.
+              </p>
             </motion.div>
 
             <motion.div variants={riseChild} className="grid gap-3">

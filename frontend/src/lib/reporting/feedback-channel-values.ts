@@ -30,7 +30,10 @@ function slug(text: string): string {
  */
 export function feedbackChannelName(fullName: string | null, email: string, n = 1): string {
   const words = (fullName ?? "").split(/\s+/).map(slug).filter(Boolean);
-  const who = words.length > 0 ? [words[0], ...(words.length > 1 ? [words[words.length - 1]] : [])].join("-") : slug(email.split("@")[0] ?? "") || "attendee";
+  const who =
+    words.length > 0
+      ? [words[0], ...(words.length > 1 ? [words[words.length - 1]] : [])].join("-")
+      : slug(email.split("@")[0] ?? "") || "attendee";
   const suffix = n > 1 ? `-${n}` : "";
   return `${PREFIX}-${who}`.slice(0, SLACK_NAME_MAX - suffix.length).replace(/-+$/, "") + suffix;
 }

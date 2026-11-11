@@ -24,21 +24,15 @@ import "./map.css";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { anchorFloating } from "@/lib/floating";
-import {
-  CONCEPT_H,
-  PAD,
-  SLIDE_H,
-  layoutMap,
-  type MapLayout,
-  type PlacedConcept,
-} from "@/lib/mimir/map/layout";
+import { CONCEPT_H, PAD, SLIDE_H, layoutMap, type MapLayout, type PlacedConcept } from "@/lib/mimir/map/layout";
 import { NO_STATE, type ConceptState, type MapLevel, type PublicMap } from "@/lib/mimir/map/schema";
 import { cn } from "@/lib/utils";
 import { ChatButton } from "./chat-button";
 import { PlayButton } from "./play-button";
 import { VideoDialog } from "./video-dialog";
 
-type Sel = { type: "slide"; id: number } | { type: "concept"; id: string } | { type: "group"; id: string } | { type: "level"; id: MapLevel };
+type Sel =
+  { type: "slide"; id: number } | { type: "concept"; id: string } | { type: "group"; id: string } | { type: "level"; id: MapLevel };
 /** What is being pointed at, and the element the popup sits beside. */
 type Pointed = { sel: Exclude<Sel, { type: "concept" }>; anchor: HTMLElement };
 const same = (a: Sel | null, b: Sel) => a !== null && a.type === b.type && a.id === b.id;
@@ -231,9 +225,15 @@ export function MapView({
             type="button"
             aria-pressed={showAll}
             onClick={() => setShowAll((on) => !on)}
-            className={cn("ml-auto inline-flex items-center rounded-md border px-2.5 py-1 transition-colors hover:bg-muted", showAll ? "bg-muted font-medium text-foreground" : "bg-card")}
+            className={cn(
+              "ml-auto inline-flex items-center rounded-md border px-2.5 py-1 transition-colors hover:bg-muted",
+              showAll ? "bg-muted font-medium text-foreground" : "bg-card",
+            )}
           >
-            <i className="mm-dot" style={{ background: showAll ? "var(--foreground)" : "transparent", border: "1px solid var(--foreground)" }} />
+            <i
+              className="mm-dot"
+              style={{ background: showAll ? "var(--foreground)" : "transparent", border: "1px solid var(--foreground)" }}
+            />
             Show all connections
           </button>
         </div>
@@ -252,20 +252,36 @@ export function MapView({
         <div className={cn("mm-canvas", locked && "mm-sel", !showAll && "mm-bare")} style={{ width: layout.width, height: layout.height }}>
           <svg className="mm-edges" viewBox={`0 0 ${layout.width} ${layout.height}`} xmlns="http://www.w3.org/2000/svg" aria-hidden>
             {layout.edges.map((e) => (
-              <path key={`${e.slide}|${e.concept}`} d={e.d} className={cn("mm-e", `mm-l${e.level}`, lit?.edges.has(`${e.slide}|${e.concept}`) && "mm-on")} />
+              <path
+                key={`${e.slide}|${e.concept}`}
+                d={e.d}
+                className={cn("mm-e", `mm-l${e.level}`, lit?.edges.has(`${e.slide}|${e.concept}`) && "mm-on")}
+              />
             ))}
             {layout.links.map((l) => (
-              <path key={`${l.from}|${l.to}`} d={l.d} className={cn("mm-e mm-req", `mm-l${l.level}`, lit?.links.has(`${l.from}|${l.to}`) && "mm-on")} />
+              <path
+                key={`${l.from}|${l.to}`}
+                d={l.d}
+                className={cn("mm-e mm-req", `mm-l${l.level}`, lit?.links.has(`${l.from}|${l.to}`) && "mm-on")}
+              />
             ))}
           </svg>
 
           {layout.bands.map((b) => (
-            <div key={b.name} className="mm-band" style={{ background: `var(--s${b.band})`, left: b.left, width: b.width, top: b.top, height: b.height }}>
-              <span>{filter ? `${b.name} (${b.count} ${b.count === 1 ? "slide" : "slides"})` : `${b.name} (slides ${b.from}-${b.to})`}</span>
+            <div
+              key={b.name}
+              className="mm-band"
+              style={{ background: `var(--s${b.band})`, left: b.left, width: b.width, top: b.top, height: b.height }}
+            >
+              <span>
+                {filter ? `${b.name} (${b.count} ${b.count === 1 ? "slide" : "slides"})` : `${b.name} (slides ${b.from}-${b.to})`}
+              </span>
             </div>
           ))}
 
-          {layout.divider !== null && <div className="mm-divider" style={{ left: layout.divider, height: layout.height - 2 * PAD }} aria-hidden />}
+          {layout.divider !== null && (
+            <div className="mm-divider" style={{ left: layout.divider, height: layout.height - 2 * PAD }} aria-hidden />
+          )}
 
           {layout.heading && (
             <div className="mm-heading" style={{ left: layout.heading.left, width: layout.heading.width, top: layout.heading.top }}>
@@ -283,7 +299,13 @@ export function MapView({
                 tabIndex={0}
                 aria-label={`Slide ${n}: ${title}`}
                 className={cn("mm-slide", !lv && "mm-empty", lit?.slides.has(n) && "mm-on")}
-                style={{ left: layout.slideX(n) - layout.slideW / 2, top: layout.slideY(n), width: layout.slideW, height: SLIDE_H, ["--ln" as string]: `var(--l${lv ?? 0})` }}
+                style={{
+                  left: layout.slideX(n) - layout.slideW / 2,
+                  top: layout.slideY(n),
+                  width: layout.slideW,
+                  height: SLIDE_H,
+                  ["--ln" as string]: `var(--l${lv ?? 0})`,
+                }}
                 {...wire({ type: "slide", id: n })}
               >
                 <b>{n}</b>
@@ -346,7 +368,17 @@ export function MapView({
         </div>
       </div>
 
-      {hover && <Popup pointed={hover} full={full} map={map} hasImage={hasImage} levelName={levelName} groupName={groupName} groupBlurb={groupBlurb} />}
+      {hover && (
+        <Popup
+          pointed={hover}
+          full={full}
+          map={map}
+          hasImage={hasImage}
+          levelName={levelName}
+          groupName={groupName}
+          groupBlurb={groupBlurb}
+        />
+      )}
 
       {playing && byId.get(playing) && (
         <VideoDialog conceptId={playing} name={byId.get(playing)!.name} onClose={() => setPlaying(null)} onState={onState} />

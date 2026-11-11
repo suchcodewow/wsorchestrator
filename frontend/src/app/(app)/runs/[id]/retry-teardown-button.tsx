@@ -9,18 +9,11 @@ import type { RunStatus, WorkshopRun } from "@/db/schema";
 
 const ERRORS: Record<string, string> = {
   not_found: "This event no longer exists.",
-  not_retryable:
-    "This teardown isn't in a failed state anymore — it may already be running again.",
+  not_retryable: "This teardown isn't in a failed state anymore — it may already be running again.",
   unauthorized: "Sign in again to retry this teardown.",
 };
 
-export function RetryTeardownButton({
-  run,
-  onRetried,
-}: {
-  run: WorkshopRun;
-  onRetried: () => void;
-}) {
+export function RetryTeardownButton({ run, onRetried }: { run: WorkshopRun; onRetried: () => void }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,15 +28,11 @@ export function RetryTeardownButton({
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(
-          ERRORS[body?.error] ?? `Could not retry teardown (${res.status})`,
-        );
+        throw new Error(ERRORS[body?.error] ?? `Could not retry teardown (${res.status})`);
       }
       onRetried();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not retry teardown",
-      );
+      setError(err instanceof Error ? err.message : "Could not retry teardown");
     } finally {
       setPending(false);
     }

@@ -52,7 +52,8 @@ export function describeChanges(before: MapContent, after: MapContent): string[]
     const removed = [...from].filter((id) => !to.has(id)).map((id) => quote(names.get(id) ?? id));
     if (added.length) lines.push(`${quote(c.name)} now depends on ${added.join(", ")}.`);
     if (removed.length) lines.push(`${quote(c.name)} no longer depends on ${removed.join(", ")}.`);
-    if (beforeGroup.get(c.id) !== afterGroup.get(c.id)) lines.push(`Moved ${quote(c.name)} to the group ${quote(afterGroup.get(c.id) ?? "")}.`);
+    if (beforeGroup.get(c.id) !== afterGroup.get(c.id))
+      lines.push(`Moved ${quote(c.name)} to the group ${quote(afterGroup.get(c.id) ?? "")}.`);
   }
   return lines;
 }

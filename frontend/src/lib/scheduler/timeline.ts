@@ -11,7 +11,15 @@
  * server saves by the same rules.
  */
 
-import { AUDIENCE_TRACKS, CHECKLIST_PREP_DAY, SCHEDULE_LIMITS, type ChecklistPeriod, type ScheduleTrack, type SessionAudience, type SessionKind } from "@/db/schema";
+import {
+  AUDIENCE_TRACKS,
+  CHECKLIST_PREP_DAY,
+  SCHEDULE_LIMITS,
+  type ChecklistPeriod,
+  type ScheduleTrack,
+  type SessionAudience,
+  type SessionKind,
+} from "@/db/schema";
 import type { ClassLists } from "@/lib/scheduler/attendees";
 
 export const TRACK_LABELS: Record<ScheduleTrack, string> = {
@@ -147,10 +155,7 @@ type Timed = { start: number; minutes: number };
 export function dayTotal(sessions: readonly Timed[]): DayTotal {
   const { dayStart, dayEnd } = SCHEDULE_LIMITS;
   const end = Math.max(dayStart, ...sessions.map((s) => s.start + s.minutes));
-  const covered = sessions.reduce(
-    (sum, s) => sum + Math.max(0, Math.min(dayEnd, s.start + s.minutes) - Math.max(dayStart, s.start)),
-    0,
-  );
+  const covered = sessions.reduce((sum, s) => sum + Math.max(0, Math.min(dayEnd, s.start + s.minutes) - Math.max(dayStart, s.start)), 0);
   return { end, left: dayEnd - dayStart - covered, over: Math.max(0, end - dayEnd) };
 }
 
@@ -267,14 +272,10 @@ export type Clash = {
   start: number;
   end: number;
   /** The person, room or attendees the two share. */
-  what:
-    | { kind: "person"; email: string; fullName: string }
-    | { kind: "room"; roomId: string }
-    | { kind: "audience"; group: AudienceGroup };
+  what: { kind: "person"; email: string; fullName: string } | { kind: "room"; roomId: string } | { kind: "audience"; group: AudienceGroup };
 };
 
-const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }) =>
-  a.start < b.end && b.start < a.end;
+const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }) => a.start < b.end && b.start < a.end;
 
 function clashOf(other: Placed, what: Clash["what"]): Clash {
   return {
@@ -292,7 +293,10 @@ function clashOf(other: Placed, what: Clash["what"]): Clash {
  * The groups both sessions teach, when they are on a class and its SE track:
  * those attendees cannot be in both. Two on one track-day never overlap.
  */
-function sharedGroups(a: Pick<ClashSession, "track" | "kind" | "audience">, b: Pick<ClashSession, "track" | "kind" | "audience">): AudienceGroup[] {
+function sharedGroups(
+  a: Pick<ClashSession, "track" | "kind" | "audience">,
+  b: Pick<ClashSession, "track" | "kind" | "audience">,
+): AudienceGroup[] {
   if (a.track === b.track || classOf(a.track) !== classOf(b.track)) return [];
   const theirs = new Set(groupsOf(b));
   return groupsOf(a).filter((g) => theirs.has(g));
@@ -360,10 +364,7 @@ export function audienceClashes(
 export type Slot = { day: number; start: number; end: number; excludeId?: string };
 
 /** What each person and each room is already doing during `slot`, keyed by email and by room id. */
-export function busyDuring(
-  placed: readonly Placed[],
-  slot: Slot,
-): { people: Map<string, Clash[]>; rooms: Map<string, Clash[]> } {
+export function busyDuring(placed: readonly Placed[], slot: Slot): { people: Map<string, Clash[]>; rooms: Map<string, Clash[]> } {
   const people = new Map<string, Clash[]>();
   const rooms = new Map<string, Clash[]>();
   for (const s of placed) {

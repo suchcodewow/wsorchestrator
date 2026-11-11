@@ -112,7 +112,9 @@ describe("a slide made from a seed", () => {
   test("moves at most one piece of any row", () => {
     const moves = (f: Slide["flaws"][number]) => f.look.dx !== undefined || f.look.dy !== undefined;
     for (const s of SLIDES) {
-      const rows = s.flaws.filter((f) => moves(f) && /^(current|future)\.\d\./.test(f.target)).map((f) => f.target.split(".").slice(0, 2).join("."));
+      const rows = s.flaws
+        .filter((f) => moves(f) && /^(current|future)\.\d\./.test(f.target))
+        .map((f) => f.target.split(".").slice(0, 2).join("."));
       assert.equal(new Set(rows).size, rows.length, `seed ${s.seed}`);
     }
   });

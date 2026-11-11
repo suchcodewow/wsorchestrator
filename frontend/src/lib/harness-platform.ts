@@ -6,10 +6,7 @@ import type { HarnessPermissionCheck } from "@/db/schema";
 import { PERMISSION_PROBES } from "@/lib/harness-permissions";
 
 export function harnessBaseUrl(): string {
-  return (process.env.HARNESS_BASE_URL ?? "https://app.harness.io").replace(
-    /\/+$/,
-    "",
-  );
+  return (process.env.HARNESS_BASE_URL ?? "https://app.harness.io").replace(/\/+$/, "");
 }
 
 export const harnessOrgUrl = (accountId: string, org: string) =>
@@ -36,14 +33,9 @@ export function parseHarnessToken(raw: string): ParsedToken | null {
   };
 }
 
-export const fingerprint = (raw: string) =>
-  createHash("sha256").update(raw.trim(), "utf8").digest("hex");
+export const fingerprint = (raw: string) => createHash("sha256").update(raw.trim(), "utf8").digest("hex");
 
-export type CheckError =
-  | "malformed"
-  | "invalid_token"
-  | "harness_error"
-  | "unreachable";
+export type CheckError = "malformed" | "invalid_token" | "harness_error" | "unreachable";
 
 export type CheckResult =
   | {
@@ -58,15 +50,9 @@ export type CheckResult =
 
 const TIMEOUT_MS = 12_000;
 
-type HarnessResponse<T> =
-  | { ok: true; status: number; data: T }
-  | { ok: false; status: number; message: string };
+type HarnessResponse<T> = { ok: true; status: number; data: T } | { ok: false; status: number; message: string };
 
-async function request<T>(
-  path: string,
-  token: string,
-  body?: unknown,
-): Promise<HarnessResponse<T>> {
+async function request<T>(path: string, token: string, body?: unknown): Promise<HarnessResponse<T>> {
   const res = await fetch(`${harnessBaseUrl()}${path}`, {
     method: body ? "POST" : "GET",
     headers: {
@@ -125,10 +111,7 @@ export async function checkHarnessToken(raw: string): Promise<CheckResult> {
         })),
       }),
       request<{ name?: string }>(`/ng/api/accounts/${accountId}`, token),
-      request<{ email?: string; name?: string }>(
-        `/ng/api/user/currentUser?accountIdentifier=${encodeURIComponent(accountId)}`,
-        token,
-      ),
+      request<{ email?: string; name?: string }>(`/ng/api/user/currentUser?accountIdentifier=${encodeURIComponent(accountId)}`, token),
     ]);
   } catch (err) {
     return {
@@ -146,10 +129,7 @@ export async function checkHarnessToken(raw: string): Promise<CheckResult> {
   }
 
   const answered = new Map(
-    (acl.data.accessControlList ?? []).map((entry) => [
-      `${entry.resourceType}:${entry.permission}`,
-      entry.permitted === true,
-    ]),
+    (acl.data.accessControlList ?? []).map((entry) => [`${entry.resourceType}:${entry.permission}`, entry.permitted === true]),
   );
   const permissions: HarnessPermissionCheck[] = PERMISSION_PROBES.map((p) => ({
     permission: p.permission,
@@ -163,9 +143,7 @@ export async function checkHarnessToken(raw: string): Promise<CheckResult> {
     ok: true,
     token: parsed,
     accountName: account.ok ? (account.data.name ?? null) : null,
-    principal: currentUser.ok
-      ? (currentUser.data.email ?? null)
-      : (acl.data.principal?.principalIdentifier ?? null),
+    principal: currentUser.ok ? (currentUser.data.email ?? null) : (acl.data.principal?.principalIdentifier ?? null),
     principalType,
     permissions,
   };
@@ -176,9 +154,7 @@ export type HarnessScope = {
   name: string;
 };
 
-export type ScopeListResult =
-  | { ok: true; scopes: HarnessScope[] }
-  | { ok: false; error: CheckError; detail?: string };
+export type ScopeListResult = { ok: true; scopes: HarnessScope[] } | { ok: false; error: CheckError; detail?: string };
 
 const PAGE_SIZE = 100;
 
@@ -246,17 +222,13 @@ export async function listHarnessOrgs(raw: string): Promise<ScopeListResult> {
   );
 }
 
-export async function listHarnessProjects(
-  raw: string,
-  orgIdentifier: string,
-): Promise<ScopeListResult> {
+export async function listHarnessProjects(raw: string, orgIdentifier: string): Promise<ScopeListResult> {
   const parsed = parseHarnessToken(raw.trim());
   if (!parsed) return { ok: false, error: "malformed" };
 
   return listScopes(
     raw.trim(),
-    `/ng/api/projects?accountIdentifier=${encodeURIComponent(parsed.accountId)}` +
-      `&orgIdentifier=${encodeURIComponent(orgIdentifier)}`,
+    `/ng/api/projects?accountIdentifier=${encodeURIComponent(parsed.accountId)}` + `&orgIdentifier=${encodeURIComponent(orgIdentifier)}`,
     (entry) => entry.project as Record<string, unknown> | undefined,
   );
 }
@@ -276,11 +248,7 @@ function nameIn(data: unknown, key: "organization" | "project"): string | null {
   return typeof name === "string" && name.length > 0 ? name : null;
 }
 
-export async function checkTemplateSource(
-  raw: string,
-  orgIdentifier: string,
-  projectIdentifier?: string | null,
-): Promise<SourceCheck> {
+export async function checkTemplateSource(raw: string, orgIdentifier: string, projectIdentifier?: string | null): Promise<SourceCheck> {
   const token = raw.trim();
   const parsed = parseHarnessToken(token);
   const wantsProject = Boolean(projectIdentifier);
@@ -298,10 +266,7 @@ export async function checkTemplateSource(
 
   let orgRes: HarnessResponse<unknown>;
   try {
-    orgRes = await request(
-      `/ng/api/organizations/${encodeURIComponent(orgIdentifier)}?${account}`,
-      token,
-    );
+    orgRes = await request(`/ng/api/organizations/${encodeURIComponent(orgIdentifier)}?${account}`, token);
   } catch (err) {
     return {
       tokenOk: false,
@@ -334,10 +299,7 @@ export async function checkTemplateSource(
 
   let projectRes: HarnessResponse<unknown>;
   try {
-    projectRes = await request(
-      `/ng/api/projects/${encodeURIComponent(projectIdentifier!)}?${account}&${org}`,
-      token,
-    );
+    projectRes = await request(`/ng/api/projects/${encodeURIComponent(projectIdentifier!)}?${account}&${org}`, token);
   } catch (err) {
     return {
       tokenOk: true,
@@ -362,10 +324,7 @@ export async function harnessAccountName(raw: string): Promise<string | null> {
   const parsed = parseHarnessToken(raw.trim());
   if (!parsed) return null;
   try {
-    const res = await request<{ name?: string }>(
-      `/ng/api/accounts/${parsed.accountId}`,
-      raw.trim(),
-    );
+    const res = await request<{ name?: string }>(`/ng/api/accounts/${parsed.accountId}`, raw.trim());
     return res.ok ? (res.data.name ?? null) : null;
   } catch {
     return null;

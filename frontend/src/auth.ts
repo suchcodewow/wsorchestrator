@@ -6,19 +6,8 @@ import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { headers } from "next/headers";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  accounts,
-  sessions,
-  users,
-  verificationTokens,
-  type AssessmentsRole,
-  type EventRole,
-  type TrainingRole,
-} from "@/db/schema";
-import {
-  effectiveAllowedDomains,
-  isEmailAllowed,
-} from "@/lib/allowed-domains";
+import { accounts, sessions, users, verificationTokens, type AssessmentsRole, type EventRole, type TrainingRole } from "@/db/schema";
+import { effectiveAllowedDomains, isEmailAllowed } from "@/lib/allowed-domains";
 import { isAddressReused } from "@/lib/account-linking";
 import { recordAudit, requestIp } from "@/lib/audit";
 import { googlePhotoChosen, syncGoogleProfile } from "@/lib/google-profile";
@@ -150,10 +139,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const access = await accessOf(user as UserRow, user.email);
 
       if (!access.platform && isBootstrapAdmin(user.email)) {
-        await db
-          .update(users)
-          .set({ isPlatformAdmin: true })
-          .where(eq(users.id, user.id));
+        await db.update(users).set({ isPlatformAdmin: true }).where(eq(users.id, user.id));
         access.platform = true;
       }
 
@@ -205,10 +191,7 @@ export async function pendingBootstrapAdmins(): Promise<string[]> {
   const listed = bootstrapAdminEmails();
   if (listed.length === 0) return [];
 
-  const present = await db
-    .select({ email: users.email })
-    .from(users)
-    .where(inArray(users.email, listed));
+  const present = await db.select({ email: users.email }).from(users).where(inArray(users.email, listed));
 
   const known = new Set(present.map((r) => r.email?.toLowerCase()));
   return listed.filter((e) => !known.has(e));

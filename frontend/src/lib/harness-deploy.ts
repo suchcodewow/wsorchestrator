@@ -5,41 +5,18 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { harnessTokens } from "@/db/schema";
 import type { DeployError } from "@/lib/harness-deploy-errors";
-import {
-  mergeDeployed,
-  nothingSelected,
-  type DeployedContent,
-  type DeploySelection,
-} from "@/lib/harness-deploy-selection";
+import { mergeDeployed, nothingSelected, type DeployedContent, type DeploySelection } from "@/lib/harness-deploy-selection";
 import { harnessIdentifier } from "@/lib/harness-identifier";
-import {
-  orgSecretValues,
-  type SecretChoice,
-} from "@/lib/harness-org-secrets";
+import { orgSecretValues, type SecretChoice } from "@/lib/harness-org-secrets";
 import { ACCOUNT_ADMIN } from "@/lib/harness-permissions";
 import { isDuplicate, isRetryable } from "@/lib/harness-retry";
-import {
-  harnessBaseUrl,
-  harnessOrgUrl,
-  parseHarnessToken,
-} from "@/lib/harness-platform";
-import {
-  harnessTimestamp,
-  recordDeployedSecret,
-} from "@/lib/harness-scrub";
-import {
-  deployableTemplateSources,
-  templateSourceToken,
-  type TemplateSourceRow,
-} from "@/lib/harness-templates";
+import { harnessBaseUrl, harnessOrgUrl, parseHarnessToken } from "@/lib/harness-platform";
+import { harnessTimestamp, recordDeployedSecret } from "@/lib/harness-scrub";
+import { deployableTemplateSources, templateSourceToken, type TemplateSourceRow } from "@/lib/harness-templates";
 import { recordHarnessDeploy } from "@/lib/harness-tokens";
 import { openSecret } from "@/lib/secret-box";
 
-export type DeployOutcome =
-  | "created"
-  | "existed"
-  | "failed"
-  | "skipped";
+export type DeployOutcome = "created" | "existed" | "failed" | "skipped";
 
 export type DeployStep = {
   scope: string;
@@ -69,9 +46,7 @@ export type DeployReport = {
   sources: number;
 };
 
-export type DeployResult =
-  | { ok: true; report: DeployReport }
-  | { ok: false; error: DeployError; detail?: string };
+export type DeployResult = { ok: true; report: DeployReport } | { ok: false; error: DeployError; detail?: string };
 
 type Json = Record<string, unknown>;
 type Query = Record<string, string | undefined>;
@@ -89,9 +64,7 @@ function messageOf(body: string): string {
       correlationId?: string;
     };
     const message = parsed.message ?? body;
-    return parsed.correlationId
-      ? `${message} [correlationId ${parsed.correlationId}]`
-      : message;
+    return parsed.correlationId ? `${message} [correlationId ${parsed.correlationId}]` : message;
   } catch {
     return body.slice(0, 400);
   }
@@ -120,16 +93,9 @@ async function harnessRequest(
         method,
         headers: {
           "x-api-key": token,
-          ...(body === undefined || body instanceof FormData
-            ? {}
-            : { "Content-Type": "application/json" }),
+          ...(body === undefined || body instanceof FormData ? {} : { "Content-Type": "application/json" }),
         },
-        body:
-          body === undefined
-            ? undefined
-            : body instanceof FormData || typeof body === "string"
-              ? body
-              : JSON.stringify(body),
+        body: body === undefined ? undefined : body instanceof FormData || typeof body === "string" ? body : JSON.stringify(body),
         signal: AbortSignal.timeout(TIMEOUT_MS),
         cache: "no-store",
       });
@@ -164,10 +130,7 @@ function outcomeOf(reply: Reply): { outcome: DeployOutcome; detail?: string } {
   if (isDuplicate(reply.status, reply.text)) return { outcome: "existed" };
   return {
     outcome: "failed",
-    detail:
-      reply.status === 0
-        ? reply.text
-        : `${messageOf(reply.text)} (HTTP ${reply.status})`,
+    detail: reply.status === 0 ? reply.text : `${messageOf(reply.text)} (HTTP ${reply.status})`,
   };
 }
 
@@ -196,10 +159,7 @@ async function listPages<T>(
     if (!ok(reply)) {
       return {
         ok: false,
-        detail:
-          reply.status === 0
-            ? reply.text
-            : `${messageOf(reply.text)} (HTTP ${reply.status})`,
+        detail: reply.status === 0 ? reply.text : `${messageOf(reply.text)} (HTTP ${reply.status})`,
       };
     }
 
@@ -211,8 +171,7 @@ async function listPages<T>(
   return { ok: true, items };
 }
 
-const yamlScalar = (value: string) =>
-  `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+const yamlScalar = (value: string) => `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
 /**
  * The entity's own YAML with the keys that say *where it lives* replaced.
@@ -223,18 +182,11 @@ const yamlScalar = (value: string) =>
  * above them at two, which Harness rejected as unparseable YAML rather than as a
  * bad field. Mirrored in the runner's `rescopeYaml`, which has the fixture.
  */
-function rescopeYaml(
-  yaml: string,
-  rootKey: string,
-  keys: Record<string, string | null>,
-): string {
+function rescopeYaml(yaml: string, rootKey: string, keys: Record<string, string | null>): string {
   const lines = yaml.replace(/\r\n/g, "\n").split("\n");
   const root = lines.findIndex((line) => line.trimEnd() === `${rootKey}:`);
   if (root === -1) {
-    throw new Error(
-      `expected this ${rootKey} to start with "${rootKey}:" — Harness returned ` +
-        `something else`,
-    );
+    throw new Error(`expected this ${rootKey} to start with "${rootKey}:" — Harness returned ` + `something else`);
   }
 
   const body = lines.slice(root + 1);
@@ -242,14 +194,9 @@ function rescopeYaml(
   // The first thing under the root key is one of the root mapping's own keys, so
   // its indent is the one this owns. Comments and blank lines are skipped — they
   // may be indented anything at all, or nothing.
-  const indent = body
-    .find((line) => line.trim() !== "" && !line.trimStart().startsWith("#"))
-    ?.match(/^ +/)?.[0];
+  const indent = body.find((line) => line.trim() !== "" && !line.trimStart().startsWith("#"))?.match(/^ +/)?.[0];
   if (indent === undefined) {
-    throw new Error(
-      `expected this ${rootKey} to have indented keys under "${rootKey}:" — ` +
-        `Harness returned something else`,
-    );
+    throw new Error(`expected this ${rootKey} to have indented keys under "${rootKey}:" — ` + `Harness returned something else`);
   }
 
   const owned = new RegExp(`^${indent}(${Object.keys(keys).join("|")}):`);
@@ -257,11 +204,7 @@ function rescopeYaml(
     .filter(([, value]) => value !== null)
     .map(([key, value]) => `${indent}${key}: ${yamlScalar(value!)}`);
 
-  return [
-    ...lines.slice(0, root + 1),
-    ...replacements,
-    ...body.filter((line) => !owned.test(line)),
-  ].join("\n");
+  return [...lines.slice(0, root + 1), ...replacements, ...body.filter((line) => !owned.test(line))].join("\n");
 }
 
 type Scope = {
@@ -277,16 +220,13 @@ const scopeQuery = (scope: Scope): Query => ({
   projectIdentifier: scope.project ?? undefined,
 });
 
-const scopeLabel = (scope: Scope) =>
-  scope.project ? `${scope.org} / ${scope.project}` : scope.org;
+const scopeLabel = (scope: Scope) => (scope.project ? `${scope.org} / ${scope.project}` : scope.org);
 
 /** A template source the way the tokens page names it, kept for the record. */
 const sourceLabel = (source: TemplateSourceRow) =>
   source.projectIdentifier === null
     ? (source.orgName ?? source.orgIdentifier)
-    : `${source.orgName ?? source.orgIdentifier} / ${
-        source.projectName ?? source.projectIdentifier
-      }`;
+    : `${source.orgName ?? source.orgIdentifier} / ${source.projectName ?? source.projectIdentifier}`;
 
 const TAGS = { deployed_by: "workshop-orchestrator" };
 const DESCRIPTION = "Deployed by Workshop Orchestrator.";
@@ -302,8 +242,7 @@ const PLACEHOLDER_DESCRIPTION =
 
 const MAX_PLACEHOLDERS = 5;
 
-const MISSING_SECRET =
-  /No secret exists with the id\s+([\w.$-]+)(?:\s+in organization\s+([\w.$-]+))?(?:\s+in project\s+([\w.$-]+))?/;
+const MISSING_SECRET = /No secret exists with the id\s+([\w.$-]+)(?:\s+in organization\s+([\w.$-]+))?(?:\s+in project\s+([\w.$-]+))?/;
 
 type MissingSecret = {
   identifier: string;
@@ -321,10 +260,7 @@ function missingSecret(body: string): MissingSecret | null {
   };
 }
 
-const missingLabel = (missing: MissingSecret) =>
-  missing.project
-    ? `${missing.org} / ${missing.project}`
-    : (missing.org ?? "the account");
+const missingLabel = (missing: MissingSecret) => (missing.project ? `${missing.org} / ${missing.project}` : (missing.org ?? "the account"));
 
 type SecretType = "SecretText" | "SecretFile";
 
@@ -339,10 +275,7 @@ type SecretType = "SecretText" | "SecretFile";
  * the whole reason a stand-in is needed. Null when the source cannot answer, and
  * the caller falls back to text.
  */
-async function secretTypeOf(
-  from: Scope,
-  missing: MissingSecret,
-): Promise<SecretType | null> {
+async function secretTypeOf(from: Scope, missing: MissingSecret): Promise<SecretType | null> {
   // Harness names the scope it looked in, which is the target. The place to ask
   // is the matching level of the source.
   const scope =
@@ -352,12 +285,10 @@ async function secretTypeOf(
         ? { orgIdentifier: from.org }
         : {};
 
-  const reply = await harnessRequest(
-    from.token,
-    "GET",
-    `/ng/api/v2/secrets/${encodeURIComponent(missing.identifier)}`,
-    { accountIdentifier: from.accountId, ...scope },
-  );
+  const reply = await harnessRequest(from.token, "GET", `/ng/api/v2/secrets/${encodeURIComponent(missing.identifier)}`, {
+    accountIdentifier: from.accountId,
+    ...scope,
+  });
   if (!ok(reply)) return null;
 
   const type = dataOf<{ secret?: { type?: string } }>(reply)?.secret?.type;
@@ -371,11 +302,7 @@ async function secretTypeOf(
  * `123` either way — inline for a text secret, and as the whole contents of the
  * uploaded file for a file one, which goes to its own multipart endpoint.
  */
-async function createPlaceholder(
-  to: Scope,
-  missing: MissingSecret,
-  type: SecretType,
-): Promise<Reply> {
+async function createPlaceholder(to: Scope, missing: MissingSecret, type: SecretType): Promise<Reply> {
   const scope = {
     orgIdentifier: missing.org ?? undefined,
     projectIdentifier: missing.project ?? undefined,
@@ -384,8 +311,7 @@ async function createPlaceholder(
   // uses for the real values. Harness refuses to move a secret between managers
   // after it is created, so a placeholder in the wrong one could never be
   // replaced by a real value under the same identifier.
-  const secretManagerIdentifier =
-    missing.org === null ? "harnessSecretManager" : "org.harnessSecretManager";
+  const secretManagerIdentifier = missing.org === null ? "harnessSecretManager" : "org.harnessSecretManager";
   const secret = {
     name: missing.identifier,
     identifier: missing.identifier,
@@ -412,18 +338,8 @@ async function createPlaceholder(
 
   const form = new FormData();
   form.append("spec", JSON.stringify({ secret }));
-  form.append(
-    "file",
-    new Blob([PLACEHOLDER_VALUE], { type: "text/plain" }),
-    `${missing.identifier}.txt`,
-  );
-  return harnessRequest(
-    to.token,
-    "POST",
-    "/ng/api/v2/secrets/files",
-    query,
-    form,
-  );
+  form.append("file", new Blob([PLACEHOLDER_VALUE], { type: "text/plain" }), `${missing.identifier}.txt`);
+  return harnessRequest(to.token, "POST", "/ng/api/v2/secrets/files", query, form);
 }
 
 async function createFillingGaps(
@@ -456,8 +372,7 @@ async function createFillingGaps(
       outcome: result.outcome,
       detail:
         result.detail ??
-        `A ${type} holding ${PLACEHOLDER_VALUE} — referenced by the content ` +
-          `being deployed, and no real value for it was available.`,
+        `A ${type} holding ${PLACEHOLDER_VALUE} — referenced by the content ` + `being deployed, and no real value for it was available.`,
     });
 
     if (result.outcome === "failed") break;
@@ -474,11 +389,7 @@ async function createFillingGaps(
     : result;
 }
 
-async function copyConnectors(
-  from: Scope,
-  to: Scope,
-  record: Record_,
-): Promise<void> {
+async function copyConnectors(from: Scope, to: Scope, record: Record_): Promise<void> {
   const listed = await listPages<{
     connector?: Json;
     harnessManaged?: boolean;
@@ -531,11 +442,7 @@ async function copyConnectors(
   }
 }
 
-async function copyTemplates(
-  from: Scope,
-  to: Scope,
-  record: Record_,
-): Promise<void> {
+async function copyTemplates(from: Scope, to: Scope, record: Record_): Promise<void> {
   const listed = await listPages<{
     identifier?: string;
     name?: string;
@@ -567,12 +474,10 @@ async function copyTemplates(
     }
     const label = `${identifier}:${versionLabel}`;
 
-    const fetched = await harnessRequest(
-      from.token,
-      "GET",
-      `/template/api/templates/${encodeURIComponent(identifier)}`,
-      { ...scopeQuery(from), versionLabel },
-    );
+    const fetched = await harnessRequest(from.token, "GET", `/template/api/templates/${encodeURIComponent(identifier)}`, {
+      ...scopeQuery(from),
+      versionLabel,
+    });
     const yaml = dataOf<{ yaml?: string }>(fetched)?.yaml;
     if (!ok(fetched) || typeof yaml !== "string") {
       record({
@@ -580,9 +485,7 @@ async function copyTemplates(
         kind: "template",
         identifier: label,
         outcome: "failed",
-        detail: `Could not read it from ${scopeLabel(from)}: ${
-          ok(fetched) ? "Harness returned no YAML." : messageOf(fetched.text)
-        }`,
+        detail: `Could not read it from ${scopeLabel(from)}: ${ok(fetched) ? "Harness returned no YAML." : messageOf(fetched.text)}`,
       });
       continue;
     }
@@ -610,14 +513,7 @@ async function copyTemplates(
     const outcome = await createFillingGaps(
       from,
       to,
-      () =>
-        harnessRequest(
-          to.token,
-          "POST",
-          "/template/api/templates",
-          { ...scopeQuery(to), storeType: "INLINE" },
-          body,
-        ),
+      () => harnessRequest(to.token, "POST", "/template/api/templates", { ...scopeQuery(to), storeType: "INLINE" }, body),
       record,
     );
 
@@ -638,18 +534,11 @@ async function copyTemplates(
  * Nothing references a variable by scope the way a connector references a
  * secret, so there is no gap to fill here either.
  */
-async function copyVariables(
-  from: Scope,
-  to: Scope,
-  record: Record_,
-): Promise<void> {
-  const listed = await listPages<{ variable?: Json }>(
-    from.token,
-    "GET",
-    "/ng/api/variables",
-    scopeQuery(from),
-    { page: "pageIndex", size: "pageSize" },
-  );
+async function copyVariables(from: Scope, to: Scope, record: Record_): Promise<void> {
+  const listed = await listPages<{ variable?: Json }>(from.token, "GET", "/ng/api/variables", scopeQuery(from), {
+    page: "pageIndex",
+    size: "pageSize",
+  });
 
   if (!listed.ok) {
     record({
@@ -693,18 +582,11 @@ async function copyVariables(
   }
 }
 
-async function copyEnvironments(
-  from: Scope,
-  to: Scope,
-  record: Record_,
-): Promise<void> {
-  const listed = await listPages<{ environment?: Json }>(
-    from.token,
-    "GET",
-    "/ng/api/environmentsV2",
-    scopeQuery(from),
-    { page: "page", size: "size" },
-  );
+async function copyEnvironments(from: Scope, to: Scope, record: Record_): Promise<void> {
+  const listed = await listPages<{ environment?: Json }>(from.token, "GET", "/ng/api/environmentsV2", scopeQuery(from), {
+    page: "page",
+    size: "size",
+  });
 
   if (!listed.ok) {
     record({
@@ -756,10 +638,7 @@ async function copyEnvironments(
               ...((environment.tags as Json | undefined) ?? {}),
               ...TAGS,
             },
-            type:
-              typeof environment.type === "string"
-                ? environment.type
-                : "PreProduction",
+            type: typeof environment.type === "string" ? environment.type : "PreProduction",
             ...(body === null ? {} : { yaml: body }),
           },
         ),
@@ -773,13 +652,7 @@ async function copyEnvironments(
       ...outcome,
     });
 
-    await copyInfrastructures(
-      from,
-      to,
-      identifier,
-      outcome.outcome === "failed" ? outcome.detail : null,
-      record,
-    );
+    await copyInfrastructures(from, to, identifier, outcome.outcome === "failed" ? outcome.detail : null, record);
   }
 }
 
@@ -827,10 +700,8 @@ async function copyInfrastructures(
       continue;
     }
 
-    const name =
-      typeof infrastructure.name === "string" ? infrastructure.name : identifier;
-    const yaml =
-      typeof infrastructure.yaml === "string" ? infrastructure.yaml : null;
+    const name = typeof infrastructure.name === "string" ? infrastructure.name : identifier;
+    const yaml = typeof infrastructure.yaml === "string" ? infrastructure.yaml : null;
     if (yaml === null) {
       record({
         scope: scopeLabel(to),
@@ -914,11 +785,7 @@ async function copyInfrastructures(
  * what keeps the copy honest — an inheriting listing would clone the authoring
  * account's builtin example policies into the target org.
  */
-async function listPolicy<T>(
-  token: string,
-  path: string,
-  query: Query,
-): Promise<{ ok: true; items: T[] } | { ok: false; detail: string }> {
+async function listPolicy<T>(token: string, path: string, query: Query): Promise<{ ok: true; items: T[] } | { ok: false; detail: string }> {
   const items: T[] = [];
 
   for (let page = 0; page < MAX_PAGES; page++) {
@@ -930,10 +797,7 @@ async function listPolicy<T>(
     if (!ok(reply)) {
       return {
         ok: false,
-        detail:
-          reply.status === 0
-            ? reply.text
-            : `${messageOf(reply.text)} (HTTP ${reply.status})`,
+        detail: reply.status === 0 ? reply.text : `${messageOf(reply.text)} (HTTP ${reply.status})`,
       };
     }
 
@@ -965,11 +829,7 @@ function policyOutcomeOf(reply: Reply): {
   outcome: DeployOutcome;
   detail?: string;
 } {
-  if (
-    !ok(reply) &&
-    reply.status === 400 &&
-    /identifier must be unique/i.test(messageOf(reply.text))
-  ) {
+  if (!ok(reply) && reply.status === 400 && /identifier must be unique/i.test(messageOf(reply.text))) {
     return { outcome: "existed" };
   }
   return outcomeOf(reply);
@@ -989,17 +849,10 @@ type PolicyScope = { org_id?: string; project_id?: string };
  * re-derived from these fields rather than taken from how it was named.
  */
 function policyIsInScope(policy: PolicyScope, from: Scope): boolean {
-  return (
-    (policy.org_id ?? "") === from.org &&
-    (policy.project_id ?? "") === (from.project ?? "")
-  );
+  return (policy.org_id ?? "") === from.org && (policy.project_id ?? "") === (from.project ?? "");
 }
 
-async function copyPolicies(
-  from: Scope,
-  to: Scope,
-  record: Record_,
-): Promise<void> {
+async function copyPolicies(from: Scope, to: Scope, record: Record_): Promise<void> {
   const listed = await listPolicy<{
     identifier?: string;
     name?: string;
@@ -1023,13 +876,11 @@ async function copyPolicies(
 
     // No tags and no description of ours, the way a variable has none: the API
     // takes an identifier, a name and a rego body and nothing else.
-    const reply = await harnessRequest(
-      to.token,
-      "POST",
-      "/pm/api/v1/policies",
-      scopeQuery(to),
-      { identifier, name: policy.name ?? identifier, rego },
-    );
+    const reply = await harnessRequest(to.token, "POST", "/pm/api/v1/policies", scopeQuery(to), {
+      identifier,
+      name: policy.name ?? identifier,
+      rego,
+    });
 
     record({
       scope: scopeLabel(to),
@@ -1050,16 +901,8 @@ async function copyPolicies(
  * in the detail, because a policy set enforcing fewer rules than the one it was
  * copied from is a difference somebody needs to be told about.
  */
-async function copyPolicySets(
-  from: Scope,
-  to: Scope,
-  record: Record_,
-): Promise<void> {
-  const listed = await listPolicy<{ identifier?: string }>(
-    from.token,
-    "/pm/api/v1/policysets",
-    scopeQuery(from),
-  );
+async function copyPolicySets(from: Scope, to: Scope, record: Record_): Promise<void> {
+  const listed = await listPolicy<{ identifier?: string }>(from.token, "/pm/api/v1/policysets", scopeQuery(from));
 
   if (!listed.ok) {
     record({
@@ -1077,12 +920,7 @@ async function copyPolicySets(
     if (typeof identifier !== "string") continue;
 
     // The listing does not promise the policies, so each set is read whole.
-    const fetched = await harnessRequest(
-      from.token,
-      "GET",
-      `/pm/api/v1/policysets/${encodeURIComponent(identifier)}`,
-      scopeQuery(from),
-    );
+    const fetched = await harnessRequest(from.token, "GET", `/pm/api/v1/policysets/${encodeURIComponent(identifier)}`, scopeQuery(from));
     if (!ok(fetched)) {
       record({
         scope: scopeLabel(to),
@@ -1138,13 +976,7 @@ async function copyPolicySets(
       enabled: set.enabled ?? false,
     };
 
-    const created = await harnessRequest(
-      to.token,
-      "POST",
-      "/pm/api/v1/policysets",
-      scopeQuery(to),
-      body,
-    );
+    const created = await harnessRequest(to.token, "POST", "/pm/api/v1/policysets", scopeQuery(to), body);
     const outcome = policyOutcomeOf(created);
     if (outcome.outcome === "failed") {
       record({ scope: scopeLabel(to), kind: "policy set", identifier, ...outcome });
@@ -1154,13 +986,10 @@ async function copyPolicySets(
     // The attach runs whether or not the create was new, so deploying twice
     // repairs a set whose policies did not land the first time.
     if (kept.length > 0) {
-      const attached = await harnessRequest(
-        to.token,
-        "PATCH",
-        `/pm/api/v1/policysets/${encodeURIComponent(identifier)}`,
-        scopeQuery(to),
-        { ...body, policies: kept },
-      );
+      const attached = await harnessRequest(to.token, "PATCH", `/pm/api/v1/policysets/${encodeURIComponent(identifier)}`, scopeQuery(to), {
+        ...body,
+        policies: kept,
+      });
       if (!ok(attached)) {
         record({
           scope: scopeLabel(to),
@@ -1222,20 +1051,10 @@ const FILTER_SERVICES: Record<string, readonly string[]> = {
   "/pipeline/api/filters": ["PipelineSetup", "PipelineExecution"],
 };
 
-async function copyFilters(
-  from: Scope,
-  to: Scope,
-  record: Record_,
-): Promise<void> {
+async function copyFilters(from: Scope, to: Scope, record: Record_): Promise<void> {
   for (const [path, types] of Object.entries(FILTER_SERVICES)) {
     for (const type of types) {
-      const listed = await listPages<Json>(
-        from.token,
-        "GET",
-        path,
-        { ...scopeQuery(from), type },
-        { page: "pageIndex", size: "pageSize" },
-      );
+      const listed = await listPages<Json>(from.token, "GET", path, { ...scopeQuery(from), type }, { page: "pageIndex", size: "pageSize" });
 
       if (!listed.ok) {
         record({
@@ -1303,13 +1122,7 @@ async function copyScope(from: Scope, to: Scope, record: Record_): Promise<void>
   await copyFilters(from, to, record);
 }
 
-async function deploySecrets(
-  to: Scope,
-  tokenId: string,
-  userId: string,
-  choice: SecretChoice,
-  record: Record_,
-): Promise<void> {
+async function deploySecrets(to: Scope, tokenId: string, userId: string, choice: SecretChoice, record: Record_): Promise<void> {
   for (const secret of await orgSecretValues(userId, choice)) {
     if (secret.value === null) {
       record({
@@ -1319,9 +1132,7 @@ async function deploySecrets(
         outcome: "skipped",
         detail:
           "It cannot be decrypted with this deployment's key — re-enter it in " +
-          (secret.mine
-            ? "My settings → My org secrets."
-            : "Settings → Org Secrets."),
+          (secret.mine ? "My settings → My org secrets." : "Settings → Org Secrets."),
       });
       continue;
     }
@@ -1347,11 +1158,7 @@ async function deploySecrets(
           },
         }),
       );
-      form.append(
-        "file",
-        new Blob([secret.value], { type: "text/plain" }),
-        secret.fileName ?? `${secret.identifier}.txt`,
-      );
+      form.append("file", new Blob([secret.value], { type: "text/plain" }), secret.fileName ?? `${secret.identifier}.txt`);
       reply = await harnessRequest(
         to.token,
         "POST",
@@ -1396,9 +1203,7 @@ async function deploySecrets(
         orgIdentifier: to.org,
         secretIdentifier: secret.identifier,
         kind: secret.kind,
-        harnessUpdatedAt: harnessTimestamp(
-          dataOf<{ updatedAt?: unknown }>(reply)?.updatedAt,
-        ),
+        harnessUpdatedAt: harnessTimestamp(dataOf<{ updatedAt?: unknown }>(reply)?.updatedAt),
       });
     } catch (err) {
       record({
@@ -1419,17 +1224,23 @@ async function administersAccountNow(
   token: string,
   accountId: string,
 ): Promise<{ ok: true } | { ok: false; error: DeployError; detail?: string }> {
-  const reply = await harnessRequest(token, "POST", "/authz/api/acl", {
-    accountIdentifier: accountId,
-  }, {
-    permissions: [
-      {
-        resourceScope: { accountIdentifier: accountId },
-        resourceType: "ACCOUNT",
-        permission: ACCOUNT_ADMIN,
-      },
-    ],
-  });
+  const reply = await harnessRequest(
+    token,
+    "POST",
+    "/authz/api/acl",
+    {
+      accountIdentifier: accountId,
+    },
+    {
+      permissions: [
+        {
+          resourceScope: { accountIdentifier: accountId },
+          resourceType: "ACCOUNT",
+          permission: ACCOUNT_ADMIN,
+        },
+      ],
+    },
+  );
 
   if (!ok(reply)) {
     if (reply.status === 0) {
@@ -1443,19 +1254,12 @@ async function administersAccountNow(
 
   const granted = dataOf<{
     accessControlList?: { permission?: string; permitted?: boolean }[];
-  }>(reply)?.accessControlList?.some(
-    (entry) => entry.permission === ACCOUNT_ADMIN && entry.permitted === true,
-  );
+  }>(reply)?.accessControlList?.some((entry) => entry.permission === ACCOUNT_ADMIN && entry.permitted === true);
 
   return granted ? { ok: true } : { ok: false, error: "not_permitted" };
 }
 
-export async function deployContent(
-  userId: string,
-  tokenId: string,
-  orgName: string,
-  selection: DeploySelection,
-): Promise<DeployResult> {
+export async function deployContent(userId: string, tokenId: string, orgName: string, selection: DeploySelection): Promise<DeployResult> {
   const typed = orgName.trim();
   const derived = harnessIdentifier(typed);
   if (typed.length === 0 || derived === null) {
@@ -1471,9 +1275,7 @@ export async function deployContent(
     .where(and(eq(harnessTokens.id, tokenId), eq(harnessTokens.userId, userId)));
   if (!row) return { ok: false, error: "not_found" };
 
-  const rerun =
-    row.deployedOrgIdentifier !== null &&
-    row.deployedOrgIdentifier.toLowerCase() === derived.toLowerCase();
+  const rerun = row.deployedOrgIdentifier !== null && row.deployedOrgIdentifier.toLowerCase() === derived.toLowerCase();
   const identifier = rerun ? row.deployedOrgIdentifier! : derived;
 
   const secret = openSecret(row.secret);
@@ -1536,28 +1338,16 @@ export async function deployContent(
     kind: "organization",
     identifier,
     outcome: reused ? "existed" : "created",
-    detail: reused
-      ? "Deployed into before, so this is a re-run — anything already there is " +
-        "left as it is."
-      : undefined,
+    detail: reused ? "Deployed into before, so this is a re-run — anything already there is " + "left as it is." : undefined,
   });
 
-  await deploySecrets(
-    target,
-    tokenId,
-    userId,
-    { official: selection.official, mine: selection.mySecrets },
-    record,
-  );
+  await deploySecrets(target, tokenId, userId, { official: selection.official, mine: selection.mySecrets }, record);
 
   const sources = await deployableTemplateSources(userId, {
     official: selection.official,
     mine: selection.myTemplates,
   });
-  const ordered = [
-    ...sources.filter((s) => s.projectIdentifier === null),
-    ...sources.filter((s) => s.projectIdentifier !== null),
-  ];
+  const ordered = [...sources.filter((s) => s.projectIdentifier === null), ...sources.filter((s) => s.projectIdentifier !== null)];
 
   // The user's own sources this run really read from, for the row's record of
   // what the organization holds. A source that was skipped never lands, so it
@@ -1574,9 +1364,7 @@ export async function deployContent(
         outcome: "skipped",
         detail:
           "That template source's token cannot be decrypted — re-add it in " +
-          (source.mine
-            ? "My settings → My templates."
-            : "Settings → Templates."),
+          (source.mine ? "My settings → My templates." : "Settings → Templates."),
       });
       continue;
     }
@@ -1648,12 +1436,9 @@ export async function deployContent(
     myTemplates: copied,
   };
 
-  await recordHarnessDeploy(
-    userId,
-    tokenId,
-    { name, identifier },
-    rerun ? mergeDeployed(row.deployedContent, content) : content,
-  ).catch(() => {});
+  await recordHarnessDeploy(userId, tokenId, { name, identifier }, rerun ? mergeDeployed(row.deployedContent, content) : content).catch(
+    () => {},
+  );
 
   return {
     ok: true,

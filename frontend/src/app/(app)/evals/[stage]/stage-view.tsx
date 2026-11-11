@@ -4,15 +4,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import {
-  HEADER_ROW,
-  LINK_ROW,
-  Pager,
-  PlainHeader,
-  SortHeader,
-  TableSearch,
-  useRowLink,
-} from "@/components/data-table";
+import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import type { EvalsAssessmentStage } from "@/db/schema";
 import { AUDIENCE_LABELS, STAGE_LABELS } from "@/lib/evals/assessment-values";
 import type { AssessmentRow } from "@/lib/evals/assessments";

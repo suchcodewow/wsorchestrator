@@ -76,7 +76,10 @@ function serve(pages: Group[][], opts: { token?: Response; subscription?: Respon
     if (url.origin !== "https://management.azure.com") return undefined;
     if (url.pathname === `/subscriptions/${SUB}/resourcegroups`) {
       const page = Number(url.searchParams.get("page") ?? "0");
-      const next = page + 1 < pages.length ? `https://management.azure.com/subscriptions/${SUB}/resourcegroups?api-version=2021-04-01&page=${page + 1}` : undefined;
+      const next =
+        page + 1 < pages.length
+          ? `https://management.azure.com/subscriptions/${SUB}/resourcegroups?api-version=2021-04-01&page=${page + 1}`
+          : undefined;
       return json({ value: pages[page] ?? [], ...(next ? { nextLink: next } : {}) });
     }
     if (url.pathname === `/subscriptions/${SUB}`) {
@@ -147,10 +150,7 @@ describe("classification", () => {
         group("NetworkWatcherRG", { tags: null }),
       ],
     ]);
-    const owners = ownerMaps(
-      { azure: { "wo-run-a": owner("r1") } },
-      { [RUN_TAG]: owner(RUN_ID) },
-    );
+    const owners = ownerMaps({ azure: { "wo-run-a": owner("r1") } }, { [RUN_TAG]: owner(RUN_ID) });
     const a = await audit(owners);
     const by = Object.fromEntries(a.resources.map((x) => [x.id, [x.classification, x.owner?.runId ?? null]]));
     assert.deepEqual(by, {
@@ -174,18 +174,15 @@ describe("classification", () => {
     configure();
     serve([[{ id: "/x" }, group("real")]]);
     const a = await audit();
-    assert.deepEqual(a.resources.map((x) => x.id), ["real"]);
+    assert.deepEqual(
+      a.resources.map((x) => x.id),
+      ["real"],
+    );
   });
 
   test("state is the provisioning state, ok only when Succeeded", async () => {
     configure();
-    serve([
-      [
-        group("a"),
-        group("b", { properties: { provisioningState: "Deleting" } }),
-        group("c", { properties: {} }),
-      ],
-    ]);
+    serve([[group("a"), group("b", { properties: { provisioningState: "Deleting" } }), group("c", { properties: {} })]]);
     const a = await audit();
     const state = Object.fromEntries(a.resources.map((x) => [x.id, x.state]));
     assert.deepEqual(state, {
@@ -225,7 +222,10 @@ describe("paging and scope", () => {
     configure();
     serve([[group("a")], [group("b")], [group("c")]]);
     const a = await audit();
-    assert.deepEqual(a.resources.map((x) => x.id), ["a", "b", "c"]);
+    assert.deepEqual(
+      a.resources.map((x) => x.id),
+      ["a", "b", "c"],
+    );
   });
 
   test("names the subscription, or leaves the name out if it cannot be read", async () => {

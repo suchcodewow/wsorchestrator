@@ -46,7 +46,10 @@ describe("failureReason", () => {
   });
 
   test("an unrecognised provider error gives its own message", () => {
-    assert.equal(failureReason(`500 {"type":"error","error":{"type":"api_error","message":"Internal server error"}}`), "Internal server error");
+    assert.equal(
+      failureReason(`500 {"type":"error","error":{"type":"api_error","message":"Internal server error"}}`),
+      "Internal server error",
+    );
   });
 
   test("anything else is given as it was stored, without the error class", () => {

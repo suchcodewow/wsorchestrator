@@ -12,12 +12,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  ACCOUNT_ADMIN,
-  PERMISSION_PROBES,
-  administersAccount,
-  permissionLabel,
-} from "@/lib/harness-permissions";
+import { ACCOUNT_ADMIN, PERMISSION_PROBES, administersAccount, permissionLabel } from "@/lib/harness-permissions";
 
 describe("PERMISSION_PROBES", () => {
   test("asks about each permission once", () => {
@@ -62,9 +57,10 @@ describe("administersAccount", () => {
   });
 
   test("is false when only other permissions are granted, however many", () => {
-    const everythingElse = PERMISSION_PROBES.filter((p) => p.permission !== ACCOUNT_ADMIN).map(
-      (p) => ({ permission: p.permission, permitted: true }),
-    );
+    const everythingElse = PERMISSION_PROBES.filter((p) => p.permission !== ACCOUNT_ADMIN).map((p) => ({
+      permission: p.permission,
+      permitted: true,
+    }));
     assert.equal(administersAccount(everythingElse), false);
   });
 

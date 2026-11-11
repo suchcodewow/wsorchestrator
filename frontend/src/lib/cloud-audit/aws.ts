@@ -4,12 +4,7 @@ import "server-only";
 
 import { createHash, createHmac } from "node:crypto";
 import { missingFromCloud, type OwnerMaps } from "./owners";
-import {
-  summarize,
-  type AuditedResource,
-  type AuditUnavailable,
-  type CloudAuditResult,
-} from "./types";
+import { summarize, type AuditedResource, type AuditUnavailable, type CloudAuditResult } from "./types";
 
 const HOST = "organizations.us-east-1.amazonaws.com";
 const SIGNING_REGION = "us-east-1";
@@ -42,13 +37,14 @@ function infraAccountIds(): Set<string> {
   );
 }
 
-const sha256 = (data: string) =>
-  createHash("sha256").update(data, "utf8").digest("hex");
-const hmac = (key: Buffer | string, data: string) =>
-  createHmac("sha256", key).update(data, "utf8").digest();
+const sha256 = (data: string) => createHash("sha256").update(data, "utf8").digest("hex");
+const hmac = (key: Buffer | string, data: string) => createHmac("sha256", key).update(data, "utf8").digest();
 
 const amzDate = (now: Date) =>
-  now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  now
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, "");
 
 class AwsError extends Error {
   constructor(
@@ -88,20 +84,13 @@ async function organizations<T>(action: string, body: object): Promise<T> {
   ].join("\n");
 
   const scope = `${dateStamp}/${SIGNING_REGION}/${SERVICE}/aws4_request`;
-  const stringToSign = [
-    "AWS4-HMAC-SHA256",
-    date,
-    scope,
-    sha256(canonicalRequest),
-  ].join("\n");
+  const stringToSign = ["AWS4-HMAC-SHA256", date, scope, sha256(canonicalRequest)].join("\n");
 
   const kDate = hmac(`AWS4${creds.secretAccessKey}`, dateStamp);
   const kRegion = hmac(kDate, SIGNING_REGION);
   const kService = hmac(kRegion, SERVICE);
   const kSigning = hmac(kService, "aws4_request");
-  const signature = createHmac("sha256", kSigning)
-    .update(stringToSign, "utf8")
-    .digest("hex");
+  const signature = createHmac("sha256", kSigning).update(stringToSign, "utf8").digest("hex");
 
   const res = await fetch(`https://${HOST}/`, {
     method: "POST",
@@ -110,8 +99,7 @@ async function organizations<T>(action: string, body: object): Promise<T> {
     headers: {
       ...headers,
       authorization:
-        `AWS4-HMAC-SHA256 Credential=${creds.accessKeyId}/${scope}, ` +
-        `SignedHeaders=${signedHeaders}, Signature=${signature}`,
+        `AWS4-HMAC-SHA256 Credential=${creds.accessKeyId}/${scope}, ` + `SignedHeaders=${signedHeaders}, Signature=${signature}`,
     },
   });
 
@@ -182,9 +170,7 @@ export async function auditAws(owners: OwnerMaps): Promise<CloudAuditResult> {
   let org: Organization["Organization"];
   try {
     [org, accounts] = await Promise.all([
-      organizations<Organization>("DescribeOrganization", {}).then(
-        (d) => d.Organization,
-      ),
+      organizations<Organization>("DescribeOrganization", {}).then((d) => d.Organization),
       listAccounts(),
     ]);
   } catch (err) {

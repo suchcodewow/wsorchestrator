@@ -13,12 +13,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  gcpStateObjects,
-  projectDeleteRefusal,
-  runLabel,
-  type GcpProject,
-} from "../src/gcp-projects.js";
+import { gcpStateObjects, projectDeleteRefusal, runLabel, type GcpProject } from "../src/gcp-projects.js";
 
 const RUN = "3c6e6a7c-9b9d-4276-b4a5-b4b1866dbb4f";
 const FOLDER = "522401695842";
@@ -49,10 +44,7 @@ describe("projectDeleteRefusal", () => {
   });
 
   test("allows it when already pending deletion", () => {
-    assert.equal(
-      projectDeleteRefusal({ ...challengeProject, state: "DELETE_REQUESTED" }, guard),
-      null,
-    );
+    assert.equal(projectDeleteRefusal({ ...challengeProject, state: "DELETE_REQUESTED" }, guard), null);
   });
 
   test("refuses the sandbox, which shares the folder and managed_by label", () => {
@@ -67,10 +59,7 @@ describe("projectDeleteRefusal", () => {
     };
     assert.match(projectDeleteRefusal(sandbox, guard) ?? "", /shared sandbox/);
     // Refused even where the sandbox is not configured, because it has no run_id.
-    assert.match(
-      projectDeleteRefusal(sandbox, { ...guard, sandboxProjectId: "" }) ?? "",
-      /run_id=\(none\)/,
-    );
+    assert.match(projectDeleteRefusal(sandbox, { ...guard, sandboxProjectId: "" }) ?? "", /run_id=\(none\)/);
   });
 
   test("refuses the admin project", () => {
@@ -84,20 +73,11 @@ describe("projectDeleteRefusal", () => {
   });
 
   test("refuses a project outside the workshops folder", () => {
-    assert.match(
-      projectDeleteRefusal({ ...challengeProject, parent: "folders/688190860371" }, guard) ?? "",
-      /not the workshops folder/,
-    );
+    assert.match(projectDeleteRefusal({ ...challengeProject, parent: "folders/688190860371" }, guard) ?? "", /not the workshops folder/);
   });
 
   test("refuses a project not labelled as the runner's", () => {
-    assert.match(
-      projectDeleteRefusal(
-        { ...challengeProject, labels: { run_id: "3c6e6a7c9b9d" } },
-        guard,
-      ) ?? "",
-      /managed_by/,
-    );
+    assert.match(projectDeleteRefusal({ ...challengeProject, labels: { run_id: "3c6e6a7c9b9d" } }, guard) ?? "", /managed_by/);
   });
 
   test("refuses another run's project", () => {
@@ -147,9 +127,8 @@ describe("gcpStateObjects", () => {
   });
 
   test("treats a GCP scenario this build no longer ships as GCP's", () => {
-    assert.deepEqual(
-      gcpStateObjects(base, [`${base}/scenarios/gcp-retired-thing/default.tfstate`]),
-      [`${base}/scenarios/gcp-retired-thing/default.tfstate`],
-    );
+    assert.deepEqual(gcpStateObjects(base, [`${base}/scenarios/gcp-retired-thing/default.tfstate`]), [
+      `${base}/scenarios/gcp-retired-thing/default.tfstate`,
+    ]);
   });
 });

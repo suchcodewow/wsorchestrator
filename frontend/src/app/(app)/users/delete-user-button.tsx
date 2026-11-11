@@ -6,21 +6,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const ERRORS: Record<string, string> = {
   self: "You can't delete your own account.",
   not_found: "That account no longer exists.",
   forbidden: "Only a platform administrator can delete accounts.",
-  bootstrap:
-    "That address is in SITE_ADMIN_EMAILS, which recreates it as a platform administrator on its next sign-in.",
+  bootstrap: "That address is in SITE_ADMIN_EMAILS, which recreates it as a platform administrator on its next sign-in.",
   owns_events: "This person owns events. Delete those first.",
   unauthorized: "Sign in again to delete this account.",
 };
@@ -81,16 +73,12 @@ export function DeleteUserButton({
           <DialogHeader>
             <DialogTitle>Delete {who}?</DialogTitle>
             <DialogDescription>
-              Their account, sessions, access tokens and personal Harness
-              settings are removed. Lab guides, workshops and components they
-              wrote stay, with no author. If their address can still sign in,
-              they come back as a new account with no roles.
+              Their account, sessions, access tokens and personal Harness settings are removed. Lab guides, workshops and components they
+              wrote stay, with no author. If their address can still sign in, they come back as a new account with no roles.
             </DialogDescription>
           </DialogHeader>
 
-          {user.name && user.email && (
-            <p className="font-mono text-sm text-muted-foreground">{user.email}</p>
-          )}
+          {user.name && user.email && <p className="font-mono text-sm text-muted-foreground">{user.email}</p>}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

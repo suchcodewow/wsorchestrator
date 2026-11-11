@@ -22,12 +22,7 @@ import { useLiveTranscript, type LiveTranscript } from "@/components/recording/u
 import { useRecorder } from "@/components/recording/use-recorder";
 import { Button } from "@/components/ui/button";
 import { riseChild, staggerParent } from "@/lib/motion";
-import {
-  MICROPHONE_PROBLEM_MESSAGES,
-  formatBytes,
-  formatDuration,
-  pickMimeType,
-} from "@/lib/recording/format";
+import { MICROPHONE_PROBLEM_MESSAGES, formatBytes, formatDuration, pickMimeType } from "@/lib/recording/format";
 import {
   canRecordHere,
   closeMicrophone,
@@ -54,9 +49,7 @@ type Status = "pass" | "warn" | "fail" | "pending";
 
 /** The transcript of the whole saved test recording. */
 type FullTranscript =
-  | { status: "idle" | "working" | "unavailable" }
-  | { status: "done"; text: string }
-  | { status: "failed"; error: string };
+  { status: "idle" | "working" | "unavailable" } | { status: "done"; text: string } | { status: "failed"; error: string };
 
 const TEST_MS = 5_000;
 /** A level the meter only reaches when someone speaks, not from fan noise. */
@@ -223,8 +216,7 @@ export function CheckPcView({ viewerId }: { viewerId: string }) {
   // ── The verdict ───────────────────────────────────────────────────────────
   const statuses = {
     browser: browser === null ? "pending" : browser.ok ? "pass" : "fail",
-    permission:
-      permission === "granted" ? "pass" : permission === "denied" ? "fail" : stream ? "pass" : "pending",
+    permission: permission === "granted" ? "pass" : permission === "denied" ? "fail" : stream ? "pass" : "pending",
     microphone: micError ? "fail" : heard ? "pass" : silentTooLong ? "warn" : "pending",
     recording: recorder.error ? "fail" : test.status,
     storage: free === null ? "pending" : free < LOW_SPACE_BYTES ? "warn" : "pass",
@@ -257,10 +249,7 @@ export function CheckPcView({ viewerId }: { viewerId: string }) {
         </span>
       </motion.div>
 
-      <motion.div
-        variants={staggerParent(0.04)}
-        className="divide-y overflow-hidden rounded-2xl border bg-card text-sm shadow-sm"
-      >
+      <motion.div variants={staggerParent(0.04)} className="divide-y overflow-hidden rounded-2xl border bg-card text-sm shadow-sm">
         <Step n={1} title="Browser" status={statuses.browser}>
           {browser &&
             (browser.ok ? (
@@ -277,8 +266,8 @@ export function CheckPcView({ viewerId }: { viewerId: string }) {
             <div className="space-y-2">
               <p>{micError ?? MICROPHONE_PROBLEM_MESSAGES.blocked}</p>
               <p className="text-muted-foreground">
-                On a Mac, if the site is already allowed, the block is in System Settings → Privacy &amp; Security →
-                Microphone: turn your browser on there, then quit and reopen it.
+                On a Mac, if the site is already allowed, the block is in System Settings → Privacy &amp; Security → Microphone: turn your
+                browser on there, then quit and reopen it.
               </p>
             </div>
           ) : permission === "granted" || stream ? (
@@ -406,9 +395,7 @@ export function CheckPcView({ viewerId }: { viewerId: string }) {
                     Keep recordings when space runs low
                   </Button>
                   {storage.persisted === false && (
-                    <span className="text-muted-foreground">
-                      The browser decides; it often says yes once you use a site regularly.
-                    </span>
+                    <span className="text-muted-foreground">The browser decides; it often says yes once you use a site regularly.</span>
                   )}
                 </div>
               )}

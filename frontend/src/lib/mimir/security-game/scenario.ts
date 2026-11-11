@@ -277,8 +277,7 @@ export function whyVulnerable(build: Build, round: RoundNumber): string[] {
   if (round >= 3 && build.color === "red") {
     const git = build.packages.find((p) => p.includes("git"));
     const lab = build.packages.find((p) => p.includes("lab"));
-    if (git && lab)
-      why.push(git === lab ? `red build, and “${git}” has both git and lab` : `red build with “${git}” and “${lab}”`);
+    if (git && lab) why.push(git === lab ? `red build, and “${git}” has both git and lab` : `red build with “${git}” and “${lab}”`);
   }
   return why;
 }
@@ -320,7 +319,12 @@ export function marksFor(build: Build, round: RoundNumber): Marks {
     digit = { start: at, end: at + 1 };
     color = true;
   }
-  if (round >= 3 && build.color === "red" && build.packages.some((p) => p.includes("git")) && build.packages.some((p) => p.includes("lab"))) {
+  if (
+    round >= 3 &&
+    build.color === "red" &&
+    build.packages.some((p) => p.includes("git")) &&
+    build.packages.some((p) => p.includes("lab"))
+  ) {
     build.packages.forEach((p, i) => packages[i].push(...spansOf(p, "git"), ...spansOf(p, "lab")));
     color = true;
   }

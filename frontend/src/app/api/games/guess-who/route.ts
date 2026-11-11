@@ -25,7 +25,10 @@ export const PUT = audited(async function PUT(req: Request) {
 
   const parsed = guessWhoConfigSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid", issues: parsed.error.issues.map((i) => ({ path: i.path, message: i.message })) }, { status: 400 });
+    return NextResponse.json(
+      { error: "invalid", issues: parsed.error.issues.map((i) => ({ path: i.path, message: i.message })) },
+      { status: 400 },
+    );
   }
 
   noteAudit({

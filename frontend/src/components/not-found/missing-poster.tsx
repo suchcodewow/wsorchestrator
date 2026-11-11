@@ -31,9 +31,7 @@ export function MissingPoster({ path }: { path: string }) {
       <article className="relative w-full max-w-md rotate-[-1.5deg] bg-[#fbfaf6] px-7 pt-10 pb-0 shadow-[0_25px_40px_-15px_rgba(0,0,0,0.55)]">
         <Pin className="top-3 left-1/2 -translate-x-1/2" />
 
-        <h1 className="text-center font-(family-name:--font-marker) text-[clamp(3.5rem,14vw,5.5rem)] leading-none text-red-600">
-          MISSING
-        </h1>
+        <h1 className="text-center font-(family-name:--font-marker) text-[clamp(3.5rem,14vw,5.5rem)] leading-none text-red-600">MISSING</h1>
         <p className="mt-2 text-center text-sm font-bold tracking-[0.2em] uppercase">Have you seen this page?</p>
 
         <div className="mx-auto mt-5 w-48 rotate-2 bg-white p-2.5 pb-8 shadow-md ring-1 ring-black/10">

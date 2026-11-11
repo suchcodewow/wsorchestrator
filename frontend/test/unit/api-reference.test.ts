@@ -22,15 +22,11 @@ function routesInCode(): Map<string, boolean> {
     const source = readFileSync(file, "utf8");
     const path = urlPath(file);
     const fns = topLevelFunctions(source);
-    const sessionHelpers = [...fns]
-      .filter(([, f]) => !f.exported && CALLS_AUTH.test(f.body))
-      .map(([name]) => name);
+    const sessionHelpers = [...fns].filter(([, f]) => !f.exported && CALLS_AUTH.test(f.body)).map(([name]) => name);
 
     for (const [name, fn] of fns) {
       if (!fn.exported || !/^(GET|POST|PUT|PATCH|DELETE)$/.test(name)) continue;
-      const sessionOnly =
-        CALLS_AUTH.test(fn.body) ||
-        sessionHelpers.some((h) => new RegExp(`\\b${h}\\(`).test(fn.body));
+      const sessionOnly = CALLS_AUTH.test(fn.body) || sessionHelpers.some((h) => new RegExp(`\\b${h}\\(`).test(fn.body));
       routes.set(`${name} ${path}`, !sessionOnly);
     }
 
@@ -64,7 +60,10 @@ describe("the API reference", () => {
   test("documents each route once", () => {
     const seen = new Map<string, number>();
     for (const e of documented) seen.set(key(e), (seen.get(key(e)) ?? 0) + 1);
-    assert.deepEqual([...seen].filter(([, n]) => n > 1), []);
+    assert.deepEqual(
+      [...seen].filter(([, n]) => n > 1),
+      [],
+    );
   });
 
   test("says session-only exactly where the handler calls auth() itself", () => {
@@ -85,16 +84,10 @@ describe("the API reference", () => {
   });
 
   test("never says an internal route takes a token", () => {
-    assert.deepEqual(
-      documented.filter((e) => e.access === "internal" && e.token).map(key),
-      [],
-    );
+    assert.deepEqual(documented.filter((e) => e.access === "internal" && e.token).map(key), []);
   });
 
   test("uses only access levels it can label", () => {
-    assert.deepEqual(
-      documented.filter((e) => !(e.access in ACCESS_LABELS)).map(key),
-      [],
-    );
+    assert.deepEqual(documented.filter((e) => !(e.access in ACCESS_LABELS)).map(key), []);
   });
 });

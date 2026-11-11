@@ -19,8 +19,7 @@ const scope = testScope("gprofile");
 
 const PHOTO = "https://lh3.googleusercontent.com/a/new-photo=s96-c";
 
-const stored = async (id: string) =>
-  (await db.select({ name: users.name, image: users.image }).from(users).where(eq(users.id, id)))[0];
+const stored = async (id: string) => (await db.select({ name: users.name, image: users.image }).from(users).where(eq(users.id, id)))[0];
 
 before(() => scope.setUp());
 after(() => scope.tearDown());

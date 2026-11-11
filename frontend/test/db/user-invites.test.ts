@@ -16,21 +16,9 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import {
-  ASSESSMENTS_ROLES,
-  EVENT_ROLES,
-  INVITE_TTL_MINUTES,
-  TRAINING_ROLES,
-  userInvites,
-  users,
-} from "@/db/schema";
+import { ASSESSMENTS_ROLES, EVENT_ROLES, INVITE_TTL_MINUTES, TRAINING_ROLES, userInvites, users } from "@/db/schema";
 import type { Access } from "@/lib/roles";
-import {
-  acceptInvite,
-  createInvite,
-  readInvite,
-  type InviteGrant,
-} from "@/lib/user-invites";
+import { acceptInvite, createInvite, readInvite, type InviteGrant } from "@/lib/user-invites";
 import { PERSONAS, PERSONA_NAMES, describeAccess } from "../support/access";
 import { readRoles, testScope } from "../support/seed";
 
@@ -74,10 +62,7 @@ async function mint(actor: { id: string; access: Access }, grant: InviteGrant) {
 async function usesOf(token: string) {
   const read = await readInvite(token);
   assert.ok(read.ok);
-  const [row] = await db
-    .select({ uses: userInvites.uses })
-    .from(userInvites)
-    .where(eq(userInvites.id, read.invite.id));
+  const [row] = await db.select({ uses: userInvites.uses }).from(userInvites).where(eq(userInvites.id, read.invite.id));
   return row!.uses;
 }
 
@@ -108,10 +93,7 @@ describe("making a link", () => {
   test("only the hash is stored, never the token", async () => {
     const admin = await scope.createUser("hash_admin", PERSONAS.eventAdmin);
     const token = await mint(admin, { eventRole: "operator", trainingRole: null, assessmentsRole: null });
-    const rows = await db
-      .select({ hash: userInvites.tokenHash })
-      .from(userInvites)
-      .where(eq(userInvites.createdBy, admin.id));
+    const rows = await db.select({ hash: userInvites.tokenHash }).from(userInvites).where(eq(userInvites.createdBy, admin.id));
     assert.equal(rows.length, 1);
     assert.notEqual(rows[0]!.hash, token);
     assert.ok(!rows[0]!.hash.includes(token));
@@ -125,15 +107,19 @@ describe("using a link", () => {
       const token = await mint(admin, grant);
       const newcomer = await scope.createUser("use_newcomer", PERSONAS.nobody);
       assert.deepEqual(await acceptInvite(newcomer.id, token), { ok: true, applied: true, grant });
-      assert.deepEqual(await readRoles(newcomer.id), {
-        event: grant.eventRole ?? "none",
-        training: grant.trainingRole,
-        assessments: grant.assessmentsRole,
-        platform: false,
-        judging: false,
-        manager: false,
-        participating: false,
-      }, describeGrant(grant));
+      assert.deepEqual(
+        await readRoles(newcomer.id),
+        {
+          event: grant.eventRole ?? "none",
+          training: grant.trainingRole,
+          assessments: grant.assessmentsRole,
+          platform: false,
+          judging: false,
+          manager: false,
+          participating: false,
+        },
+        describeGrant(grant),
+      );
     }
   });
 

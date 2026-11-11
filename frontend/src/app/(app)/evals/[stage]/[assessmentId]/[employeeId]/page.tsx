@@ -7,11 +7,7 @@ import { getScoringForm, scoringAssessment, scoringBootcamp } from "@/lib/evals/
 import { canScoreAssessments } from "@/lib/roles";
 import { ScoringFormView } from "./scoring-form";
 
-export default async function ScoringPage({
-  params,
-}: {
-  params: Promise<{ stage: string; assessmentId: string; employeeId: string }>;
-}) {
+export default async function ScoringPage({ params }: { params: Promise<{ stage: string; assessmentId: string; employeeId: string }> }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
 

@@ -57,7 +57,15 @@ describe("signingParts", () => {
     assert.match(parts.unsignedUrl, /^\/recordings-bkt\/chunks\/t-1\/camera\/000007\?X-Goog-Algorithm=GOOG4-RSA-SHA256&/);
     assert.match(parts.unsignedUrl, /X-Goog-Expires=3600&X-Goog-SignedHeaders=host$/);
     // The method is part of what is signed: a download URL must never take an upload.
-    const asGet = signingParts({ method: "GET", host: "storage.googleapis.com", bucket: "recordings-bkt", object: "chunks/t-1/camera/000007", email, now, expiresSeconds: 3600 });
+    const asGet = signingParts({
+      method: "GET",
+      host: "storage.googleapis.com",
+      bucket: "recordings-bkt",
+      object: "chunks/t-1/camera/000007",
+      email,
+      now,
+      expiresSeconds: 3600,
+    });
     assert.notEqual(parts.stringToSign, asGet.stringToSign);
   });
 });

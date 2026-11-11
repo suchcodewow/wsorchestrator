@@ -65,9 +65,7 @@ function gkeZones(): string[] {
     .split(",")
     .map((z) => z.trim())
     .filter(Boolean);
-  return override.length > 0
-    ? override
-    : (ZONE_LETTERS[region] ?? ["a", "b", "c"]);
+  return override.length > 0 ? override : (ZONE_LETTERS[region] ?? ["a", "b", "c"]);
 }
 
 /**
@@ -77,8 +75,7 @@ function gkeZones(): string[] {
  * necessarily the configured one — see `gcpRegionFor` in `run.ts`.
  */
 export function regionFromLocation(location: unknown): string | undefined {
-  const match =
-    typeof location === "string" ? location.match(/^(.+)-[a-z]$/) : null;
+  const match = typeof location === "string" ? location.match(/^(.+)-[a-z]$/) : null;
   return match?.[1];
 }
 
@@ -135,8 +132,7 @@ export function gcpCfg() {
      * than just skipping the connector. Off, the Terraform creates no account
      * at all and the runner has nothing to upload.
      */
-    harnessConnectorEnabled:
-      (process.env.GCP_HARNESS_CONNECTOR_ENABLED ?? "true") !== "false",
+    harnessConnectorEnabled: (process.env.GCP_HARNESS_CONNECTOR_ENABLED ?? "true") !== "false",
     /**
      * Project role that service account gets. Owner — the connector is what
      * the workshop's pipelines build through, so it administers the project
@@ -213,9 +209,7 @@ const CLOUD_CREDENTIAL_ENV: Record<Cloud, string[]> = {
  */
 export function assertCloudsConfigured(clouds: Cloud[]): void {
   const missing = clouds.flatMap((cloud) =>
-    (CLOUD_CREDENTIAL_ENV[cloud] ?? [])
-      .filter((name) => !process.env[name])
-      .map((name) => `${cloud}: ${name}`),
+    (CLOUD_CREDENTIAL_ENV[cloud] ?? []).filter((name) => !process.env[name]).map((name) => `${cloud}: ${name}`),
   );
 
   if (missing.length > 0) {
@@ -244,32 +238,27 @@ export function awsCfg() {
      * inside it. AWS creates OrganizationAccountAccessRole in every account it
      * provisions, so that is the default.
      */
-    accountAccessRole:
-      process.env.AWS_ACCOUNT_ACCESS_ROLE ?? "OrganizationAccountAccessRole",
+    accountAccessRole: process.env.AWS_ACCOUNT_ACCESS_ROLE ?? "OrganizationAccountAccessRole",
     /**
      * Every AWS account needs a globally-unique root email, so the runner uses
      * plus-addressing: aws+<account-name>@<domain>. Defaults to the Workspace
      * domain.
      */
-    accountEmailDomain:
-      process.env.AWS_ACCOUNT_EMAIL_DOMAIN ?? required("GOOGLE_WORKSPACE_DOMAIN"),
+    accountEmailDomain: process.env.AWS_ACCOUNT_EMAIL_DOMAIN ?? required("GOOGLE_WORKSPACE_DOMAIN"),
     /**
      * Whether each AWS-building run also creates an IAM user in its member
      * account, keys it, and hands the key to Harness behind an AWS connector
      * (see `linkAwsToHarness`). On by default; off, the Terraform creates no
      * user at all.
      */
-    harnessConnectorEnabled:
-      (process.env.AWS_HARNESS_CONNECTOR_ENABLED ?? "true") !== "false",
+    harnessConnectorEnabled: (process.env.AWS_HARNESS_CONNECTOR_ENABLED ?? "true") !== "false",
     /**
      * Policy that user gets. AdministratorAccess — unlike the other two
      * clouds, the boundary here is a whole member account that is closed at
      * teardown, so administrator inside it reaches nothing that outlives the
      * workshop.
      */
-    harnessUserPolicyArn:
-      process.env.AWS_HARNESS_USER_POLICY_ARN ??
-      "arn:aws:iam::aws:policy/AdministratorAccess",
+    harnessUserPolicyArn: process.env.AWS_HARNESS_USER_POLICY_ARN ?? "arn:aws:iam::aws:policy/AdministratorAccess",
   };
 }
 
@@ -322,8 +311,7 @@ export function azureCfg() {
      * record; it coexists with Google's MX). Override for a tenant that uses a
      * different verified domain.
      */
-    userDomain:
-      process.env.AZURE_USER_DOMAIN ?? required("GOOGLE_WORKSPACE_DOMAIN"),
+    userDomain: process.env.AZURE_USER_DOMAIN ?? required("GOOGLE_WORKSPACE_DOMAIN"),
     /**
      * Whether each Azure-building run also registers an app of its own, gives
      * it a client secret, and hands that to Harness behind an Azure connector
@@ -335,8 +323,7 @@ export function azureCfg() {
      * creating users did not, so a tenant that has not granted it fails the
      * apply. Off, the Terraform registers nothing.
      */
-    harnessConnectorEnabled:
-      (process.env.AZURE_HARNESS_CONNECTOR_ENABLED ?? "true") !== "false",
+    harnessConnectorEnabled: (process.env.AZURE_HARNESS_CONNECTOR_ENABLED ?? "true") !== "false",
     /**
      * Role that principal is granted on the run's resource group. Owner — the
      * connector is what the workshop's pipelines build through, and the
@@ -383,10 +370,7 @@ export function harnessCfg() {
   return {
     accountId: required("HARNESS_ACCOUNT_ID"),
     apiKey: required("HARNESS_API_KEY"),
-    baseUrl: (process.env.HARNESS_BASE_URL ?? "https://app.harness.io").replace(
-      /\/+$/,
-      "",
-    ),
+    baseUrl: (process.env.HARNESS_BASE_URL ?? "https://app.harness.io").replace(/\/+$/, ""),
     /*
      * Role and resource-group bindings for the three grants a workshop hands
      * out, mirroring the proven `harnessevents.ps1` reference. Each binding
@@ -402,27 +386,16 @@ export function harnessCfg() {
      */
 
     /** Makes the run's creator an administrator of the whole account. */
-    accountAdminRole:
-      process.env.HARNESS_ACCOUNT_ADMIN_ROLE ?? "_account_admin",
-    accountAdminRoleName:
-      process.env.HARNESS_ACCOUNT_ADMIN_ROLE_NAME ?? "Account Admin",
-    accountAdminResourceGroup:
-      process.env.HARNESS_ACCOUNT_ADMIN_RESOURCE_GROUP ??
-      "_all_resources_including_child_scopes",
-    accountAdminResourceGroupName:
-      process.env.HARNESS_ACCOUNT_ADMIN_RESOURCE_GROUP_NAME ??
-      "All Resources Including Child Scopes",
+    accountAdminRole: process.env.HARNESS_ACCOUNT_ADMIN_ROLE ?? "_account_admin",
+    accountAdminRoleName: process.env.HARNESS_ACCOUNT_ADMIN_ROLE_NAME ?? "Account Admin",
+    accountAdminResourceGroup: process.env.HARNESS_ACCOUNT_ADMIN_RESOURCE_GROUP ?? "_all_resources_including_child_scopes",
+    accountAdminResourceGroupName: process.env.HARNESS_ACCOUNT_ADMIN_RESOURCE_GROUP_NAME ?? "All Resources Including Child Scopes",
 
     /** Makes each attendee an administrator of their own project. */
     projectAdminRole: process.env.HARNESS_PROJECT_ADMIN_ROLE ?? "_project_admin",
-    projectAdminRoleName:
-      process.env.HARNESS_PROJECT_ADMIN_ROLE_NAME ?? "Project Admin",
-    projectAdminResourceGroup:
-      process.env.HARNESS_PROJECT_ADMIN_RESOURCE_GROUP ??
-      "_all_project_level_resources",
-    projectAdminResourceGroupName:
-      process.env.HARNESS_PROJECT_ADMIN_RESOURCE_GROUP_NAME ??
-      "All Project Level Resources",
+    projectAdminRoleName: process.env.HARNESS_PROJECT_ADMIN_ROLE_NAME ?? "Project Admin",
+    projectAdminResourceGroup: process.env.HARNESS_PROJECT_ADMIN_RESOURCE_GROUP ?? "_all_project_level_resources",
+    projectAdminResourceGroupName: process.env.HARNESS_PROJECT_ADMIN_RESOURCE_GROUP_NAME ?? "All Project Level Resources",
 
     /**
      * Read-only binding every attendee gets on each project a template source
@@ -431,16 +404,10 @@ export function harnessCfg() {
      * an attendee needs to read and reference it rather than edit it — where the
      * project they administer is theirs to change.
      */
-    projectViewerRole:
-      process.env.HARNESS_PROJECT_VIEWER_ROLE ?? "_project_viewer",
-    projectViewerRoleName:
-      process.env.HARNESS_PROJECT_VIEWER_ROLE_NAME ?? "Project Viewer",
-    projectViewerResourceGroup:
-      process.env.HARNESS_PROJECT_VIEWER_RESOURCE_GROUP ??
-      "_all_project_level_resources",
-    projectViewerResourceGroupName:
-      process.env.HARNESS_PROJECT_VIEWER_RESOURCE_GROUP_NAME ??
-      "All Project Level Resources",
+    projectViewerRole: process.env.HARNESS_PROJECT_VIEWER_ROLE ?? "_project_viewer",
+    projectViewerRoleName: process.env.HARNESS_PROJECT_VIEWER_ROLE_NAME ?? "Project Viewer",
+    projectViewerResourceGroup: process.env.HARNESS_PROJECT_VIEWER_RESOURCE_GROUP ?? "_all_project_level_resources",
+    projectViewerResourceGroupName: process.env.HARNESS_PROJECT_VIEWER_RESOURCE_GROUP_NAME ?? "All Project Level Resources",
 
     /**
      * Custom org-level role every attendee is bound to, giving the IDP and
@@ -450,12 +417,8 @@ export function harnessCfg() {
      */
     attendeeRole: process.env.HARNESS_ATTENDEE_ROLE ?? "attendeeRole",
     attendeeRoleName: process.env.HARNESS_ATTENDEE_ROLE_NAME ?? "attendeeRole",
-    orgResourceGroup:
-      process.env.HARNESS_ORG_RESOURCE_GROUP ??
-      "_all_organization_level_resources",
-    orgResourceGroupName:
-      process.env.HARNESS_ORG_RESOURCE_GROUP_NAME ??
-      "All Organization Level Resources",
+    orgResourceGroup: process.env.HARNESS_ORG_RESOURCE_GROUP ?? "_all_organization_level_resources",
+    orgResourceGroupName: process.env.HARNESS_ORG_RESOURCE_GROUP_NAME ?? "All Organization Level Resources",
 
     /*
      * The event's cloud credentials in Harness — one org-scoped secret per
@@ -480,8 +443,7 @@ export function harnessCfg() {
      * Name of the org-scoped delegate token the runner creates/reuses. One per
      * org, shared by every cluster in the event.
      */
-    delegateTokenName:
-      process.env.HARNESS_DELEGATE_TOKEN_NAME ?? "workshop-delegate",
+    delegateTokenName: process.env.HARNESS_DELEGATE_TOKEN_NAME ?? "workshop-delegate",
     /**
      * Pin the delegate container image. Empty — the normal case — means the
      * runner asks Harness for the version it currently supports, since the
@@ -500,15 +462,7 @@ export function harnessCfg() {
  * prohibited words]` without naming the word, so a workshop slug like
  * `google-platform` fails project creation with nothing to act on.
  */
-const PROHIBITED_ID_WORDS = [
-  "google",
-  "gooogle",
-  "googel",
-  "gogle",
-  "goggle",
-  "g00gle",
-  "ssl",
-];
+const PROHIBITED_ID_WORDS = ["google", "gooogle", "googel", "gogle", "goggle", "g00gle", "ssl"];
 
 /**
  * Fold `<prefix>-<slug>` into the character set GCP ids allow, dropping the
@@ -588,11 +542,7 @@ export function makeClusterName(slug: string, runId: string): string {
  * project that already exists. Project ids are capped at 30 characters, so the
  * slug is truncated to fit whatever the suffixes need.
  */
-export function makeChallengeProjectId(
-  slug: string,
-  runId: string,
-  email: string,
-): string {
+export function makeChallengeProjectId(slug: string, runId: string, email: string): string {
   const short = runId.replace(/-/g, "").slice(0, 4);
   const who = createHash("sha1").update(email).digest("hex").slice(0, 6);
   const suffix = `-${short}-${who}`;
@@ -609,14 +559,8 @@ export function makeChallengeProjectId(
  * same way on the way in and on the way out, so the reaper tears down exactly
  * the projects the provisioner created without anything extra being stored.
  */
-export function challengeProjectMap(
-  slug: string,
-  runId: string,
-  emails: string[],
-): Record<string, string> {
-  return Object.fromEntries(
-    emails.map((email) => [email, makeChallengeProjectId(slug, runId, email)]),
-  );
+export function challengeProjectMap(slug: string, runId: string, emails: string[]): Record<string, string> {
+  return Object.fromEntries(emails.map((email) => [email, makeChallengeProjectId(slug, runId, email)]));
 }
 
 /**
@@ -638,11 +582,7 @@ export function makeResourceGroupName(slug: string, runId: string): string {
  * same way `makeChallengeProjectId` is, so a challenge that grows never
  * renumbers — and so recomputes the name of — an RG that already exists.
  */
-export function makeChallengeResourceGroup(
-  slug: string,
-  runId: string,
-  email: string,
-): string {
+export function makeChallengeResourceGroup(slug: string, runId: string, email: string): string {
   const short = runId.replace(/-/g, "").slice(0, 4);
   const who = createHash("sha1").update(email).digest("hex").slice(0, 6);
   const suffix = `-${short}-${who}`;
@@ -665,11 +605,7 @@ export function makeAwsAccountName(slug: string, runId: string): string {
 }
 
 /** A challenge competitor's own AWS account name, derived from their address. */
-export function makeChallengeAwsAccountName(
-  slug: string,
-  runId: string,
-  email: string,
-): string {
+export function makeChallengeAwsAccountName(slug: string, runId: string, email: string): string {
   const short = runId.replace(/-/g, "").slice(0, 4);
   const who = createHash("sha1").update(email).digest("hex").slice(0, 6);
   const suffix = `-${short}-${who}`;
@@ -687,15 +623,6 @@ export function awsAccountEmail(accountName: string, domain: string): string {
  * same way on provision and teardown so the reaper destroys exactly the RGs the
  * provisioner created — mirrors `challengeProjectMap`.
  */
-export function challengeResourceGroupMap(
-  slug: string,
-  runId: string,
-  emails: string[],
-): Record<string, string> {
-  return Object.fromEntries(
-    emails.map((email) => [
-      email,
-      makeChallengeResourceGroup(slug, runId, email),
-    ]),
-  );
+export function challengeResourceGroupMap(slug: string, runId: string, emails: string[]): Record<string, string> {
+  return Object.fromEntries(emails.map((email) => [email, makeChallengeResourceGroup(slug, runId, email)]));
 }

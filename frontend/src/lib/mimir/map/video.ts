@@ -25,7 +25,11 @@ export async function signedVideoUrl(object: string): Promise<VideoUrl> {
   const b = bucket();
   if (!b) return { ok: false, error: "not_configured" };
   if ((await objectSize(b, object)) === null) return { ok: false, error: "missing" };
-  return { ok: true, url: await signedUrl({ method: "GET", bucket: b, object, expiresSeconds: VIDEO_URL_SECONDS }), expiresInSeconds: VIDEO_URL_SECONDS };
+  return {
+    ok: true,
+    url: await signedUrl({ method: "GET", bucket: b, object, expiresSeconds: VIDEO_URL_SECONDS }),
+    expiresInSeconds: VIDEO_URL_SECONDS,
+  };
 }
 
 /** Whether each of these videos is in the bucket: true or false, or null for all when this deployment has none. */

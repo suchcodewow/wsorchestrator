@@ -33,8 +33,7 @@ const ERRORS: Record<string, string> = {
   invalid: "Use just the part after the @, like example.com.",
   duplicate: "That domain is already on the list.",
   not_found: "That entry was already removed — reload the page.",
-  self_lockout:
-    "That change would leave your own address unable to sign in.",
+  self_lockout: "That change would leave your own address unable to sign in.",
   forbidden: "Your own role changed — reload the page.",
 };
 
@@ -58,12 +57,7 @@ export function DomainsView({
   framePage: Page<DomainRow>;
 }) {
   return (
-    <motion.div
-      variants={staggerParent(0.05)}
-      initial="hidden"
-      animate="show"
-      className="space-y-6"
-    >
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild}>
         <TableSearch value={query.q} placeholder="Search by domain, note or who added it" label="Search domains" />
       </motion.div>
@@ -133,11 +127,7 @@ function DomainTable({
   const q = query.q.toLowerCase();
   const envDomains = page.page === 1 ? allEnvDomains.filter((d) => d.includes(q)) : [];
 
-  async function send(
-    key: string,
-    url: string,
-    init: RequestInit,
-  ): Promise<boolean> {
+  async function send(key: string, url: string, init: RequestInit): Promise<boolean> {
     setBusy(key);
     setError(null);
     try {
@@ -209,24 +199,15 @@ function DomainTable({
                     }}
                   />
                 ) : (
-                  <tr
-                    key={row.id}
-                    className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
-                  >
+                  <tr key={row.id} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
                     <td className="px-5 py-3 font-mono font-medium">
                       {row.domain}
                       {viewerEmail?.endsWith(`@${row.domain}`) && (
-                        <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">
-                          yours
-                        </span>
+                        <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">yours</span>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-muted-foreground">
-                      {row.note || "—"}
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">
-                      {row.addedBy ?? "—"}
-                    </td>
+                    <td className="px-5 py-3 text-muted-foreground">{row.note || "—"}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{row.addedBy ?? "—"}</td>
                     <td className="px-5 py-3">
                       <div className="flex justify-end gap-1">
                         <Button
@@ -253,11 +234,7 @@ function DomainTable({
                             })
                           }
                         >
-                          {busy === row.id ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="size-3.5" />
-                          )}
+                          {busy === row.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
                         </Button>
                       </div>
                     </td>
@@ -317,10 +294,7 @@ function EnvRow({ domain }: { domain: string }) {
         Set by <code>AUTH_ALLOWED_EMAIL_DOMAINS</code> — always in force
       </td>
       <td className="px-5 py-3">
-        <div
-          className="flex justify-end pr-2 text-muted-foreground"
-          title="Change this in the deployment's configuration"
-        >
+        <div className="flex justify-end pr-2 text-muted-foreground" title="Change this in the deployment's configuration">
           <Lock className="size-3.5" />
         </div>
       </td>
@@ -388,26 +362,10 @@ function EditRow({
       </td>
       <td className="px-5 py-2.5">
         <div className="flex justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Save"
-            disabled={!valid || busy}
-            onClick={submit}
-          >
-            {busy ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Check className="size-3.5" />
-            )}
+          <Button variant="ghost" size="icon" aria-label="Save" disabled={!valid || busy} onClick={submit}>
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Cancel"
-            disabled={busy}
-            onClick={onCancel}
-          >
+          <Button variant="ghost" size="icon" aria-label="Cancel" disabled={busy} onClick={onCancel}>
             <X className="size-3.5" />
           </Button>
         </div>

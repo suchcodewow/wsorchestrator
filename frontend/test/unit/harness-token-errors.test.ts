@@ -64,10 +64,7 @@ describe("messageFor", () => {
   });
 
   test("appends what Harness said, trimmed", () => {
-    assert.equal(
-      messageFor("invalid_token", 409, " Invalid API key "),
-      `${MESSAGES.invalid_token} Harness said: Invalid API key`,
-    );
+    assert.equal(messageFor("invalid_token", 409, " Invalid API key "), `${MESSAGES.invalid_token} Harness said: Invalid API key`);
   });
 
   test("ignores a detail that is blank or not a string", () => {

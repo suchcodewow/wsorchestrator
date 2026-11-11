@@ -77,10 +77,7 @@ export const POST = audited(async function POST(req: Request) {
   });
   if (result.runId) noteAudit({ target: result.runId });
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, detail: result.detail, runId: result.runId },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error, detail: result.detail, runId: result.runId }, { status: STATUS_FOR[result.error] });
   }
   noteAudit({ detail: { ...result } });
   return NextResponse.json(result);

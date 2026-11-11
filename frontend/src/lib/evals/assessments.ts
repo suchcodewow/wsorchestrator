@@ -252,18 +252,12 @@ export async function updateAssessment(id: string, input: AssessmentInput): Prom
         .where(inArray(evalsSubmissionScores.criterionId, dropped));
       const retire = scored.map((s) => s.id);
       if (retire.length > 0) {
-        await tx
-          .update(evalsAssessmentCriteria)
-          .set({ retiredAt: new Date() })
-          .where(inArray(evalsAssessmentCriteria.id, retire));
+        await tx.update(evalsAssessmentCriteria).set({ retiredAt: new Date() }).where(inArray(evalsAssessmentCriteria.id, retire));
       }
       await tx
         .delete(evalsAssessmentCriteria)
         .where(
-          and(
-            inArray(evalsAssessmentCriteria.id, dropped),
-            retire.length > 0 ? notInArray(evalsAssessmentCriteria.id, retire) : undefined,
-          ),
+          and(inArray(evalsAssessmentCriteria.id, dropped), retire.length > 0 ? notInArray(evalsAssessmentCriteria.id, retire) : undefined),
         );
     }
 
@@ -274,9 +268,7 @@ export async function updateAssessment(id: string, input: AssessmentInput): Prom
           .set({ position, name: c.name, description: c.description })
           .where(eq(evalsAssessmentCriteria.id, c.id));
       } else {
-        await tx
-          .insert(evalsAssessmentCriteria)
-          .values({ assessmentId: id, position, name: c.name, description: c.description });
+        await tx.insert(evalsAssessmentCriteria).values({ assessmentId: id, position, name: c.name, description: c.description });
       }
     }
 
@@ -316,10 +308,7 @@ export async function deleteAssessment(id: string): Promise<{ ok: true; name: st
   if (scored || recorded) return hasScores();
   let deleted: { name: string } | undefined;
   try {
-    [deleted] = await db
-      .delete(evalsAssessments)
-      .where(eq(evalsAssessments.id, id))
-      .returning({ name: evalsAssessments.name });
+    [deleted] = await db.delete(evalsAssessments).where(eq(evalsAssessments.id, id)).returning({ name: evalsAssessments.name });
   } catch (err) {
     // Scored or recorded in between: the foreign key refuses it.
     if (isForeignKeyViolation(err)) return hasScores();

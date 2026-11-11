@@ -19,10 +19,7 @@ export async function getOrgLeaderEmail(): Promise<string> {
 export type SetOrgLeaderError = "not_an_employee";
 
 /** The leader must be someone the last HiBob sync actually imported. */
-export async function setOrgLeaderEmail(
-  actorId: string,
-  email: string,
-): Promise<{ ok: true } | { ok: false; error: SetOrgLeaderError }> {
+export async function setOrgLeaderEmail(actorId: string, email: string): Promise<{ ok: true } | { ok: false; error: SetOrgLeaderError }> {
   const lower = email.trim().toLowerCase();
   const [employee] = await db
     .select({ email: employees.email })
@@ -66,7 +63,12 @@ export async function getCandidateCutoffs(): Promise<CandidateCutoffs> {
   const rows = await db
     .select({ key: evalsSettings.key, value: evalsSettings.value })
     .from(evalsSettings)
-    .where(inArray(evalsSettings.key, CUTOFF_FIELDS.map((f) => EVALS_SETTINGS_KEYS[f])));
+    .where(
+      inArray(
+        evalsSettings.key,
+        CUTOFF_FIELDS.map((f) => EVALS_SETTINGS_KEYS[f]),
+      ),
+    );
   const saved = new Map(rows.map((r) => [r.key, r.value]));
   const cutoffs = { ...DEFAULT_CANDIDATE_CUTOFFS };
   for (const field of CUTOFF_FIELDS) {

@@ -3,13 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  channelAudience,
-  channelSuffix,
-  cohortChannels,
-  planMembership,
-  type CohortMember,
-} from "../../src/lib/cohorts/slack-plan";
+import { channelAudience, channelSuffix, cohortChannels, planMembership, type CohortMember } from "../../src/lib/cohorts/slack-plan";
 
 test("the suffix is the start date's three-letter month and four-digit year", () => {
   assert.equal(channelSuffix("2026-11-09"), "nov-2026");
@@ -49,14 +43,16 @@ const contacts = [
 const [salesBtc, seBtc, salesInt, seInt] = cohortChannels("2026-11-09", true);
 
 test("a sales- channel holds its stage's Sales and Engineers and the Bootcamp Contacts, lowercased", () => {
-  assert.deepEqual(
-    [...channelAudience(salesBtc!, cohort, contacts)].sort(),
-    ["bootcamp-contact@harness.io", "eng@harness.io", "seller@harness.io"],
-  );
-  assert.deepEqual(
-    [...channelAudience(salesInt!, cohort, contacts)].sort(),
-    ["bootcamp-contact@harness.io", "int-eng@harness.io", "int-seller@harness.io"],
-  );
+  assert.deepEqual([...channelAudience(salesBtc!, cohort, contacts)].sort(), [
+    "bootcamp-contact@harness.io",
+    "eng@harness.io",
+    "seller@harness.io",
+  ]);
+  assert.deepEqual([...channelAudience(salesInt!, cohort, contacts)].sort(), [
+    "bootcamp-contact@harness.io",
+    "int-eng@harness.io",
+    "int-seller@harness.io",
+  ]);
 });
 
 test("an se- channel holds its stage's Engineers and the Engineer Contacts, and no Sales", () => {

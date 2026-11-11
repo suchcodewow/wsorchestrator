@@ -62,15 +62,7 @@ export function RecordingList({
   );
 }
 
-function RecordingRow({
-  recording: r,
-  onDeleted,
-  actions,
-}: {
-  recording: StoredRecording;
-  onDeleted: () => void;
-  actions?: ReactNode;
-}) {
+function RecordingRow({ recording: r, onDeleted, actions }: { recording: StoredRecording; onDeleted: () => void; actions?: ReactNode }) {
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState<"play" | "download" | "delete" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +86,15 @@ function RecordingRow({
     setError(null);
     try {
       if (kind === "delete") {
-        if (!(await confirmDialog({ title: "Delete this recording from this computer?", description: "It cannot be recovered.", confirmLabel: "Delete", destructive: true }))) return;
+        if (
+          !(await confirmDialog({
+            title: "Delete this recording from this computer?",
+            description: "It cannot be recovered.",
+            confirmLabel: "Delete",
+            destructive: true,
+          }))
+        )
+          return;
         await deleteRecording(r.id);
         onDeleted();
         return;

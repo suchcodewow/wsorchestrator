@@ -46,13 +46,7 @@ export function Avatar({
   }
 
   return (
-    <span
-      aria-hidden
-      className={cn(
-        box,
-        "items-center justify-center bg-brand/10 text-xs font-medium text-brand",
-      )}
-    >
+    <span aria-hidden className={cn(box, "items-center justify-center bg-brand/10 text-xs font-medium text-brand")}>
       {initial}
     </span>
   );

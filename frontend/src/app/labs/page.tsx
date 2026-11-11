@@ -50,9 +50,7 @@ export default async function LabsPage() {
           </span>
           <p className="mt-4 text-sm font-medium">No workshops yet</p>
           <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">
-            {canEdit
-              ? "Write some guides, then put them in order."
-              : "Nothing has been published yet."}
+            {canEdit ? "Write some guides, then put them in order." : "Nothing has been published yet."}
           </p>
         </div>
       ) : (
@@ -85,7 +83,6 @@ export default async function LabsPage() {
           ))}
         </ul>
       )}
-
     </div>
   );
 }

@@ -8,14 +8,7 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { describeCron, nextDue, parseCron, scheduleProblem, zoneName } from "@/lib/cron";
 import type { TimedJobRow } from "@/lib/timed-jobs";
@@ -40,15 +33,7 @@ const ERRORS: Record<string, string> = {
   fixed_schedule: "This job's schedule is set in Terraform.",
 };
 
-export function ScheduleDialog({
-  job,
-  onClose,
-  onSaved,
-}: {
-  job: TimedJobRow;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
+export function ScheduleDialog({ job, onClose, onSaved }: { job: TimedJobRow; onClose: () => void; onSaved: () => void }) {
   const [cron, setCron] = useState(job.cron);
   const [timeZone, setTimeZone] = useState(job.timeZone);
   const [busy, setBusy] = useState(false);
@@ -61,7 +46,16 @@ export function ScheduleDialog({
     return parsed.ok ? nextDue(parsed.cron, timeZone, new Date(), 3) : [];
   }, [cron, timeZone, problem]);
   const when = useMemo(
-    () => new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short", dateStyle: undefined, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
+    () =>
+      new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        weekday: "short",
+        dateStyle: undefined,
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
     [timeZone],
   );
   const isDefault = cron.trim().split(/\s+/).join(" ") === job.defaultCron && timeZone === job.defaultTimeZone;
@@ -78,7 +72,11 @@ export function ScheduleDialog({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setError(body?.error === "invalid_schedule" ? (body.detail ?? "That schedule is not valid.") : (ERRORS[body?.error ?? ""] ?? `Could not save (${res.status})`));
+        setError(
+          body?.error === "invalid_schedule"
+            ? (body.detail ?? "That schedule is not valid.")
+            : (ERRORS[body?.error ?? ""] ?? `Could not save (${res.status})`),
+        );
         return;
       }
       onSaved();
@@ -176,11 +174,7 @@ export function ScheduleDialog({
             <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
               Cancel
             </Button>
-            <Button
-              type="button"
-              disabled={busy || problem !== null}
-              onClick={() => void save(isDefault ? null : { cron, timeZone })}
-            >
+            <Button type="button" disabled={busy || problem !== null} onClick={() => void save(isDefault ? null : { cron, timeZone })}>
               Save
             </Button>
           </div>

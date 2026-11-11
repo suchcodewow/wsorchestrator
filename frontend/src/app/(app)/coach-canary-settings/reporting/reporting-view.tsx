@@ -37,13 +37,7 @@ const COLUMNS: { column: ExperienceReportSort; label: string; className?: string
   { column: "slides", label: "Slide review" },
 ];
 
-export function ReportingView({
-  query,
-  page,
-}: {
-  query: ListQuery<ExperienceReportSort>;
-  page: Page<ExperienceReportRow>;
-}) {
+export function ReportingView({ query, page }: { query: ListQuery<ExperienceReportSort>; page: Page<ExperienceReportRow> }) {
   const rowLink = useRowLink();
   const [open, setOpen] = useState<string | null>(null);
   const sortProps = { sort: query.sort, dir: query.dir };
@@ -109,11 +103,7 @@ export function ReportingView({
                         )}
                       </td>
                       <td className="px-5 py-3">
-                        {r.securityAttempts ? (
-                          <Scored best={r.securityBest} max={SECURITY_MAX} attempts={r.securityAttempts} />
-                        ) : (
-                          <None />
-                        )}
+                        {r.securityAttempts ? <Scored best={r.securityBest} max={SECURITY_MAX} attempts={r.securityAttempts} /> : <None />}
                       </td>
                       <td className="px-5 py-3">
                         {r.slidesDone ? (

@@ -47,8 +47,8 @@ export function ClearResultsButton({ userId, who, sittings }: { userId: string; 
           <DialogHeader>
             <DialogTitle>Clear {who}&apos;s results?</DialogTitle>
             <DialogDescription>
-              {sittings} {sittings === 1 ? "sitting" : "sittings"} and every answer in them are deleted, on every form, so they
-              can take each subject again. This cannot be undone.
+              {sittings} {sittings === 1 ? "sitting" : "sittings"} and every answer in them are deleted, on every form, so they can take
+              each subject again. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           {error && <p className="text-sm text-destructive">{error}</p>}
@@ -68,17 +68,7 @@ export function ClearResultsButton({ userId, who, sittings }: { userId: string; 
 }
 
 /** Resets one subject, after asking, so the person can come back and take it again. */
-export function ResetTestButton({
-  userId,
-  subject,
-  form,
-  who,
-}: {
-  userId: string;
-  subject: SubjectKey;
-  form: Form;
-  who: string;
-}) {
+export function ResetTestButton({ userId, subject, form, who }: { userId: string; subject: SubjectKey; form: Form; who: string }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const name = SUBJECTS[subject].name;

@@ -193,6 +193,15 @@ first over the same OpenTofu workspace and database.
 
 ## Conventions
 
+**Run Prettier on every file you create or edit.** `frontend` and `runner` each
+have `.prettierrc.json` (`printWidth` 140) and `npm run format -- <paths>` /
+`npm run format:check -- <paths>`; the whole codebase was formatted with it, so
+a file you touched that fails `format:check` is your change's fault. Use the
+project's script, never a bare `npx prettier` (Prettier's defaults rewrap at
+80 columns), and name paths rather than `.`, so a stray file or generated
+output is left alone. Format before the checks under
+[Before saying you are done](#before-saying-you-are-done).
+
 **Use Tailwind v4's canonical utility names, not the v3 aliases.**
 `frontend` is on `tailwindcss: ^4.0.0`, which renamed several utilities and
 kept the old ones only as deprecated aliases (`break-words` →
@@ -335,6 +344,7 @@ more than text, such as a field or a list of what goes with it, is its own
 ## Before saying you are done
 
 ```bash
+cd frontend  && npm run format -- <the files you changed>    # then run the checks below
 cd runner    && npm run verify              # typecheck + unit tests, the CI gate
 cd frontend  && npm run verify              # typecheck + lint + unit tests, also the CI gate
 cd frontend  && npm run test:db             # role rules, against workshops_agent

@@ -15,12 +15,7 @@ import assert from "node:assert/strict";
 
 import { MAX_TEMPLATE_SOURCES } from "@/db/schema";
 import type { CheckError } from "@/lib/harness-platform";
-import {
-  MESSAGES,
-  STATUS_FOR,
-  messageFor,
-  type TemplateSourceError,
-} from "@/lib/harness-template-errors";
+import { MESSAGES, STATUS_FOR, messageFor, type TemplateSourceError } from "@/lib/harness-template-errors";
 import * as tokenErrors from "@/lib/harness-token-errors";
 
 const EXPECTED_STATUS: Record<TemplateSourceError, number> = {

@@ -56,8 +56,6 @@ export async function listMyForms(email: string): Promise<MyForm[]> {
   }
 
   const todo = forms.filter((f) => !f.completedAt);
-  const done = forms
-    .filter((f) => f.completedAt)
-    .sort((x, y) => y.completedAt!.localeCompare(x.completedAt!));
+  const done = forms.filter((f) => f.completedAt).sort((x, y) => y.completedAt!.localeCompare(x.completedAt!));
   return [...todo, ...done];
 }

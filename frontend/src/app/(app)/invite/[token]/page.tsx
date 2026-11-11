@@ -10,13 +10,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
-import {
-  ASSESSMENTS_ROLE_LABELS,
-  EVENT_ROLE_LABELS,
-  TRAINING_ROLE_LABELS,
-  hasNoAccess,
-  homePath,
-} from "@/lib/roles";
+import { ASSESSMENTS_ROLE_LABELS, EVENT_ROLE_LABELS, TRAINING_ROLE_LABELS, hasNoAccess, homePath } from "@/lib/roles";
 import { readInvite, type InviteGrant } from "@/lib/user-invites";
 import { InviteView } from "./invite-view";
 
@@ -34,11 +28,7 @@ function grantLabels(grant: InviteGrant): string[] {
   ];
 }
 
-export default async function InvitePage({
-  params,
-}: {
-  params: Promise<{ token: string }>;
-}) {
+export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
 

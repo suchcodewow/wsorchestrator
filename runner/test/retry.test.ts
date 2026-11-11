@@ -23,12 +23,10 @@ import assert from "node:assert/strict";
 import { httpStatusOf, isTransient, summarize, withRetry } from "../src/retry.js";
 
 /** The shape gaxios hands back for an HTTP failure. */
-const gaxiosError = (status: number, message = "request failed") =>
-  Object.assign(new Error(message), { status, response: { status } });
+const gaxiosError = (status: number, message = "request failed") => Object.assign(new Error(message), { status, response: { status } });
 
 /** The shape undici hands back for a socket failure: code lives on `cause`. */
-const fetchError = (code: string) =>
-  Object.assign(new TypeError("fetch failed"), { cause: { code } });
+const fetchError = (code: string) => Object.assign(new TypeError("fetch failed"), { cause: { code } });
 
 /** What Google's front end actually returns instead of a JSON error. */
 const GOOGLE_502_PAGE =

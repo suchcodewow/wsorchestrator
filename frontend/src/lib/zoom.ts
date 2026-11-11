@@ -3,9 +3,11 @@
  * Assessments Administrator connected. The app is a user-managed General App
  * (`ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`; infra/admin/app.tf) with only
  * user-level scopes: the past-meeting ones, to read who joined the calendar's
- * meetings that user hosts, and `meeting:delete:meeting`, to take down the
- * Zoom meetings the old create-a-meeting flow made. It reaches that user's
- * meetings and no one else's. The user signs in once through Zoom's consent
+ * meetings that user hosts, the meeting ones, to make the Zoom meeting an
+ * occurrence is held in and add the meeting facilitators to it as alternative
+ * hosts, and `meeting:delete:meeting`, to take down the Zoom meetings the old
+ * create-a-meeting flow made. It reaches that user's meetings and no one
+ * else's. The user signs in once through Zoom's consent
  * screen; the refresh token that returns is what every later sync acts with
  * (`lib/zoom-connection.ts` stores it). Unset, or with no user connected,
  * attendance is only what an administrator marks on the Current tab.
@@ -22,6 +24,10 @@ export const ZOOM_SCOPES = [
   "meeting:read:list_past_instances",
   "meeting:read:list_past_participants",
   "meeting:delete:meeting",
+  // To hold an occurrence in a meeting this user hosts: make it, read it back, and add its alternative hosts.
+  "meeting:write:meeting",
+  "meeting:read:meeting",
+  "meeting:update:meeting",
   // To read the connecting user's own email (`GET /users/me`); not the account-wide `:admin` scope.
   "user:read:user",
 ] as const;
@@ -103,7 +109,12 @@ async function tokenRequest(app: ZoomApp, params: Record<string, string>): Promi
     error?: string;
   };
   if (!res.ok || !body.access_token || !body.refresh_token) {
-    throw new ZoomError(res.status, null, `Zoom refused the app's credentials: ${body.reason ?? body.error ?? `HTTP ${res.status}`}`, body.error ?? null);
+    throw new ZoomError(
+      res.status,
+      null,
+      `Zoom refused the app's credentials: ${body.reason ?? body.error ?? `HTTP ${res.status}`}`,
+      body.error ?? null,
+    );
   }
   return {
     accessToken: body.access_token,
@@ -177,10 +188,57 @@ export function zoomClient(accessToken: () => Promise<string>): ZoomClient {
         }
         if (!res.ok) {
           const error = json as { code?: number; message?: string } | null;
-          throw new ZoomError(res.status, error?.code ?? null, `Zoom ${method} ${path} answered ${res.status}: ${error?.message ?? text.slice(0, 200)}`);
+          throw new ZoomError(
+            res.status,
+            error?.code ?? null,
+            `Zoom ${method} ${path} answered ${res.status}: ${error?.message ?? text.slice(0, 200)}`,
+          );
         }
         return json as T;
       }
     },
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Meetings the connected user hosts                                   */
+/* ------------------------------------------------------------------ */
+
+export type ZoomMeeting = {
+  id: number;
+  host_email?: string;
+  join_url: string;
+  password?: string;
+  settings?: { alternative_hosts?: string };
+};
+
+/** The alternative hosts Zoom reports on a meeting, lowercased; it separates them with semicolons. */
+export function alternativeHostsOf(meeting: Pick<ZoomMeeting, "settings">): string[] {
+  return (meeting.settings?.alternative_hosts ?? "")
+    .split(/[;,]/)
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function getMeeting(zoom: ZoomClient, id: string): Promise<ZoomMeeting> {
+  return zoom.call<ZoomMeeting>("GET", `/meetings/${encodeURIComponent(id)}`);
+}
+
+/** A one-off meeting hosted by the connected user, held at `startsAt`, with `alternativeHosts` able to start it. */
+export function createMeeting(
+  zoom: ZoomClient,
+  input: { topic: string; startsAt: Date; minutes: number; timeZone: string; alternativeHosts: readonly string[] },
+): Promise<ZoomMeeting> {
+  return zoom.call<ZoomMeeting>("POST", "/users/me/meetings", {
+    topic: input.topic,
+    type: 2,
+    start_time: input.startsAt.toISOString().replace(/\.\d+Z$/, "Z"),
+    duration: input.minutes,
+    timezone: input.timeZone,
+    settings: input.alternativeHosts.length > 0 ? { alternative_hosts: input.alternativeHosts.join(";") } : {},
+  });
+}
+
+export async function setAlternativeHosts(zoom: ZoomClient, id: string, emails: readonly string[]): Promise<void> {
+  await zoom.call("PATCH", `/meetings/${encodeURIComponent(id)}`, { settings: { alternative_hosts: emails.join(";") } });
 }

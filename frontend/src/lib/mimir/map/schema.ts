@@ -43,9 +43,16 @@ export const VIDEO_LANGUAGE_NAMES: Record<VideoLanguage, string> = { en: "Englis
 
 const videoFileSchema = z.object({
   /** Where the file is in the recordings bucket. */
-  object: z.string().startsWith(VIDEO_PREFIX).max(200).regex(/^[A-Za-z0-9._/-]+$/, "letters, digits and . _ / -"),
+  object: z
+    .string()
+    .startsWith(VIDEO_PREFIX)
+    .max(200)
+    .regex(/^[A-Za-z0-9._/-]+$/, "letters, digits and . _ / -"),
   /** Its length, from the file. The player reports the real one; this sizes the ring before it has played. */
-  seconds: z.number().positive().max(6 * 3600),
+  seconds: z
+    .number()
+    .positive()
+    .max(6 * 3600),
   /** What the narrator says: the coach reads it to know the video. */
   transcript: text(60_000),
 });
@@ -71,7 +78,9 @@ export const missingLanguages = (video: MapVideo): TranslatedLanguage[] => TRANS
 /** `video` in `language` if it has one, otherwise in English. */
 export function videoIn(video: MapVideo, language: VideoLanguage): MapVideoFile & { language: VideoLanguage } {
   const translated = language === "en" ? undefined : video.translations?.[language];
-  return translated ? { ...translated, language } : { object: video.object, seconds: video.seconds, transcript: video.transcript, language: "en" };
+  return translated
+    ? { ...translated, language }
+    : { object: video.object, seconds: video.seconds, transcript: video.transcript, language: "en" };
 }
 
 const conceptSchema = z.object({
@@ -96,13 +105,32 @@ export const mapContentSchema = z
     version: z.literal(1),
     title: text(200).min(1),
     sections: z
-      .array(z.object({ from: z.number().int().min(1), to: z.number().int().min(1), name: text(80).min(1), band: z.number().int().min(1).max(4) }))
+      .array(
+        z.object({
+          from: z.number().int().min(1),
+          to: z.number().int().min(1),
+          name: text(80).min(1),
+          band: z.number().int().min(1).max(4),
+        }),
+      )
       .max(12),
-    slides: z.array(z.object({ n: z.number().int().min(1).max(MAP_SLIDE_LIMIT), title: text(200).min(1) })).min(1).max(MAP_SLIDE_LIMIT),
+    slides: z
+      .array(z.object({ n: z.number().int().min(1).max(MAP_SLIDE_LIMIT), title: text(200).min(1) }))
+      .min(1)
+      .max(MAP_SLIDE_LIMIT),
     levels: z.array(z.object({ level: levelNumber, name: text(80).min(1), blurb: text(400) })).max(3),
     /** In course order. A group may be split in two (a `sub` each) and keep one id. */
     buckets: z
-      .array(z.object({ id, level: levelNumber, name: text(120).min(1), sub: text(80).optional(), blurb: text(400), concepts: z.array(id).min(1) }))
+      .array(
+        z.object({
+          id,
+          level: levelNumber,
+          name: text(120).min(1),
+          sub: text(80).optional(),
+          blurb: text(400),
+          concepts: z.array(id).min(1),
+        }),
+      )
       .min(1)
       .max(40),
     concepts: z.array(conceptSchema).min(1).max(MAP_CONCEPT_LIMIT),
@@ -185,9 +213,14 @@ export function videoRows(content: MapContent): VideoRow[] {
  * reads the map expects it. A translation without its English is ignored.
  */
 export function withVideos(structure: unknown, rows: VideoRow[]): unknown {
-  if (typeof structure !== "object" || structure === null || !Array.isArray((structure as { concepts?: unknown }).concepts)) return structure;
+  if (typeof structure !== "object" || structure === null || !Array.isArray((structure as { concepts?: unknown }).concepts))
+    return structure;
   const byConcept = new Map<string, Partial<Record<VideoLanguage, MapVideoFile>>>();
-  for (const r of rows) byConcept.set(r.conceptId, { ...byConcept.get(r.conceptId), [r.language]: { object: r.object, seconds: r.seconds, transcript: r.transcript } });
+  for (const r of rows)
+    byConcept.set(r.conceptId, {
+      ...byConcept.get(r.conceptId),
+      [r.language]: { object: r.object, seconds: r.seconds, transcript: r.transcript },
+    });
   const s = structure as { concepts: { id?: unknown }[] };
   return {
     ...s,
@@ -231,7 +264,10 @@ export function slideLevels(concepts: { level: MapLevel; slides: number[] }[]): 
 }
 
 /** How far through its video a concept's ring is drawn, from 0 to 1. */
-export function ringFraction(progress: { completed: boolean; videoFurthest: number; videoDuration: number }, fallbackSeconds: number): number {
+export function ringFraction(
+  progress: { completed: boolean; videoFurthest: number; videoDuration: number },
+  fallbackSeconds: number,
+): number {
   if (progress.completed) return 1;
   const total = progress.videoDuration > 0 ? progress.videoDuration : fallbackSeconds;
   if (!(total > 0)) return 0;

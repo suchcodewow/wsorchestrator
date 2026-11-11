@@ -16,8 +16,7 @@ export function normalizeId(target: AuditTarget, id: string): string {
   return target === "azure" ? id.toLowerCase() : id;
 }
 
-const str = (v: unknown): string | null =>
-  typeof v === "string" && v.length > 0 ? v : null;
+const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
 
 function entries(v: unknown): Array<[string, string]> {
   if (!v || typeof v !== "object" || Array.isArray(v)) return [];
@@ -99,7 +98,5 @@ export function missingFromCloud(
   ignore: Set<string> = new Set(),
 ): Array<{ id: string } & ResourceOwner> {
   const seen = new Set(present);
-  return [...owners.entries()]
-    .filter(([id]) => !seen.has(id) && !ignore.has(id))
-    .map(([id, owner]) => ({ id, ...owner }));
+  return [...owners.entries()].filter(([id]) => !seen.has(id) && !ignore.has(id)).map(([id, owner]) => ({ id, ...owner }));
 }

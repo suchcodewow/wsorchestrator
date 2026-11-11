@@ -33,8 +33,7 @@ export async function GET(req: Request) {
   try {
     return NextResponse.json({ images: await listLabImages(q) });
   } catch (err) {
-    const missingTable =
-      err instanceof Error && /relation .* does not exist/i.test(err.message);
+    const missingTable = err instanceof Error && /relation .* does not exist/i.test(err.message);
 
     console.error("lab-images: list failed", err);
 

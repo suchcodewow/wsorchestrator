@@ -35,14 +35,9 @@ export async function downscaleImage(file: File): Promise<File> {
     if (!ctx) return file;
     ctx.drawImage(bitmap, 0, 0, width, height);
 
-    const type =
-      file.type === "image/jpeg" || file.type === "image/webp"
-        ? file.type
-        : "image/png";
+    const type = file.type === "image/jpeg" || file.type === "image/webp" ? file.type : "image/png";
 
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, type, 0.92),
-    );
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, 0.92));
     if (!blob || blob.size >= file.size) return file;
 
     const base = file.name.replace(/\.[^.]+$/, "") || "image";
@@ -53,10 +48,7 @@ export async function downscaleImage(file: File): Promise<File> {
   }
 }
 
-export async function uploadImageFile(
-  file: File,
-  options: { name?: string; alt?: string; autoName?: boolean } = {},
-): Promise<PickerImage> {
+export async function uploadImageFile(file: File, options: { name?: string; alt?: string; autoName?: boolean } = {}): Promise<PickerImage> {
   const body = new FormData();
   body.append("file", await downscaleImage(file));
   if (options.name) body.append("name", options.name);
@@ -76,9 +68,7 @@ export async function uploadImageFile(
 export function imageFromTransfer(data: DataTransfer | null): File | null {
   if (!data) return null;
 
-  const dropped = Array.from(data.files).find((f) =>
-    f.type.startsWith("image/"),
-  );
+  const dropped = Array.from(data.files).find((f) => f.type.startsWith("image/"));
   if (dropped) return dropped;
 
   for (const item of Array.from(data.items)) {

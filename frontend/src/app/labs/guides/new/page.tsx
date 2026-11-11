@@ -14,11 +14,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function NewLabGuidePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ workshop?: string }>;
-}) {
+export default async function NewLabGuidePage({ searchParams }: { searchParams: Promise<{ workshop?: string }> }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   if (!canManageLabGuides(session.user.access)) notFound();
@@ -40,17 +36,9 @@ export default async function NewLabGuidePage({
         {back.label}
       </Link>
 
-      <h1 className="mt-6 mb-8 text-2xl font-medium tracking-tight">
-        New lab guide
-      </h1>
+      <h1 className="mt-6 mb-8 text-2xl font-medium tracking-tight">New lab guide</h1>
 
-      <GuideEditor
-        addTo={
-          workshop
-            ? { id: workshop.id, slug: workshop.slug, title: workshop.title }
-            : undefined
-        }
-      />
+      <GuideEditor addTo={workshop ? { id: workshop.id, slug: workshop.slug, title: workshop.title } : undefined} />
     </div>
   );
 }

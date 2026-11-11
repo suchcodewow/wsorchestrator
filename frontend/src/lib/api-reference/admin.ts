@@ -1,5 +1,58 @@
-import { FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, FRAME_DOMAIN_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, RELEASE_NOTICE_LIST, RELEASE_NOTICE_MESSAGE_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_EXAM, BOOTCAMP_LIMITS, BOOTCAMP_SCORE, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, INTAKE_LIMITS, MEETING_SELECTION_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
+import {
+  FOOD_ORDER_LIST,
+  RECORDING_LIST,
+  GUEST_JUDGE_LIST,
+  INTAKE_RESPONSE_LIST,
+  JUDGE_PROSPECT_LIST,
+  ASSESSMENT_ATTENDEE_LIST,
+  ASSESSMENT_LIST,
+  AUDIT_LIST,
+  BOOTCAMP_COHORT_LIST,
+  BOOTCAMP_LIST,
+  BOOTCAMP_RECORD_LIST,
+  CURRENT_COHORT_LIST,
+  DOMAIN_LIST,
+  EMPLOYEE_LIST,
+  FRAME_DOMAIN_LIST,
+  HIBOB_SYNC_LIST,
+  HISTORY_STATUSES,
+  JUDGE_LIST,
+  ORGANIZATION_LIST,
+  PREVIOUS_SESSION_LIST,
+  RELEASE_NOTICE_LIST,
+  RELEASE_NOTICE_MESSAGE_LIST,
+  SESSION_COMMENT_LIST,
+  SESSION_TYPE_LIST,
+  MEETING_SELECTION_LIST,
+  MEETING_SYNC_CHANGE_LIST,
+  MEETING_SYNC_LIST,
+  SLACK_CONTACT_LIST,
+  SLACK_SYNC_CHANGE_LIST,
+  SLACK_SYNC_LIST,
+  CHANNEL_CONTACT_LIST,
+  SURVEY_RESPONSE_LIST,
+  SURVEY_RESULT_LIST,
+  TITLE_LIST,
+  USER_LIST,
+  FACILITY_LIST,
+  VIDEO_FEEDBACK_LIST,
+  VIDEO_FEEDBACK_SUMMARY_LIST,
+} from "@/lib/list-specs";
+import {
+  BOOTCAMP_EXAM,
+  BOOTCAMP_LIMITS,
+  BOOTCAMP_SCORE,
+  CHECKLIST_LIMITS,
+  EVALS_ASSESSMENT_LIMITS,
+  FACILITY_LIMITS,
+  FOOD_ORDER_LIMITS,
+  INTAKE_LIMITS,
+  MEETING_SELECTION_LIMITS,
+  RECORDING_LIMITS,
+  SCHEDULE_LIMITS,
+  SURVEY_LIMITS,
+  VIDEO_FEEDBACK_LIMITS,
+} from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH } from "@/lib/recording/video";
 import { CHECKLIST_ITEM_ROW } from "./account";
@@ -50,7 +103,7 @@ const AUDIENCE_TYPE = `"both" | "sales" | "engineers"`;
 const COLOR_TYPE = `"slate" | "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink"`;
 const RECORDING_TAKE_SHAPE = `{ takeId, contributor, startedAt, durationMs: number | null, bytes: number, kinds: ("camera" | "screen")[], status: "uploading" | "assembling" | "ready" | "failed", stalled: boolean }`;
 const VIDEO_FEEDBACK_SHAPE = `{ id, rating: "up" | "down", video: { kind: "mimir_concept" | "recording", id, label }, positionSeconds: number, language: "en" | "es", videoObject: string | null, comment: string | null, status: "pending" | "accepted" | "ignored" | "applied", user: { id, name, email } | null, createdAt }`;
-const RECORDING_TRACK_SHAPE =`{ id, takeId, kind: "camera" | "screen", mimeType, startedAt, offsetMs: number, contributor, status: "uploading" | "assembling" | "ready" | "failed", chunks: number | null, durationMs: number | null, fileBytes: number | null, error: string | null, lastChunkAt: string | null, stalled: boolean }`;
+const RECORDING_TRACK_SHAPE = `{ id, takeId, kind: "camera" | "screen", mimeType, startedAt, offsetMs: number, contributor, status: "uploading" | "assembling" | "ready" | "failed", chunks: number | null, durationMs: number | null, fileBytes: number | null, error: string | null, lastChunkAt: string | null, stalled: boolean }`;
 
 const MINUTES_NOTE = `a multiple of ${SCHEDULE_LIMITS.slot} from ${SCHEDULE_LIMITS.slot} to ${SCHEDULE_LIMITS.maxMinutes}`;
 
@@ -65,7 +118,12 @@ const GROUP_SHAPE = "{ email, fullName, instructorEmail, track: string | null }"
 const SESSION_TYPE_SHAPE = `{ id, name, kind: ${KIND_TYPE}, emoji, color, minutes: number, description, position: number }`;
 
 const SESSION_LOOK_FIELDS: Field[] = [
-  { name: "kind", type: KIND_TYPE, required: true, note: "main: one room; breakout: a room per instructor; unstructured: no one and no room" },
+  {
+    name: "kind",
+    type: KIND_TYPE,
+    required: true,
+    note: "main: one room; breakout: a room per instructor; unstructured: no one and no room",
+  },
   { name: "name", type: "string", required: true, note: `up to ${SCHEDULE_LIMITS.name} characters` },
   { name: "minutes", type: "number", required: true, note: MINUTES_NOTE },
   { name: "emoji", type: "string", note: `up to ${SCHEDULE_LIMITS.emoji} characters; default none` },
@@ -96,7 +154,11 @@ const SESSION_STAFF_FIELDS: Field[] = [
 const SESSION_ERRORS: EndpointError[] = [
   { status: 400, error: "invalid", when: "the body is not that shape" },
   { status: 400, error: "no_leader", when: "staff is not empty and does not mark exactly one leader" },
-  { status: 400, error: "not_instructor", when: "someone added is neither a Training administrator nor a guest judge of the bootcamp; email names them" },
+  {
+    status: 400,
+    error: "not_instructor",
+    when: "someone added is neither a Training administrator nor a guest judge of the bootcamp; email names them",
+  },
   { status: 400, error: "unknown_room", when: "a room is not one of the bootcamp's facility's" },
   { status: 400, error: "shared_room", when: "two breakout instructors are given the same room" },
   { status: 400, error: "unknown_type", when: "typeId names no session type" },
@@ -151,13 +213,16 @@ const INTAKE_FORM_PARAM: Field = {
   note: "Pre-Bootcamp or Pre-Intermediate",
 };
 
-
 const FOOD_ORDER_SHAPE = "{ id, vendor, arrivesAt, needs, fileName: string | null, fileBytes: number | null, arrived: boolean, updatedAt }";
 
 const FOOD_ORDER_FIELDS: Field[] = [
   { name: "vendor", type: "string", required: true, note: `who it is from, up to ${FOOD_ORDER_LIMITS.vendor} characters` },
   { name: "arrivesAt", type: "string", required: true, note: "when it arrives, an ISO 8601 date and time with an offset" },
-  { name: "needs", type: "string", note: `what the training team needs from it, up to ${FOOD_ORDER_LIMITS.needs} characters; one thing a line prints as a checklist` },
+  {
+    name: "needs",
+    type: "string",
+    note: `what the training team needs from it, up to ${FOOD_ORDER_LIMITS.needs} characters; one thing a line prints as a checklist`,
+  },
   { name: "file", type: "File", note: `the vendor's PDF, under ${FOOD_ORDER_LIMITS.bytes / (1024 * 1024)} MB` },
 ];
 
@@ -180,7 +245,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "The tour of the page at a path, the version of it the caller last saw, and whether they may edit it.",
         access: "signedIn",
         token: true,
-        query: [{ name: "path", type: "string", required: true, note: "the page's path, starting with /; a query or trailing slash is ignored" }],
+        query: [
+          { name: "path", type: "string", required: true, note: "the page's path, starting with /; a query or trailing slash is ignored" },
+        ],
         returns: `{ tour: { id, pathPattern, version: number, updatedAt, steps: { id, title, body, placement: "auto" | "top" | "bottom" | "left" | "right", target: { tour?, id?, role?, name?, path?, label } }[] } | null, seenVersion: number, canEdit: boolean }`,
         errors: [{ status: 400, error: "invalid_path", when: "path is missing or does not start with /" }],
       },
@@ -196,8 +263,17 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         body: {
           kind: "json",
           fields: [
-            { name: "version", type: "number", note: "the version the edit started from; omit to create, or to overwrite whatever is there" },
-            { name: "steps", type: `{ title, body, placement?: "auto" | "top" | "bottom" | "left" | "right", target: { tour?, id?, role?, name?, path?, label? } }[]`, required: true, note: "1–30; title up to 120 characters, body up to 1000" },
+            {
+              name: "version",
+              type: "number",
+              note: "the version the edit started from; omit to create, or to overwrite whatever is there",
+            },
+            {
+              name: "steps",
+              type: `{ title, body, placement?: "auto" | "top" | "bottom" | "left" | "right", target: { tour?, id?, role?, name?, path?, label? } }[]`,
+              required: true,
+              note: "1–30; title up to 120 characters, body up to 1000",
+            },
           ],
         },
         returns: "{ tour }, as GET /api/tours/match returns it",
@@ -326,7 +402,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             { name: "value", type: "boolean", note: "required when area is platform" },
           ],
         },
-        returns: "{ ok: true, area, role } or { ok: true, area: \"platform\", value }",
+        returns: '{ ok: true, area, role } or { ok: true, area: "platform", value }',
         errors: [
           { status: 400, error: "invalid_body", when: "the body does not match one of the four shapes" },
           { status: 403, error: "forbidden", when: "you do not administer that area" },
@@ -382,7 +458,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             },
           ],
         },
-        returns: "201 { path: \"/invite/{token}\", expiresAt: ISO 8601 string }",
+        returns: '201 { path: "/invite/{token}", expiresAt: ISO 8601 string }',
         errors: [
           { status: 400, error: "invalid_body", when: "the body does not parse" },
           { status: 400, error: "empty", when: "the link would grant nothing" },
@@ -399,9 +475,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           "The roles apply only if you have no access in any area; anyone who already has access is left as they are and gets applied: false.",
         body: {
           kind: "json",
-          fields: [
-            { name: "token", type: "string", required: true, note: "the token from the invite path; 1–200 characters" },
-          ],
+          fields: [{ name: "token", type: "string", required: true, note: "the token from the invite path; 1–200 characters" }],
         },
         returns: "{ applied: boolean, home: string }",
         errors: [
@@ -437,7 +511,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           kind: "json",
           fields: [
             { name: "name", type: "string", required: true, note: "1–80 characters" },
-            { name: "copyFrom", type: "string", note: "the email of an employee, from GET /api/evals/employees, or of any account; not a platform administrator" },
+            {
+              name: "copyFrom",
+              type: "string",
+              note: "the email of an employee, from GET /api/evals/employees, or of any account; not a platform administrator",
+            },
           ],
         },
         returns: "201 { testAccount: { id, name, email } }",
@@ -474,7 +552,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/cohorts/current",
-        summary: "Lists the org members still to train — bootcamp and intermediate candidates — narrowed to a stage and a track, a page at a time. The deferred are left out; GET /api/cohorts/deferred lists them.",
+        summary:
+          "Lists the org members still to train — bootcamp and intermediate candidates — narrowed to a stage and a track, a page at a time. The deferred are left out; GET /api/cohorts/deferred lists them.",
         access: "trainingViewer",
         token: true,
         notes:
@@ -528,7 +607,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           "Each side is ordered by name, from the employee list, with anyone it has no name for last by email; fullName is null for them. active is false for anyone the last HiBob sync did not send: someone who has left, or whom HiBob never sent. key addresses their page, for GET /api/reporting/bootcamp/people/{key}.",
         params: [{ name: "date", type: "string", required: true, note: "YYYY-MM-DD" }],
         query: [
-          { name: "bootcamp.page", type: "integer", note: `The bootcamp side's page, from 1. Default 1. A page holds at most ${PAGE_SIZE}.` },
+          {
+            name: "bootcamp.page",
+            type: "integer",
+            note: `The bootcamp side's page, from 1. Default 1. A page holds at most ${PAGE_SIZE}.`,
+          },
           { name: "intermediate.page", type: "integer", note: `The intermediate side's page, the same way.` },
         ],
         returns: `{ date: "YYYY-MM-DD", bootcamp: { rows: { key, email, fullName: string | null, active: boolean }[], ${PAGE_FIELDS} }, intermediate: the same }`,
@@ -540,7 +623,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PUT",
         path: "/api/cohorts/current/track",
-        summary: "Sets one org member's track by hand, or an added attendee's; sales, engineer and ignored put an org member's title on that list.",
+        summary:
+          "Sets one org member's track by hand, or an added attendee's; sales, engineer and ignored put an org member's title on that list.",
         access: "trainingAdmin",
         token: true,
         notes:
@@ -548,7 +632,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         body: {
           kind: "json",
           fields: [
-            { name: "email", type: "string", required: true, note: "anyone under the Organization Leader, or anyone added to the cohort by hand" },
+            {
+              name: "email",
+              type: "string",
+              required: true,
+              note: "anyone under the Organization Leader, or anyone added to the cohort by hand",
+            },
             {
               name: "track",
               type: `"sales" | "engineer" | "undecided" | "deferred" | "ignored" | "exempt" | "automatic"`,
@@ -565,7 +654,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/cohorts/current/attendees",
-        summary: "Adds someone from the employee list to the current cohort by hand, to Bootcamp or Intermediate on the Sales or Engineer track.",
+        summary:
+          "Adds someone from the employee list to the current cohort by hand, to Bootcamp or Intermediate on the Sales or Engineer track.",
         access: "trainingAdmin",
         token: true,
         notes:
@@ -579,7 +669,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             { name: "notify", type: "boolean", note: "send them their registration form in Slack now; default false" },
           ],
         },
-        returns: '201 { ok: true, email, fullName, stage: "bootcamp" | "intermediate", track: "sales" | "engineer", notified: { sent: true } | { sent: false, reason, detail? } | null }',
+        returns:
+          '201 { ok: true, email, fullName, stage: "bootcamp" | "intermediate", track: "sales" | "engineer", notified: { sent: true } | { sent: false, reason, detail? } | null }',
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
           { status: 404, error: "not_an_employee", when: "no one active in the employee list has that email" },
@@ -607,7 +698,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Takes someone added by hand off the current cohort.",
         access: "trainingAdmin",
         token: true,
-        notes: "Their track, and any track set by hand, goes back to what the rules give them; someone the rules include stays in the cohort.",
+        notes:
+          "Their track, and any track set by hand, goes back to what the rules give them; someone the rules include stays in the cohort.",
         query: [{ name: "email", type: "string", required: true, note: "the email they were added under" }],
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "no one was added under that email" }],
@@ -686,7 +778,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/evals/google-meetings",
-        summary: "Lists the meetings picked from the Revenue Enablement calendar, a page at a time, with the connected accounts and the sync's state.",
+        summary:
+          "Lists the meetings picked from the Revenue Enablement calendar, a page at a time, with the connected accounts and the sync's state.",
         access: "assessmentsAdmin",
         token: true,
         notes:
@@ -700,17 +793,39 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Picks a meeting from the Revenue Enablement calendar, for a stage and a track. Nothing is sent until a sync.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "name need not be on the calendar now; GET /api/evals/google-meetings/calendar lists the names that are. A name already picked, in any case or spacing, is refused. With a time zone range, only people whose time zone on record has a UTC offset inside it today (half hours round toward the east) are invited; anyone with no time zone on record is left out.",
+        notes:
+          "name need not be on the calendar now; GET /api/evals/google-meetings/calendar lists the names that are. A name already picked, in any case or spacing, is refused. With a time zone range, only people whose time zone on record has a UTC offset inside it today (half hours round toward the east) are invited; anyone with no time zone on record is left out.",
         body: {
           kind: "json",
           fields: [
-            { name: "name", type: "string", required: true, note: `1 to ${MEETING_SELECTION_LIMITS.name} characters; trimmed, with runs of spaces made one` },
+            {
+              name: "name",
+              type: "string",
+              required: true,
+              note: `1 to ${MEETING_SELECTION_LIMITS.name} characters; trimmed, with runs of spaces made one`,
+            },
             { name: "stage", type: `"bootcamp" | "intermediate"`, required: true },
             { name: "track", type: `"sales" | "engineer" | "both"`, required: true },
-            { name: "timezoneFrom", type: "integer | null", note: "-12 to 14: the first UTC offset, in whole hours, the meeting covers; give it with timezoneTo, or both null (the default) for every time zone" },
-            { name: "timezoneTo", type: "integer | null", note: "-12 to 14; before timezoneFrom it runs the long way round, so 9 to -6 covers +9 east through the date line to -6" },
-            { name: "minDaysAfterStart", type: "integer", note: "0 to 365, 0 by default: the days after a person's start date before an occurrence suits them; when none left in their window does, they are invited to the last one" },
-            { name: "allOccurrences", type: "boolean", note: "false by default: one occurrence at a time; true for every occurrence in their window from the first that suits them" },
+            {
+              name: "timezoneFrom",
+              type: "integer | null",
+              note: "-12 to 14: the first UTC offset, in whole hours, the meeting covers; give it with timezoneTo, or both null (the default) for every time zone",
+            },
+            {
+              name: "timezoneTo",
+              type: "integer | null",
+              note: "-12 to 14; before timezoneFrom it runs the long way round, so 9 to -6 covers +9 east through the date line to -6",
+            },
+            {
+              name: "minDaysAfterStart",
+              type: "integer",
+              note: "0 to 365, 0 by default: the days after a person's start date before an occurrence suits them; when none left in their window does, they are invited to the last one",
+            },
+            {
+              name: "allOccurrences",
+              type: "boolean",
+              note: "false by default: one occurrence at a time; true for every occurrence in their window from the first that suits them",
+            },
           ],
         },
         returns: "{ id, name }",
@@ -731,12 +846,28 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         body: {
           kind: "json",
           fields: [
-            { name: "name", type: "string", note: `1 to ${MEETING_SELECTION_LIMITS.name} characters; trimmed, with runs of spaces made one` },
+            {
+              name: "name",
+              type: "string",
+              note: `1 to ${MEETING_SELECTION_LIMITS.name} characters; trimmed, with runs of spaces made one`,
+            },
             { name: "stage", type: `"bootcamp" | "intermediate"` },
             { name: "track", type: `"sales" | "engineer" | "both"` },
-            { name: "timezoneFrom", type: "integer | null", note: "-12 to 14; send it with timezoneTo, and null for both to cover every time zone again" },
-            { name: "timezoneTo", type: "integer | null", note: "-12 to 14; before timezoneFrom it runs the long way round, so 9 to -6 covers +9 east through the date line to -6" },
-            { name: "minDaysAfterStart", type: "integer", note: "0 to 365: the days after a person's start date before an occurrence suits them" },
+            {
+              name: "timezoneFrom",
+              type: "integer | null",
+              note: "-12 to 14; send it with timezoneTo, and null for both to cover every time zone again",
+            },
+            {
+              name: "timezoneTo",
+              type: "integer | null",
+              note: "-12 to 14; before timezoneFrom it runs the long way round, so 9 to -6 covers +9 east through the date line to -6",
+            },
+            {
+              name: "minDaysAfterStart",
+              type: "integer",
+              note: "0 to 365: the days after a person's start date before an occurrence suits them",
+            },
             { name: "allOccurrences", type: "boolean", note: "true for every occurrence in their window, false for one at a time" },
           ],
         },
@@ -746,7 +877,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 404, error: "not_found", when: "id is not a UUID, or no such meeting" },
           { status: 409, error: "duplicate", when: "the new name is picked already" },
           { status: 409, error: "running", when: "the name changes while a sync is under way" },
-          { status: 409, error: "not_connected", when: "the name changes, there are invites to take back, and no working Google account is connected; detail says why" },
+          {
+            status: 409,
+            error: "not_connected",
+            when: "the name changes, there are invites to take back, and no working Google account is connected; detail says why",
+          },
           { status: 502, error: "remote_failed", when: "Google refused to take an invite back; detail has its answer" },
         ],
       },
@@ -763,7 +898,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 404, error: "not_found", when: "id is not a UUID, or no such meeting" },
           { status: 409, error: "running", when: "a sync is under way" },
-          { status: 409, error: "not_connected", when: "there are invites to take back and no working Google account is connected; detail says why" },
+          {
+            status: 409,
+            error: "not_connected",
+            when: "there are invites to take back and no working Google account is connected; detail says why",
+          },
           { status: 502, error: "remote_failed", when: "Google refused to take an invite back; detail has its answer" },
         ],
       },
@@ -795,11 +934,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "The people a stage and track cover, by UTC offset, for choosing a meeting's time zone range.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "Counts the Current tab's Sales and Engineer candidates in that stage and on that track, by the whole-hour UTC offset their time zone on record has at `at` (default now); half hours round toward the east. people has their names under the same offsets, sorted by name. unknown is those with no time zone on record, who a time zone range leaves out.",
+        notes:
+          "Counts the Current tab's Sales and Engineer candidates in that stage and on that track, by the whole-hour UTC offset their time zone on record has at `at` (default now); half hours round toward the east. people has their names under the same offsets, sorted by name. unknown is those with no time zone on record, who a time zone range leaves out.",
         query: [
           { name: "stage", type: `"bootcamp" | "intermediate"`, required: true },
           { name: "track", type: `"sales" | "engineer" | "both"`, required: true },
-          { name: "at", type: "ISO 8601 timestamp", note: "when to read each time zone's UTC offset, which daylight saving moves; the picked meeting's start. Default: now" },
+          {
+            name: "at",
+            type: "ISO 8601 timestamp",
+            note: "when to read each time zone's UTC offset, which daylight saving moves; the picked meeting's start. Default: now",
+          },
         ],
         returns: "{ byHour: { [offset: string]: number }, people: { [offset: string]: string[] }, unknown: number, total: number }",
         errors: [{ status: 400, error: "invalid", when: "stage or track is missing or not one of the values" }],
@@ -810,13 +954,18 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "The names of the meetings on the Revenue Enablement calendar in the next 60 days, each once, to pick from.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "Read as the connected Google account. Names that differ only in case or spacing are one. next is when the first of them starts; occurrences counts them in the 60 days. Sorted by name.",
+        notes:
+          "Read as the connected Google account. Names that differ only in case or spacing are one. next is when the first of them starts; occurrences counts them in the 60 days. Sorted by name.",
         returns: "{ names: { name, next, occurrences: number }[] }",
         errors: [
           { status: 409, error: "not_connected", when: "no Google account is connected" },
           { status: 409, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" },
           { status: 409, error: "revoked", when: "Google no longer accepts the account's token; connect it again" },
-          { status: 502, error: "google_error", when: "Google refused, such as an account that cannot see the calendar; detail has its answer" },
+          {
+            status: 502,
+            error: "google_error",
+            when: "Google refused, such as an account that cannot see the calendar; detail has its answer",
+          },
         ],
       },
       {
@@ -825,7 +974,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists the meeting facilitators, whom the Google Meetings sync adds to each occurrence a cohort member is on.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "They are picked here, not by role: holding the Assessments Administrator role neither adds anyone nor is needed. Each email is lowercased and listed once, in email order, up to 100.",
+        notes:
+          "They are picked here, not by role: holding the Assessments Administrator role neither adds anyone nor is needed. Each email is lowercased and listed once, in email order, up to 100.",
         returns: "{ facilitators: { email, fullName }[] }",
       },
       {
@@ -834,7 +984,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Replaces the meeting facilitators, whom the Google Meetings sync adds to each occurrence a cohort member is on.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "The whole list, up to 100 people; an email given twice keeps its last entry. Nothing reaches the calendar until the next live sync, which adds whoever joined the list and takes off whoever left it.",
+        notes:
+          "The whole list, up to 100 people; an email given twice keeps its last entry. Nothing reaches the calendar until the next live sync, which adds whoever joined the list and takes off whoever left it.",
         body: { kind: "json", fields: [{ name: "facilitators", type: "{ email: string, fullName: string }[]", required: true }] },
         returns: "{ facilitators: { email, fullName }[] }",
         errors: [{ status: 400, error: "invalid", when: "the body does not parse, or holds more than 100 people" }],
@@ -857,8 +1008,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Runs as the connected Google account, in one logged run. It reads the calendar's next 60 days and stores each event of each picked meeting's name as an occurrence, with its guests' replies and the Zoom meeting in its link. For each occurrence over for half an hour whose attendance is not known, it asks the connected Zoom user's past-meeting report who joined, matching by email and then by full name; one with no Zoom link, or no Zoom user connected, waits for an administrator's mark (PUT /api/evals/google-meetings/{id}/attendance). Then each person on the Current tab a meeting is for is invited to its next occurrence in their window (as GET /api/evals/google-meetings describes: before the active bootcamp, or after it for an intermediate meeting's RSVP'd bootcamp candidates and the bootcamp's own graduates); anyone who missed theirs is invited to the next one after it, and anyone with none left is logged as none_left and not invited. Someone who declines the occurrence they hold is invited to the next one after it in the same way, without waiting for it to pass, and stays on the event as a declined guest, so it is not offered to them again; if they then accept it, the later invite is taken off as one too many. A meeting with allOccurrences logs no one as none_left, and invites them to every occurrence in their window from the first that suits them, so a decline changes nothing there. Anyone holding more invites than the meeting's setting allows is taken off the extra ones. Someone who attended is taken off any later occurrence, as is anyone the meeting is no longer for. Every person on GET /api/evals/google-meetings/facilitators is added to each occurrence a cohort member is on, and taken off once they leave that list or no cohort member is left on it. The sync takes off only guests it added; an invite already right is left alone. Every change is sent to Google with sendUpdates=none, so no guest is emailed about an invite, a removal or a cancellation. With the test group on, its members stand in for the cohort and no facilitators are added. The first live run also cancels, once, the upcoming invites and Zoom meetings the old create-a-meeting flow made. With preview, or while the sync is not live, it is a dry run that logs what it would do. The run's changes are on GET /api/evals/google-meetings/sync/{id}. Allows 300 seconds.",
-        body: { kind: "json", fields: [{ name: "preview", type: "boolean", note: "a dry run whether or not the sync is live; an empty body is a sync" }] },
+          "Runs as the connected Google account, in one logged run. It reads the calendar's next 60 days and stores each event of each picked meeting's name as an occurrence, with its guests' replies and the Zoom meeting in its link. For each occurrence over for 15 minutes whose attendance is not known, it asks the connected Zoom user's past-meeting report who joined, matching by email and then by full name, and marks those it lists attended; whoever it does not list is asked about again by each later run, and marked missed only once the occurrence has been over for 6 hours; one with no Zoom link, or no Zoom user connected, waits for an administrator's mark (PUT /api/evals/google-meetings/{id}/attendance). Then each person on the Current tab a meeting is for is invited to its next occurrence in their window (as GET /api/evals/google-meetings describes: before the active bootcamp, or after it for an intermediate meeting's RSVP'd bootcamp candidates and the bootcamp's own graduates); anyone who missed theirs is invited to the next one after it, and anyone with none left is logged as none_left and not invited. Someone who declines the occurrence they hold is invited to the next one after it in the same way, without waiting for it to pass, and stays on the event as a declined guest, so it is not offered to them again; if they then accept it, the later invite is taken off as one too many. A meeting with allOccurrences logs no one as none_left, and invites them to every occurrence in their window from the first that suits them, so a decline changes nothing there. Anyone holding more invites than the meeting's setting allows is taken off the extra ones. Someone who attended is taken off any later occurrence, as is anyone the meeting is no longer for. Every person on GET /api/evals/google-meetings/facilitators is added to each occurrence a cohort member is on, and taken off once they leave that list or no cohort member is left on it. The sync takes off only guests it added; an invite already right is left alone. Every change is sent to Google with sendUpdates=none, so no guest is emailed about an invite, a removal or a cancellation. With the test group on, its members stand in for the cohort and no facilitators are added. The first live run also cancels, once, the upcoming invites and Zoom meetings the old create-a-meeting flow made. With preview, or while the sync is not live, it is a dry run that logs what it would do. The run's changes are on GET /api/evals/google-meetings/sync/{id}. Allows 300 seconds.",
+        body: {
+          kind: "json",
+          fields: [{ name: "preview", type: "boolean", note: "a dry run whether or not the sync is live; an empty body is a sync" }],
+        },
         returns:
           '{ ok: true, runId, status: "succeeded" | "skipped", dryRun: boolean, testGroup: boolean, unfinished: boolean, notes: string[], invited, removed, attended, missed, noneLeft, failures: number }',
         errors: [
@@ -880,7 +1034,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           "One change per person invited to or taken off an occurrence (invited, removed), per attendance read (attended, missed), per person with no occurrence left in their window of a meeting taken one at a time (none_left), per old invite cancelled (cancelled), and per call Google or Zoom refused (failed, with their answer in detail). occurrenceStartsAt is the occurrence it was about, or null. In a dry run each says what would have happened. fullName is the employee list's name for the email now, or null. counts is by kind, whatever the search.",
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         query: [
-          { name: "kind", type: '"invites" | "attendance" | "problems"', note: "only invites sent, taken back or cancelled; only attendance read; or only refusals and people with none left. Every change if left out" },
+          {
+            name: "kind",
+            type: '"invites" | "attendance" | "problems"',
+            note: "only invites sent, taken back or cancelled; only attendance read; or only refusals and people with none left. Every change if left out",
+          },
           ...listQuery(MEETING_SYNC_CHANGE_LIST.sorts, "the meeting, the action, the email, the name or the detail"),
         ],
         returns: `{ run: <as in GET /api/evals/google-meetings/sync>, counts: { all, invites, attendance, problems: number }, changes: { id, meetingName, occurrenceStartsAt: string | null, action: "invited" | "removed" | "attended" | "missed" | "none_left" | "cancelled" | "failed", email, fullName: string | null, detail: string | null, at }[], ${PAGE_FIELDS} }`,
@@ -889,7 +1047,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/evals/google-meetings/connect",
-        summary: "Sends the browser to Google to connect the account Google Meetings reads the Revenue Enablement calendar and invites the cohort as.",
+        summary:
+          "Sends the browser to Google to connect the account Google Meetings reads the Revenue Enablement calendar and invites the cohort as.",
         access: "platform",
         token: false,
         notes:
@@ -927,7 +1086,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         body: {
           kind: "json",
-          fields: [{ name: "preview", type: "boolean", note: "true for a dry run whether or not the sync is live, to see what it would change and send, and to whom; the body may be left out" }],
+          fields: [
+            {
+              name: "preview",
+              type: "boolean",
+              note: "true for a dry run whether or not the sync is live, to see what it would change and send, and to whom; the body may be left out",
+            },
+          ],
         },
         notes:
           "Its channels also run after each scheduled HiBob sync, and its reminders once a day on their own. Channels: with no bootcamp active, none are synced. Otherwise it finds or creates the public channels sales-bootcamp-{mon}-{yyyy} and se-bootcamp-{mon}-{yyyy}, and the -intermediate- pair when the bootcamp holds an intermediate class, from its start date; joins each; invites the Current tab's Sales and Engineers at that stage, and the Bootcamp Contacts, to the sales- channel, and its Engineers and the Engineer Contacts to the se- one; and removes anyone it invited earlier who no longer belongs. Undecided people are left out, and no one it did not invite is ever removed. Reminders: while the daily reminder is on (PUT /api/cohorts/slack/settings) and today's have not gone out, a direct message, with a link to /intake, to everyone in the current cohort who has not answered their stage's intake form; a form with no questions sends nothing, and an app missing chat:write or im:write sends nothing and says so in notes. A run with nothing to do in any part is skipped. In dry run (see PUT /api/settings/slack-mode), or with preview, it changes and sends nothing, and the counts and GET /api/cohorts/slack/sync/{id} say what it would do and send, and to whom. A dry run works with Slack not connected too: unable to see who is already anywhere, it lists every channel not yet created as one to create, everyone each should hold as one to add, and a message to everyone due a reminder, and says so in notes. Slack's rate limits can stop a run part-way, when unfinished is true and the next run carries on. Allows 300 seconds; every attempt is logged.",
@@ -935,8 +1100,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
           { status: 409, error: "already_running", when: "another sync is running" },
-          { status: 409, error: "not_configured", when: "a live run, with the Slack app not installed and no SLACK_BOT_TOKEN on the deployment" },
-          { status: 502, error: "slack_error", when: "Slack refused the token or a call every member would need, such as a missing scope; detail says which" },
+          {
+            status: 409,
+            error: "not_configured",
+            when: "a live run, with the Slack app not installed and no SLACK_BOT_TOKEN on the deployment",
+          },
+          {
+            status: 502,
+            error: "slack_error",
+            when: "Slack refused the token or a call every member would need, such as a missing scope; detail says which",
+          },
         ],
       },
       {
@@ -949,7 +1122,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           "One change per channel created or joined, per person invited, removed or refused, per direct message sent, and per email with no Slack account. A change to a channel names it in channelName; one to a person alone has an empty channelName: a message (messaged, its text in detail, as Slack mrkdwn), a message Slack refused (failed), or no Slack account (not_in_slack). In a dry run each says what would have happened. fullName is the employee list's name for the email now, or null. counts is by kind, whatever the search.",
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         query: [
-          { name: "kind", type: '"channels" | "messages" | "problems"', note: "only changes to a channel; only messages, sent or refused; or only refusals and emails with no Slack account. Every change if left out" },
+          {
+            name: "kind",
+            type: '"channels" | "messages" | "problems"',
+            note: "only changes to a channel; only messages, sent or refused; or only refusals and emails with no Slack account. Every change if left out",
+          },
           ...listQuery(SLACK_SYNC_CHANGE_LIST.sorts, "the channel, the action, the email, the name or the detail"),
         ],
         returns: `{ run: <as in GET /api/cohorts/slack/sync>, counts: { all, channels, messages, problems: number }, changes: { id, channelName, action: "created" | "joined" | "invited" | "removed" | "messaged" | "not_in_slack" | "failed", email, fullName: string | null, detail: string | null, at }[], ${PAGE_FIELDS} }`,
@@ -958,7 +1135,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/cohorts/slack/settings",
-        summary: "Whether Slack is live or a dry run (set with PUT /api/settings/slack-mode), and whether the cohort Slack sync sends the intake form's daily reminder.",
+        summary:
+          "Whether Slack is live or a dry run (set with PUT /api/settings/slack-mode), and whether the cohort Slack sync sends the intake form's daily reminder.",
         access: "trainingAdmin",
         token: true,
         returns: "{ live: boolean, reminders: boolean }",
@@ -999,16 +1177,25 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           fields: [
             { name: "on", type: "boolean" },
             { name: "suffix", type: "string", note: "slugified, at most 40 characters" },
-            { name: "members", type: '{ email: string, fullName: string, stage?: "bootcamp" | "intermediate" | "both" }[]', note: "replaces the whole list; stage is both unless given, and says which stage's channels, meetings, reminders and intake form the person gets" },
+            {
+              name: "members",
+              type: '{ email: string, fullName: string, stage?: "bootcamp" | "intermediate" | "both" }[]',
+              note: "replaces the whole list; stage is both unless given, and says which stage's channels, meetings, reminders and intake form the person gets",
+            },
           ],
         },
-        returns: "{ on, suffix, members: as in GET, archived?: string[], cancelled?: number } (archived and cancelled only when turning it off)",
+        returns:
+          "{ on, suffix, members: as in GET, archived?: string[], cancelled?: number } (archived and cancelled only when turning it off)",
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape, or changes nothing" },
           { status: 400, error: "suffix_required", when: "it would be on with no suffix" },
           { status: 400, error: "members_required", when: "it would be on with no one in it" },
           { status: 409, error: "suffix_locked", when: "the suffix is changed while the group is on" },
-          { status: 502, error: "teardown_failed", when: "a channel or invite could not be removed; failures lists them and the group stays on" },
+          {
+            status: 502,
+            error: "teardown_failed",
+            when: "a channel or invite could not be removed; failures lists them and the group stays on",
+          },
         ],
       },
       {
@@ -1027,8 +1214,34 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "On Admin Settings → External Connectors, beside the Google account, and a dry run until someone turns it live. A dry run reads the calendar and Zoom and logs whom it would invite and take off, but changes no invite and writes nothing to either, cancelling none of the old form's meetings; it stores only the occurrences it read, for the Current tab. QA shares production's Google Workspace, so it stays in dry run there.",
-        body: { kind: "json", fields: [{ name: "live", type: "boolean", required: true, note: "true to change invites, false for a dry run" }] },
+        body: {
+          kind: "json",
+          fields: [{ name: "live", type: "boolean", required: true, note: "true to change invites, false for a dry run" }],
+        },
         returns: "{ live: boolean }",
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
+      },
+      {
+        method: "GET",
+        path: "/api/settings/google-meetings-invites",
+        summary: "Whether the Google Meetings sync emails guests about its invite changes, or is silent.",
+        access: "platform",
+        token: true,
+        returns: "{ email: boolean }",
+      },
+      {
+        method: "PUT",
+        path: "/api/settings/google-meetings-invites",
+        summary: "Has the Google Meetings sync email guests about its invite changes, or return it to silent.",
+        access: "platform",
+        token: true,
+        notes:
+          "On Admin Settings → External Connectors, beside the Google account, as Silent / Email Invites, and silent until someone changes it. Silent sends every calendar write with sendUpdates=none, so a guest finds the invite on their calendar without an email. Email Invites sends each invite change, and each Zoom link rewrite, with sendUpdates=all, so Google emails every guest on the event as it does for any edit; the old form's cancellations stay silent. It takes effect on the next sync, and only on a live one: a dry run changes no invite.",
+        body: {
+          kind: "json",
+          fields: [{ name: "email", type: "boolean", required: true, note: "true for Email Invites, false for Silent" }],
+        },
+        returns: "{ email: boolean }",
         errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
       },
       {
@@ -1047,7 +1260,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "One switch, on Admin Settings → External Connectors, and a dry run until someone turns it live. In a dry run the cohort Slack sync (POST /api/cohorts/slack/sync) logs the channels it would create, the people it would invite and remove and the reminders it would send; the daily survey announcement is not posted; the Live Sessions Slack button (POST /api/reporting/bootcamp/people/{key}/slack) answers dry_run; and a release logs the message it would send (GET /api/reporting/release-notices/{id}). QA shares production's Slack workspace, so leave QA in dry run.",
-        body: { kind: "json", fields: [{ name: "live", type: "boolean", required: true, note: "true to change Slack and send messages, false for a dry run" }] },
+        body: {
+          kind: "json",
+          fields: [{ name: "live", type: "boolean", required: true, note: "true to change Slack and send messages, false for a dry run" }],
+        },
         returns: "{ live: boolean }",
         errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
       },
@@ -1096,7 +1312,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists the bootcamps the Scheduler has planned, a page at a time, latest first.",
         access: "scheduleReader",
         token: true,
-        notes: "intDays is null for a bootcamp with no intermediate class. At most one bootcamp is active; complete is one that has run. A guest judge with no training role is shown only the active bootcamp, the one they judge, and is refused every other bootcamp's routes with 403.",
+        notes:
+          "intDays is null for a bootcamp with no intermediate class. At most one bootcamp is active; complete is one that has run. A guest judge with no training role is shown only the active bootcamp, the one they judge, and is refused every other bootcamp's routes with 403.",
         query: [
           ...listQuery(BOOTCAMP_LIST.sorts, "the status, the facility, or who created it"),
           { name: "complete", type: '"true" | "false"', note: "false leaves out bootcamps with status complete. Default true." },
@@ -1236,7 +1453,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/schedule",
-        summary: "Reads one bootcamp's whole schedule: every day of its four tracks, its rooms, who can run a session, and the assessments a breakout can be scored on.",
+        summary:
+          "Reads one bootcamp's whole schedule: every day of its four tracks, its rooms, who can run a session, and the assessments a breakout can be scored on.",
         access: "scheduleReader",
         token: true,
         notes: `days.btc[0] is day 1 of Bootcamp; each day's sessions are in start order, at most ${SCHEDULE_LIMITS.sessionsPerDay}. start is minutes after midnight, on the quarter hour, from 480 (8:00 AM); a session ends by midnight, and no two on one track-day overlap. Time between them is unscheduled. The SE tracks run as many days as the class they break out of, and a track the bootcamp does not hold has no days. Day N of every track is the same calendar day. instructors is every Training administrator and every guest judge of the bootcamp. assessments is every active assessment, and any inactive one a session here still names, at most 100. classes lists, by email, who each class is now on each track (at most ${SCHEDULE_LIMITS.groupPeople} each), and a session's assigned is everyone in its breakout groups, so a breakout can be checked for anyone it leaves out.`,
@@ -1268,7 +1486,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape, or names a track-day or a session twice" },
           { status: 400, error: "no_day", when: "a day is past the end of its track, or the bootcamp does not hold the track" },
-          { status: 400, error: "overlap", when: "two sessions of a day overlap, or one starts before 8:00 AM, off the quarter hour, or runs past midnight" },
+          {
+            status: 400,
+            error: "overlap",
+            when: "two sessions of a day overlap, or one starts before 8:00 AM, off the quarter hour, or runs past midnight",
+          },
           { status: 404, error: "not_found", when: "no such bootcamp" },
           { status: 409, error: "stale", when: "the sessions named are not exactly the ones those days hold now; reload and try again" },
         ],
@@ -1313,7 +1535,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Says who and which rooms are busy during a stretch of one day, across the bootcamp's four tracks.",
         access: "trainingViewer",
         token: true,
-        notes: "Each person, by email, and each room, by id, that is in a session overlapping the stretch, with the sessions. Unstructured sessions take no one and no room.",
+        notes:
+          "Each person, by email, and each room, by id, that is in a session overlapping the stretch, with the sessions. Unstructured sessions take no one and no room.",
         params: [BOOTCAMP_ID],
         query: [
           { name: "day", type: "number", required: true },
@@ -1421,7 +1644,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists a session's comments, a page at a time, newest first.",
         access: "scheduleReader",
         token: true,
-        notes: "authorName and authorEmail are as they were when it was written. mentions are the people it tags; the body spells each as \"@\" and their fullName.",
+        notes:
+          'authorName and authorEmail are as they were when it was written. mentions are the people it tags; the body spells each as "@" and their fullName.',
         params: [BOOTCAMP_ID, SESSION_ID],
         query: listQuery(SESSION_COMMENT_LIST.sorts, "the text or the author"),
         returns: `{ comments: ${COMMENT_SHAPE}[], ${PAGE_FIELDS} }`,
@@ -1434,7 +1658,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Each person tagged sees the comment in their inbox (GET /api/me/mentions). Write \"@\" and their name in the body where they are tagged, as the schedule page does; the body is not checked for it.",
+          'Each person tagged sees the comment in their inbox (GET /api/me/mentions). Write "@" and their name in the body where they are tagged, as the schedule page does; the body is not checked for it.',
         params: [BOOTCAMP_ID, SESSION_ID],
         body: {
           kind: "json",
@@ -1450,7 +1674,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: `201 ${COMMENT_SHAPE}`,
         errors: [
           { status: 400, error: "invalid", when: `body is empty or too long, or more than ${SCHEDULE_LIMITS.mentions} mentions` },
-          { status: 400, error: "not_instructor", when: "a mention is not an administrator or guest judge of the bootcamp; email names it" },
+          {
+            status: 400,
+            error: "not_instructor",
+            when: "a mention is not an administrator or guest judge of the bootcamp; email names it",
+          },
           { status: 404, error: "not_found", when: "no such bootcamp or session" },
         ],
       },
@@ -1502,7 +1730,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 400, error: "invalid", when: "groups is missing or too long, an email is not one, or an attendee is named twice" },
           { status: 400, error: "not_staff", when: "an instructorEmail is not on the session's staff; email names it" },
-          { status: 400, error: "not_attendee", when: "an attendee is not taught this session and was not in its groups; email names them" },
+          {
+            status: 400,
+            error: "not_attendee",
+            when: "an attendee is not taught this session and was not in its groups; email names them",
+          },
           { status: 404, error: "not_found", when: "no such bootcamp or session" },
           { status: 409, error: "not_breakout", when: "the session is not a breakout" },
         ],
@@ -1510,14 +1742,15 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/checklist",
-        summary: "Counts the checklist items of each half of each track-day, and how many are done, and lists those the schedule marks at their time.",
+        summary:
+          "Counts the checklist items of each half of each track-day, and how many are done, and lists those the schedule marks at their time.",
         access: "scheduleReader",
         token: true,
         notes:
           "days has one entry per track, day and period (am is Day, pm is Evening); a half-day with no items is left out. marks is every item still to do in the Day half of a class-day (not Prep Day) that has an alarm, in minutes after midnight, by track, day and time.",
         params: [BOOTCAMP_ID],
         returns:
-          "{ days: { track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, period: \"am\" | \"pm\", total: number, done: number }[], marks: { id, track, day: number, alarm: number, name, ownerEmail: string | null, ownerName, mentions: { email, fullName }[] }[] }",
+          '{ days: { track: "btc" | "int" | "btc_se" | "int_se", day: number, period: "am" | "pm", total: number, done: number }[], marks: { id, track, day: number, alarm: number, name, ownerEmail: string | null, ownerName, mentions: { email, fullName }[] }[] }',
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
       },
       {
@@ -1560,8 +1793,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: `201 ${CHECKLIST_ITEM_ROW}`,
         errors: [
           { status: 400, error: "invalid", when: "name is empty or too long, or period is neither am nor pm" },
-          { status: 400, error: "no_day", when: "the track does not run that many days at this bootcamp, or day is 0 on a track other than btc" },
-          { status: 400, error: "not_instructor", when: "ownerEmail or a mention is not an administrator or guest judge of the bootcamp; email names it" },
+          {
+            status: 400,
+            error: "no_day",
+            when: "the track does not run that many days at this bootcamp, or day is 0 on a track other than btc",
+          },
+          {
+            status: 400,
+            error: "not_instructor",
+            when: "ownerEmail or a mention is not an administrator or guest judge of the bootcamp; email names it",
+          },
           { status: 404, error: "not_found", when: "no such bootcamp, or track or day is not one" },
           { status: 409, error: "full", when: `the day already has ${CHECKLIST_LIMITS.itemsPerDay} items` },
         ],
@@ -1569,7 +1810,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PATCH",
         path: "/api/scheduler/bootcamps/{id}/checklist/items/{itemId}",
-        summary: "Ticks a checklist item done or back to do, changes its name, owner or time, or moves it to another half-day or another place in its own.",
+        summary:
+          "Ticks a checklist item done or back to do, changes its name, owner or time, or moves it to another half-day or another place in its own.",
         access: "signedIn",
         token: true,
         notes:
@@ -1582,10 +1824,18 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             { name: "track", type: TRACK_TYPE, note: "to move it to another track" },
             { name: "day", type: "number", note: "to move it to another day: 1-based; 0 is Prep Day, on btc only" },
             { name: "period", type: `"am" | "pm"`, note: "to move it to the other half of the day" },
-            { name: "position", type: "number", note: `its place in the half-day, first at 0, counting the other items there; 0 to ${CHECKLIST_LIMITS.itemsPerDay}` },
+            {
+              name: "position",
+              type: "number",
+              note: `its place in the half-day, first at 0, counting the other items there; 0 to ${CHECKLIST_LIMITS.itemsPerDay}`,
+            },
             { name: "name", type: "string", note: `up to ${CHECKLIST_LIMITS.name} characters` },
             { name: "alarm", type: "number | null", note: "when it is due, in minutes after midnight (0 to 1439); null for none" },
-            { name: "ownerEmail", type: "string | null", note: "a Training administrator or guest judge of the bootcamp; null or blank for nobody" },
+            {
+              name: "ownerEmail",
+              type: "string | null",
+              note: "a Training administrator or guest judge of the bootcamp; null or blank for nobody",
+            },
             {
               name: "mentions",
               type: "string[]",
@@ -1595,10 +1845,22 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         },
         returns: CHECKLIST_ITEM_ROW,
         errors: [
-          { status: 400, error: "invalid", when: "none of done, name, alarm, ownerEmail, track, day, period or position is given, or one is the wrong type, or name is empty or too long, or alarm is out of range" },
+          {
+            status: 400,
+            error: "invalid",
+            when: "none of done, name, alarm, ownerEmail, track, day, period or position is given, or one is the wrong type, or name is empty or too long, or alarm is out of range",
+          },
           { status: 400, error: "no_day", when: "the track does not run that day at this bootcamp, or day is 0 on a track other than btc" },
-          { status: 400, error: "not_instructor", when: "ownerEmail or a mention is not an administrator or guest judge of the bootcamp; email names it" },
-          { status: 403, error: "forbidden", when: "you are not a Training Administrator and name, alarm, ownerEmail, track, day, period or position is given" },
+          {
+            status: 400,
+            error: "not_instructor",
+            when: "ownerEmail or a mention is not an administrator or guest judge of the bootcamp; email names it",
+          },
+          {
+            status: 403,
+            error: "forbidden",
+            when: "you are not a Training Administrator and name, alarm, ownerEmail, track, day, period or position is given",
+          },
           { status: 403, error: "not_owner", when: "you are not a Training Administrator and it is not yours" },
           { status: 404, error: "not_found", when: "no such bootcamp or item" },
           { status: 409, error: "full", when: `the day it is moved to already has ${CHECKLIST_LIMITS.itemsPerDay} items` },
@@ -1702,7 +1964,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists the session types that start a new session, a page at a time, in the order the session dialog offers them.",
         access: "trainingViewer",
         token: true,
-        notes: "A type is a quick start: picking one fills in a new session's kind, name, icon, color, length and description, which are then the session's own.",
+        notes:
+          "A type is a quick start: picking one fills in a new session's kind, name, icon, color, length and description, which are then the session's own.",
         query: listQuery(SESSION_TYPE_LIST.sorts, "the name or the description"),
         returns: `{ sessionTypes: ${SESSION_TYPE_SHAPE}[], ${PAGE_FIELDS} }`,
       },
@@ -1761,8 +2024,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
   {
     id: "recordings",
     title: "Recordings",
-    intro:
-      `Async recordings. Anyone in the org signs in with Google at /record — the Harness Training Recorder — and, needing no role, types their name, and records their camera (with the microphone) and, if they choose, their screen, each as its own file. The browser keeps every stream locally and uploads it a chunk at a time while it records, retrying until each lands: on a deployment, straight to Cloud Storage on signed URLs, so no video passes through the app. The /api/record routes are what that page calls, as the signed-in account: a take is its recorder's, and nobody else may add to it. Everything else here is for Training Viewers to read and play, and for Training Administrators to delete. A recording is deleted ${RECORDING_RETENTION_DAYS} days after it is made, and is not listed meanwhile.`,
+    intro: `Async recordings. Anyone in the org signs in with Google at /record — the Harness Training Recorder — and, needing no role, types their name, and records their camera (with the microphone) and, if they choose, their screen, each as its own file. The browser keeps every stream locally and uploads it a chunk at a time while it records, retrying until each lands: on a deployment, straight to Cloud Storage on signed URLs, so no video passes through the app. The /api/record routes are what that page calls, as the signed-in account: a take is its recorder's, and nobody else may add to it. Everything else here is for Training Viewers to read and play, and for Training Administrators to delete. A recording is deleted ${RECORDING_RETENTION_DAYS} days after it is made, and is not listed meanwhile.`,
     endpoints: [
       {
         method: "GET",
@@ -1830,7 +2092,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             { name: "mimeType", type: "string", required: true, note: "what MediaRecorder records: video/mp4 or video/webm, with codecs" },
             { name: "startedAt", type: "string", required: true, note: "ISO 8601" },
             { name: "offsetMs", type: "number", required: true, note: "when this stream started after the take's first; 0 to 60000" },
-            { name: "contributor", type: "string", note: `the name the person recording gave; trimmed, at most ${RECORDING_LIMITS.contributor} characters` },
+            {
+              name: "contributor",
+              type: "string",
+              note: `the name the person recording gave; trimmed, at most ${RECORDING_LIMITS.contributor} characters`,
+            },
           ],
         },
         returns: `${RECORDING_TRACK_SHAPE} & { upload: "direct" | "app" }`,
@@ -1919,7 +2185,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         body: {
           kind: "json",
           fields: [
-            { name: "chunks", type: "number", required: true, note: "how many chunks the stream has; 0 marks it failed, nothing having been saved" },
+            {
+              name: "chunks",
+              type: "number",
+              required: true,
+              note: "how many chunks the stream has; 0 marks it failed, nothing having been saved",
+            },
             { name: "durationMs", type: "number", required: true },
           ],
         },
@@ -1943,12 +2214,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Saves a smiley (up) or confused (down) rating on a video, where it was, and an optional comment.",
         access: "signedIn",
         token: true,
-        notes:
-          `A Coach Canary concept's video may be rated by anyone signed in; a recording's stream only by a ${ACCESS_LABELS.trainingAdmin}, who are the ones who can watch it. The video's name is saved with the feedback as it is now, and so is the version being watched, since the same moment falls at a different second in each: videoObject is null for feedback from before that was kept, and for a recording. A comment is trimmed, and a blank one is saved as none. A recording's feedback is deleted with the take.`,
+        notes: `A Coach Canary concept's video may be rated by anyone signed in; a recording's stream only by a ${ACCESS_LABELS.trainingAdmin}, who are the ones who can watch it. The video's name is saved with the feedback as it is now, and so is the version being watched, since the same moment falls at a different second in each: videoObject is null for feedback from before that was kept, and for a recording. A comment is trimmed, and a blank one is saved as none. A recording's feedback is deleted with the take.`,
         body: {
           kind: "json",
           fields: [
-            { name: "video", type: `{ kind: "mimir_concept" | "recording", id: string, language?: "en" | "es", object?: string }`, required: true, note: "the concept's id, or the recording stream's id. For a concept, language and object name the version playing, as its GET returned them; left out, it is the English video as it is now" },
+            {
+              name: "video",
+              type: `{ kind: "mimir_concept" | "recording", id: string, language?: "en" | "es", object?: string }`,
+              required: true,
+              note: "the concept's id, or the recording stream's id. For a concept, language and object name the version playing, as its GET returned them; left out, it is the English video as it is now",
+            },
             { name: "rating", type: `"up" | "down"`, required: true },
             { name: "position", type: "number", required: true, note: "where the video was, in seconds from the start" },
             { name: "comment", type: "string", note: `up to ${VIDEO_FEEDBACK_LIMITS.comment} characters` },
@@ -1967,7 +2242,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists feedback on videos, a page at a time, the newest first.",
         access: "videoFeedback",
         token: true,
-        notes: "Each area reads its own videos' feedback: an Assessments Administrator Coach Canary's concepts (mimir_concept), a Training Administrator the async recordings (recording). Without kind it is everything the caller may read; naming a kind they may not read is 403. user is null once the account that gave it is deleted.",
+        notes:
+          "Each area reads its own videos' feedback: an Assessments Administrator Coach Canary's concepts (mimir_concept), a Training Administrator the async recordings (recording). Without kind it is everything the caller may read; naming a kind they may not read is 403. user is null once the account that gave it is deleted.",
         query: [
           ...listQuery(VIDEO_FEEDBACK_LIST.sorts, "the video's name, the comment, or the name or email of who gave it", "desc"),
           { name: "kind", type: `"mimir_concept" | "recording"`, note: "only feedback on that kind of video" },
@@ -1979,10 +2255,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/video-feedback/summary",
-        summary: "Lists each concept on the Coach Canary map, and each video no longer on it that has feedback, with its counts of smiley and confused ratings, and of each that came with a comment, a page at a time, by name.",
+        summary:
+          "Lists each concept on the Coach Canary map, and each video no longer on it that has feedback, with its counts of smiley and confused ratings, and of each that came with a comment, a page at a time, by name.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "Only Coach Canary concept videos are counted. A comment is a rating saved with words; the counts of ratings include them. accepted is how many comments an administrator has accepted and no regeneration has applied yet. label is the concept's name on the map, or the video's name when it was last rated for one no longer on it. inMap is whether the concept is on the map, and hasVideo whether it has a video there. translations lists the languages that video has been translated into. job is the concept's latest Coach Canary Studio video job, or null.",
+        notes:
+          "Only Coach Canary concept videos are counted. A comment is a rating saved with words; the counts of ratings include them. accepted is how many comments an administrator has accepted and no regeneration has applied yet. label is the concept's name on the map, or the video's name when it was last rated for one no longer on it. inMap is whether the concept is on the map, and hasVideo whether it has a video there. translations lists the languages that video has been translated into. job is the concept's latest Coach Canary Studio video job, or null.",
         query: listQuery(VIDEO_FEEDBACK_SUMMARY_LIST.sorts, "the concept's name"),
         returns: `{ videos: { conceptId, label, inMap: boolean, hasVideo: boolean, translations: string[], up: number, upComments: number, down: number, downComments: number, accepted: number, job: { id, status, progress, error, createdAt, finishedAt } | null }[], ${PAGE_FIELDS} }`,
       },
@@ -1993,7 +2271,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "the feedback's id" }],
-        notes: "Only a rating that came with a comment can be changed. Send comment, status, or both; the audit trail keeps the words before and after. A video with accepted comments is the one Coach Canary Feedback offers to regenerate. applied is set only by a regeneration that took the comment in, and cannot be sent.",
+        notes:
+          "Only a rating that came with a comment can be changed. Send comment, status, or both; the audit trail keeps the words before and after. A video with accepted comments is the one Coach Canary Feedback offers to regenerate. applied is set only by a regeneration that took the comment in, and cannot be sent.",
         body: {
           kind: "json",
           fields: [
@@ -2021,7 +2300,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         params: [INTAKE_FORM_PARAM],
-        notes: "Until it is first saved this is the default form, with updatedAt null: each as the Google Form it replaces asked it: Pre-Bootcamp's introduction and six questions, Pre-Intermediate's introduction and five. Pre-Bootcamp's preferred-name and time zone questions are automatic: /intake asks everyone them first, so they are never in this form. A form has no title of its own; /intake heads it Bootcamp Registration or Intermediate Registration.",
+        notes:
+          "Until it is first saved this is the default form, with updatedAt null: each as the Google Form it replaces asked it: Pre-Bootcamp's introduction and six questions, Pre-Intermediate's introduction and five. Pre-Bootcamp's preferred-name and time zone questions are automatic: /intake asks everyone them first, so they are never in this form. A form has no title of its own; /intake heads it Bootcamp Registration or Intermediate Registration.",
         returns: `{ introduction: string, questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string | null }`,
         errors: [{ status: 404, error: "not_found", when: "form is neither bootcamp nor intermediate" }],
       },
@@ -2047,11 +2327,20 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists each person's latest answers to one intake form, or to both, a page at a time, the most recently saved first.",
         access: "trainingAdmin",
         token: true,
-        notes: "Someone who changed their answers is listed once, as they are now; with form all, once for each form they answered, form saying which. name is from HiBob, and null for an email no employee has.",
+        notes:
+          "Someone who changed their answers is listed once, as they are now; with form all, once for each form they answered, form saying which. name is from HiBob, and null for an email no employee has.",
         query: [
-          { name: "form", type: '"bootcamp" | "intermediate" | "all"', note: "the form, or all for both together; bootcamp, Pre-Bootcamp, if left out or anything else" },
+          {
+            name: "form",
+            type: '"bootcamp" | "intermediate" | "all"',
+            note: "the form, or all for both together; bootcamp, Pre-Bootcamp, if left out or anything else",
+          },
           ...listQuery(INTAKE_RESPONSE_LIST.sorts, "the name, email or any answer"),
-          { name: "question", type: "string", note: "with answer, only responses whose answer to this question id is, or for checkboxes includes, answer" },
+          {
+            name: "question",
+            type: "string",
+            note: "with answer, only responses whose answer to this question id is, or for checkboxes includes, answer",
+          },
           { name: "answer", type: "string", note: "with question; either alone is ignored" },
         ],
         returns: `{ form: "bootcamp" | "intermediate" | "all", responses: { id, form: "bootcamp" | "intermediate", email, name: string | null, answers: Record<string, string | string[]>, submittedAt }[], ${PAGE_FIELDS} }`,
@@ -2068,9 +2357,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { name: "form", type: '"bootcamp" | "intermediate"', required: true, note: "the form to bring the responses into" },
           { name: "commit", type: '"1"', note: "store them; left out, nothing is written" },
         ],
-        body: { kind: "multipart", fields: [{ name: "file", type: "File", required: true, note: "the responses sheet as .csv or .xlsx, up to 2 MB and 2,000 rows" }] },
+        body: {
+          kind: "multipart",
+          fields: [{ name: "file", type: "File", required: true, note: "the responses sheet as .csv or .xlsx, up to 2 MB and 2,000 rows" }],
+        },
         returns:
-          "{ imported: boolean, columns: { header, questionId: string | null }[], added: number, alreadyThere: number, inCohort: number, people: number, problems: { row: number, problem: \"no_email\" | \"not_an_email\" }[] }",
+          '{ imported: boolean, columns: { header, questionId: string | null }[], added: number, alreadyThere: number, inCohort: number, people: number, problems: { row: number, problem: "no_email" | "not_an_email" }[] }',
         errors: [
           { status: 400, error: "no_file", when: "no file was sent" },
           { status: 400, error: "unreadable", when: "the file is neither a .csv nor an .xlsx" },
@@ -2084,17 +2376,30 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/logistics/dietary",
-        summary: "Counts the current cohort's dietary needs by item, critical and not, and lists who wrote in Other and who has yet to register.",
+        summary:
+          "Counts the current cohort's dietary needs by item, critical and not, and lists who wrote in Other and who has yet to register.",
         access: "trainingViewer",
         token: true,
         notes:
           "Reads both forms, Pre-Bootcamp and Pre-Intermediate, as one list, since both groups are there at once, for the current cohort only (the Cohorts page's Current tab, Sales and Engineer tracks), and the test group's members while it is on: each person's latest response to either, and the stage they are in now, so a returning intermediate who has only answered bootcamp still counts. stage narrows everything to one group; anything but bootcamp or intermediate is everyone. counts.critical lists each checklist item someone marked Critical with how many did, the most first; counts.notCritical the same for items checked without Critical. Both are short, the checklist's own length, and not paged. criticalWriteIns lists who checked Other, marked it Critical and wrote in what it is; otherWriteIns who did so without Critical. Each is a page at a time under its own prefix. unregistered lists everyone in the current cohort who has sent neither form, and counts.notRegistered how many. Answers given before the checklist existed are not counted.",
         query: [
           { name: "stage", type: `"all" | "bootcamp" | "intermediate"`, note: "who to count; left out, everyone" },
-          { name: "criticalOther.sort", type: `"name" | "email" | "stage"`, note: "the critical write-ins' sort, by name if left out; criticalOther.dir and criticalOther.page beside it" },
-          { name: "other.sort", type: `"name" | "email" | "stage"`, note: "the other write-ins' sort, by name if left out; other.dir and other.page beside it" },
+          {
+            name: "criticalOther.sort",
+            type: `"name" | "email" | "stage"`,
+            note: "the critical write-ins' sort, by name if left out; criticalOther.dir and criticalOther.page beside it",
+          },
+          {
+            name: "other.sort",
+            type: `"name" | "email" | "stage"`,
+            note: "the other write-ins' sort, by name if left out; other.dir and other.page beside it",
+          },
           { name: "q", type: "string", note: "narrows the not-registered list by name or email" },
-          { name: "unregistered.sort", type: `"name" | "email" | "stage"`, note: "the not-registered list's sort; unregistered.dir and unregistered.page beside it" },
+          {
+            name: "unregistered.sort",
+            type: `"name" | "email" | "stage"`,
+            note: "the not-registered list's sort; unregistered.dir and unregistered.page beside it",
+          },
         ],
         returns: `{ stage: "all" | "bootcamp" | "intermediate", counts: { responded: number, withNeeds: number, withCritical: number, cohortSize: number, notRegistered: number, critical: { item: string, count: number }[], notCritical: { item: string, count: number }[] }, criticalWriteIns: { people: { email, name: string | null, stage: "bootcamp" | "intermediate", text: string }[], page: number, hasMore: boolean }, otherWriteIns: { people: { email, name: string | null, stage: "bootcamp" | "intermediate", text: string }[], page: number, hasMore: boolean }, unregistered: { people: { email, name: string | null, stage: "bootcamp" | "intermediate" }[], page: number, hasMore: boolean } }`,
       },
@@ -2172,14 +2477,19 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes: `Read from the employee list as the last HiBob sync left it: anyone in ${GUEST_JUDGE_DEPARTMENTS.join(", ")} with at least one direct report, on no bootcamp's guest judges and not in the guest speaker history, by email. location is HiBob's work location and site its country. tenureMonths is the whole months since HiBob's start date, the first day of their current time at Harness, so a rehire counts from their return; sort tenure ascending is the newest first. syncedAt is when that sync ran.`,
         query: [
           ...listQuery(JUDGE_PROSPECT_LIST.sorts, "the name, email, title or location"),
-          { name: "group", type: `"sales" | "se"`, note: "only Enterprise Sales and Corporate Sales, or only Sales Engineering, by HiBob department; anything else is every leader" },
+          {
+            name: "group",
+            type: `"sales" | "se"`,
+            note: "only Enterprise Sales and Corporate Sales, or only Sales Engineering, by HiBob department; anything else is every leader",
+          },
         ],
         returns: `{ leaders: { email, fullName, title, department, reportsToName, location: string | null, site, startDate: string | null, tenureMonths: number | null }[], ${PAGE_FIELDS}, syncedAt: string | null }`,
       },
       {
         method: "POST",
         path: "/api/logistics/guest-judges/thank-you",
-        summary: "Makes a one-slide Google Slides deck saying Thank You! over the guest judges' Slack photos, saves it as BootCamp Thank You in the shared Drive folder, and shares it with the caller.",
+        summary:
+          "Makes a one-slide Google Slides deck saying Thank You! over the guest judges' Slack photos, saves it as BootCamp Thank You in the shared Drive folder, and shares it with the caller.",
         access: "trainingAdmin",
         token: true,
         notes:
@@ -2187,7 +2497,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: "201 { url: string, judges: number, withPhotos: number }, both counts being the people on the slide",
         errors: [
           { status: 404, error: "no_judges", when: "no guest judges are listed, or Slack has a photo for none of them" },
-          { status: 409, error: "google_not_configured | google_not_connected | google_reconnect | slack_not_connected | no_email", when: "Google or Slack is not set up for it, or the Google account needs connecting again; message says which" },
+          {
+            status: 409,
+            error: "google_not_configured | google_not_connected | google_reconnect | slack_not_connected | no_email",
+            when: "Google or Slack is not set up for it, or the Google account needs connecting again; message says which",
+          },
           { status: 502, error: "failed", when: "Google or Slack refused or could not be reached; message has their answer" },
         ],
       },
@@ -2197,7 +2511,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "A guest judge's Slack photo as a PNG circle with a coloured ring, for the thank-you slide.",
         access: "public",
         token: true,
-        notes: "Made for Google Slides to fetch: the link comes from the thank-you slide's POST and is signed, good for 15 minutes, and only for a Slack or Gravatar image.",
+        notes:
+          "Made for Google Slides to fetch: the link comes from the thank-you slide's POST and is signed, good for 15 minutes, and only for a Slack or Gravatar image.",
         query: [
           { name: "src", type: "string", required: true, note: "the Slack image URL" },
           { name: "ring", type: `"blue" | "orange"`, required: true },
@@ -2216,13 +2531,18 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Adds someone to the guest speaker history: a session they taught, commentated or judged at a month's cohort.",
         access: "trainingAdmin",
         token: true,
-        notes: "For cohorts kept outside the Scheduler; a Scheduler bootcamp's judges are set in its bootcamp dialog. An entry already there is left as it is, and added is false. With an email the person drops off the leaders list.",
+        notes:
+          "For cohorts kept outside the Scheduler; a Scheduler bootcamp's judges are set in its bootcamp dialog. An entry already there is left as it is, and added is false. With an email the person drops off the leaders list.",
         body: {
           kind: "json",
           fields: [
             { name: "cohort", type: "string", required: true, note: "the cohort's month, YYYY-MM" },
             { name: "program", type: `"bootcamp" | "intermediate"`, required: true },
-            { name: "session", type: "string", note: `up to ${GUEST_SPEAKER_LIMITS.session} characters; empty for someone on no particular session` },
+            {
+              name: "session",
+              type: "string",
+              note: `up to ${GUEST_SPEAKER_LIMITS.session} characters; empty for someone on no particular session`,
+            },
             { name: "role", type: `"teach" | "commentator" | "judge" | "speaker"`, required: true },
             { name: "fullName", type: "string", required: true, note: `up to ${GUEST_SPEAKER_LIMITS.name} characters` },
             { name: "email", type: "string | null", note: "their email, from the employee list; null or left out for someone not in it" },
@@ -2237,7 +2557,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Sets a month aside for a cohort, so it lists as a space to fill in before anyone is down for it.",
         access: "trainingAdmin",
         token: true,
-        notes: "A month already set aside is left as it is, and added is false. A month with guest speakers or a Scheduler bootcamp lists whether or not it is set aside.",
+        notes:
+          "A month already set aside is left as it is, and added is false. A month with guest speakers or a Scheduler bootcamp lists whether or not it is set aside.",
         body: { kind: "json", fields: [{ name: "cohort", type: "string", required: true, note: "the cohort's month, YYYY-MM" }] },
         returns: "201 { added: true }, or 200 { added: false }",
         errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
@@ -2261,7 +2582,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         query: [
           { name: "cohort", type: "string", required: true, note: "a history row's cohort, YYYY-MM-DD, the first of its month" },
-          { name: "person", type: "string", required: true, note: "a history row's person: their email, or their lowercased name for someone with none" },
+          {
+            name: "person",
+            type: "string",
+            required: true,
+            note: "a history row's person: their email, or their lowercased name for someone with none",
+          },
         ],
         returns: "{ removed: number }",
         errors: [{ status: 404, error: "not_found", when: "the history holds nothing for them at that cohort" }],
@@ -2274,7 +2600,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "The form is the one for the caller's stage of the current cohort (the Cohorts page's Current tab, Sales and Engineer tracks): bootcamp, headed Bootcamp Registration, for a bootcamp candidate, and intermediate, Intermediate Registration, for an intermediate one. answers is empty and savedAt null until they have saved any, except on intermediate for someone who answered bootcamp before: answers then starts from their bootcamp dietary answers, and carriedFrom says when those were saved. name is the first name of the preferred name they have chosen, which the preferred-name question starts from until they answer it; null if they have none, and the question then starts blank. On both forms, questions open with the automatic preferred-name and timezone questions, then the form's own, and an earlier answer saved as a full name starts from its first name. introduction opens with the line \"Bootcamp takes place from **8:00AM {first day}** to **12:00PM {last day}**.\" from the next bootcamp's dates (the active one, else the soonest scheduled) for bootcamp, or \"Intermediate takes place from ...\" from the next intermediate class's dates (the active bootcamp's if it holds one, else the soonest scheduled that does; it runs for its own number of days from the bootcamp's first day) for intermediate, then the introduction saved in Logistics settings; the times and days are wrapped in ** to show in bold. canDefer is true on both, and the page asks them to sign up or defer (POST /api/intake/defer) before it shows the questions. While the cohort test group is on (PUT /api/cohorts/test-group), a person in it gets the form for the stage they were given there; one given both picks with ?form=bootcamp or ?form=intermediate (bootcamp by default), and testForms lists the two. Their answers are marked as test answers and deleted when the group is turned off, and never change their name.",
-        query: [{ name: "form", type: "bootcamp | intermediate", note: "which form, for a test group member in both stages; ignored for anyone else" }],
+        query: [
+          {
+            name: "form",
+            type: "bootcamp | intermediate",
+            note: "which form, for a test group member in both stages; ignored for anyone else",
+          },
+        ],
         returns: `{ form: "bootcamp" | "intermediate", heading, introduction: string, canDefer: boolean, questions: ${INTAKE_QUESTION_SHAPE}[], answers: Record<string, string | string[]>, savedAt: string | null, carriedFrom?: { form: "bootcamp", savedAt }, name: string | null, testForms?: ("bootcamp" | "intermediate")[] }`,
         errors: [{ status: 404, error: "not_in_cohort", when: "the caller is not in the current cohort" }],
       },
@@ -2303,8 +2635,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 404, error: "not_in_cohort", when: "the caller is not in the current cohort" },
           { status: 409, error: "no_questions", when: "their form has no questions yet, so there is nothing to answer" },
           { status: 400, error: "required", when: "a required question has no answer; questionId names it" },
-          { status: 400, error: "not_an_option", when: "an answer is not one the question offers, or a single-answer question was given several; questionId names it" },
-          { status: 400, error: "not_a_name", when: "the preferred-name answer is not a single first name, with no spaces; questionId names it" },
+          {
+            status: 400,
+            error: "not_an_option",
+            when: "an answer is not one the question offers, or a single-answer question was given several; questionId names it",
+          },
+          {
+            status: 400,
+            error: "not_a_name",
+            when: "the preferred-name answer is not a single first name, with no spaces; questionId names it",
+          },
         ],
       },
       {
@@ -2315,7 +2655,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "It is the Defer button on /intake/registration, after the caller confirms. Their track becomes Deferred, the same change as choosing it on the Employees page, which takes them off the Current tab and out of the form; it stays until an administrator sets the track back to automatic. The page then tells them to look out for a message about the next session. A test group member (see PUT /api/cohorts/test-group) is not deferred: nothing changes, and deferred is false. A test group member in both stages names the form with ?form=bootcamp. Audited as the track change, or, for a test group member, as a test defer.",
-        query: [{ name: "form", type: "bootcamp | intermediate", note: "which form, for a test group member in both stages; ignored for anyone else" }],
+        query: [
+          {
+            name: "form",
+            type: "bootcamp | intermediate",
+            note: "which form, for a test group member in both stages; ignored for anyone else",
+          },
+        ],
         returns: "{ deferred: boolean }",
         errors: [{ status: 404, error: "not_in_cohort", when: "the caller is not in the current cohort" }],
       },
@@ -2364,7 +2710,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/me/forms",
-        summary: "Lists everything the caller has been asked to fill in, as /intake shows it: their registration form and their daily surveys.",
+        summary:
+          "Lists everything the caller has been asked to fill in, as /intake shows it: their registration form and their daily surveys.",
         access: "signedIn",
         token: true,
         notes: `The ones still to answer come first: the registration form, then surveys by day. Those answered follow, most recently answered first. The registration form is listed only for someone in the current cohort (see GET /api/intake) whose form has questions; a test group member in both stages has both. At most ${PAGE_SIZE} surveys are listed.`,
@@ -2387,7 +2734,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Saves the caller's answers to one of their own daily surveys.",
         access: "signedIn",
         token: true,
-        notes: "Every session the survey asks about needs a rating; feedback and dayChange are trimmed and may be empty. Saving again replaces the answers given before.",
+        notes:
+          "Every session the survey asks about needs a rating; feedback and dayChange are trimmed and may be empty. Saving again replaces the answers given before.",
         params: [{ name: "id", type: "string", required: true, note: "the caller's survey" }],
         body: {
           kind: "json",
@@ -2399,7 +2747,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
               note: `keyed by session id, one for each session the survey asks about: rating a whole number from 1 (poor) to 5 (excellent), feedback up to ${SURVEY_LIMITS.answer} characters`,
             },
             { name: "dayRating", type: "integer", required: true, note: "the day overall, from 1 to 5" },
-            { name: "dayChange", type: "string", note: `one thing they would change about the day, up to ${SURVEY_LIMITS.answer} characters` },
+            {
+              name: "dayChange",
+              type: "string",
+              note: `one thing they would change about the day, up to ${SURVEY_LIMITS.answer} characters`,
+            },
           ],
         },
         returns: `${MY_SURVEY_SHAPE}`,
@@ -2416,7 +2768,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists the daily surveys anyone has answered, as Survey Results shows them, a page at a time.",
         access: "trainingViewer",
         token: true,
-        notes: "A survey is listed once it has at least one response. average is the mean of the day-overall ratings; Survey Results shows it to one decimal place. date is the day the survey is about. Sorting by date puts the latest day first by default.",
+        notes:
+          "A survey is listed once it has at least one response. average is the mean of the day-overall ratings; Survey Results shows it to one decimal place. date is the day the survey is about. Sorting by date puts the latest day first by default.",
         query: listQuery(SURVEY_RESULT_LIST.sorts, 'the bootcamp\'s month and the group, as in "November 2026 Bootcamp Sales"', "desc"),
         returns: `{ surveys: ${SURVEY_CARD_SHAPE}[], ${PAGE_FIELDS} }`,
       },
@@ -2426,7 +2779,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Reads one daily survey's results: how each session was rated, and its responses a page at a time.",
         access: "trainingViewer",
         token: true,
-        notes: "survey.sessions are the sessions it asks about, each with its mean rating, how many rated it, and how many left feedback on it. responses are the people who have answered, with every answer they gave.",
+        notes:
+          "survey.sessions are the sessions it asks about, each with its mean rating, how many rated it, and how many left feedback on it. responses are the people who have answered, with every answer they gave.",
         params: [{ name: "id", type: "string", required: true, note: "the survey's id, as GET /api/survey-results lists it" }],
         query: listQuery(SURVEY_RESPONSE_LIST.sorts, "the name or email", "desc"),
         returns: `{ survey: ${SURVEY_RESULT_SHAPE}, responses: { id, email, fullName, submittedAt, dayRating: number, dayChange, sessions: Record<string, { rating: number, feedback }> }[], ${PAGE_FIELDS} }`,
@@ -2448,10 +2802,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "bootcamp is the active one, or null when none is, or, for intermediate, when the active one holds no intermediate class; nothing can be scored then.",
-        query: [
-          { name: "stage", type: `"bootcamp" | "intermediate"`, required: true },
-          ...listQuery(ASSESSMENT_LIST.sorts, "the name"),
-        ],
+        query: [{ name: "stage", type: `"bootcamp" | "intermediate"`, required: true }, ...listQuery(ASSESSMENT_LIST.sorts, "the name")],
         returns: `{ stage, bootcamp: { id, startDate, btcDays, intDays } | null, assessments: { id, name, stage, audience, active: true, updatedAt, criteria: number, submissions: number }[], ${PAGE_FIELDS} }`,
         errors: [{ status: 400, error: "invalid", when: "stage is missing or not one of those" }],
       },
@@ -2492,7 +2843,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/evals/scoring/{assessmentId}/{employeeId}/transcripts",
-        summary: "Transcribes one recording made while scoring an attendee, and files the transcript with their assessment at the active bootcamp.",
+        summary:
+          "Transcribes one recording made while scoring an attendee, and files the transcript with their assessment at the active bootcamp.",
         access: "scorer",
         token: true,
         notes: `Deepgram's nova-3 model, with punctuation, number formatting and a blank line between paragraphs; when more than one voice is heard, each change of speaker starts a paragraph with "Speaker 1:", "Speaker 2:" and so on. text is empty when nothing was heard. The audio is passed through and not kept. Sending the same recordingId again returns the transcript already filed, with 200, without transcribing it again. Up to ${PAGE_SIZE} are kept per attendee per assessment per bootcamp.`,
@@ -2514,12 +2866,21 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             { name: "durationMs", type: "number", required: true, note: "how long it is, in milliseconds" },
           ],
         },
-        returns: "{ id, recordingId, recordedAt, durationMs, recordedByName: string | null, text } — 201 when filed, 200 when it already was",
+        returns:
+          "{ id, recordingId, recordedAt, durationMs, recordedByName: string | null, text } — 201 when filed, 200 when it already was",
         errors: [
           { status: 400, error: "invalid", when: "the body is not form data, or a field is missing or not that shape" },
           { status: 400, error: "empty", when: "the audio file is empty" },
-          { status: 404, error: "not_found", when: "assessmentId is not a UUID, no such active assessment, or the attendee is not one it applies to" },
-          { status: 409, error: "no_bootcamp", when: "no bootcamp is active, or for intermediate, the active one holds no intermediate class" },
+          {
+            status: 404,
+            error: "not_found",
+            when: "assessmentId is not a UUID, no such active assessment, or the attendee is not one it applies to",
+          },
+          {
+            status: 409,
+            error: "no_bootcamp",
+            when: "no bootcamp is active, or for intermediate, the active one holds no intermediate class",
+          },
           { status: 409, error: "too_many", when: `${PAGE_SIZE} transcripts are already filed for them` },
           { status: 409, error: "conflict", when: "that recordingId is filed for another attendee, assessment or bootcamp" },
           { status: 413, error: "too_large", when: "the audio file is over 25 MiB" },
@@ -2538,12 +2899,25 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         params: [
           { name: "assessmentId", type: "string", required: true, note: "UUID" },
           { name: "employeeId", type: "string", required: true, note: "the employee's HiBob id" },
-          { name: "transcriptId", type: "string", required: true, note: "UUID; the id of a transcript filed for them, not its recordingId" },
+          {
+            name: "transcriptId",
+            type: "string",
+            required: true,
+            note: "UUID; the id of a transcript filed for them, not its recordingId",
+          },
         ],
         returns: "{ comments: { criterionId, summary }[] }",
         errors: [
-          { status: 404, error: "not_found", when: "an id is not that shape, no such active assessment, the attendee is not one it applies to, or no such transcript is filed for them at the active bootcamp" },
-          { status: 409, error: "no_bootcamp", when: "no bootcamp is active, or for intermediate, the active one holds no intermediate class" },
+          {
+            status: 404,
+            error: "not_found",
+            when: "an id is not that shape, no such active assessment, the attendee is not one it applies to, or no such transcript is filed for them at the active bootcamp",
+          },
+          {
+            status: 409,
+            error: "no_bootcamp",
+            when: "no bootcamp is active, or for intermediate, the active one holds no intermediate class",
+          },
           { status: 409, error: "empty", when: "the transcript has no text: nothing was heard" },
           { status: 409, error: "no_criteria", when: "the assessment asks no criteria" },
           { status: 422, error: "refused", when: "Claude declined to review it" },
@@ -2558,7 +2932,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "Every criterion still asked needs a whole score from 1 to 4; comments are optional. averageScore is their mean to one decimal place. Rounded to a whole number, an average of 1 or 2 requires constructiveFeedback and an average of 4 requires positiveFeedback. A revision replaces the scores, dropping any for criteria since retired. A comment's mentions tag people with \"@\"; a revision keeps a tag still listed as it was made and drops one no longer listed. The feedback cannot tag anyone.",
+          'Every criterion still asked needs a whole score from 1 to 4; comments are optional. averageScore is their mean to one decimal place. Rounded to a whole number, an average of 1 or 2 requires constructiveFeedback and an average of 4 requires positiveFeedback. A revision replaces the scores, dropping any for criteria since retired. A comment\'s mentions tag people with "@"; a revision keeps a tag still listed as it was made and drops one no longer listed. The feedback cannot tag anyone.',
         params: [
           { name: "assessmentId", type: "string", required: true, note: "UUID" },
           { name: "employeeId", type: "string", required: true, note: "the employee's HiBob id" },
@@ -2588,7 +2962,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 400, error: "feedback_required", when: "the average requires feedback that is empty" },
           { status: 400, error: "not_scorer", when: "a mention can neither use eVals nor judge the active bootcamp; email names it" },
           { status: 404, error: "not_found", when: "no such active assessment, or the attendee is not one it applies to" },
-          { status: 409, error: "no_bootcamp", when: "no bootcamp is active, or for intermediate, the active one holds no intermediate class" },
+          {
+            status: 409,
+            error: "no_bootcamp",
+            when: "no bootcamp is active, or for intermediate, the active one holds no intermediate class",
+          },
           { status: 409, error: "conflict", when: "someone else saved it since revises, or saved the first one first" },
         ],
       },
@@ -2670,7 +3048,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           kind: "json",
           fields: [
             { name: "descriptors", type: '{ id?: uuid, name: string, polarity: "positive" | "negative" }[]', required: true },
-            { name: "bands", type: "{ four: number, three: number, two: number }", required: true, note: "whole numbers, four above three above two" },
+            {
+              name: "bands",
+              type: "{ four: number, three: number, two: number }",
+              required: true,
+              note: "whole numbers, four above three above two",
+            },
           ],
         },
         returns: "the settings, as GET returns them",
@@ -2698,7 +3081,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           "A record is a class someone was assessed in that the caller may see: once it is released, or for an Assessments Viewer also once its bootcamp is complete. level is the furthest class attended: intermediate, else bootcamp. date is their latest class day. averageScore is their score in level at the newest bootcamp they had it, worked out as GET /api/reporting/bootcamp/cohort does, and scored how many assessments it counts. viewers names who has opened their card (POST /api/reporting/bootcamp/people/{key}/views), newest first, at most 20, with when each last did; viewerCount counts them all. Both are empty until the caller has opened that card themself. key addresses their page: their employee id, else, for someone assessed whom the employee list does not have, a submission's. fullName is null for someone it has no name for, and active false for anyone the last HiBob sync did not send. counts gives everyone the caller may see, the active and the inactive, whatever the search or status.",
         query: [
           ...listQuery(BOOTCAMP_RECORD_LIST.sorts, "the name or email", BOOTCAMP_RECORD_LIST.dir),
-          { name: "status", type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "), note: "only the active or only the inactive; everyone if omitted" },
+          {
+            name: "status",
+            type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "),
+            note: "only the active or only the inactive; everyone if omitted",
+          },
         ],
         returns: `{ people: { key, email, fullName: string | null, level: "intermediate" | "bootcamp", date: "YYYY-MM-DD", active: boolean, scored: number, averageScore: number | null, viewers: { name, at }[], viewerCount: number }[], ${PAGE_FIELDS}, status: "active" | "inactive" | null, counts: { total: number, active: number, inactive: number } }`,
         errors: [{ status: 400, error: "invalid_status", when: "status is neither active nor inactive" }],
@@ -2706,7 +3093,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/reporting/bootcamp/cohort",
-        summary: "Returns the active bootcamp, which of its classes are released, and a page of the people in its cohort the caller may see.",
+        summary:
+          "Returns the active bootcamp, which of its classes are released, and a page of the people in its cohort the caller may see.",
         access: "signedIn",
         token: true,
         notes:
@@ -2726,7 +3114,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "comments counts the blank comments there are marks to write, so one person can count twice. overall counts the blank overall positive and constructive feedback of the cohort (PUT /api/reporting/bootcamp/people/{key}/review) that some assessment's saved feedback on that side could fill. scores counts the people who would get a score. skipped names candidates who have not RSVP'd and have no marks and no assessment, whom it leaves out, at most 100. unscored is everyone in the class still waiting on a score, which keeps it from being released: someone in the cohort (RSVP'd to the class and not deferred, as Live Sessions lists them) without a scored assessment for every active assessment of the class taught to their track and for Participation, or anyone with a blank score there. total, and up to 100 names. noExitExam and noFeedback, in the same shape, are everyone in that cohort without an exit exam, and without both overall positive and constructive feedback; either also keeps it from being released. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
-        returns: "{ bootcamp: StagePending | null, intermediate: StagePending | null }, where StagePending is { comments: number, overall: number, scores: number, skipped: string[], unscored: Waiting, noExitExam: Waiting, noFeedback: Waiting }, where Waiting is { total: number, names: string[] }",
+        returns:
+          "{ bootcamp: StagePending | null, intermediate: StagePending | null }, where StagePending is { comments: number, overall: number, scores: number, skipped: string[], unscored: Waiting, noExitExam: Waiting, noFeedback: Waiting }, where Waiting is { total: number, names: string[] }",
       },
       {
         method: "POST",
@@ -2737,7 +3126,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes:
           "Anyone with a mark and a blank score gets a score from the net of their marks, and someone with no marks who RSVP'd to the class, or has another assessment in it, gets a 2. Anyone else is left out, because a submission counts as attendance at release. Claude writes one sentence for each side that has marks and is blank; only the descriptors, their counts and the score are sent. Saved comments and scores stay. failed counts people whose comments Claude did not write, who are left as they were, so calling it again picks them up. Then, for everyone in the class's cohort, Claude sums up each side of their assessments' saved feedback, Participation's included, into one sentence for their overall feedback on that side where it is blank; overall says how many it wrote and for how many people it failed, or the error that stopped it, unconfigured or upstream, without undoing the Participation step.",
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
-        returns: '{ stage, bootcamp: { id, startDate }, people: number, scores: number, comments: number, failed: number, overall: { written: number, failed: number, error: "unconfigured" | "upstream" | null } }',
+        returns:
+          '{ stage, bootcamp: { id, startDate }, people: number, scores: number, comments: number, failed: number, overall: { written: number, failed: number, error: "unconfigured" | "upstream" | null } }',
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
@@ -2771,27 +3161,32 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/reporting/bootcamp/release",
-        summary: "Releases the active bootcamp's BTC or INT results to managers, which marks everyone assessed in that class as having attended it.",
+        summary:
+          "Releases the active bootcamp's BTC or INT results to managers, which marks everyone assessed in that class as having attended it.",
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "From then on, managers see that class's results for the people in their org. Everyone scored in the class has attended it from then on: a BTC class moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people scored in it. Releasing also clears who has opened the card of each of them on Reporting → Live Sessions, so the eye beside their name returns only once someone opens it again. A class cannot be released while anyone in it is waiting on a score for an assessment, an exit exam, or overall positive and constructive feedback (PUT /api/reporting/bootcamp/people/{key}/review); GET /api/reporting/bootcamp/participation names who. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, tells no one, and returns when it was, with notice null. Otherwise everyone in the management chain of anyone scored in the class (their manager up to the Organization Leader, from the HiBob sync), and everyone on the Additional Slack Contacts (GET /api/evals/slack-contacts) whoever they manage, gets a Slack direct message, \"Feedback has been released for November 2026 Bootcamp! Click here to view results for your attendees\" (Intermediate for an INT class), linking to Reporting → Live Sessions. With the test group on, its members for that class get it instead. The messages go out after the response, one at a time; notice.runId is the run, which GET /api/reporting/release-notices/{id} shows as it goes. notice.dryRun is true while Slack is in dry run (PUT /api/settings/slack-mode), when nothing is sent and the run logs what would have been. notice is null when no one was scored, or the run could not start. Nothing about the message fails the release.",
+          'From then on, managers see that class\'s results for the people in their org. Everyone scored in the class has attended it from then on: a BTC class moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people scored in it. Releasing also clears who has opened the card of each of them on Reporting → Live Sessions, so the eye beside their name returns only once someone opens it again. A class cannot be released while anyone in it is waiting on a score for an assessment, an exit exam, or overall positive and constructive feedback (PUT /api/reporting/bootcamp/people/{key}/review); GET /api/reporting/bootcamp/participation names who. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, tells no one, and returns when it was, with notice null. Otherwise everyone in the management chain of anyone scored in the class (their manager up to the Organization Leader, from the HiBob sync), and everyone on the Additional Slack Contacts (GET /api/evals/slack-contacts) whoever they manage, gets a Slack direct message, "Feedback has been released for November 2026 Bootcamp! Click here to view results for your attendees" (Intermediate for an INT class), linking to Reporting → Live Sessions. With the test group on, its members for that class get it instead. The messages go out after the response, one at a time; notice.runId is the run, which GET /api/reporting/release-notices/{id} shows as it goes. notice.dryRun is true while Slack is in dry run (PUT /api/settings/slack-mode), when nothing is sent and the run logs what would have been. notice is null when no one was scored, or the run could not start. Nothing about the message fails the release.',
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
-        returns:
-          '{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number, notice: { runId, dryRun: boolean } | null }',
+        returns: "{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number, notice: { runId, dryRun: boolean } | null }",
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
           { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
           { status: 409, error: "unscored", when: "someone in the class has an assessment still waiting on a score" },
           { status: 409, error: "no_exit_exam", when: "everyone is scored, but someone in the cohort has no exit exam" },
-          { status: 409, error: "no_feedback", when: "everyone is scored and has an exit exam, but someone in the cohort lacks overall positive or constructive feedback" },
+          {
+            status: 409,
+            error: "no_feedback",
+            when: "everyone is scored and has an exit exam, but someone in the cohort lacks overall positive or constructive feedback",
+          },
         ],
       },
       {
         method: "POST",
         path: "/api/reporting/release-notices/preview",
-        summary: "Logs who releasing the active bootcamp's BTC or INT scores would message in Slack, without releasing or sending anything.",
+        summary:
+          "Logs who releasing the active bootcamp's BTC or INT scores would message in Slack, without releasing or sending anything.",
         access: "assessmentsAdmin",
         token: true,
         notes:
@@ -2868,7 +3263,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists who has opened someone's Live Sessions card, newest first.",
         access: "signedIn",
         token: true,
-        notes: "One row per person who has opened it: name, when they last did (at), and how many times (views). At most 100; total counts them all. Empty until the caller has opened it themself.",
+        notes:
+          "One row per person who has opened it: name, when they last did (at), and how many times (views). At most 100; total counts them all. Empty until the caller has opened it themself.",
         params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
         returns: "{ viewers: { name, at, views: number }[], total: number }",
         errors: [{ status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" }],
@@ -2879,7 +3275,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Records that the caller opened someone's Live Sessions card.",
         access: "signedIn",
         token: true,
-        notes: "Takes no body. The card calls it each time it opens. It counts the view and sets when the caller last viewed; the lists' eye names who has. The audit log records each view.",
+        notes:
+          "Takes no body. The card calls it each time it opens. It counts the view and sets when the caller last viewed; the lists' eye names who has. The audit log records each view.",
         params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" }],
@@ -2893,16 +3290,32 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes:
           "It replaces the whole review: both feedback boxes and the optional otherNotes, which their manager reads under the class's overall score once it is released, and both exams. Once both exams are in, their average counts towards the class's overall score as one more exercise. The audit log records who saved it.",
         params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
-        body: { kind: "json", fields: [
-          { name: "bootcampId", type: "string", required: true, note: "a bootcamp they were assessed at in stage" },
-          { name: "stage", type: '"bootcamp" | "intermediate"', required: true },
-          { name: "positiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
-          { name: "constructiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
-          { name: "otherNotes", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters; optional` },
-          { name: "entranceExam", type: "number | null", note: `${BOOTCAMP_EXAM.min} to ${BOOTCAMP_EXAM.max}, to one decimal place; null for none` },
-          { name: "exitExam", type: "number | null", note: `${BOOTCAMP_EXAM.min} to ${BOOTCAMP_EXAM.max}, to one decimal place; null for none` },
-          { name: "revises", type: "string | null", required: true, note: "the updatedAt of the review being replaced, or null when there is none yet" },
-        ] },
+        body: {
+          kind: "json",
+          fields: [
+            { name: "bootcampId", type: "string", required: true, note: "a bootcamp they were assessed at in stage" },
+            { name: "stage", type: '"bootcamp" | "intermediate"', required: true },
+            { name: "positiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
+            { name: "constructiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
+            { name: "otherNotes", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters; optional` },
+            {
+              name: "entranceExam",
+              type: "number | null",
+              note: `${BOOTCAMP_EXAM.min} to ${BOOTCAMP_EXAM.max}, to one decimal place; null for none`,
+            },
+            {
+              name: "exitExam",
+              type: "number | null",
+              note: `${BOOTCAMP_EXAM.min} to ${BOOTCAMP_EXAM.max}, to one decimal place; null for none`,
+            },
+            {
+              name: "revises",
+              type: "string | null",
+              required: true,
+              note: "the updatedAt of the review being replaced, or null when there is none yet",
+            },
+          ],
+        },
         returns: "{ ok: true, review: { email, bootcampId, stage, examAverage: number | null, updatedAt } }",
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
@@ -2919,11 +3332,14 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes:
           "Claude sums up that side of the saved feedback on every assessment of them in that class at that bootcamp, Participation's included, into one sentence. Only the feedback is sent, each piece with the exercise it was left on, and their first name, the preferred one where they gave one; no full name or email. Nothing is saved: the text is for PUT /api/reporting/bootcamp/people/{key}/review.",
         params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
-        body: { kind: "json", fields: [
-          { name: "bootcampId", type: "string", required: true, note: "a bootcamp they were assessed at in stage" },
-          { name: "stage", type: '"bootcamp" | "intermediate"', required: true },
-          { name: "side", type: '"positive" | "constructive"', required: true },
-        ] },
+        body: {
+          kind: "json",
+          fields: [
+            { name: "bootcampId", type: "string", required: true, note: "a bootcamp they were assessed at in stage" },
+            { name: "stage", type: '"bootcamp" | "intermediate"', required: true },
+            { name: "side", type: '"positive" | "constructive"', required: true },
+          ],
+        },
         returns: "{ text }",
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
@@ -2942,16 +3358,32 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes:
           "It keeps the criteria the assessment was scored on, their names as scored, and its owner; the audit log records who corrected it. The average follows the new scores, and the feedback the eVals form requires for that average is still required. An assessment with no criteria, as those imported from the old bootcamp history are, takes scores as [] and its averageScore directly, and requires no feedback.",
         params: [{ name: "id", type: "string", required: true, note: "the submission's id" }],
-        body: { kind: "json", fields: [
-          { name: "scores", type: "{ criterionId, score: 1 | 2 | 3 | 4, comment?: string }[]", required: true, note: `every criterion it was scored on, once each; comments up to ${EVALS_ASSESSMENT_LIMITS.comment} characters` },
-          { name: "positiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
-          { name: "constructiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
-          { name: "averageScore", type: "number", note: `${BOOTCAMP_SCORE.min} to ${BOOTCAMP_SCORE.max}, to one decimal place; only for an assessment with no criteria, and required for one` },
-          { name: "revises", type: "string", required: true, note: "the updatedAt of the version being corrected" },
-        ] },
+        body: {
+          kind: "json",
+          fields: [
+            {
+              name: "scores",
+              type: "{ criterionId, score: 1 | 2 | 3 | 4, comment?: string }[]",
+              required: true,
+              note: `every criterion it was scored on, once each; comments up to ${EVALS_ASSESSMENT_LIMITS.comment} characters`,
+            },
+            { name: "positiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
+            { name: "constructiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
+            {
+              name: "averageScore",
+              type: "number",
+              note: `${BOOTCAMP_SCORE.min} to ${BOOTCAMP_SCORE.max}, to one decimal place; only for an assessment with no criteria, and required for one`,
+            },
+            { name: "revises", type: "string", required: true, note: "the updatedAt of the version being corrected" },
+          ],
+        },
         returns: "{ ok: true, submission: { id, attendeeEmail, assessmentName, averageScore, updatedAt } }",
         errors: [
-          { status: 400, error: "invalid", when: "the body is not that shape, or the scores are not exactly the criteria it was scored on" },
+          {
+            status: 400,
+            error: "invalid",
+            when: "the body is not that shape, or the scores are not exactly the criteria it was scored on",
+          },
           { status: 400, error: "feedback_required", when: "the average requires feedback that is empty" },
           { status: 404, error: "not_found", when: "`id` is not a UUID, or no submission has it" },
           { status: 409, error: "conflict", when: "someone saved it since revises" },
@@ -2968,18 +3400,27 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/evals/canary-wire",
-        summary: "Returns one Canary Wire month from the newest Mindtickle pull: every rep's progress per module, grouped by manager, with per-role and overall rates.",
+        summary:
+          "Returns one Canary Wire month from the newest Mindtickle pull: every rep's progress per module, grouped by manager, with per-role and overall rates.",
         access: "canaryWire",
         token: true,
         notes:
           "Built from the newest pull and today's exemptions, so a past month counts whoever was accountable then. A rep is pre-bootcamp, and counted in no rate, until the month after the first BTC they attended (a released class they were assessed in); someone pinned to the exempt track on Cohorts → Current counts in every month. With no BTC, someone whose HiBob start date is before the first BTC on record counts in every month, since the records don't go back far enough to have them; anyone else with none counts in none. None of this applies to SDRs, who never attend bootcamp: they count from their first full month at Harness by HiBob's start date (starting October 2 counts from November, October 1 from October), and in every month with no start date. Names, titles and managers are the HiBob sync's (the employee list), matched by email, with Mindtickle's for anyone HiBob doesn't have; an IC is someone nobody in HiBob reports to. Rates are percentages to one place, null when nothing is owed. A role's and the totals' rates are in people: of the learners who owe something this month, the share who finished everything they owe. A team's and a rep's are in modules. A cell is keyed by module label: accountable cells are counted, exempt ones are pre-bootcamp work and off-role ones (neither) are another edition's module, shown but not counted. atPt is the event's moment in Pacific, empty when only the day is known. lastActivity is the newest completion in the month's content. hasSnapshot is false until the first pull from Mindtickle has finished, and every list is then empty. With format=csv, the same month as a CSV download, one row per rep.",
         query: [
-          { name: "month", type: "string", note: 'a month the picker offers, "September 2026"; the newest month anybody has worked in if omitted' },
+          {
+            name: "month",
+            type: "string",
+            note: 'a month the picker offers, "September 2026"; the newest month anybody has worked in if omitted',
+          },
           { name: "format", type: '"csv"', note: "a CSV download instead of JSON" },
-          { name: "scope", type: '"org" | "everyone"', note: "org: the caller and everyone under them in HiBob, for a manager; everyone: the whole Canary Wire. Defaults to org for a manager and everyone otherwise" },
+          {
+            name: "scope",
+            type: '"org" | "everyone"',
+            note: "org: the caller and everyone under them in HiBob, for a manager; everyone: the whole Canary Wire. Defaults to org for a manager and everyone otherwise",
+          },
         ],
         returns:
-          "{ month, scope: \"org\" | \"everyone\", months: string[], monthsWithData: string[], hasSnapshot, hasData, labels: string[], modules: { label, edition, name }[], teams: { manager, managerEmail, roles: string[], directs: Rep[], learners, exempt, assigned, completed, pct, fullyComplete, notActivated }[], roles: { role, learners, finished, pct, icLearners, icFinished, icPct, exempt, modules: string[] }[], totals: { learners, finished, pct, icLearners, icFinished, icPct, exempt, rostered, notActivated } | null, lastActivity: { at, atPt, who, module, role }, fetchedAtPt, savedAt: string | null, notes: string[], seriesLinks: { edition, label, url }[], moduleUrlTemplate }, where Rep is { name, email, role, manager, managerEmail, title, notActivated, ic, exempt, exemptFrom, exemptSource: \"bootcamp\" | \"predates_history\" | \"no_bootcamp\" | \"first_month\" | \"edition\", cells: Record<label, { state, on, atPt, moduleId, seriesId, moduleType, accountable, exempt, also: { state, on, atPt, edition }[], edition? }>, assigned, completed, pct, offRole }; text/csv with format=csv",
+          '{ month, scope: "org" | "everyone", months: string[], monthsWithData: string[], hasSnapshot, hasData, labels: string[], modules: { label, edition, name }[], teams: { manager, managerEmail, roles: string[], directs: Rep[], learners, exempt, assigned, completed, pct, fullyComplete, notActivated }[], roles: { role, learners, finished, pct, icLearners, icFinished, icPct, exempt, modules: string[] }[], totals: { learners, finished, pct, icLearners, icFinished, icPct, exempt, rostered, notActivated } | null, lastActivity: { at, atPt, who, module, role }, fetchedAtPt, savedAt: string | null, notes: string[], seriesLinks: { edition, label, url }[], moduleUrlTemplate }, where Rep is { name, email, role, manager, managerEmail, title, notActivated, ic, exempt, exemptFrom, exemptSource: "bootcamp" | "predates_history" | "no_bootcamp" | "first_month" | "edition", cells: Record<label, { state, on, atPt, moduleId, seriesId, moduleType, accountable, exempt, also: { state, on, atPt, edition }[], edition? }>, assigned, completed, pct, offRole }; text/csv with format=csv',
         errors: [
           { status: 400, error: "invalid_month", when: "month is not one the picker offers" },
           { status: 400, error: "invalid_format", when: "format is set to anything but csv" },
@@ -2990,7 +3431,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/evals/canary-wire/history",
-        summary: "Returns the Canary Wire month over month: each rep's share of their own lineup finished in each of the last six months with content, as the dots beside each rep on Reporting → Canary Wire show it.",
+        summary:
+          "Returns the Canary Wire month over month: each rep's share of their own lineup finished in each of the last six months with content, as the dots beside each rep on Reporting → Canary Wire show it.",
         access: "canaryWire",
         token: true,
         notes:
@@ -3000,7 +3442,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { name: "format", type: '"csv"', note: "a CSV download instead of JSON" },
         ],
         returns:
-          "{ months: string[], scope: \"org\" | \"everyone\", hasSnapshot, teams: { manager, managerEmail, roles: string[], directs: { name, email, role, manager, managerEmail, title, notActivated, marks: { pct: number | null, completed, assigned, exempt }[], lastCompleted: string }[], rates: { learners, finished, pct }[] }[], roles: { role, rates }[], totals: { learners, finished, pct }[], seriesLinks }; text/csv with format=csv",
+          '{ months: string[], scope: "org" | "everyone", hasSnapshot, teams: { manager, managerEmail, roles: string[], directs: { name, email, role, manager, managerEmail, title, notActivated, marks: { pct: number | null, completed, assigned, exempt }[], lastCompleted: string }[], rates: { learners, finished, pct }[] }[], roles: { role, rates }[], totals: { learners, finished, pct }[], seriesLinks }; text/csv with format=csv',
         errors: [
           { status: 400, error: "invalid_scope", when: "scope is neither org nor everyone" },
           { status: 400, error: "not_a_manager", when: "scope is org and nobody reports to the caller" },
@@ -3015,7 +3457,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "A pull takes about 15 minutes, so it goes in steps of up to four minutes (POST /api/evals/canary-wire/pull/step), each saving where it got to. done of total counts learners fetched, 0 of 0 until the rosters are in. working is true while a step holds the pull. A running pull nobody works on for 6 hours is given up as failed. configured is false when MT_API_KEY or MT_SECRET_KEY is unset, and no pull can start.",
-        returns: "{ configured: boolean, pull: { id, trigger: \"manual\" | \"schedule\", status: \"running\" | \"succeeded\" | \"failed\", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } | null }",
+        returns:
+          '{ configured: boolean, pull: { id, trigger: "manual" | "schedule", status: "running" | "succeeded" | "failed", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } | null }',
       },
       {
         method: "POST",
@@ -3025,7 +3468,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "Fetches nothing itself: call POST /api/evals/canary-wire/pull/step until the pull ends, as the page does. When it succeeds it replaces the Canary Wire's data.",
-        returns: "{ pull: { id, trigger: \"manual\" | \"schedule\", status: \"running\" | \"succeeded\" | \"failed\", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } }",
+        returns:
+          '{ pull: { id, trigger: "manual" | "schedule", status: "running" | "succeeded" | "failed", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } }',
         errors: [
           { status: 409, error: "running", when: "a pull is already running" },
           { status: 409, error: "not_configured", when: "Mindtickle's key pair or tenant is unset" },
@@ -3039,7 +3483,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "Answers at once, with the pull unchanged, when another step holds it, and with null when no pull is running. Each step fetches learners' histories in order and saves every ten, so a step cut short loses little. One learner's history failing is noted and costs that learner; Mindtickle refusing the key pair fails the pull. Allows 300 seconds.",
-        returns: "{ pull: { id, trigger: \"manual\" | \"schedule\", status: \"running\" | \"succeeded\" | \"failed\", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } | null }",
+        returns:
+          '{ pull: { id, trigger: "manual" | "schedule", status: "running" | "succeeded" | "failed", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } | null }',
       },
     ],
   },
@@ -3316,9 +3761,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         body: {
           kind: "json",
-          fields: [
-            { name: "email", type: "string", required: true, note: "an employee from the last HiBob sync; stored lowercased" },
-          ],
+          fields: [{ name: "email", type: "string", required: true, note: "an employee from the last HiBob sync; stored lowercased" }],
         },
         returns: "{ ok: true }",
         errors: [
@@ -3352,7 +3795,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         },
         returns: `{ startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, as saved`,
         errors: [
-          { status: 400, error: "invalid", when: "neither field is given, a date is not a real YYYY-MM-DD day, or the body has another field" },
+          {
+            status: 400,
+            error: "invalid",
+            when: "neither field is given, a date is not a real YYYY-MM-DD day, or the body has another field",
+          },
         ],
       },
       {
@@ -3371,13 +3818,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Sets the deferral window, and retracks the org by it at once.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "Every org member's track is worked out again rather than at the next sync; retracked counts those whose track changed. Creating, editing or deleting a bootcamp does the same.",
+        notes:
+          "Every org member's track is worked out again rather than at the next sync; retracked counts those whose track changed. Creating, editing or deleting a bootcamp does the same.",
         body: {
           kind: "json",
           fields: [{ name: "days", type: "integer", required: true, note: "0 to 365; 0 turns deferral off" }],
         },
         returns: `{ days: number, bootcampStart: "YYYY-MM-DD" | null, retracked: number }`,
-        errors: [{ status: 400, error: "invalid", when: "days is missing, not a whole number from 0 to 365, or the body has another field" }],
+        errors: [
+          { status: 400, error: "invalid", when: "days is missing, not a whole number from 0 to 365, or the body has another field" },
+        ],
       },
     ],
   },
@@ -3402,8 +3852,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Adds a sign-in domain.",
         access: "platform",
         token: false,
-        notes:
-          "The domain is lowercased, and anything up to an @ is dropped, so an email address works too.",
+        notes: "The domain is lowercased, and anything up to an @ is dropped, so an email address works too.",
         body: {
           kind: "json",
           fields: [
@@ -3527,8 +3976,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "platform",
         token: false,
         notes: "Reads up to 50 backups from the Cloud SQL Admin API.",
-        returns:
-          "{ backups: { id, type, status, startTime, endTime, location, description, error }[] }",
+        returns: "{ backups: { id, type, status, startTime, endTime, location, description, error }[] }",
         errors: [
           { status: 503, error: "not_configured", when: "GCP_ADMIN_PROJECT_ID or CLOUD_SQL_INSTANCE is unset" },
           { status: 502, error: "permission_denied", when: "Cloud SQL refused the app's credentials" },
@@ -3548,7 +3996,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             {
               name: "description",
               type: "string",
-              note: "up to 255 characters; defaults to \"On demand — {your email}\"",
+              note: 'up to 255 characters; defaults to "On demand — {your email}"',
             },
           ],
         },
@@ -3598,8 +4046,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "platform",
         token: false,
         notes: "Only QA has this. Production, and anywhere not configured for it, answers 404.",
-        returns:
-          "{ backups: { id, type, status, startTime, endTime, location, description, error }[] }",
+        returns: "{ backups: { id, type, status, startTime, endTime, location, description, error }[] }",
         errors: [
           { status: 404, error: "not_found", when: "this deployment cannot import production backups" },
           { status: 502, error: "permission_denied", when: "Cloud SQL refused the app's credentials" },
@@ -3647,7 +4094,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/audit",
-        summary: "Lists the audit trail a page at a time: every change made through the API, every sign-in, and what the runner did on its own.",
+        summary:
+          "Lists the audit trail a page at a time: every change made through the API, every sign-in, and what the runner did on its own.",
         access: "platform",
         token: true,
         notes:
@@ -3689,9 +4137,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           "Called every five minutes. Accepts only a Google-signed OIDC token for TIMED_JOBS_AUDIENCE from the TIMED_JOBS_INVOKER service account; either unset refuses every call. Starts, side by side, every job GET /api/settings/timed-jobs lists with via \"dispatcher\" whose schedule fell due in the last 30 minutes and after the time it was last started for; that time is claimed first, so a retried or doubled call starts nothing twice, and a time missed by more than 30 minutes is skipped rather than run late. Each job runs the same code as its Sync Now button, logged with trigger schedule: the HiBob sync and then the cohort Slack sync as POST /api/cohorts/slack/sync runs it, with the day's intake form reminders; the Google Meetings sync as POST /api/evals/google-meetings/sync without preview, so a dry run while the sync is not live and on the test group's invites while it is on; and a step of the Canary Wire's pull. A job switched off is recorded as skipped and answers { skipped: \"off\" }. Answers 502, with the same body, if any job it started failed, so Cloud Scheduler's history shows it. Allows 300 seconds.",
         returns:
           "{ ran: { key: string, status: number, body: <as that job's own route answers, or { skipped: string }> }[] }; an empty ran when nothing was due",
-        errors: [
-          { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },
-        ],
+        errors: [{ status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" }],
       },
       {
         method: "POST",
@@ -3714,8 +4160,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             },
           ],
         },
-        returns:
-          "{ migrations: string[], attendeePasswordsCleared: number, usersRestored: number, usersAdded: number }",
+        returns: "{ migrations: string[], attendeePasswordsCleared: number, usersRestored: number, usersAdded: number }",
         errors: [
           { status: 401, error: "unauthorized", when: "not QA, or the OIDC token is missing, invalid or from someone else" },
           { status: 400, error: "invalid_body", when: "the body does not parse" },

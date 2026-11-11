@@ -4,16 +4,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowDown,
-  ArrowUp,
-  ChevronsUpDown,
-  CircleSlash,
-  ExternalLink,
-  Loader2,
-  RefreshCw,
-  TriangleAlert,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronsUpDown, CircleSlash, ExternalLink, Loader2, RefreshCw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -42,8 +33,7 @@ const COPY: Record<
   gcp: {
     tab: "Google Cloud",
     plural: "projects",
-    blurb:
-      "Every project billed to the workshop account, matched against the runs database.",
+    blurb: "Every project billed to the workshop account, matched against the runs database.",
     infra: "Control plane / sandbox",
     unmanaged: "Created elsewhere",
     missing: {
@@ -51,19 +41,15 @@ const COPY: Record<
       note: "A run records these project ids, but the billing account doesn’t list them.",
     },
     errors: {
-      not_configured:
-        "No billing account is configured for this deployment (GCP_BILLING_ACCOUNT_ID is unset).",
-      permission_denied:
-        "The app service account needs roles/billing.viewer to read the billing account.",
-      unavailable:
-        "Couldn’t reach the Cloud Billing API — try refreshing in a moment.",
+      not_configured: "No billing account is configured for this deployment (GCP_BILLING_ACCOUNT_ID is unset).",
+      permission_denied: "The app service account needs roles/billing.viewer to read the billing account.",
+      unavailable: "Couldn’t reach the Cloud Billing API — try refreshing in a moment.",
     },
   },
   aws: {
     tab: "AWS",
     plural: "accounts",
-    blurb:
-      "Every chargeable account in the workshop organization, matched against the runs database.",
+    blurb: "Every chargeable account in the workshop organization, matched against the runs database.",
     infra: "Management / permanent",
     unmanaged: null,
     missing: {
@@ -71,19 +57,16 @@ const COPY: Record<
       note: "A run records these account ids, but the organization doesn’t list them.",
     },
     errors: {
-      not_configured:
-        "AWS isn’t configured for this deployment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are unset).",
+      not_configured: "AWS isn’t configured for this deployment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are unset).",
       permission_denied:
         "AWS refused the credentials — they must belong to the organization’s management account and be able to list accounts.",
-      unavailable:
-        "Couldn’t reach AWS Organizations — try refreshing in a moment.",
+      unavailable: "Couldn’t reach AWS Organizations — try refreshing in a moment.",
     },
   },
   azure: {
     tab: "Azure",
     plural: "resource groups",
-    blurb:
-      "Every resource group in the workshop subscription, matched against the runs database.",
+    blurb: "Every resource group in the workshop subscription, matched against the runs database.",
     infra: "Permanent (configured)",
     unmanaged: "Not created here",
     missing: {
@@ -93,17 +76,14 @@ const COPY: Record<
     errors: {
       not_configured:
         "Azure isn’t configured for this deployment (AZURE_SUBSCRIPTION_ID, AZURE_TENANT_ID, ARM_CLIENT_ID and ARM_CLIENT_SECRET are needed).",
-      permission_denied:
-        "Azure refused the service principal — it needs an unexpired secret and Reader on the subscription.",
-      unavailable:
-        "Couldn’t reach Azure Resource Manager — try refreshing in a moment.",
+      permission_denied: "Azure refused the service principal — it needs an unexpired secret and Reader on the subscription.",
+      unavailable: "Couldn’t reach Azure Resource Manager — try refreshing in a moment.",
     },
   },
   harness: {
     tab: "Harness",
     plural: "organizations",
-    blurb:
-      "Every organization in the Harness account, matched against the runs database.",
+    blurb: "Every organization in the Harness account, matched against the runs database.",
     infra: "Permanent (configured)",
     unmanaged: "Not created here",
     missing: {
@@ -111,12 +91,9 @@ const COPY: Record<
       note: "A run records these organization identifiers, but the account doesn’t list them.",
     },
     errors: {
-      not_configured:
-        "Harness isn’t configured for this deployment (HARNESS_ACCOUNT_ID and HARNESS_API_KEY are unset).",
-      permission_denied:
-        "Harness refused the deployment’s API key — it has expired, been revoked, or can’t view organizations.",
-      unavailable:
-        "Couldn’t reach Harness — try refreshing in a moment.",
+      not_configured: "Harness isn’t configured for this deployment (HARNESS_ACCOUNT_ID and HARNESS_API_KEY are unset).",
+      permission_denied: "Harness refused the deployment’s API key — it has expired, been revoked, or can’t view organizations.",
+      unavailable: "Couldn’t reach Harness — try refreshing in a moment.",
     },
   },
 };
@@ -125,13 +102,7 @@ type Filter = "all" | Classification;
 type SortColumn = "id" | "name";
 type Sort = { column: SortColumn; dir: "asc" | "desc" } | null;
 
-export function CloudStatus({
-  initial,
-  opening,
-}: {
-  initial: CloudStatusReport;
-  opening: AuditTarget;
-}) {
+export function CloudStatus({ initial, opening }: { initial: CloudStatusReport; opening: AuditTarget }) {
   const [report, setReport] = useState(initial);
   const [target, setTarget] = useState<AuditTarget>(opening);
   const [message, setMessage] = useState<string | null>(null);
@@ -155,9 +126,7 @@ export function CloudStatus({
       setReport(body.report as CloudStatusReport);
       setMessage(null);
     } catch (err) {
-      setMessage(
-        err instanceof Error ? err.message : "Couldn’t refresh the audit",
-      );
+      setMessage(err instanceof Error ? err.message : "Couldn’t refresh the audit");
     } finally {
       setPending(false);
     }
@@ -168,11 +137,7 @@ export function CloudStatus({
       setSorts((prev) => {
         const current = prev[target] ?? null;
         const next: Sort =
-          !current || current.column !== column
-            ? { column, dir: "asc" }
-            : current.dir === "asc"
-              ? { column, dir: "desc" }
-              : null;
+          !current || current.column !== column ? { column, dir: "asc" } : current.dir === "asc" ? { column, dir: "desc" } : null;
         return { ...prev, [target]: next };
       });
     },
@@ -181,13 +146,9 @@ export function CloudStatus({
 
   const rows = useMemo(() => {
     if (!result.ok) return [];
-    const filtered =
-      filter === "all"
-        ? result.audit.resources
-        : result.audit.resources.filter((r) => r.classification === filter);
+    const filtered = filter === "all" ? result.audit.resources : result.audit.resources.filter((r) => r.classification === filter);
     if (!sort) return filtered;
-    const key = (r: AuditedResource) =>
-      sort.column === "id" ? r.id.toLowerCase() : (r.name ?? "").toLowerCase();
+    const key = (r: AuditedResource) => (sort.column === "id" ? r.id.toLowerCase() : (r.name ?? "").toLowerCase());
     return [...filtered].sort((a, b) => {
       const c = key(a).localeCompare(key(b));
       return sort.dir === "asc" ? c : -c;
@@ -210,11 +171,7 @@ export function CloudStatus({
 
       {message && <Problem>{message}</Problem>}
 
-      <div
-        role="tablist"
-        aria-label="Platform"
-        className="flex flex-wrap items-stretch gap-2"
-      >
+      <div role="tablist" aria-label="Platform" className="flex flex-wrap items-stretch gap-2">
         {AUDIT_TARGETS.map((t) => (
           <TargetTab
             key={t}
@@ -236,28 +193,16 @@ export function CloudStatus({
             <span className="whitespace-nowrap">
               {result.audit.scope.label}:{" "}
               {result.audit.scope.url ? (
-                <a
-                  href={result.audit.scope.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-mono hover:underline"
-                >
+                <a href={result.audit.scope.url} target="_blank" rel="noreferrer" className="font-mono hover:underline">
                   {result.audit.scope.name ?? result.audit.scope.value}
                 </a>
               ) : (
-                <span className="font-mono">
-                  {result.audit.scope.name ?? result.audit.scope.value}
-                </span>
+                <span className="font-mono">{result.audit.scope.name ?? result.audit.scope.value}</span>
               )}
             </span>
           </p>
 
-          <Counts
-            audit={result.audit}
-            copy={copy}
-            filter={filter}
-            onFilter={(f) => setFilters((prev) => ({ ...prev, [target]: f }))}
-          />
+          <Counts audit={result.audit} copy={copy} filter={filter} onFilter={(f) => setFilters((prev) => ({ ...prev, [target]: f }))} />
 
           <Card>
             <CardHeader>
@@ -268,21 +213,9 @@ export function CloudStatus({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                      <SortableHeader
-                        label={result.audit.columns.id}
-                        column="id"
-                        sort={sort}
-                        onSort={toggleSort}
-                      />
-                      <SortableHeader
-                        label={result.audit.columns.name}
-                        column="name"
-                        sort={sort}
-                        onSort={toggleSort}
-                      />
-                      <th className="px-6 pb-2 font-medium">
-                        {result.audit.columns.state}
-                      </th>
+                      <SortableHeader label={result.audit.columns.id} column="id" sort={sort} onSort={toggleSort} />
+                      <SortableHeader label={result.audit.columns.name} column="name" sort={sort} onSort={toggleSort} />
+                      <th className="px-6 pb-2 font-medium">{result.audit.columns.state}</th>
                       <th className="px-6 pb-2 font-medium">Association</th>
                     </tr>
                   </thead>
@@ -292,10 +225,7 @@ export function CloudStatus({
                     ))}
                     {rows.length === 0 && (
                       <tr>
-                        <td
-                          colSpan={4}
-                          className="px-6 py-6 text-center text-muted-foreground"
-                        >
+                        <td colSpan={4} className="px-6 py-6 text-center text-muted-foreground">
                           No {copy.plural} in this view.
                         </td>
                       </tr>
@@ -406,12 +336,8 @@ function Counts({
     { key: "all", label: `Total ${copy.plural}` },
     { key: "untracked", label: "Untracked", alert: true },
     { key: "tracked", label: "Tracked" },
-    ...(audit.counts.infra > 0
-      ? [{ key: "infra" as Filter, label: "Infra" }]
-      : []),
-    ...(audit.counts.unmanaged > 0
-      ? [{ key: "unmanaged" as Filter, label: copy.unmanaged ?? "Unmanaged" }]
-      : []),
+    ...(audit.counts.infra > 0 ? [{ key: "infra" as Filter, label: "Infra" }] : []),
+    ...(audit.counts.unmanaged > 0 ? [{ key: "unmanaged" as Filter, label: copy.unmanaged ?? "Unmanaged" }] : []),
   ];
 
   return (
@@ -471,29 +397,13 @@ function RunLink({ runId, name }: { runId: string; name: string }) {
   );
 }
 
-function ResourceRow({
-  resource,
-  copy,
-}: {
-  resource: AuditedResource;
-  copy: (typeof COPY)[AuditTarget];
-}) {
+function ResourceRow({ resource, copy }: { resource: AuditedResource; copy: (typeof COPY)[AuditTarget] }) {
   const flagged = resource.classification === "untracked";
   return (
-    <tr
-      className={cn(
-        "border-t transition-colors",
-        flagged ? "bg-destructive/5 hover:bg-destructive/10" : "hover:bg-muted/40",
-      )}
-    >
+    <tr className={cn("border-t transition-colors", flagged ? "bg-destructive/5 hover:bg-destructive/10" : "hover:bg-muted/40")}>
       <td className="px-6 py-3">
         {resource.url ? (
-          <a
-            href={resource.url}
-            target="_blank"
-            rel="noreferrer"
-            className="font-mono wrap-break-word hover:underline"
-          >
+          <a href={resource.url} target="_blank" rel="noreferrer" className="font-mono wrap-break-word hover:underline">
             {resource.id}
             <ExternalLink className="ml-1.5 inline size-3 shrink-0 align-[-0.1em] opacity-60" />
           </a>
@@ -501,19 +411,10 @@ function ResourceRow({
           <span className="font-mono wrap-break-word">{resource.id}</span>
         )}
       </td>
-      <td className="px-6 py-3">
-        {resource.name ?? <span className="text-muted-foreground">—</span>}
-      </td>
+      <td className="px-6 py-3">{resource.name ?? <span className="text-muted-foreground">—</span>}</td>
       <td className="px-6 py-3">
         {resource.state && (
-          <span
-            className={cn(
-              "text-xs",
-              resource.state.ok
-                ? "text-muted-foreground"
-                : "text-amber-600 dark:text-amber-500",
-            )}
-          >
+          <span className={cn("text-xs", resource.state.ok ? "text-muted-foreground" : "text-amber-600 dark:text-amber-500")}>
             {resource.state.label}
           </span>
         )}
@@ -575,14 +476,7 @@ function FilterButton({
         alert && active && "border-destructive/60 bg-destructive/10",
       )}
     >
-      <div
-        className={cn(
-          "text-2xl font-medium tabular-nums",
-          alert && "text-destructive",
-        )}
-      >
-        {value}
-      </div>
+      <div className={cn("text-2xl font-medium tabular-nums", alert && "text-destructive")}>{value}</div>
       <div className="text-xs text-muted-foreground">{label}</div>
     </button>
   );

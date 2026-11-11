@@ -62,9 +62,10 @@ export async function cohortSummary(form: Form, q = ""): Promise<CohortSummary> 
     .innerJoin(users, eq(users.id, irisAttempts.userId))
     .where(scope);
 
-  const subjects = Object.fromEntries(
-    SUBJECT_KEYS.map((k) => [k, { median: null, placed: 0, levels: { 1: 0, 2: 0, 3: 0 } }]),
-  ) as Record<SubjectKey, SubjectSummary>;
+  const subjects = Object.fromEntries(SUBJECT_KEYS.map((k) => [k, { median: null, placed: 0, levels: { 1: 0, 2: 0, 3: 0 } }])) as Record<
+    SubjectKey,
+    SubjectSummary
+  >;
   for (const r of rows) {
     if (!isSubjectKey(r.subject)) continue;
     subjects[r.subject] = {
@@ -134,11 +135,7 @@ export async function personDetail(userId: string, form: Form): Promise<PersonDe
   // One query per sitting keeps each to at most 17 rows.
   // A sitting on a subject that is no longer offered is left out rather than shown nameless.
   for (const a of attempts.filter((a) => isSubjectKey(a.subject))) {
-    const responses = await db
-      .select()
-      .from(irisResponses)
-      .where(eq(irisResponses.attemptId, a.id))
-      .orderBy(asc(irisResponses.seq));
+    const responses = await db.select().from(irisResponses).where(eq(irisResponses.attemptId, a.id)).orderBy(asc(irisResponses.seq));
     sittings.push({
       subject: a.subject as SubjectKey,
       placement: (a.placement as Level | null) ?? null,
@@ -180,7 +177,9 @@ export async function personDetail(userId: string, form: Form): Promise<PersonDe
 }
 
 /** Deletes every sitting `userId` has, on every form and in progress or not, so they can start over. */
-export async function clearResults(userId: string): Promise<{ ok: true; deleted: number; email: string | null } | { ok: false; error: "not_found" }> {
+export async function clearResults(
+  userId: string,
+): Promise<{ ok: true; deleted: number; email: string | null } | { ok: false; error: "not_found" }> {
   const [who] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId));
   if (!who) return { ok: false, error: "not_found" };
   const gone = await db.delete(irisAttempts).where(eq(irisAttempts.userId, userId)).returning({ id: irisAttempts.id });
@@ -202,12 +201,7 @@ export async function resetSitting(
   const gone = await db
     .delete(irisAttempts)
     .where(
-      and(
-        eq(irisAttempts.userId, userId),
-        eq(irisAttempts.subject, subject),
-        eq(irisAttempts.form, form),
-        eq(irisAttempts.mode, "live"),
-      ),
+      and(eq(irisAttempts.userId, userId), eq(irisAttempts.subject, subject), eq(irisAttempts.form, form), eq(irisAttempts.mode, "live")),
     )
     .returning({ id: irisAttempts.id });
   return { ok: true, deleted: gone.length, email: who.email };

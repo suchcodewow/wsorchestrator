@@ -5,10 +5,7 @@
  * log and the unit suite share it.
  */
 
-export type SlackTextPart =
-  | { kind: "text"; text: string }
-  | { kind: "bold"; text: string }
-  | { kind: "link"; text: string; href: string };
+export type SlackTextPart = { kind: "text"; text: string } | { kind: "bold"; text: string } | { kind: "link"; text: string; href: string };
 
 const unescape = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 

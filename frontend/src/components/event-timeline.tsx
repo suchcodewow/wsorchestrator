@@ -1,17 +1,7 @@
 /** The landing page's two paths: a workshop from booking to first green build, and a bootcamp from rooms to scores. */
 
 import { cn } from "@/lib/utils";
-import {
-  Activity,
-  Building2,
-  CalendarDays,
-  CalendarRange,
-  Check,
-  FlaskConical,
-  Layers,
-  Rocket,
-  type LucideIcon,
-} from "lucide-react";
+import { Activity, Building2, CalendarDays, CalendarRange, Check, FlaskConical, Layers, Rocket, type LucideIcon } from "lucide-react";
 
 type Stage = {
   Icon: LucideIcon;
@@ -131,9 +121,7 @@ export function EventTimeline({ path, className }: { path: keyof typeof PATHS; c
             </div>
 
             <div className="min-w-0 lg:flex lg:flex-1 lg:flex-col">
-              <p className="flex h-6 items-center font-mono text-[11px] tracking-wider text-muted-foreground uppercase lg:hidden">
-                {when}
-              </p>
+              <p className="flex h-6 items-center font-mono text-[11px] tracking-wider text-muted-foreground uppercase lg:hidden">{when}</p>
               <article
                 data-timeline="card"
                 className="mt-2 flex flex-col rounded-2xl border bg-card/60 p-5 text-left backdrop-blur-sm lg:mt-4 lg:flex-1 dark:bg-card"

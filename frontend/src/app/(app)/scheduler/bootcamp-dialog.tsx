@@ -98,7 +98,7 @@ export function BootcampDialog({
       setIncludeInt(editing ? editing.intDays !== null : true);
       setIntDays(String(editing?.intDays ?? BOOTCAMP_DEFAULTS.intDays));
       setStatus(editing?.status ?? "scheduled");
-      setFacilityId(editing ? (editing.facilityId ?? "") : (facilities.length === 1 ? facilities[0]!.id : ""));
+      setFacilityId(editing ? (editing.facilityId ?? "") : facilities.length === 1 ? facilities[0]!.id : "");
       setCopyFrom("");
       setJudges(editing ? null : []);
       setJudgesError(null);
@@ -203,7 +203,8 @@ export function BootcampDialog({
         <DialogHeader>
           <DialogTitle>{editing ? `Bootcamp starting ${formatDate(editing.startDate)}` : "Schedule Next Bootcamp"}</DialogTitle>
           <DialogDescription className="leading-relaxed">
-            The active bootcamp&apos;s start date is the BTC and INT date that releasing its scores on Reporting → Bootcamp writes to bootcamp history.
+            The active bootcamp&apos;s start date is the BTC and INT date that releasing its scores on Reporting → Bootcamp writes to
+            bootcamp history.
           </DialogDescription>
         </DialogHeader>
 
@@ -223,14 +224,7 @@ export function BootcampDialog({
                 <label htmlFor="bc-start" className="text-sm font-medium">
                   Bootcamp start date
                 </label>
-                <Input
-                  id="bc-start"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  required
-                  autoFocus
-                />
+                <Input id="bc-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required autoFocus />
               </div>
               <div className="grid gap-1.5">
                 <label htmlFor="bc-days" className="text-sm font-medium">
@@ -419,9 +413,7 @@ export function BootcampDialog({
         <Dialog open={confirming !== null} onOpenChange={(next) => !next && !pending && setConfirming(null)}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>
-                Bootcamp starting {confirming ? formatDate(confirming.startDate) : ""} is active
-              </DialogTitle>
+              <DialogTitle>Bootcamp starting {confirming ? formatDate(confirming.startDate) : ""} is active</DialogTitle>
               <DialogDescription className="leading-relaxed">
                 Only one bootcamp can be active. Mark that one complete and make this one active?
               </DialogDescription>

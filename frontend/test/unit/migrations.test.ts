@@ -45,8 +45,12 @@ describe("drizzle migrations", () => {
       const [, y, mo, d, h, mi, s] = m.map(Number);
       const at = new Date(Date.UTC(y!, mo! - 1, d, h, mi, s));
       return (
-        at.getUTCFullYear() !== y || at.getUTCMonth() !== mo! - 1 || at.getUTCDate() !== d ||
-        at.getUTCHours() !== h || at.getUTCMinutes() !== mi || at.getUTCSeconds() !== s
+        at.getUTCFullYear() !== y ||
+        at.getUTCMonth() !== mo! - 1 ||
+        at.getUTCDate() !== d ||
+        at.getUTCHours() !== h ||
+        at.getUTCMinutes() !== mi ||
+        at.getUTCSeconds() !== s
       );
     });
     assert.deepEqual(wrong, []);
@@ -54,7 +58,10 @@ describe("drizzle migrations", () => {
 
   test("never share a timestamp", () => {
     const stamps = files.map((f) => TIMESTAMPED.exec(f)?.[0].slice(0, 14)).filter(Boolean);
-    assert.deepEqual(stamps.filter((s, i) => stamps.indexOf(s) !== i), []);
+    assert.deepEqual(
+      stamps.filter((s, i) => stamps.indexOf(s) !== i),
+      [],
+    );
   });
 
   test("each wrap themselves in a transaction", () => {

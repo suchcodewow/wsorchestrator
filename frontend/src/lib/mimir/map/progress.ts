@@ -91,7 +91,10 @@ export async function markMastered(userId: string, conceptId: string): Promise<v
   await db
     .insert(t)
     .values({ userId, conceptId, masteredAt: now, updatedAt: now })
-    .onConflictDoUpdate({ target: [t.userId, t.conceptId], set: { masteredAt: sqlCoalesce(t.masteredAt, now), recommendedAt: null, updatedAt: now } });
+    .onConflictDoUpdate({
+      target: [t.userId, t.conceptId],
+      set: { masteredAt: sqlCoalesce(t.masteredAt, now), recommendedAt: null, updatedAt: now },
+    });
 }
 
 /** The coach asks them to watch the video. Not for something they have already shown they know. */
@@ -160,4 +163,5 @@ export async function coverPoints(userId: string, concept: { id: string; points?
 const sqlGreatest = (column: AnyPgColumn, value: number): SQL => sql`greatest(${column}, ${value})`;
 const sqlCoalesce = (column: AnyPgColumn, value: Date): SQL => sql`coalesce(${column}, ${value})`;
 /** `value` unless already mastered, in which case the existing recommendation (null) stays. */
-const sqlIfNull = (mastered: AnyPgColumn, value: Date, current: AnyPgColumn): SQL => sql`case when ${mastered} is null then coalesce(${current}, ${value}) else ${current} end`;
+const sqlIfNull = (mastered: AnyPgColumn, value: Date, current: AnyPgColumn): SQL =>
+  sql`case when ${mastered} is null then coalesce(${current}, ${value}) else ${current} end`;

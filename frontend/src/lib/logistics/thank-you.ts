@@ -19,7 +19,11 @@ import { slackClient, slackToken, SlackError } from "@/lib/slack";
 
 export type ThankYouResult =
   | { ok: true; url: string; judges: number; withPhotos: number }
-  | { ok: false; error: "google_not_configured" | "google_not_connected" | "google_reconnect" | "slack_not_connected" | "no_judges" | "failed"; message: string };
+  | {
+      ok: false;
+      error: "google_not_configured" | "google_not_connected" | "google_reconnect" | "slack_not_connected" | "no_judges" | "failed";
+      message: string;
+    };
 
 /** The Drive folder the deck goes in, and the name it has there. */
 const THANK_YOU_FOLDER_ID = "10Yvy8SSz0x859Ymnx2J4bFYsYlVYNPhI";
@@ -63,10 +67,19 @@ export async function generateThankYou(shareWith: string): Promise<ThankYouResul
   const client = oauthClient();
   if (!client) return { ok: false, error: "google_not_configured", message: "AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET are not set." };
   const connection = await googleConnection();
-  if (!connection) return { ok: false, error: "google_not_connected", message: "No Google account is connected. Connect one under Admin Settings → External Connectors." };
+  if (!connection)
+    return {
+      ok: false,
+      error: "google_not_connected",
+      message: "No Google account is connected. Connect one under Admin Settings → External Connectors.",
+    };
   const granted = new Set(connection.scope.split(" "));
   if (!GOOGLE_MEETING_SCOPES.filter((s) => s.startsWith("https://")).every((s) => granted.has(s))) {
-    return { ok: false, error: "google_reconnect", message: `${connection.email} was connected before slides were needed. Connect the Google account again under Admin Settings → External Connectors.` };
+    return {
+      ok: false,
+      error: "google_reconnect",
+      message: `${connection.email} was connected before slides were needed. Connect the Google account again under Admin Settings → External Connectors.`,
+    };
   }
   const token = await slackToken();
   if (!token) return { ok: false, error: "slack_not_connected", message: "Slack is not connected, so there are no photos to use." };
@@ -85,7 +98,8 @@ export async function generateThankYou(shareWith: string): Promise<ThankYouResul
     if (people.length === 0) return { ok: false, error: "no_judges", message: "None of the guest judges has a Slack photo." };
 
     const refreshToken = openSecret(connection.refreshToken);
-    if (!refreshToken) return { ok: false, error: "google_reconnect", message: "The stored Google token cannot be opened here. Connect the account again." };
+    if (!refreshToken)
+      return { ok: false, error: "google_reconnect", message: "The stored Google token cannot be opened here. Connect the account again." };
     const access = await accessToken(client, refreshToken);
     const deck = await createThankYouDeck(calendarClient(access, SLIDES_API), calendarClient(access, DRIVE_API), {
       title: THANK_YOU_TITLE,
@@ -96,7 +110,11 @@ export async function generateThankYou(shareWith: string): Promise<ThankYouResul
     return { ok: true, url: deck.url, judges: people.length, withPhotos: people.length };
   } catch (err) {
     if (err instanceof GoogleError && err.revoked) {
-      return { ok: false, error: "google_reconnect", message: `Google no longer accepts ${connection.email}'s token. Connect the account again.` };
+      return {
+        ok: false,
+        error: "google_reconnect",
+        message: `Google no longer accepts ${connection.email}'s token. Connect the account again.`,
+      };
     }
     return { ok: false, error: "failed", message: (err as Error).message };
   }

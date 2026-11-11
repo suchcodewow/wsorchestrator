@@ -114,7 +114,9 @@ export async function checklistCounts(bootcampId: string): Promise<ChecklistDayC
 }
 
 /** An item the schedule marks at its time: a Day item of a class-day, with a time, still to do. */
-export type ChecklistMark = Pick<ChecklistItemRow, "id" | "track" | "day" | "name" | "ownerEmail" | "ownerName" | "mentions"> & { alarm: number };
+export type ChecklistMark = Pick<ChecklistItemRow, "id" | "track" | "day" | "name" | "ownerEmail" | "ownerName" | "mentions"> & {
+  alarm: number;
+};
 
 /**
  * Every item the schedule marks, by day and time; `checklistMarked` is the
@@ -161,7 +163,12 @@ export const checklistItemSchema = z.object({
   /** Which half of the day; Day (`am`) when left out. */
   period: checklistPeriodSchema.optional(),
   /** When it is due, in minutes after midnight; null or absent for no time. */
-  alarm: z.number().int().min(0).max(24 * 60 - 1).nullish(),
+  alarm: z
+    .number()
+    .int()
+    .min(0)
+    .max(24 * 60 - 1)
+    .nullish(),
   /** An administrator or guest judge of the bootcamp; blank or absent for nobody. */
   ownerEmail: z.string().trim().toLowerCase().max(320).nullish(),
   /** The emails of the people its name tags. */
@@ -279,7 +286,10 @@ export async function editChecklistItem(
     .from(t)
     .where(and(eq(t.id, itemId), eq(t.bootcampId, bootcampId)));
   if (!item) return { ok: false, error: "not_found" };
-  noteAudit({ target: itemId, targetLabel: `${checklistDayLabel(item.track, item.day, item.period)}: ${(input.name ?? item.name).slice(0, 80)}` });
+  noteAudit({
+    target: itemId,
+    targetLabel: `${checklistDayLabel(item.track, item.day, item.period)}: ${(input.name ?? item.name).slice(0, 80)}`,
+  });
 
   const pool = input.ownerEmail || input.mentions?.length ? await instructorPool(bootcampId) : [];
   let owner: { email: string; fullName: string } | null | undefined;
@@ -311,7 +321,9 @@ export async function editChecklistItem(
       if (gone.length > 0) await tx.delete(mentions).where(inArray(mentions.id, gone));
       const added = picked.tagged.filter((m) => !have.some((h) => h.email === m.email));
       if (added.length > 0) {
-        await tx.insert(mentions).values(added.map((m) => ({ checklistItemId: itemId, bootcampId, email: m.email, fullName: m.fullName, ...tagger })));
+        await tx
+          .insert(mentions)
+          .values(added.map((m) => ({ checklistItemId: itemId, bootcampId, email: m.email, fullName: m.fullName, ...tagger })));
       }
     }
     const [full] = await tx.select(COLUMNS).from(t).where(eq(t.id, itemId));

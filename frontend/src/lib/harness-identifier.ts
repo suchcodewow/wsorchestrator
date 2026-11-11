@@ -3,9 +3,31 @@
 const MAX_IDENTIFIER = 128;
 
 const RESERVED = new Set([
-  "or", "and", "eq", "ne", "lt", "gt", "le", "ge", "div", "mod", "not",
-  "null", "true", "false", "new", "var", "return", "step", "parallel",
-  "stepgroup", "org", "account", "status", "liteenginetask", "notification",
+  "or",
+  "and",
+  "eq",
+  "ne",
+  "lt",
+  "gt",
+  "le",
+  "ge",
+  "div",
+  "mod",
+  "not",
+  "null",
+  "true",
+  "false",
+  "new",
+  "var",
+  "return",
+  "step",
+  "parallel",
+  "stepgroup",
+  "org",
+  "account",
+  "status",
+  "liteenginetask",
+  "notification",
 ]);
 
 export function harnessIdentifier(input: string): string | null {

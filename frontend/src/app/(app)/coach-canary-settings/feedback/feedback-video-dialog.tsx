@@ -57,7 +57,10 @@ export function FeedbackVideoDialog({
   return (
     <VideoPlayerDialog title={name} onClose={onClose}>
       {error ? (
-        <p role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-6 text-sm text-destructive">
+        <p
+          role="alert"
+          className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-6 text-sm text-destructive"
+        >
           <TriangleAlert className="size-4 shrink-0" />
           {error}
         </p>

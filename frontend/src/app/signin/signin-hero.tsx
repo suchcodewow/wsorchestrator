@@ -37,11 +37,7 @@ export function SignInHero({ children }: { children: React.ReactNode }) {
               scale: 0.985,
               duration: 0.7,
             })
-            .from(
-              q("[data-anim]"),
-              { opacity: 0, y: 10, duration: 0.55, stagger: 0.07 },
-              "-=0.42",
-            );
+            .from(q("[data-anim]"), { opacity: 0, y: 10, duration: 0.55, stagger: 0.07 }, "-=0.42");
         },
       );
 

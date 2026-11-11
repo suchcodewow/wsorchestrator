@@ -153,9 +153,9 @@ function Intro({ onStart }: { onStart: () => void }) {
             👋
           </span>
           <p className="max-w-3xl">
-            <span className="font-medium">Welcome to Globalcorp!</span> You’ve just been hired onto the Platform Team, which is
-            responsible for security across the whole company. There’s no time for a tour: builds are already coming down the
-            pipeline, so get started right away.
+            <span className="font-medium">Welcome to Globalcorp!</span> You’ve just been hired onto the Platform Team, which is responsible
+            for security across the whole company. There’s no time for a tour: builds are already coming down the pipeline, so get started
+            right away.
           </p>
         </div>
         <div className="flex gap-3 px-5 py-4 text-sm">
@@ -169,15 +169,10 @@ function Intro({ onStart }: { onStart: () => void }) {
           <p className="font-medium">How the job works</p>
           <ul className="list-disc space-y-1 pl-5 marker:text-muted-foreground">
             <li>Each month is a few pages of software builds passing through the pipeline, eight to a page.</li>
+            <li>Every month you’re given rules for what makes a build vulnerable. Click each build that breaks them to block it.</li>
+            <li>You get {SECONDS_PER_PAGE} seconds a page. When the clock runs out, the next page arrives, and you can’t go back.</li>
             <li>
-              Every month you’re given rules for what makes a build vulnerable. Click each build that breaks them to block it.
-            </li>
-            <li>
-              You get {SECONDS_PER_PAGE} seconds a page. When the clock runs out, the next page arrives, and you can’t go back.
-            </li>
-            <li>
-              At the end of the month you’ll learn how many vulnerable builds there really were, and score points for how close
-              you came.
+              At the end of the month you’ll learn how many vulnerable builds there really were, and score points for how close you came.
             </li>
           </ul>
         </div>
@@ -237,18 +232,14 @@ function RulesScreen({ round, onStart }: { round: Round; onStart: () => void }) 
 
       <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         {round.keepsEarlierRules && (
-          <p className="border-b bg-muted/40 px-5 py-2.5 text-sm font-medium">
-            All the earlier rules still apply, plus one more.
-          </p>
+          <p className="border-b bg-muted/40 px-5 py-2.5 text-sm font-medium">All the earlier rules still apply, plus one more.</p>
         )}
         <RuleList round={round.number} />
       </section>
 
       <section className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-sm font-medium">
-            Check the packages: which of these {round.examples.length} builds are vulnerable?
-          </h3>
+          <h3 className="text-sm font-medium">Check the packages: which of these {round.examples.length} builds are vulnerable?</h3>
           {!revealed && (
             <Button variant="brand" onClick={() => setRevealed(true)}>
               <Eye />
@@ -278,8 +269,8 @@ function RulesScreen({ round, onStart }: { round: Round; onStart: () => void }) 
           <p className="text-2xl font-semibold">The total here is {vulnerable}!</p>
           {round.number === 1 && (
             <p className="text-sm text-muted-foreground">
-              Remember, it counts as one blocked build as soon as the first vulnerability is found. The middle option has 2
-              vulnerabilities but still counts just once.
+              Remember, it counts as one blocked build as soon as the first vulnerability is found. The middle option has 2 vulnerabilities
+              but still counts just once.
             </p>
           )}
         </div>
@@ -502,9 +493,7 @@ function Result({
         <p className="text-sm text-muted-foreground">
           Month {round.number} of {ROUNDS.length}
         </p>
-        <h2 className="text-xl font-semibold">
-          {last ? "That’s a wrap on month three!" : `You made it through month ${round.number}!`}
-        </h2>
+        <h2 className="text-xl font-semibold">{last ? "That’s a wrap on month three!" : `You made it through month ${round.number}!`}</h2>
       </div>
 
       <section className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -551,11 +540,7 @@ function Result({
               </summary>
               <div className="divide-y border-t">
                 <BuildList title="Vulnerable builds you missed" entries={result.missed} empty="You missed none." />
-                <BuildList
-                  title="Builds you blocked that were fine"
-                  entries={result.falseAlarms}
-                  empty="You blocked nothing by mistake."
-                />
+                <BuildList title="Builds you blocked that were fine" entries={result.falseAlarms} empty="You blocked nothing by mistake." />
               </div>
             </details>
             <p className="px-5 py-2.5 text-sm text-muted-foreground">
@@ -624,10 +609,7 @@ function Review({
           {REVIEWS.map((r) => (
             <li
               key={r.title}
-              className={cn(
-                "flex gap-4 px-5 py-2.5 text-sm",
-                r === review ? "bg-brand-subtle/50 font-medium" : "text-muted-foreground",
-              )}
+              className={cn("flex gap-4 px-5 py-2.5 text-sm", r === review ? "bg-brand-subtle/50 font-medium" : "text-muted-foreground")}
             >
               <span className="w-14 shrink-0 font-mono tabular-nums">
                 {r.from}–{r.to}

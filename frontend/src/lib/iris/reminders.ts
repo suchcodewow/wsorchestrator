@@ -316,9 +316,13 @@ export async function runDiagnosticReminders(
     return { ok: true, runId, status: "succeeded", dryRun, ...tally, note: summary };
   } catch (err) {
     // Anything else, the database most likely, still ends the run.
-    await finish(runId, "failed", tally, notes.join(" ") || null, err instanceof Error ? err.message.slice(0, 500) : "The run failed.").catch(
-      () => {},
-    );
+    await finish(
+      runId,
+      "failed",
+      tally,
+      notes.join(" ") || null,
+      err instanceof Error ? err.message.slice(0, 500) : "The run failed.",
+    ).catch(() => {});
     throw err;
   }
 }
@@ -329,7 +333,9 @@ export async function runDiagnosticReminders(
 
 export type ReminderRunSummary = IrisReminderRun & { triggeredByName: string | null };
 
-const triggeredByName = sql<string | null>`(select coalesce(nullif(u.name, ''), u.email) from ${users} u where u.id = ${irisReminderRuns.triggeredBy})`;
+const triggeredByName = sql<
+  string | null
+>`(select coalesce(nullif(u.name, ''), u.email) from ${users} u where u.id = ${irisReminderRuns.triggeredBy})`;
 
 const RUN_SORT_COLUMNS = {
   startedAt: irisReminderRuns.startedAt,

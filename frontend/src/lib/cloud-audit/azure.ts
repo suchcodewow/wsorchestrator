@@ -3,13 +3,7 @@
 import "server-only";
 
 import { missingFromCloud, normalizeId, type OwnerMaps } from "./owners";
-import {
-  summarize,
-  type AuditedResource,
-  type AuditUnavailable,
-  type CloudAuditResult,
-  type Classification,
-} from "./types";
+import { summarize, type AuditedResource, type AuditUnavailable, type CloudAuditResult, type Classification } from "./types";
 
 const ARM = "https://management.azure.com";
 const LOGIN = "https://login.microsoftonline.com";
@@ -26,8 +20,7 @@ type AzureConfig = {
 };
 
 function config(): AzureConfig | null {
-  const subscriptionId =
-    process.env.AZURE_SUBSCRIPTION_ID || process.env.ARM_SUBSCRIPTION_ID;
+  const subscriptionId = process.env.AZURE_SUBSCRIPTION_ID || process.env.ARM_SUBSCRIPTION_ID;
   const tenantId = process.env.AZURE_TENANT_ID || process.env.ARM_TENANT_ID;
   const clientId = process.env.ARM_CLIENT_ID;
   const clientSecret = process.env.ARM_CLIENT_SECRET;
@@ -76,10 +69,7 @@ async function accessToken(cfg: AzureConfig): Promise<string> {
   } | null;
 
   if (!res.ok || !body?.access_token) {
-    throw new AzureError(
-      res.status === 400 ? 403 : res.status,
-      body?.error_description ?? "Could not get an Azure token",
-    );
+    throw new AzureError(res.status === 400 ? 403 : res.status, body?.error_description ?? "Could not get an Azure token");
   }
 
   cached = {
@@ -115,8 +105,7 @@ type ResourceGroupPage = { value?: ResourceGroup[]; nextLink?: string };
 
 async function listResourceGroups(cfg: AzureConfig): Promise<ResourceGroup[]> {
   const groups: ResourceGroup[] = [];
-  let url: string | undefined =
-    `${ARM}/subscriptions/${cfg.subscriptionId}/resourcegroups?api-version=${RG_API_VERSION}`;
+  let url: string | undefined = `${ARM}/subscriptions/${cfg.subscriptionId}/resourcegroups?api-version=${RG_API_VERSION}`;
   while (url) {
     const page: ResourceGroupPage = await armGet(cfg, url);
     groups.push(...(page.value ?? []));
@@ -137,14 +126,11 @@ async function subscriptionName(cfg: AzureConfig): Promise<string | null> {
   }
 }
 
-const portalUrl = (cfg: AzureConfig, resourceId: string) =>
-  `https://portal.azure.com/#@${cfg.tenantId}/resource${resourceId}`;
+const portalUrl = (cfg: AzureConfig, resourceId: string) => `https://portal.azure.com/#@${cfg.tenantId}/resource${resourceId}`;
 
 function classifyError(err: unknown): AuditUnavailable {
   if (!(err instanceof AzureError)) return "unavailable";
-  return err.status === 401 || err.status === 403
-    ? "permission_denied"
-    : "unavailable";
+  return err.status === 401 || err.status === 403 ? "permission_denied" : "unavailable";
 }
 
 export async function auditAzure(owners: OwnerMaps): Promise<CloudAuditResult> {
@@ -168,18 +154,9 @@ export async function auditAzure(owners: OwnerMaps): Promise<CloudAuditResult> {
     const id = normalizeId("azure", g.name);
     const ours = g.tags?.managed_by === MANAGED_BY;
     const state = g.properties?.provisioningState ?? "Unknown";
-    const owner =
-      known.get(id) ??
-      (ours && g.tags?.run_id ? owners.byRunTag.get(g.tags.run_id) ?? null : null);
+    const owner = known.get(id) ?? (ours && g.tags?.run_id ? (owners.byRunTag.get(g.tags.run_id) ?? null) : null);
 
-    const classification: Classification = owner
-      ? "tracked"
-      : infra.has(id)
-        ? "infra"
-        : ours
-          ?
-            "untracked"
-          : "unmanaged";
+    const classification: Classification = owner ? "tracked" : infra.has(id) ? "infra" : ours ? "untracked" : "unmanaged";
 
     return [
       {

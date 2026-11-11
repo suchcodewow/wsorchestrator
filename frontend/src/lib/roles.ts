@@ -1,13 +1,6 @@
 /** The functional areas, the roles within each, and what each one may do. */
 
-import {
-  ASSESSMENTS_ROLES,
-  EVENT_ROLES,
-  TRAINING_ROLES,
-  type AssessmentsRole,
-  type EventRole,
-  type TrainingRole,
-} from "@/db/schema";
+import { ASSESSMENTS_ROLES, EVENT_ROLES, TRAINING_ROLES, type AssessmentsRole, type EventRole, type TrainingRole } from "@/db/schema";
 
 /**
  * Everything a signed-in user may do, one entry per functional area. A
@@ -55,8 +48,7 @@ export const EVENT_ROLE_DESCRIPTIONS: Record<EventRole, string> = {
   none: "Cannot see or run events.",
   contributor: "Writes Harness components but cannot run events.",
   operator: "Schedules and runs their own events.",
-  manager:
-    "Also sees every user's events, can delete any of them, and writes the lab guides.",
+  manager: "Also sees every user's events, can delete any of them, and writes the lab guides.",
   administrator: "Also manages event settings and everyone's event role.",
 };
 
@@ -122,32 +114,25 @@ export const canUseEvents = (access: Access) => eventAtLeast(access, "contributo
 
 export const canCreateEvents = (access: Access) => eventAtLeast(access, "operator");
 
-export const canContributeComponents = (access: Access) =>
-  eventAtLeast(access, "contributor");
+export const canContributeComponents = (access: Access) => eventAtLeast(access, "contributor");
 
-export const canPublishComponents = (access: Access) =>
-  eventAtLeast(access, "manager");
+export const canPublishComponents = (access: Access) => eventAtLeast(access, "manager");
 
 export const canSeeAllEvents = (access: Access) => eventAtLeast(access, "manager");
 
-export const canManageAnyEvent = (access: Access) =>
-  eventAtLeast(access, "manager");
+export const canManageAnyEvent = (access: Access) => eventAtLeast(access, "manager");
 
-export const canManageLabGuides = (access: Access) =>
-  eventAtLeast(access, "manager");
+export const canManageLabGuides = (access: Access) => eventAtLeast(access, "manager");
 
-export const canManageSettings = (access: Access) =>
-  eventAtLeast(access, "administrator");
+export const canManageSettings = (access: Access) => eventAtLeast(access, "administrator");
 
-export const canAuditProjects = (access: Access) =>
-  eventAtLeast(access, "administrator");
+export const canAuditProjects = (access: Access) => eventAtLeast(access, "administrator");
 
 // The training area.
 
 export const canUseTraining = (access: Access) => trainingAtLeast(access, "viewer");
 
-export const canManageTrainingSettings = (access: Access) =>
-  trainingAtLeast(access, "administrator");
+export const canManageTrainingSettings = (access: Access) => trainingAtLeast(access, "administrator");
 
 /**
  * The Scheduler: a Training Viewer or above, and the active bootcamp's guest
@@ -163,8 +148,7 @@ export const canUseMimir: (access: Access) => boolean = () => true;
 
 export const canUseEvals = (access: Access) => assessmentsAtLeast(access, "viewer");
 
-export const canManageEvalsSettings = (access: Access) =>
-  assessmentsAtLeast(access, "administrator");
+export const canManageEvalsSettings = (access: Access) => assessmentsAtLeast(access, "administrator");
 
 /** Coach Canary Settings: the content the coach serves, and its coaching settings. It sits in Assessments, so it is theirs. */
 export const canManageMimir = (access: Access) => canManageEvalsSettings(access);
@@ -176,8 +160,7 @@ export const canManageMimir = (access: Access) => canManageEvalsSettings(access)
  * on Reporting → Bootcamp. A manager opens on their own org and can switch to
  * everyone; the others see everyone.
  */
-export const canSeeCanaryWire = (access: Access) =>
-  access.manager || canUseEvals(access);
+export const canSeeCanaryWire = (access: Access) => access.manager || canUseEvals(access);
 
 /** Starts a Canary Wire pull by hand. It pulls every two hours on its own; this is for testing. */
 export const canRefreshCanaryWire = (access: Access) => access.platform;
@@ -206,8 +189,7 @@ export const canSeeEvals = (access: Access) => canUseEvals(access) || access.jud
 export const canScoreAssessments = (access: Access) => canManageEvalsSettings(access) || access.judging;
 
 /** Searches the employee list: eVals administrators for their settings, Training administrators to add judges. */
-export const canSearchEmployees = (access: Access) =>
-  canManageEvalsSettings(access) || canManageTrainingSettings(access);
+export const canSearchEmployees = (access: Access) => canManageEvalsSettings(access) || canManageTrainingSettings(access);
 
 /**
  * Mimir Studio: uploads a new slide deck for a new concept map, and makes a
@@ -275,9 +257,7 @@ export function canManageRoles(access: Access, area: Area | "platform"): boolean
 }
 
 export const canManageUsers = (access: Access) =>
-  canManageRoles(access, "event") ||
-  canManageRoles(access, "training") ||
-  canManageRoles(access, "assessments");
+  canManageRoles(access, "event") || canManageRoles(access, "training") || canManageRoles(access, "assessments");
 
 export const canDeleteUsers = (access: Access) => access.platform;
 
@@ -302,10 +282,7 @@ export function accessBadges(access: Access): string[] {
  * guest judge may still have nothing by this measure: judging is not a role.
  */
 export const hasNoAccess = (access: Access) =>
-  !access.platform &&
-  access.event === "none" &&
-  access.training === null &&
-  access.assessments === null;
+  !access.platform && access.event === "none" && access.training === null && access.assessments === null;
 
 /** Where a signed-in user lands: the first area they can use. */
 export function homePath(access: Access): string {
@@ -321,9 +298,7 @@ export function asEventRole(value: unknown): EventRole | null {
 }
 
 export function asTrainingRole(value: unknown): TrainingRole | null {
-  return TRAINING_ROLES.includes(value as TrainingRole)
-    ? (value as TrainingRole)
-    : null;
+  return TRAINING_ROLES.includes(value as TrainingRole) ? (value as TrainingRole) : null;
 }
 
 export function asAssessmentsRole(value: unknown): AssessmentsRole | null {

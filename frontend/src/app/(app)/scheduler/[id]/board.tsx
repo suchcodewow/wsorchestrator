@@ -211,17 +211,19 @@ function Column({
         style={{ height }}
       >
         {/* The header's bottom border already marks the day's start. */}
-        {hours.filter((m) => m !== dayStart).map((m) => (
-          <div
-            key={m}
-            aria-hidden
-            className={cn(
-              "absolute inset-x-0",
-              m === dayEnd ? "border-t border-dashed border-red-400/80 dark:border-red-500/70" : "border-t border-border/50",
-            )}
-            style={{ top: (m - dayStart) * scale }}
-          />
-        ))}
+        {hours
+          .filter((m) => m !== dayStart)
+          .map((m) => (
+            <div
+              key={m}
+              aria-hidden
+              className={cn(
+                "absolute inset-x-0",
+                m === dayEnd ? "border-t border-dashed border-red-400/80 dark:border-red-500/70" : "border-t border-border/50",
+              )}
+              style={{ top: (m - dayStart) * scale }}
+            />
+          ))}
         <div
           aria-hidden
           className="absolute inset-x-0 bottom-0 bg-red-500/5 dark:bg-red-500/8"
@@ -234,9 +236,7 @@ function Column({
             minutes={g.minutes}
             scale={scale}
             onAdd={
-              props.canManage && column.sessions.length < SCHEDULE_LIMITS.sessionsPerDay
-                ? () => props.onAdd(column, g.start)
-                : undefined
+              props.canManage && column.sessions.length < SCHEDULE_LIMITS.sessionsPerDay ? () => props.onAdd(column, g.start) : undefined
             }
           />
         ))}
@@ -266,7 +266,8 @@ function Gap({ start, minutes, scale, onAdd }: { start: number; minutes: number;
   const label = `Unscheduled · ${formatLength(minutes)}`;
   const className = cn(
     "absolute inset-x-1.5 flex items-center justify-center overflow-hidden rounded-md border border-dashed border-border text-[11px] text-muted-foreground tabular-nums",
-    onAdd && "transition-colors hover:border-brand-border hover:bg-brand/5 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+    onAdd &&
+      "transition-colors hover:border-brand-border hover:bg-brand/5 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
   );
   const style = { top: (start - dayStart) * scale, height: minutes * scale - 2 };
   if (!onAdd) {
@@ -290,7 +291,10 @@ function Gap({ start, minutes, scale, onAdd }: { start: number; minutes: number;
   );
 }
 
-type CardProps = Pick<BoardProps, "density" | "issues" | "dimmed" | "roomNames" | "canManage" | "resizingId" | "onOpen" | "onResize" | "onResizeEnd"> & {
+type CardProps = Pick<
+  BoardProps,
+  "density" | "issues" | "dimmed" | "roomNames" | "canManage" | "resizingId" | "onOpen" | "onResize" | "onResizeEnd"
+> & {
   session: SessionRow;
   start: number;
   scale: number;
@@ -363,7 +367,13 @@ export function SessionFace({
     ...(pace ? [{ key: "pace", text: pace, className: "tabular-nums" }] : []),
     ...(people ? [{ key: "people", text: people }] : []),
     ...(wrong.length > 0
-      ? [{ key: "wrong", text: wrong.length === 1 ? wrong[0]! : `${wrong.length} issues`, className: "font-medium text-red-700 dark:text-red-400" }]
+      ? [
+          {
+            key: "wrong",
+            text: wrong.length === 1 ? wrong[0]! : `${wrong.length} issues`,
+            className: "font-medium text-red-700 dark:text-red-400",
+          },
+        ]
       : []),
   ];
   const fits = Math.max(0, Math.floor((height - 24) / 16));
@@ -407,9 +417,7 @@ export function SessionFace({
         <span className={cn("min-w-0 flex-1 truncate leading-tight", density === "condensed" ? "text-[11px]" : "text-[13px] font-medium")}>
           {s.name}
         </span>
-        {density === "detailed" && (
-          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatLength(s.minutes)}</span>
-        )}
+        {density === "detailed" && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatLength(s.minutes)}</span>}
         {s.comments > 0 && density === "detailed" && (
           <span className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground">
             <MessageSquare className="size-3" />

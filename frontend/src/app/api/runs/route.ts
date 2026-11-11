@@ -115,10 +115,7 @@ export const POST = audited(async function POST(req: Request) {
     clouds: [...new Set(parsed.data.clouds)],
     // Normalised, so booking something that needs a cluster books the cluster
     // too even when the caller is not the dialog.
-    scenarios: withClusterScenario(
-      [...new Set(parsed.data.scenarios)] as ScenarioId[],
-      parsed.data.clouds,
-    ),
+    scenarios: withClusterScenario([...new Set(parsed.data.scenarios)] as ScenarioId[], parsed.data.clouds),
     userId: caller.id,
     scheduledStart: startNow ? new Date() : new Date(scheduledStart!),
     startNow,

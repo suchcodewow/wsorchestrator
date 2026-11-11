@@ -24,14 +24,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  ASSESSMENTS_ROLES,
-  EVENT_ROLES,
-  TRAINING_ROLES,
-  type AssessmentsRole,
-  type EventRole,
-  type TrainingRole,
-} from "@/db/schema";
+import { ASSESSMENTS_ROLES, EVENT_ROLES, TRAINING_ROLES, type AssessmentsRole, type EventRole, type TrainingRole } from "@/db/schema";
 import * as roles from "@/lib/roles";
 import type { Access } from "@/lib/roles";
 import { EVERY_ACCESS, PERSONAS, describeAccess } from "../support/access";
@@ -48,8 +41,7 @@ const TRAINING_RANK: Record<TrainingRole, number> = { viewer: 1, administrator: 
 
 const EVALS_RANK: Record<AssessmentsRole, number> = { viewer: 1, administrator: 2 };
 
-const event = (min: EventRole) => (a: Access) =>
-  a.platform || EVENT_RANK[a.event] >= EVENT_RANK[min];
+const event = (min: EventRole) => (a: Access) => a.platform || EVENT_RANK[a.event] >= EVENT_RANK[min];
 
 const training = (min: TrainingRole) => (a: Access) =>
   a.platform || (a.training !== null && TRAINING_RANK[a.training] >= TRAINING_RANK[min]);
@@ -140,10 +132,7 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
   },
   canManageUsers: {
     actual: roles.canManageUsers,
-    expected: (a) =>
-      event("administrator")(a) ||
-      training("administrator")(a) ||
-      evals("administrator")(a),
+    expected: (a) => event("administrator")(a) || training("administrator")(a) || evals("administrator")(a),
   },
   canDeleteUsers: { actual: roles.canDeleteUsers, expected: platformOnly },
   canAddUsers: { actual: roles.canAddUsers, expected: platformOnly },
@@ -152,10 +141,7 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
 test("the combinations cover every role", () => {
   // 5 event × (none + 2 training) × (none + 2 assessments) × platform on/off × judging or not × managing or not
   // × a Diagnostic Participant or not.
-  assert.equal(
-    EVERY_ACCESS.length,
-    EVENT_ROLES.length * (TRAINING_ROLES.length + 1) * (ASSESSMENTS_ROLES.length + 1) * 2 * 2 * 2 * 2,
-  );
+  assert.equal(EVERY_ACCESS.length, EVENT_ROLES.length * (TRAINING_ROLES.length + 1) * (ASSESSMENTS_ROLES.length + 1) * 2 * 2 * 2 * 2);
   assert.equal(new Set(EVERY_ACCESS.map(describeAccess)).size, EVERY_ACCESS.length);
 });
 
@@ -174,7 +160,10 @@ describe("every permission, for every combination of roles", () => {
     // untested, and this is the file that says who holds what.
     const exported = Object.keys(roles).filter((k) => /^can[A-Z]/.test(k) && k !== "canManageRoles");
     const covered = new Set(Object.keys(POLICY));
-    assert.deepEqual(exported.filter((k) => !covered.has(k)), []);
+    assert.deepEqual(
+      exported.filter((k) => !covered.has(k)),
+      [],
+    );
   });
 });
 
@@ -234,7 +223,15 @@ describe("the areas are independent", () => {
   });
 
   test("no role makes someone a Participant", () => {
-    for (const p of ["assessmentsViewer", "assessmentsAdmin", "platform", "eventAdmin", "trainingAdmin", "guestJudge", "peopleManager"] as const) {
+    for (const p of [
+      "assessmentsViewer",
+      "assessmentsAdmin",
+      "platform",
+      "eventAdmin",
+      "trainingAdmin",
+      "guestJudge",
+      "peopleManager",
+    ] as const) {
       assert.equal(roles.canTakeIris(PERSONAS[p]), false, p);
     }
   });
@@ -287,7 +284,6 @@ describe("homePath", () => {
   test("sends a guest judge with no role to eVals, where they score", () => {
     assert.equal(roles.homePath(PERSONAS.guestJudge), "/evals");
   });
-
 });
 
 describe("accessBadges", () => {
@@ -304,7 +300,15 @@ describe("accessBadges", () => {
 
   test("shows the event role, then the training role, then the assessments role", () => {
     assert.deepEqual(
-      roles.accessBadges({ event: "manager", training: "viewer", assessments: "viewer", platform: false, judging: false, manager: false, participating: false }),
+      roles.accessBadges({
+        event: "manager",
+        training: "viewer",
+        assessments: "viewer",
+        platform: false,
+        judging: false,
+        manager: false,
+        participating: false,
+      }),
       ["Event Manager", "Training Viewer", "Assessments Viewer"],
     );
     assert.deepEqual(roles.accessBadges(PERSONAS.trainingAdmin), ["Training Administrator"]);

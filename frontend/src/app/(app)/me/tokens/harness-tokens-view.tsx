@@ -69,9 +69,7 @@ export function HarnessTokensView({ tokens, choices, configured, canDeploy, scru
 
       <motion.div variants={riseChild}>
         {tokens.length === 0 ? (
-          <p className="rounded-2xl border border-dashed px-5 py-8 text-center text-sm text-muted-foreground">
-            No tokens saved yet.
-          </p>
+          <p className="rounded-2xl border border-dashed px-5 py-8 text-center text-sm text-muted-foreground">No tokens saved yet.</p>
         ) : (
           <div className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
             {tokens.map((t) => (

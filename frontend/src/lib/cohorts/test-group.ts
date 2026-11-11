@@ -11,13 +11,7 @@ import "server-only";
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  EVALS_SETTINGS_KEYS,
-  TEST_GROUP_MAX_MEMBERS,
-  evalsSettings,
-  testGroupArtifacts,
-  type TestGroupArtifactKind,
-} from "@/db/schema";
+import { EVALS_SETTINGS_KEYS, TEST_GROUP_MAX_MEMBERS, evalsSettings, testGroupArtifacts, type TestGroupArtifactKind } from "@/db/schema";
 import {
   dedupeMembers,
   isTestGroupStage,
@@ -34,18 +28,11 @@ export type TestGroup = {
 };
 
 async function readSetting(key: string): Promise<string | null> {
-  const [row] = await db
-    .select({ value: evalsSettings.value })
-    .from(evalsSettings)
-    .where(eq(evalsSettings.key, key));
+  const [row] = await db.select({ value: evalsSettings.value }).from(evalsSettings).where(eq(evalsSettings.key, key));
   return row?.value ?? null;
 }
 
-async function writeSetting(
-  actorId: string,
-  key: string,
-  value: string,
-): Promise<void> {
+async function writeSetting(actorId: string, key: string, value: string): Promise<void> {
   await db
     .insert(evalsSettings)
     .values({ key, value, updatedBy: actorId })
@@ -94,25 +81,11 @@ export async function saveTestGroup(
   actorId: string,
   change: { on?: boolean; suffix?: string; members?: TestGroupMember[] },
 ): Promise<void> {
-  if (change.suffix !== undefined)
-    await writeSetting(
-      actorId,
-      EVALS_SETTINGS_KEYS.testGroupSuffix,
-      change.suffix,
-    );
+  if (change.suffix !== undefined) await writeSetting(actorId, EVALS_SETTINGS_KEYS.testGroupSuffix, change.suffix);
   if (change.members !== undefined) {
-    await writeSetting(
-      actorId,
-      EVALS_SETTINGS_KEYS.testGroupMembers,
-      JSON.stringify(dedupeMembers(change.members)),
-    );
+    await writeSetting(actorId, EVALS_SETTINGS_KEYS.testGroupMembers, JSON.stringify(dedupeMembers(change.members)));
   }
-  if (change.on !== undefined)
-    await writeSetting(
-      actorId,
-      EVALS_SETTINGS_KEYS.testGroupOn,
-      change.on ? "true" : "false",
-    );
+  if (change.on !== undefined) await writeSetting(actorId, EVALS_SETTINGS_KEYS.testGroupOn, change.on ? "true" : "false");
 }
 
 /**
@@ -134,11 +107,7 @@ export async function outboundCohort() {
   };
 }
 
-export async function recordTestArtifact(
-  kind: TestGroupArtifactKind,
-  key: string,
-  ref: string | null = null,
-): Promise<void> {
+export async function recordTestArtifact(kind: TestGroupArtifactKind, key: string, ref: string | null = null): Promise<void> {
   await db
     .insert(testGroupArtifacts)
     .values({ kind, key, ref })
@@ -149,22 +118,11 @@ export async function recordTestArtifact(
 }
 
 export async function testArtifacts(kind: TestGroupArtifactKind) {
-  return db
-    .select()
-    .from(testGroupArtifacts)
-    .where(eq(testGroupArtifacts.kind, kind))
-    .limit(1000);
+  return db.select().from(testGroupArtifacts).where(eq(testGroupArtifacts.kind, kind)).limit(1000);
 }
 
-export async function forgetTestArtifact(
-  kind: TestGroupArtifactKind,
-  key: string,
-): Promise<void> {
-  await db
-    .delete(testGroupArtifacts)
-    .where(
-      and(eq(testGroupArtifacts.kind, kind), eq(testGroupArtifacts.key, key)),
-    );
+export async function forgetTestArtifact(kind: TestGroupArtifactKind, key: string): Promise<void> {
+  await db.delete(testGroupArtifacts).where(and(eq(testGroupArtifacts.kind, kind), eq(testGroupArtifacts.key, key)));
 }
 
 /** The stage form(s) a test group member fills in at /intake; null for anyone else, and for everyone while the group is off. */

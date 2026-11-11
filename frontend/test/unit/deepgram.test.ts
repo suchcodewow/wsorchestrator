@@ -10,12 +10,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  liveListenUrl,
-  parseLiveMessage,
-  prerecordedListenUrl,
-  prerecordedTranscript,
-} from "@/lib/recording/deepgram";
+import { liveListenUrl, parseLiveMessage, prerecordedListenUrl, prerecordedTranscript } from "@/lib/recording/deepgram";
 
 describe("listen URLs", () => {
   for (const [name, url] of [
@@ -140,7 +135,9 @@ describe("prerecordedTranscript", () => {
     const body = {
       results: {
         channels: [
-          { alternatives: [{ transcript: "Testing one, two, three.", paragraphs: { transcript: "\nSpeaker 0: Testing one, two, three." } }] },
+          {
+            alternatives: [{ transcript: "Testing one, two, three.", paragraphs: { transcript: "\nSpeaker 0: Testing one, two, three." } }],
+          },
         ],
       },
     };

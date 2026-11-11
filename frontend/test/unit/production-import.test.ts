@@ -12,12 +12,7 @@ import { afterEach, beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { deploymentEnvironment, isImportedRun, isProduction } from "@/lib/deployment";
-import {
-  finishSchema,
-  productionImportAvailable,
-  productionSource,
-  startProductionImport,
-} from "@/lib/production-import";
+import { finishSchema, productionImportAvailable, productionSource, startProductionImport } from "@/lib/production-import";
 
 const KEYS = [
   "DEPLOYMENT_ENVIRONMENT",

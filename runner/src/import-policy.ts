@@ -25,9 +25,7 @@ export type ImportConfig = {
  * backup onto production" is a rollback, and the Backups page already does
  * that with its own safeguards.
  */
-export function importConfig(
-  env: NodeJS.ProcessEnv,
-): { ok: true; config: ImportConfig } | { ok: false; reason: string } {
+export function importConfig(env: NodeJS.ProcessEnv): { ok: true; config: ImportConfig } | { ok: false; reason: string } {
   const environment = env.DEPLOYMENT_ENVIRONMENT?.trim() ?? "";
   if (!environment) {
     return { ok: false, reason: "DEPLOYMENT_ENVIRONMENT is not set, so this may be production" };
@@ -101,9 +99,7 @@ export function importConfig(
  * fails. The import puts QA's password back, and this is where it reads it
  * from: the same `DATABASE_URL` everything else in QA connects with.
  */
-export function databaseCredentials(
-  url: string | undefined,
-): { user: string; password: string } | null {
+export function databaseCredentials(url: string | undefined): { user: string; password: string } | null {
   if (!url) return null;
   try {
     const parsed = new URL(url);
@@ -122,9 +118,7 @@ export type SqlOperation = {
   error?: { errors?: { code?: string; message?: string }[] };
 };
 
-export function operationState(
-  op: SqlOperation,
-): { state: "running" } | { state: "done" } | { state: "failed"; message: string } {
+export function operationState(op: SqlOperation): { state: "running" } | { state: "done" } | { state: "failed"; message: string } {
   if (op.status !== "DONE") return { state: "running" };
   const errors = op.error?.errors ?? [];
   if (errors.length === 0) return { state: "done" };
@@ -145,10 +139,7 @@ export type Execution = { name?: string; completionTime?: string };
  * building. So nothing may be running. The import is itself a `tf-runner`
  * execution, and Cloud Run names it in `CLOUD_RUN_EXECUTION`.
  */
-export function otherRunningExecutions(
-  executions: Execution[],
-  self: string | undefined,
-): string[] {
+export function otherRunningExecutions(executions: Execution[], self: string | undefined): string[] {
   return executions
     .filter((e) => !e.completionTime)
     .map((e) => e.name ?? "")
@@ -178,10 +169,7 @@ export function refusedOutright(err: unknown): boolean {
  * marking them as production's, and a reaper tick would tear them down. So
  * the triggers stay paused and the log says how to finish by hand.
  */
-export function shouldResume(progress: {
-  restoreStarted: boolean;
-  quarantined: boolean;
-}): boolean {
+export function shouldResume(progress: { restoreStarted: boolean; quarantined: boolean }): boolean {
   return !progress.restoreStarted || progress.quarantined;
 }
 

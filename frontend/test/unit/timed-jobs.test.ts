@@ -76,7 +76,9 @@ describe("timed jobs registry", () => {
 
 describe("dispatched jobs", () => {
   test("every one has a run, and every run a job", () => {
-    const dispatched = TIMED_JOBS.filter((job) => job.via === "dispatcher").map((job) => job.key).sort();
+    const dispatched = TIMED_JOBS.filter((job) => job.via === "dispatcher")
+      .map((job) => job.key)
+      .sort();
     const runs = [...RUNS.matchAll(/\n  "([\w-]+)": \{/g)].map((m) => m[1]).sort();
     assert.deepEqual(runs, dispatched);
   });

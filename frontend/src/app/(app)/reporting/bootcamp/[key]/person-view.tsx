@@ -13,14 +13,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft, Loader2, Pencil, Save, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { PersonEmployee, PersonReview, PersonSubmission } from "@/lib/reporting/bootcamp";
 import type { ClassSummary, ReleaseStage } from "@/lib/reporting/bootcamp-values";
@@ -103,9 +96,7 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
               )}
             </div>
             {employee && (
-              <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
-                Started {formatDate(employee.startDate)}
-              </span>
+              <span className="shrink-0 text-sm tabular-nums text-muted-foreground">Started {formatDate(employee.startDate)}</span>
             )}
           </div>
           {employee && (
@@ -184,12 +175,7 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
           )}
 
           <EditSessionProvider value={session.register}>
-            <SubmissionGroups
-              personKey={person.key}
-              submissions={records.submissions}
-              reviews={records.reviews}
-              editing={editing}
-            />
+            <SubmissionGroups personKey={person.key} submissions={records.submissions} reviews={records.reviews} editing={editing} />
           </EditSessionProvider>
           {records.submissions.length === 0 && (
             <p className="rounded-2xl border bg-card px-5 py-8 text-center text-sm text-muted-foreground shadow-sm">
@@ -204,9 +190,8 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
           <DialogHeader>
             <DialogTitle>Discard changes?</DialogTitle>
             <DialogDescription>
-              {session.changed === 1 ? "One form has" : `${session.changed} forms have`} changes that have not been
-              saved. Discarding puts them back as they were saved. Participation marks moved while editing were saved as
-              they moved, and stay.
+              {session.changed === 1 ? "One form has" : `${session.changed} forms have`} changes that have not been saved. Discarding puts
+              them back as they were saved. Participation marks moved while editing were saved as they moved, and stay.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

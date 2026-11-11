@@ -32,13 +32,29 @@ export const GAMES_GROUPS: EndpointGroup[] = [
         body: {
           kind: "json",
           fields: [
-            { name: "tools", type: `${TOOL_SHAPE}[]`, required: true, note: `${GUESS_WHO_LIMITS.toolsMin} to ${GUESS_WHO_LIMITS.toolsMax}; name up to ${GUESS_WHO_LIMITS.nameMax} characters` },
-            { name: "rounds", type: "{ red: string, blue: string }[]", required: true, note: `1 to ${GUESS_WHO_LIMITS.roundsMax}; each a tool id from tools` },
+            {
+              name: "tools",
+              type: `${TOOL_SHAPE}[]`,
+              required: true,
+              note: `${GUESS_WHO_LIMITS.toolsMin} to ${GUESS_WHO_LIMITS.toolsMax}; name up to ${GUESS_WHO_LIMITS.nameMax} characters`,
+            },
+            {
+              name: "rounds",
+              type: "{ red: string, blue: string }[]",
+              required: true,
+              note: `1 to ${GUESS_WHO_LIMITS.roundsMax}; each a tool id from tools`,
+            },
             { name: "questionCap", type: "integer", required: true, note: `${GUESS_WHO_LIMITS.capMin} to ${GUESS_WHO_LIMITS.capMax}` },
           ],
         },
         returns: "{ ok: true }",
-        errors: [{ status: 400, error: "invalid", when: "the body does not parse, a tool id repeats, or a round names a tool not in tools; issues lists each problem's path" }],
+        errors: [
+          {
+            status: 400,
+            error: "invalid",
+            when: "the body does not parse, a tool id repeats, or a round names a tool not in tools; issues lists each problem's path",
+          },
+        ],
       },
       {
         method: "DELETE",

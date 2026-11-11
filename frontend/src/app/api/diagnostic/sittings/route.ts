@@ -31,8 +31,5 @@ export const POST = audited(async function POST(req: Request) {
   const result = await startSitting(user.id, subject, form, mode);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: STATUS[result.error] });
   noteAudit({ target: result.sitting.attemptId });
-  return NextResponse.json(
-    { sitting: result.sitting, resumed: result.resumed },
-    { status: result.resumed ? 200 : 201 },
-  );
+  return NextResponse.json({ sitting: result.sitting, resumed: result.resumed }, { status: result.resumed ? 200 : 201 });
 });

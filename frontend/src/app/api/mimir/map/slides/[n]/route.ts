@@ -7,11 +7,7 @@
 
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
-import {
-  SLIDE_CACHE_SECONDS,
-  parseSlideNumber,
-  signedSlideUrl,
-} from "@/lib/mimir/map/slides";
+import { SLIDE_CACHE_SECONDS, parseSlideNumber, signedSlideUrl } from "@/lib/mimir/map/slides";
 
 type Params = { params: Promise<{ n: string }> };
 
@@ -20,14 +16,9 @@ export async function GET(req: Request, { params }: Params) {
   if (error) return error;
 
   const n = parseSlideNumber((await params).n);
-  if (n === null)
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (n === null) return NextResponse.json({ error: "not_found" }, { status: 404 });
   const signed = await signedSlideUrl(n);
-  if (!signed.ok)
-    return NextResponse.json(
-      { error: signed.error },
-      { status: signed.error === "missing" ? 404 : 503 },
-    );
+  if (!signed.ok) return NextResponse.json({ error: signed.error }, { status: signed.error === "missing" ? 404 : 503 });
 
   return new NextResponse(null, {
     status: 302,

@@ -91,12 +91,10 @@ describe("importConfig", () => {
 
 describe("databaseCredentials", () => {
   test("reads the Cloud Run socket form", () => {
-    assert.deepEqual(
-      databaseCredentials(
-        "postgresql://appuser:s3cret@localhost/workshops?host=/cloudsql/p:us-central1:workshops-db",
-      ),
-      { user: "appuser", password: "s3cret" },
-    );
+    assert.deepEqual(databaseCredentials("postgresql://appuser:s3cret@localhost/workshops?host=/cloudsql/p:us-central1:workshops-db"), {
+      user: "appuser",
+      password: "s3cret",
+    });
   });
 
   test("decodes an escaped password", () => {
@@ -152,10 +150,7 @@ describe("otherRunningExecutions", () => {
 
   // A name that merely starts the same must not be mistaken for this one.
   test("matches its own execution exactly", () => {
-    assert.deepEqual(
-      otherRunningExecutions([{ name: `${base}/tf-runner-self2` }], "tf-runner-self"),
-      [`${base}/tf-runner-self2`],
-    );
+    assert.deepEqual(otherRunningExecutions([{ name: `${base}/tf-runner-self2` }], "tf-runner-self"), [`${base}/tf-runner-self2`]);
   });
 });
 
@@ -190,9 +185,7 @@ describe("shouldResume", () => {
 
 describe("QUARANTINE_SQL", () => {
   test("stamps every run, not only the unstamped ones", () => {
-    assert.ok(
-      QUARANTINE_SQL.some((s) => /^update workshop_runs set environment = 'production'$/.test(s)),
-    );
+    assert.ok(QUARANTINE_SQL.some((s) => /^update workshop_runs set environment = 'production'$/.test(s)));
   });
 
   // The reaper's scrub sweep overwrites these in the shared Harness account.

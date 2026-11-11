@@ -22,15 +22,10 @@ export async function POST(req: Request) {
   }
   const org = typeof body.org === "string" ? body.org.trim() : "";
 
-  const result = org
-    ? await listHarnessProjects(body.token, org)
-    : await listHarnessOrgs(body.token);
+  const result = org ? await listHarnessProjects(body.token, org) : await listHarnessOrgs(body.token);
 
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, detail: result.detail },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error, detail: result.detail }, { status: STATUS_FOR[result.error] });
   }
 
   return NextResponse.json({ scopes: result.scopes });

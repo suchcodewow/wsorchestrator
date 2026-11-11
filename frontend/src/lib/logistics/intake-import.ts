@@ -88,9 +88,9 @@ export async function importIntakeResponses(
   if (commit && fresh.length > 0) {
     await db.transaction(async (tx) => {
       for (let i = 0; i < fresh.length; i += BATCH) {
-        await tx.insert(intakeResponses).values(
-          fresh.slice(i, i + BATCH).map((e) => ({ form, email: e.email, answers: e.answers, submittedAt: e.at })),
-        );
+        await tx
+          .insert(intakeResponses)
+          .values(fresh.slice(i, i + BATCH).map((e) => ({ form, email: e.email, answers: e.answers, submittedAt: e.at })));
       }
     });
   }

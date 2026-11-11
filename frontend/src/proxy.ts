@@ -21,8 +21,7 @@ function canonicalRedirect(request: NextRequest): NextResponse | null {
   const canonical = process.env.CANONICAL_HOST;
   if (!canonical || ASSET.test(request.nextUrl.pathname)) return null;
 
-  const host =
-    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
 
   if (!host || host === canonical) return null;
 
@@ -36,9 +35,7 @@ function canonicalRedirect(request: NextRequest): NextResponse | null {
 
 function publicFiles(dir: string, prefix = ""): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
-    entry.isDirectory()
-      ? publicFiles(join(dir, entry.name), `${prefix}${entry.name}/`)
-      : [`${prefix}${entry.name}`],
+    entry.isDirectory() ? publicFiles(join(dir, entry.name), `${prefix}${entry.name}/`) : [`${prefix}${entry.name}`],
   );
 }
 
@@ -76,13 +73,9 @@ async function withRequestPath(request: NextRequest): Promise<NextResponse> {
 }
 
 export async function proxy(request: NextRequest) {
-  return (
-    canonicalRedirect(request) ?? assetMiss(request) ?? withRequestPath(request)
-  );
+  return canonicalRedirect(request) ?? assetMiss(request) ?? withRequestPath(request);
 }
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

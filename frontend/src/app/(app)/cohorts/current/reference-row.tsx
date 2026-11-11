@@ -66,13 +66,7 @@ export function useReferenceRow(q: string) {
 const ICON = "size-4 stroke-[2.5] text-zinc-950 drop-shadow-[0_0_2px_rgb(220_38_38/0.8)] dark:text-zinc-400";
 
 /** The row, cell for cell with a candidate's; nothing on it can be changed, and a click anywhere plays the animation. */
-export function ReferenceRow({
-  btcDate,
-  onClick,
-}: {
-  btcDate: boolean;
-  onClick: () => void;
-}) {
+export function ReferenceRow({ btcDate, onClick }: { btcDate: boolean; onClick: () => void }) {
   return (
     <tr onClick={onClick} className="cursor-pointer border-b transition-colors last:border-b-0 hover:bg-muted/30">
       <td className="px-5 py-2 font-medium">
@@ -94,9 +88,7 @@ export function ReferenceRow({
         </span>
       </td>
       <td className="px-5 py-2">Director</td>
-      {btcDate && (
-        <td className="whitespace-nowrap px-5 py-2 tabular-nums text-muted-foreground">{formatDate(BTC_DATE)}</td>
-      )}
+      {btcDate && <td className="whitespace-nowrap px-5 py-2 tabular-nums text-muted-foreground">{formatDate(BTC_DATE)}</td>}
     </tr>
   );
 }
@@ -136,7 +128,17 @@ function Flap({ wing, period, phase, className }: { wing: Wing; period: number; 
 }
 
 /** One white gull, `facing` "side" flying right (mirror it to fly left), or "front" flying at the viewer. */
-function Gull({ facing, period = 0.5, phase = 0, still = false }: { facing: "side" | "front"; period?: number; phase?: number; still?: boolean }) {
+function Gull({
+  facing,
+  period = 0.5,
+  phase = 0,
+  still = false,
+}: {
+  facing: "side" | "front";
+  period?: number;
+  phase?: number;
+  still?: boolean;
+}) {
   const wing = (w: Wing, className?: string) =>
     still ? <path d={w.mid} className={className} /> : <Flap wing={w} period={period} phase={phase} className={className} />;
   return (
@@ -264,7 +266,14 @@ function Flyover({ onCovered, onDone }: { onCovered: () => void; onDone: () => v
             <motion.div
               key={n}
               className="absolute"
-              style={{ left: `${b.gx}vw`, top: `${b.gy}vh`, width: b.size, height: b.size / 2, marginLeft: -b.size / 2, marginTop: -b.size / 4 }}
+              style={{
+                left: `${b.gx}vw`,
+                top: `${b.gy}vh`,
+                width: b.size,
+                height: b.size / 2,
+                marginLeft: -b.size / 2,
+                marginTop: -b.size / 4,
+              }}
               initial={{ x: `${b.from.x}vw`, y: `${b.from.y}vh`, scale: 0.5, rotate: b.tilt, opacity: 1 }}
               animate={{
                 x: [`${b.from.x}vw`, "0vw", "0vw", "0vw", `${b.to.x * 0.9}vw`, `${b.to.x}vw`],

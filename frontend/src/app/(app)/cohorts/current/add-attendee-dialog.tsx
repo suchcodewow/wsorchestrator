@@ -206,8 +206,7 @@ export function AddAttendeeDialog({ open, onClose, onAdded }: { open: boolean; o
             <span>
               Send them the registration link in Slack now
               <span className="block text-xs text-muted-foreground">
-                Otherwise it goes with the next morning&apos;s reminders. Either way, the daily reminder follows until they
-                fill it in.
+                Otherwise it goes with the next morning&apos;s reminders. Either way, the daily reminder follows until they fill it in.
               </span>
             </span>
           </label>
@@ -240,7 +239,9 @@ function Choice({ on, onPick, children }: { on: boolean; onPick: () => void; chi
       onClick={onPick}
       className={cn(
         "inline-flex h-9 cursor-pointer items-center rounded-full border px-4 text-sm shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
-        on ? "border-brand-border bg-brand-subtle text-foreground" : "bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+        on
+          ? "border-brand-border bg-brand-subtle text-foreground"
+          : "bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
       )}
     >
       {children}

@@ -48,7 +48,12 @@ export async function listTimedJobs(): Promise<TimedJobRow[]> {
   const rows = await db
     .select()
     .from(timedJobs)
-    .where(inArray(timedJobs.key, TIMED_JOBS.map((job) => job.key)))
+    .where(
+      inArray(
+        timedJobs.key,
+        TIMED_JOBS.map((job) => job.key),
+      ),
+    )
     .limit(100);
   const byKey = new Map(rows.map((row) => [row.key, row]));
   const now = new Date();
@@ -142,7 +147,12 @@ export async function dispatchTimedJobs(now: Date, ctx: TimedJobContext): Promis
   const rows = await db
     .select()
     .from(timedJobs)
-    .where(inArray(timedJobs.key, dispatched.map((job) => job.key)))
+    .where(
+      inArray(
+        timedJobs.key,
+        dispatched.map((job) => job.key),
+      ),
+    )
     .limit(100);
   const byKey = new Map(rows.map((row) => [row.key, row]));
 
@@ -209,7 +219,10 @@ export async function runTimedJob(
   await recordRun(key, "running", null).catch(() => {});
   try {
     const res = await run();
-    const body = (await res.clone().json().catch(() => ({}))) as Record<string, unknown>;
+    const body = (await res
+      .clone()
+      .json()
+      .catch(() => ({}))) as Record<string, unknown>;
     if (res.ok && typeof body.skipped === "string") {
       await recordRun(key, "skipped", body.skipped).catch(() => {});
     } else if (res.ok) {

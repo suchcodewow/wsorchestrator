@@ -81,7 +81,9 @@ export async function addComment(
   sessionId: string,
   input: z.infer<typeof commentInputSchema>,
 ): Promise<{ ok: true; comment: CommentRow } | { ok: false; error: "not_instructor"; email: string }> {
-  const picked = input.mentions?.length ? pickMentions(await instructorPool(bootcampId), input.mentions) : { ok: true as const, tagged: [] };
+  const picked = input.mentions?.length
+    ? pickMentions(await instructorPool(bootcampId), input.mentions)
+    : { ok: true as const, tagged: [] };
   if (!picked.ok) return { ok: false, error: "not_instructor", email: picked.email };
 
   const tagger = await taggerOf(actorId);

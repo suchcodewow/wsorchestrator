@@ -67,12 +67,10 @@ export function shuffledOrder(random: () => number = Math.random): number[] {
 }
 
 /** Whether the question on screen is still in the bank: one from a bank since replaced is not. */
-const onBank = (attempt: Pick<IrisAttempt, "currentItemId">) =>
-  attempt.currentItemId !== null && ITEMS_BY_ID.has(attempt.currentItemId);
+const onBank = (attempt: Pick<IrisAttempt, "currentItemId">) => attempt.currentItemId !== null && ITEMS_BY_ID.has(attempt.currentItemId);
 
 /** The order the question on screen is shown in; A–D when none was stored. */
-const orderOf = (attempt: Pick<IrisAttempt, "optionOrder">) =>
-  attempt.optionOrder?.length === 4 ? attempt.optionOrder : [0, 1, 2, 3];
+const orderOf = (attempt: Pick<IrisAttempt, "optionOrder">) => (attempt.optionOrder?.length === 4 ? attempt.optionOrder : [0, 1, 2, 3]);
 
 function viewOf(attempt: IrisAttempt): SittingView {
   const item = ITEMS_BY_ID.get(attempt.currentItemId!)!;
@@ -198,12 +196,7 @@ export async function startSitting(
       .select({ id: irisAttempts.id })
       .from(irisAttempts)
       .where(
-        and(
-          eq(irisAttempts.userId, userId),
-          eq(irisAttempts.subject, subject),
-          eq(irisAttempts.form, form),
-          eq(irisAttempts.mode, "live"),
-        ),
+        and(eq(irisAttempts.userId, userId), eq(irisAttempts.subject, subject), eq(irisAttempts.form, form), eq(irisAttempts.mode, "live")),
       );
     if (done) return { ok: false, error: "already_taken" };
   }
@@ -255,9 +248,7 @@ export async function openSitting(
     .select()
     .from(irisAttempts)
     .where(and(eq(irisAttempts.id, attemptId), eq(irisAttempts.userId, userId)));
-  return attempt && modes.includes(attempt.mode as SittingMode) && !attempt.finishedAt && onBank(attempt)
-    ? viewOf(attempt)
-    : null;
+  return attempt && modes.includes(attempt.mode as SittingMode) && !attempt.finishedAt && onBank(attempt) ? viewOf(attempt) : null;
 }
 
 /**

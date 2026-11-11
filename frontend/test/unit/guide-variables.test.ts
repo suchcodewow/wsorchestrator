@@ -85,17 +85,11 @@ describe("fillGuideVariables", () => {
   });
 
   test("replaces every occurrence, with or without inner spaces", () => {
-    assert.equal(
-      fillGuideVariables("{{project}}/{{ project }}/{{  project}}", { project: "p" }),
-      "p/p/p",
-    );
+    assert.equal(fillGuideVariables("{{project}}/{{ project }}/{{  project}}", { project: "p" }), "p/p/p");
   });
 
   test("matches the whole name, so projectUrl is not project + Url", () => {
-    assert.equal(
-      fillGuideVariables("{{projectUrl}} {{project}}", { project: "p", projectUrl: "https://u" }),
-      "https://u p",
-    );
+    assert.equal(fillGuideVariables("{{projectUrl}} {{project}}", { project: "p", projectUrl: "https://u" }), "https://u p");
   });
 
   test("leaves a blank or empty value standing and tallies it missing", () => {
@@ -129,10 +123,7 @@ describe("fillGuideVariables", () => {
   });
 
   test("does not re-expand a value that itself looks like a token", () => {
-    assert.equal(
-      fillGuideVariables("{{project}}", { project: "{{org}}", org: "o" }),
-      "{{org}}",
-    );
+    assert.equal(fillGuideVariables("{{project}}", { project: "{{org}}", org: "o" }), "{{org}}");
   });
 
   test("a triple brace keeps its outer braces", () => {
@@ -166,14 +157,15 @@ describe("parseGuideContext", () => {
   });
 
   test("reads a well-formed cookie", () => {
-    assert.deepEqual(
-      parseGuideContext(cookie({ runId: RUN, accountId: 7, typed: { project: "p", email: "e@x.example" } })),
-      { runId: RUN, accountId: 7, typed: { project: "p", email: "e@x.example" } },
-    );
+    assert.deepEqual(parseGuideContext(cookie({ runId: RUN, accountId: 7, typed: { project: "p", email: "e@x.example" } })), {
+      runId: RUN,
+      accountId: 7,
+      typed: { project: "p", email: "e@x.example" },
+    });
   });
 
   test("is empty for a cookie that is not JSON, or not URI-decodable", () => {
-    for (const raw of ["not json", "%7B", "%E0%A4%A", "{\"runId\":", "%"]) {
+    for (const raw of ["not json", "%7B", "%E0%A4%A", '{"runId":', "%"]) {
       assert.deepEqual(parseGuideContext(raw), EMPTY_GUIDE_CONTEXT, raw);
     }
   });
@@ -221,10 +213,7 @@ describe("parseGuideContext", () => {
   });
 
   test("trims typed values and drops blank ones", () => {
-    assert.deepEqual(
-      parseGuideContext(cookie({ typed: { project: "  p  ", org: "   ", email: "" } })).typed,
-      { project: "p" },
-    );
+    assert.deepEqual(parseGuideContext(cookie({ typed: { project: "  p  ", org: "   ", email: "" } })).typed, { project: "p" });
   });
 
   test("cuts a typed value to 300 characters", () => {

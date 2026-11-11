@@ -13,14 +13,7 @@ import { Loader2, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { confirmDialog } from "@/components/ui/confirm";
 import { Input } from "@/components/ui/input";
-import {
-  GUESS_WHO_LIMITS,
-  guessWhoConfigSchema,
-  toolId,
-  type GuessWhoConfig,
-  type GuessWhoTool,
-  type Team,
-} from "@/lib/games/guess-who";
+import { GUESS_WHO_LIMITS, guessWhoConfigSchema, toolId, type GuessWhoConfig, type GuessWhoTool, type Team } from "@/lib/games/guess-who";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { formatWhen } from "../../cohort-settings/format";
@@ -58,7 +51,13 @@ export function GuessWhoSettingsForm({
   function addTool() {
     setTools((list) => [
       ...list,
-      { id: toolId("New tool", list.map((t) => t.id)), name: "New tool" },
+      {
+        id: toolId(
+          "New tool",
+          list.map((t) => t.id),
+        ),
+        name: "New tool",
+      },
     ]);
   }
 

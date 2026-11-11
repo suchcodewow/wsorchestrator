@@ -100,15 +100,10 @@ export function useTokenActions() {
     if (scrub && scrub.problems.length > 0) {
       setError(
         `Token removed, but ${scrub.problems.length} of this site's secrets ` +
-          `need removing in Harness by hand: ${scrub.problems
-            .map((p) => p.secretIdentifier)
-            .join(", ")}.`,
+          `need removing in Harness by hand: ${scrub.problems.map((p) => p.secretIdentifier).join(", ")}.`,
       );
     } else if (scrub && scrub.scrubbed > 0) {
-      setSaved(
-        `Token removed, and ${scrub.scrubbed} deployed secret${plural(scrub.scrubbed)} ` +
-          `scrubbed from Harness on the way out.`,
-      );
+      setSaved(`Token removed, and ${scrub.scrubbed} deployed secret${plural(scrub.scrubbed)} ` + `scrubbed from Harness on the way out.`);
     }
     router.refresh();
   }

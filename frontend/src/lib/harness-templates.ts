@@ -6,18 +6,8 @@
 import "server-only";
 import { and, asc, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  harnessTemplateSources,
-  MAX_TEMPLATE_SOURCES,
-  users,
-  type HarnessTemplateSource,
-} from "@/db/schema";
-import {
-  checkTemplateSource,
-  fingerprint,
-  harnessAccountName,
-  parseHarnessToken,
-} from "@/lib/harness-platform";
+import { harnessTemplateSources, MAX_TEMPLATE_SOURCES, users, type HarnessTemplateSource } from "@/db/schema";
+import { checkTemplateSource, fingerprint, harnessAccountName, parseHarnessToken } from "@/lib/harness-platform";
 import type { TemplateSourceError } from "@/lib/harness-template-errors";
 import { openSecret, sealSecret } from "@/lib/secret-box";
 
@@ -25,9 +15,7 @@ import { openSecret, sealSecret } from "@/lib/secret-box";
 export type SourceOwner = string | null;
 
 const ownedBy = (owner: SourceOwner): SQL =>
-  owner === null
-    ? isNull(harnessTemplateSources.userId)
-    : eq(harnessTemplateSources.userId, owner);
+  owner === null ? isNull(harnessTemplateSources.userId) : eq(harnessTemplateSources.userId, owner);
 
 export type TemplateSourceRow = {
   id: string;
@@ -53,10 +41,7 @@ export type SourceStatus = {
   detail?: string;
 };
 
-const summarize = (
-  row: HarnessTemplateSource,
-  addedBy: string | null,
-): TemplateSourceRow => ({
+const summarize = (row: HarnessTemplateSource, addedBy: string | null): TemplateSourceRow => ({
   id: row.id,
   accountId: row.accountId,
   accountName: row.accountName,
@@ -71,9 +56,7 @@ const summarize = (
   mine: row.userId !== null,
 });
 
-export async function listTemplateSources(
-  owner: SourceOwner,
-): Promise<TemplateSourceRow[]> {
+export async function listTemplateSources(owner: SourceOwner): Promise<TemplateSourceRow[]> {
   return sourcesWhere(ownedBy(owner));
 }
 
@@ -89,18 +72,10 @@ export type SourceChoice = {
  * What one user's deploy may read from: the site's sources and whichever of
  * their own they picked, each place named only once even if both point at it.
  */
-export async function deployableTemplateSources(
-  userId: string,
-  choice: SourceChoice,
-): Promise<TemplateSourceRow[]> {
+export async function deployableTemplateSources(userId: string, choice: SourceChoice): Promise<TemplateSourceRow[]> {
   if (!choice.official && choice.mine.length === 0) return [];
 
-  const rows = await sourcesWhere(
-    or(
-      isNull(harnessTemplateSources.userId),
-      eq(harnessTemplateSources.userId, userId),
-    )!,
-  );
+  const rows = await sourcesWhere(or(isNull(harnessTemplateSources.userId), eq(harnessTemplateSources.userId, userId))!);
 
   const picked = new Set(choice.mine);
   const wanted = rows.filter((r) => (r.mine ? picked.has(r.id) : choice.official));
@@ -108,10 +83,7 @@ export async function deployableTemplateSources(
   // The user's own row wins where both scopes name the same place, since it is
   // the more specific of the two.
   const seen = new Set<string>();
-  return [
-    ...wanted.filter((r) => r.mine),
-    ...wanted.filter((r) => !r.mine),
-  ].filter((row) => {
+  return [...wanted.filter((r) => r.mine), ...wanted.filter((r) => !r.mine)].filter((row) => {
     const place = `${row.accountId}/${row.orgIdentifier}/${row.projectIdentifier ?? ""}`;
     if (seen.has(place)) return false;
     seen.add(place);
@@ -125,23 +97,23 @@ async function sourcesWhere(where: SQL): Promise<TemplateSourceRow[]> {
     .from(harnessTemplateSources)
     .leftJoin(users, eq(users.id, harnessTemplateSources.addedBy))
     .where(where)
-    .orderBy(
-      asc(harnessTemplateSources.orgIdentifier),
-      asc(harnessTemplateSources.projectIdentifier),
-    );
+    .orderBy(asc(harnessTemplateSources.orgIdentifier), asc(harnessTemplateSources.projectIdentifier));
 
   return rows.map((r) => summarize(r.source, r.byName ?? r.byEmail ?? null));
 }
 
-export async function checkTemplateSources(
-  rows: TemplateSourceRow[],
-): Promise<Record<string, SourceStatus>> {
+export async function checkTemplateSources(rows: TemplateSourceRow[]): Promise<Record<string, SourceStatus>> {
   if (rows.length === 0) return {};
 
   const secrets = await db
     .select({ id: harnessTemplateSources.id, secret: harnessTemplateSources.secret })
     .from(harnessTemplateSources)
-    .where(inArray(harnessTemplateSources.id, rows.map((r) => r.id)));
+    .where(
+      inArray(
+        harnessTemplateSources.id,
+        rows.map((r) => r.id),
+      ),
+    );
   const tokenFor = new Map(secrets.map((r) => [r.id, openSecret(r.secret)]));
 
   const checked = await Promise.all(
@@ -155,17 +127,12 @@ export async function checkTemplateSources(
             orgOk: false,
             projectOk: row.projectIdentifier ? false : null,
             ok: false,
-            detail:
-              "This token can no longer be decrypted — the deployment's encryption key changed.",
+            detail: "This token can no longer be decrypted — the deployment's encryption key changed.",
           },
         ];
       }
 
-      const check = await checkTemplateSource(
-        token,
-        row.orgIdentifier,
-        row.projectIdentifier,
-      );
+      const check = await checkTemplateSource(token, row.orgIdentifier, row.projectIdentifier);
       return [
         row.id,
         {
@@ -182,9 +149,7 @@ export async function checkTemplateSources(
   return Object.fromEntries(checked);
 }
 
-export type SaveResult =
-  | { ok: true; source: TemplateSourceRow }
-  | { ok: false; error: TemplateSourceError; detail?: string };
+export type SaveResult = { ok: true; source: TemplateSourceRow } | { ok: false; error: TemplateSourceError; detail?: string };
 
 export async function saveTemplateSource(
   owner: SourceOwner,
@@ -211,24 +176,14 @@ export async function saveTemplateSource(
     .where(ownedBy(owner));
 
   const print = fingerprint(raw);
-  if (
-    existing.some(
-      (row) =>
-        row.fingerprint === print &&
-        row.orgIdentifier === org &&
-        row.projectIdentifier === project,
-    )
-  ) {
+  if (existing.some((row) => row.fingerprint === print && row.orgIdentifier === org && row.projectIdentifier === project)) {
     return { ok: false, error: "duplicate" };
   }
   if (existing.length >= MAX_TEMPLATE_SOURCES) {
     return { ok: false, error: "too_many" };
   }
 
-  const [check, accountName] = await Promise.all([
-    checkTemplateSource(raw, org, project || null),
-    harnessAccountName(raw),
-  ]);
+  const [check, accountName] = await Promise.all([checkTemplateSource(raw, org, project || null), harnessAccountName(raw)]);
 
   if (!check.tokenOk) {
     return { ok: false, error: "invalid_token", detail: check.detail };
@@ -267,10 +222,7 @@ export async function saveTemplateSource(
   return { ok: true, source: summarize(row!, null) };
 }
 
-export async function deleteTemplateSource(
-  owner: SourceOwner,
-  id: string,
-): Promise<boolean> {
+export async function deleteTemplateSource(owner: SourceOwner, id: string): Promise<boolean> {
   const deleted = await db
     .delete(harnessTemplateSources)
     .where(and(ownedBy(owner), eq(harnessTemplateSources.id, id)))

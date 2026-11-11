@@ -15,13 +15,7 @@ import "server-only";
 import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import {
-  RECORDING_LIMITS,
-  RECORDING_TRACK_KINDS,
-  recordingTracks,
-  type RecordingTrackKind,
-  type RecordingTrackStatus,
-} from "@/db/schema";
+import { RECORDING_LIMITS, RECORDING_TRACK_KINDS, recordingTracks, type RecordingTrackKind, type RecordingTrackStatus } from "@/db/schema";
 import type { RecordingSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -214,7 +208,10 @@ export const registerTrackSchema = z.object({
     .string()
     .max(RECORDING_LIMITS.mimeType)
     .regex(/^video\/(mp4|webm)(;.*)?$/),
-  startedAt: z.string().datetime({ offset: true }).transform((s) => new Date(s)),
+  startedAt: z
+    .string()
+    .datetime({ offset: true })
+    .transform((s) => new Date(s)),
   offsetMs: z.number().int().min(0).max(60_000),
   /** Absent from a take recorded before the page asked for a name. */
   contributor: z.string().trim().max(RECORDING_LIMITS.contributor).default(""),
@@ -249,11 +246,7 @@ export async function findTrack(userId: string, takeId: string, kind: string): P
     .select(TRACK_COLUMNS)
     .from(recordingTracks)
     .where(
-      and(
-        eq(recordingTracks.recordedBy, userId),
-        eq(recordingTracks.takeId, takeId),
-        eq(recordingTracks.kind, kind as RecordingTrackKind),
-      ),
+      and(eq(recordingTracks.recordedBy, userId), eq(recordingTracks.takeId, takeId), eq(recordingTracks.kind, kind as RecordingTrackKind)),
     );
   return row ? toTrackRow(row) : null;
 }
@@ -274,7 +267,16 @@ export async function noteChunk(trackId: string): Promise<void> {
 }
 
 export const uploadUrlsSchema = z.object({
-  seqs: z.array(z.number().int().min(0).max(RECORDING_LIMITS.chunks - 1)).min(1).max(UPLOAD_URL_BATCH),
+  seqs: z
+    .array(
+      z
+        .number()
+        .int()
+        .min(0)
+        .max(RECORDING_LIMITS.chunks - 1),
+    )
+    .min(1)
+    .max(UPLOAD_URL_BATCH),
 });
 
 /** Signed URLs to upload chunks `seqs` of a stream straight to the bucket, good for an hour. */
@@ -287,12 +289,14 @@ export async function uploadUrls(track: RecordingTrackRow, seqs: number[]): Prom
 export const finishTrackSchema = z.object({
   /** 0 when the browser saved nothing at all for the stream. */
   chunks: z.number().int().min(0).max(RECORDING_LIMITS.chunks),
-  durationMs: z.number().int().min(0).max(24 * 60 * 60_000),
+  durationMs: z
+    .number()
+    .int()
+    .min(0)
+    .max(24 * 60 * 60_000),
 });
 
-export type FinishResult =
-  | { status: "missing"; missing: number[] }
-  | { status: Exclude<RecordingTrackStatus, "uploading"> };
+export type FinishResult = { status: "missing"; missing: number[] } | { status: Exclude<RecordingTrackStatus, "uploading"> };
 
 /**
  * The browser says the stream ended after `chunks` chunks. If any is not here

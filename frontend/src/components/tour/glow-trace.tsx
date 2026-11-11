@@ -61,7 +61,17 @@ export function GlowTrace({ duration, blur, count = 1, onDone }: { duration: num
           style={{ ...dash, filter: `blur(${blur}px)` }}
         />
       )}
-      <rect width="100%" height="100%" pathLength={100} fill="none" stroke={`url(#${gradient})`} strokeWidth={2} strokeLinecap="round" strokeDasharray="20 30" style={dash} />
+      <rect
+        width="100%"
+        height="100%"
+        pathLength={100}
+        fill="none"
+        stroke={`url(#${gradient})`}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeDasharray="20 30"
+        style={dash}
+      />
     </svg>
   );
 }

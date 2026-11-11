@@ -181,9 +181,13 @@ export function historyView(
       ) || cmp(a.manager, b.manager),
   );
 
-  const roles: HistoryRole[] = [...new Set(reps.map((r) => r.role))]
-    .sort(cmp)
-    .map((role) => ({ role, rates: ratesOver(reps.filter((r) => r.role === role), months.length) }));
+  const roles: HistoryRole[] = [...new Set(reps.map((r) => r.role))].sort(cmp).map((role) => ({
+    role,
+    rates: ratesOver(
+      reps.filter((r) => r.role === role),
+      months.length,
+    ),
+  }));
 
   return { months, hasSnapshot: true, teams, roles, totals: ratesOver(reps, months.length), seriesLinks: SERIES_LINKS };
 }

@@ -14,11 +14,7 @@ export const RATING_TEXT_TONES: Record<VideoFeedbackRating, string> = {
   down: "text-orange-500",
 };
 
-export function RatingFace({
-  rating,
-  className,
-  ...props
-}: { rating: VideoFeedbackRating } & React.ComponentProps<"svg">) {
+export function RatingFace({ rating, className, ...props }: { rating: VideoFeedbackRating } & React.ComponentProps<"svg">) {
   const Face = rating === "up" ? Smile : Annoyed;
   return <Face className={cn(className)} {...props} />;
 }

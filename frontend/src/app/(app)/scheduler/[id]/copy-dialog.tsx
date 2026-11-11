@@ -129,7 +129,12 @@ export function CopyDialog({
 
             {sessionCount > 0 && (
               <label className="flex items-start gap-2.5 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-sm dark:border-amber-800/60 dark:bg-amber-950/30">
-                <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} className="mt-0.5 size-4 accent-brand" />
+                <input
+                  type="checkbox"
+                  checked={replace}
+                  onChange={(e) => setReplace(e.target.checked)}
+                  className="mt-0.5 size-4 accent-brand"
+                />
                 <span>
                   Replace its {sessionCount} session{sessionCount === 1 ? "" : "s"}, and their comments; its checklists are kept
                 </span>

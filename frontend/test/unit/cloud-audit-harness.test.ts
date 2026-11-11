@@ -122,21 +122,30 @@ describe("classification", () => {
     process.env.HARNESS_INFRA_ORGS = "shared";
     serve([[org("shared"), org("default", { harnessManaged: true })]]);
     const a = await audit(ownerMaps({ harness: { shared: owner("r1"), default: owner("r2") } }));
-    assert.deepEqual(a.resources.map((x) => x.classification), ["tracked", "tracked"]);
+    assert.deepEqual(
+      a.resources.map((x) => x.classification),
+      ["tracked", "tracked"],
+    );
   });
 
   test("a tag with a different value is not ours", async () => {
     configure();
     serve([[org("x", { tags: { managed_by: "terraform" } }), org("y", { tags: null })]]);
     const a = await audit();
-    assert.deepEqual(a.resources.map((x) => x.classification), ["unmanaged", "unmanaged"]);
+    assert.deepEqual(
+      a.resources.map((x) => x.classification),
+      ["unmanaged", "unmanaged"],
+    );
   });
 
   test("entries without an identifier are skipped", async () => {
     configure();
     serve([[{}, { organization: {} }, org("real")]]);
     const a = await audit();
-    assert.deepEqual(a.resources.map((x) => x.id), ["real"]);
+    assert.deepEqual(
+      a.resources.map((x) => x.id),
+      ["real"],
+    );
   });
 });
 
@@ -159,7 +168,10 @@ describe("paging", () => {
     configure();
     serve([[org("a")], [org("b")], [org("c")]]);
     const a = await audit();
-    assert.deepEqual(a.resources.map((x) => x.id), ["a", "b", "c"]);
+    assert.deepEqual(
+      a.resources.map((x) => x.id),
+      ["a", "b", "c"],
+    );
     const pages = fake.calls
       .filter((c) => c.url.includes("/ng/api/organizations"))
       .map((c) => new URL(c.url).searchParams.get("pageIndex"));
@@ -177,7 +189,10 @@ describe("paging", () => {
       return undefined;
     };
     const a = await audit();
-    assert.deepEqual(a.resources.map((x) => x.id), ["a"]);
+    assert.deepEqual(
+      a.resources.map((x) => x.id),
+      ["a"],
+    );
     assert.equal(fake.calls.filter((c) => c.url.includes("/organizations")).length, 2);
   });
 
@@ -198,10 +213,7 @@ describe("presentation", () => {
     configure();
     serve([[org("wo run/1", { name: "Summit" })]]);
     const a = await audit();
-    assert.equal(
-      a.resources[0]!.url,
-      `${BASE}/ng/account/acct123/settings/organizations/wo%20run%2F1/details`,
-    );
+    assert.equal(a.resources[0]!.url, `${BASE}/ng/account/acct123/settings/organizations/wo%20run%2F1/details`);
     assert.equal(a.resources[0]!.name, "Summit");
     assert.deepEqual(a.scope, {
       label: "Harness account",

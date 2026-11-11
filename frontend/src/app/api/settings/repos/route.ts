@@ -29,10 +29,7 @@ export const POST = audited(async function POST(req: Request) {
 
   const result = await addRepo(user.id, body);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
   return NextResponse.json({ ok: true }, { status: 201 });
 });

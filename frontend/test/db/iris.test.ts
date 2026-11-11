@@ -22,16 +22,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { irisAttempts, irisItemReviews, irisResponses } from "@/db/schema";
-import {
-  answer,
-  myIris,
-  openSitting,
-  setTrack,
-  shuffledOrder,
-  sittingModes,
-  startSitting,
-  type SittingView,
-} from "@/lib/iris/attempts";
+import { answer, myIris, openSitting, setTrack, shuffledOrder, sittingModes, startSitting, type SittingView } from "@/lib/iris/attempts";
 import { clearResults, cohortSummary, personDetail, resetSitting } from "@/lib/iris/cohort";
 import { listParticipants } from "@/lib/iris/participants";
 import { IDK } from "@/lib/iris/engine";
@@ -141,7 +132,10 @@ describe("a live sitting", () => {
     const { itemId, order } = await onScreen(start.sitting.attemptId);
     const item = ITEMS_BY_ID.get(itemId)!;
     assert.deepEqual([...order].sort(), [0, 1, 2, 3]);
-    assert.deepEqual(start.sitting.question.options, order.map((i) => item.options[i]));
+    assert.deepEqual(
+      start.sitting.question.options,
+      order.map((i) => item.options[i]),
+    );
     // Answer the key by where it sits on screen.
     const res = await answer(shuffler.id, start.sitting.attemptId, 1, order.indexOf(item.answer));
     assert.ok(res.ok);
@@ -198,7 +192,7 @@ describe("a live sitting", () => {
     assert.deepEqual(await answer(taker.id, row!.id, row!.questions + 1, 0), { ok: false, error: "finished" });
   });
 
-  test("\"I don't know\" every time places Beginner", async () => {
+  test('"I don\'t know" every time places Beginner', async () => {
     const shrug = await scope.createUser("shrug", PERSONAS.participant);
     await setTrack(shrug.id, "AE");
     const start = await startSitting(shrug.id, "sdlc", "A", "live");
@@ -226,9 +220,7 @@ describe("a group answering at once", () => {
     );
     const began = Date.now();
     for (let round = 0; round < 3; round++) {
-      const results = await Promise.all(
-        takers.map(({ t, sitting }) => answer(t.id, sitting.attemptId, sitting.number, IDK)),
-      );
+      const results = await Promise.all(takers.map(({ t, sitting }) => answer(t.id, sitting.attemptId, sitting.number, IDK)));
       results.forEach((res, i) => {
         assert.ok(res.ok && !res.done, JSON.stringify(res));
         takers[i]!.sitting = res.sitting;
@@ -297,7 +289,10 @@ describe("what administrators read back", () => {
     assert.ok(detail);
     const sitting = detail!.sittings.find((s) => s.subject === "sdlc")!;
     assert.equal(sitting.answers.length, sitting.questions);
-    assert.deepEqual(sitting.answers.map((a) => a.seq), sitting.answers.map((_, i) => i + 1));
+    assert.deepEqual(
+      sitting.answers.map((a) => a.seq),
+      sitting.answers.map((_, i) => i + 1),
+    );
     assert.ok(sitting.answers.every((a) => a.correct && a.chosen && a.stem));
   });
 

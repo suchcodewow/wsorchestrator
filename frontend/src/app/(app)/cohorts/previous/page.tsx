@@ -23,12 +23,6 @@ export default async function PreviousCohortsPage({
     Promise.all(parseOpen(params[OPEN_PARAM]).map((date) => getSessionDetail(date, { bootcamp: 1, intermediate: 1 }))),
   ]);
   return (
-    <PreviousView
-      query={query}
-      page={page}
-      total={summary.sessions}
-      first={summary.first}
-      opened={opened.filter((d) => d !== null)}
-    />
+    <PreviousView query={query} page={page} total={summary.sessions} first={summary.first} opened={opened.filter((d) => d !== null)} />
   );
 }

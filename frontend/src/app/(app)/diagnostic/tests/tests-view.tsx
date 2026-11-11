@@ -43,8 +43,8 @@ export function TestsView({ mine, selfId }: { mine: MyIris; selfId: string | nul
         <div className="space-y-1">
           <p className="font-medium">Complete these assessments on your own!</p>
           <p className="text-muted-foreground">
-            These assessments have one goal: assign prework that helps you the most right now. If you use AI or a search engine to
-            answer questions, you could miss foundational concepts that are required to be successful during in-person sessions.
+            These assessments have one goal: assign prework that helps you the most right now. If you use AI or a search engine to answer
+            questions, you could miss foundational concepts that are required to be successful during in-person sessions.
           </p>
         </div>
       </motion.div>
@@ -78,15 +78,7 @@ export function TestsView({ mine, selfId }: { mine: MyIris; selfId: string | nul
   );
 }
 
-function SubjectAction({
-  subject,
-  status,
-  selfId,
-}: {
-  subject: string;
-  status: SubjectStatus;
-  selfId: string | null;
-}) {
+function SubjectAction({ subject, status, selfId }: { subject: string; status: SubjectStatus; selfId: string | null }) {
   if (status === "completed") {
     return <span className="text-muted-foreground">Done</span>;
   }
@@ -94,10 +86,7 @@ function SubjectAction({
     // An administrator can do something about it: approve the subject's questions.
     if (selfId) {
       return (
-        <Link
-          href={`/diagnostic-settings/questions?subject=${subject}`}
-          className="text-right text-muted-foreground hover:underline"
-        >
+        <Link href={`/diagnostic-settings/questions?subject=${subject}`} className="text-right text-muted-foreground hover:underline">
           Not open yet
           <span className="block text-xs">Too few approved questions</span>
         </Link>
@@ -146,27 +135,19 @@ function StartButton({ subject }: { subject: string }) {
           </DialogHeader>
           <DialogDescription asChild>
             <div className="space-y-3 text-sm text-foreground">
+              <p>This test is not looking for a high score. It finds where you are today, and that decides the training path you get.</p>
               <p>
-                This test is not looking for a high score. It finds where you are today, and that decides the training path you
-                get.
+                Please do not use AI, a search engine or anyone else to answer these questions. A score you got with help puts you on a
+                harder path than you&apos;re ready for. Cheating only hurts you.
               </p>
               <p>
-                Please do not use AI, a search engine or anyone else to answer these questions. A score you got with help puts you
-                on a harder path than you&apos;re ready for. Cheating only hurts you.
-              </p>
-              <p>
-                Every question has an &ldquo;I don&apos;t know&rdquo; option on purpose. Choosing it is completely fine, and it
-                helps match your path to what you actually know.
+                Every question has an &ldquo;I don&apos;t know&rdquo; option on purpose. Choosing it is completely fine, and it helps match
+                your path to what you actually know.
               </p>
             </div>
           </DialogDescription>
           <label className="flex items-start gap-2.5 rounded-lg border border-brand/30 bg-brand-subtle/40 px-3 py-2.5 text-sm">
-            <input
-              type="checkbox"
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-              className="mt-0.5 size-4 accent-brand"
-            />
+            <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 size-4 accent-brand" />
             <span>I acknowledge that I will answer on my own, without AI or other help.</span>
           </label>
           <DialogFooter>

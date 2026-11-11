@@ -14,16 +14,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default:
-          "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
-        brand:
-          "bg-brand text-brand-foreground shadow-xs hover:bg-brand/90 focus-visible:ring-brand/40",
-        destructive:
-          "bg-destructive text-white shadow-xs hover:bg-destructive/90",
-        outline:
-          "border border-input bg-background shadow-xs hover:bg-accent hover:text-accent-foreground",
-        secondary:
-          "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
+        default: "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
+        brand: "bg-brand text-brand-foreground shadow-xs hover:bg-brand/90 focus-visible:ring-brand/40",
+        destructive: "bg-destructive text-white shadow-xs hover:bg-destructive/90",
+        outline: "border border-input bg-background shadow-xs hover:bg-accent hover:text-accent-foreground",
+        secondary: "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
@@ -47,14 +42,7 @@ type ButtonProps = React.ComponentProps<"button"> &
     animate?: boolean;
   };
 
-function Button({
-  className,
-  variant,
-  size,
-  asChild = false,
-  animate = true,
-  ...props
-}: ButtonProps) {
+function Button({ className, variant, size, asChild = false, animate = true, ...props }: ButtonProps) {
   const classes = cn(buttonVariants({ variant, size, className }));
 
   if (asChild) {
@@ -66,12 +54,7 @@ function Button({
   }
 
   return (
-    <motion.button
-      data-slot="button"
-      className={classes}
-      {...INTERACTIVE}
-      {...(props as React.ComponentProps<typeof motion.button>)}
-    />
+    <motion.button data-slot="button" className={classes} {...INTERACTIVE} {...(props as React.ComponentProps<typeof motion.button>)} />
   );
 }
 

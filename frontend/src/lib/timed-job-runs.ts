@@ -63,7 +63,10 @@ export const TIMED_JOB_RUNS: Record<string, TimedJobRun> = {
     async run({ deadline }) {
       const result = await runMeetingSync("schedule", null, deadline);
       if (!result.ok) {
-        return NextResponse.json({ error: result.error, detail: result.detail, runId: result.runId }, { status: SYNC_STATUS_FOR[result.error] });
+        return NextResponse.json(
+          { error: result.error, detail: result.detail, runId: result.runId },
+          { status: SYNC_STATUS_FOR[result.error] },
+        );
       }
       return NextResponse.json(result);
     },
@@ -79,7 +82,10 @@ export const TIMED_JOB_RUNS: Record<string, TimedJobRun> = {
     async run({ appUrl, deadline }) {
       const result = await runDiagnosticReminders("schedule", null, deadline, { appUrl });
       if (!result.ok) {
-        return NextResponse.json({ error: result.error, detail: result.detail, runId: result.runId }, { status: REMINDER_STATUS_FOR[result.error] });
+        return NextResponse.json(
+          { error: result.error, detail: result.detail, runId: result.runId },
+          { status: REMINDER_STATUS_FOR[result.error] },
+        );
       }
       if (result.status === "skipped") return NextResponse.json({ skipped: result.note ?? "Nothing was due", runId: result.runId });
       return NextResponse.json(result);

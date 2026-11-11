@@ -19,14 +19,7 @@ import assert from "node:assert/strict";
 
 import { pool } from "@/db";
 import { LAB_IMAGE_LIMITS, LAB_IMAGE_MIME_TYPES } from "@/db/schema";
-import {
-  deleteLabImage,
-  getLabImageData,
-  missingLabImages,
-  renameLabImage,
-  sniffImageType,
-  uploadLabImage,
-} from "@/lib/lab-images";
+import { deleteLabImage, getLabImageData, missingLabImages, renameLabImage, sniffImageType, uploadLabImage } from "@/lib/lab-images";
 
 const p = pool as unknown as Record<string, unknown>;
 const saved = { connect: p.connect, query: p.query };

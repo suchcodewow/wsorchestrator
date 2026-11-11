@@ -9,20 +9,13 @@ import { listSiteUsers } from "@/lib/site-users";
 import { testAccountsAllowed } from "@/lib/test-accounts";
 import { UsersTable } from "./users-table";
 
-export default async function UsersPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function UsersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   if (!canManageUsers(session.user.access)) notFound();
 
   const query = parseListQuery(await searchParams, USER_LIST);
-  const [page, pendingAdmins] = await Promise.all([
-    listSiteUsers(query),
-    pendingBootstrapAdmins(),
-  ]);
+  const [page, pendingAdmins] = await Promise.all([listSiteUsers(query), pendingBootstrapAdmins()]);
 
   return (
     <UsersTable

@@ -17,37 +17,15 @@
  * honour that; Firefox and Safari still offer their full-screen button.
  */
 
-import {
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ComponentProps,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, MessageSquarePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  RATING_LABELS,
-  RATING_TEXT_TONES,
-  RatingFace,
-} from "@/components/rating-face";
+import { RATING_LABELS, RATING_TEXT_TONES, RatingFace } from "@/components/rating-face";
 import { FeedbackSlotContext } from "@/components/video-player-dialog";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  VIDEO_FEEDBACK_LIMITS,
-  type VideoFeedbackKind,
-  type VideoFeedbackRating,
-} from "@/db/schema";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { VIDEO_FEEDBACK_LIMITS, type VideoFeedbackKind, type VideoFeedbackRating } from "@/db/schema";
 import { anchorFloating } from "@/lib/floating";
 import type { VideoLanguage } from "@/lib/mimir/map/schema";
 import { formatDuration } from "@/lib/recording/format";
@@ -70,12 +48,7 @@ type Composing = {
   anchor: HTMLElement;
 };
 
-async function sendFeedback(
-  target: FeedbackTarget,
-  rating: VideoFeedbackRating,
-  position: number,
-  comment?: string,
-) {
+async function sendFeedback(target: FeedbackTarget, rating: VideoFeedbackRating, position: number, comment?: string) {
   try {
     const res = await fetch("/api/video-feedback", {
       method: "POST",
@@ -122,15 +95,7 @@ export function VideoWithFeedback({
   );
 }
 
-function FeedbackBar({
-  video,
-  target,
-  start,
-}: {
-  video: RefObject<HTMLVideoElement | null>;
-  target: FeedbackTarget;
-  start?: ReactNode;
-}) {
+function FeedbackBar({ video, target, start }: { video: RefObject<HTMLVideoElement | null>; target: FeedbackTarget; start?: ReactNode }) {
   const [sending, setSending] = useState<VideoFeedbackRating | null>(null);
   const [saved, setSaved] = useState<VideoFeedbackRating | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -173,55 +138,31 @@ function FeedbackBar({
 
   const slot = useContext(FeedbackSlotContext);
   const controls = (
-    <div
-      className={cn(
-        "flex items-center gap-2",
-        !slot && "absolute top-3 right-3 z-10",
-      )}
-    >
+    <div className={cn("flex items-center gap-2", !slot && "absolute top-3 right-3 z-10")}>
       {start}
       {(error || saved) && (
-        <span
-          role="status"
-          className={cn(
-            "rounded-full bg-black/65 px-2.5 py-1 text-xs text-white",
-            error && "text-red-300",
-          )}
-        >
+        <span role="status" className={cn("rounded-full bg-black/65 px-2.5 py-1 text-xs text-white", error && "text-red-300")}>
           {error ?? "Thanks for the feedback!"}
         </span>
       )}
       <div className="flex items-center gap-4">
         {(["up", "down"] as const).map((rating) => {
-          const tone =
-            rating === "up"
-              ? "bg-green-600 hover:bg-green-500"
-              : "bg-orange-500 hover:bg-orange-400";
+          const tone = rating === "up" ? "bg-green-600 hover:bg-green-500" : "bg-orange-500 hover:bg-orange-400";
           return (
             <div key={rating} className="flex items-center">
               <OverlayButton
                 label={RATING_LABELS[rating]}
                 disabled={sending === rating}
                 active={saved === rating}
-                className={cn(
-                  "relative z-10 size-9 rounded-full shadow-md ring-2 ring-background",
-                  tone,
-                )}
+                className={cn("relative z-10 size-9 rounded-full shadow-md ring-2 ring-background", tone)}
                 onClick={() => void rate(rating)}
               >
-                {sending === rating ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <RatingFace rating={rating} />
-                )}
+                {sending === rating ? <Loader2 className="animate-spin" /> : <RatingFace rating={rating} />}
               </OverlayButton>
               <OverlayButton
                 label={`${RATING_LABELS[rating]}, with a comment`}
                 active={composing?.rating === rating}
-                className={cn(
-                  "-ml-3 h-7 w-10 rounded-md pl-3 brightness-90",
-                  tone,
-                )}
+                className={cn("-ml-3 h-7 w-10 rounded-md pl-3 brightness-90", tone)}
                 onClick={(e) => comment(rating, e.currentTarget)}
               >
                 <MessageSquarePlus />
@@ -236,14 +177,7 @@ function FeedbackBar({
   return (
     <TooltipProvider>
       {slot ? createPortal(controls, slot) : controls}
-      {composing && (
-        <CommentBox
-          key={`${composing.rating}-${composing.position}`}
-          target={target}
-          composing={composing}
-          onClose={close}
-        />
-      )}
+      {composing && <CommentBox key={`${composing.rating}-${composing.position}`} target={target} composing={composing} onClose={close} />}
     </TooltipProvider>
   );
 }
@@ -326,20 +260,14 @@ function CommentBox({
       latestClose.current(null);
     };
     window.addEventListener("keydown", onKey, { capture: true });
-    return () =>
-      window.removeEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, []);
 
   async function save() {
     if (!text.trim() || saving) return;
     setSaving(true);
     setError(null);
-    const failed = await sendFeedback(
-      target,
-      composing.rating,
-      composing.position,
-      text,
-    );
+    const failed = await sendFeedback(target, composing.rating, composing.position, text);
     setSaving(false);
     if (failed) setError(failed);
     else onClose(composing.rating);
@@ -357,14 +285,8 @@ function CommentBox({
       }}
     >
       <p className="flex items-center gap-1.5 font-medium">
-        <RatingFace
-          rating={composing.rating}
-          className={cn("size-3.5", RATING_TEXT_TONES[composing.rating])}
-        />
-        {RATING_LABELS[composing.rating]} at{" "}
-        <span className="tabular-nums">
-          {formatDuration(composing.position * 1000)}
-        </span>
+        <RatingFace rating={composing.rating} className={cn("size-3.5", RATING_TEXT_TONES[composing.rating])} />
+        {RATING_LABELS[composing.rating]} at <span className="tabular-nums">{formatDuration(composing.position * 1000)}</span>
       </p>
       <Textarea
         autoFocus
@@ -386,12 +308,7 @@ function CommentBox({
         </p>
       )}
       <div className="flex justify-end gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => onClose(null)}
-        >
+        <Button type="button" variant="ghost" size="sm" onClick={() => onClose(null)}>
           Cancel
         </Button>
         <Button type="submit" size="sm" disabled={!text.trim() || saving}>

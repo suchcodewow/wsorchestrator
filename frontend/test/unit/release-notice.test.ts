@@ -16,7 +16,10 @@ describe("releaseNoticeText", () => {
   });
 
   test("filters an INT release's link to Intermediate", () => {
-    assert.match(releaseNoticeText("intermediate", "2026-11-17", url), /<https:\/\/harnessevents\.io\/reporting\/bootcamp\?cohort\.stage=intermediate\|Click here>/);
+    assert.match(
+      releaseNoticeText("intermediate", "2026-11-17", url),
+      /<https:\/\/harnessevents\.io\/reporting\/bootcamp\?cohort\.stage=intermediate\|Click here>/,
+    );
   });
 
   test("says Intermediate for an INT release", () => {
@@ -30,10 +33,12 @@ describe("releaseNoticeText", () => {
 
 describe("releaseNoticeRecipients", () => {
   test("is everyone in every chain, each once, in the order first met", () => {
-    assert.deepEqual(
-      releaseNoticeRecipients(["m1@x.io;d1@x.io;cro@x.io", "m2@x.io;d1@x.io;cro@x.io", "M1@x.io ; cro@x.io"]),
-      ["m1@x.io", "d1@x.io", "cro@x.io", "m2@x.io"],
-    );
+    assert.deepEqual(releaseNoticeRecipients(["m1@x.io;d1@x.io;cro@x.io", "m2@x.io;d1@x.io;cro@x.io", "M1@x.io ; cro@x.io"]), [
+      "m1@x.io",
+      "d1@x.io",
+      "cro@x.io",
+      "m2@x.io",
+    ]);
   });
 
   test("adds the Additional Slack Contacts after the chains, once each", () => {

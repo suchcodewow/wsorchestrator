@@ -261,10 +261,7 @@ async function completeIfActive(tx: Pick<typeof db, "update">, id: string): Prom
     .where(and(eq(bootcamps.id, id), eq(bootcamps.status, "active")));
 }
 
-export async function createBootcamp(
-  actorId: string,
-  input: BootcampInput,
-): Promise<{ ok: true; id: string } | BootcampFailure> {
+export async function createBootcamp(actorId: string, input: BootcampInput): Promise<{ ok: true; id: string } | BootcampFailure> {
   const { judges: emails, completeActive, ...fields } = input;
   const judges = await judgesFor(emails);
   if (!judges.ok) return judges;
@@ -293,11 +290,7 @@ export async function createBootcamp(
   }
 }
 
-export async function updateBootcamp(
-  actorId: string,
-  id: string,
-  patch: BootcampPatch,
-): Promise<{ ok: true } | BootcampFailure> {
+export async function updateBootcamp(actorId: string, id: string, patch: BootcampPatch): Promise<{ ok: true } | BootcampFailure> {
   const [before] = await db.select().from(bootcamps).where(eq(bootcamps.id, id));
   if (!before) return { ok: false, error: "not_found" };
   noteAudit({ target: id, targetLabel: `Bootcamp starting ${patch.startDate ?? before.startDate}` });
@@ -343,10 +336,7 @@ export async function deleteBootcamp(id: string): Promise<{ ok: true } | { ok: f
   if (scored || recorded) return { ok: false, error: "has_scores" };
   let deleted: { id: string; startDate: string }[];
   try {
-    deleted = await db
-      .delete(bootcamps)
-      .where(eq(bootcamps.id, id))
-      .returning({ id: bootcamps.id, startDate: bootcamps.startDate });
+    deleted = await db.delete(bootcamps).where(eq(bootcamps.id, id)).returning({ id: bootcamps.id, startDate: bootcamps.startDate });
   } catch (err) {
     // Scored or recorded in between: the foreign key refuses it.
     if (isForeignKeyViolation(err)) return { ok: false, error: "has_scores" };

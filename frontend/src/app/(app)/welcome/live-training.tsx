@@ -125,10 +125,7 @@ export function LiveTrainingSteps({ training, assessments, feedback }: LiveTrain
                   </span>
                 </span>
                 <span className="block h-1 overflow-hidden rounded-full bg-muted">
-                  <span
-                    className="block h-full rounded-full bg-brand/70"
-                    style={{ width: `${total > 0 ? (scored / total) * 100 : 0}%` }}
-                  />
+                  <span className="block h-full rounded-full bg-brand/70" style={{ width: `${total > 0 ? (scored / total) * 100 : 0}%` }} />
                 </span>
               </li>
             );
@@ -151,9 +148,7 @@ export function LiveTrainingSteps({ training, assessments, feedback }: LiveTrain
               {at ? (
                 <>
                   <Ticked>{STAGE_LABELS[stage]} released</Ticked>
-                  <span className="ml-auto font-mono text-[10px] text-muted-foreground tabular-nums">
-                    {formatDate(at.slice(0, 10))}
-                  </span>
+                  <span className="ml-auto font-mono text-[10px] text-muted-foreground tabular-nums">{formatDate(at.slice(0, 10))}</span>
                 </>
               ) : (
                 <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -189,9 +184,7 @@ export function LiveTrainingSteps({ training, assessments, feedback }: LiveTrain
               <span className="relative z-10 flex size-6 shrink-0 items-center justify-center">
                 <span className="size-3 rounded-full border-2 border-brand bg-brand shadow-[0_0_0_4px_var(--background)]" />
               </span>
-              <span className="hidden font-mono text-[11px] tracking-wider text-muted-foreground uppercase xl:inline">
-                Step {i + 1}
-              </span>
+              <span className="hidden font-mono text-[11px] tracking-wider text-muted-foreground uppercase xl:inline">Step {i + 1}</span>
               <span
                 aria-hidden
                 className={cn(

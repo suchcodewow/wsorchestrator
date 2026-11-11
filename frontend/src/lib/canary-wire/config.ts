@@ -86,5 +86,4 @@ export const INCLUDE_USER_STATES = ["ACTIVE", "ADDED"];
  * off: they address a spot inside the module and appear in no API.
  * An empty string turns every link off.
  */
-export const MODULE_URL_TEMPLATE =
-  "https://flightdeck.harness.io/new/ui/learner/{module_type}/{module_id}/consume?series={series_id}";
+export const MODULE_URL_TEMPLATE = "https://flightdeck.harness.io/new/ui/learner/{module_type}/{module_id}/consume?series={series_id}";

@@ -36,10 +36,7 @@ export async function GET() {
 
   const result = await listBackups();
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] ?? 502 },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] ?? 502 });
   }
 
   return NextResponse.json({ backups: result.backups });
@@ -58,15 +55,11 @@ export const POST = audited(async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  const description =
-    parsed.data.description || `On demand — ${user.email ?? user.id}`;
+  const description = parsed.data.description || `On demand — ${user.email ?? user.id}`;
 
   const result = await createBackup(description);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] ?? 502 },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] ?? 502 });
   }
 
   auditBackupAction({

@@ -77,7 +77,11 @@ function transcript(video: string): string {
 }
 
 function seconds(file: string): number {
-  return Math.round(parseFloat(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file]).toString()) * 10) / 10;
+  return (
+    Math.round(
+      parseFloat(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file]).toString()) * 10,
+    ) / 10
+  );
 }
 
 const videoFor = new Map<number, string>();
@@ -95,7 +99,13 @@ const concepts = data.concepts.map((c) => {
     explanation: c.explanation,
     ...(extras.requires?.[c.id]?.length ? { requires: extras.requires[c.id] } : {}),
     ...(video && existsSync(join(scriptsDir, video))
-      ? { video: { object: `${VIDEO_PREFIX}${video}.mp4`, seconds: seconds(join(videosDir, `${video}.mp4`)), transcript: transcript(video) } }
+      ? {
+          video: {
+            object: `${VIDEO_PREFIX}${video}.mp4`,
+            seconds: seconds(join(videosDir, `${video}.mp4`)),
+            transcript: transcript(video),
+          },
+        }
       : {}),
   };
 });
@@ -103,7 +113,8 @@ const concepts = data.concepts.map((c) => {
 // The groups' order is the course's; it should agree with the data's own study order.
 const order = extras.groups.flatMap((g) => g.concepts);
 const expected = [...data.concepts].sort((a, b) => a.study_order - b.study_order).map((c) => c.id);
-if (order.join() !== expected.join()) console.error("Warning: the groups' order differs from the concept data's study order. The groups win.");
+if (order.join() !== expected.join())
+  console.error("Warning: the groups' order differs from the concept data's study order. The groups win.");
 
 const content = {
   version: 1,

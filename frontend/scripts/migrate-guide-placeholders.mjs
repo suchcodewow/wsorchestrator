@@ -22,23 +22,9 @@
 import { writeFileSync } from "node:fs";
 import { Client } from "pg";
 
-const NAMES = [
-  "project",
-  "org",
-  "account",
-  "projectUrl",
-  "orgUrl",
-  "email",
-  "workshop",
-  "gcpProject",
-  "awsAccount",
-  "awsRegion",
-];
+const NAMES = ["project", "org", "account", "projectUrl", "orgUrl", "email", "workshop", "gcpProject", "awsAccount", "awsRegion"];
 
-const PLACEHOLDER = new RegExp(
-  `\\?(${[...NAMES].sort((a, b) => b.length - a.length).join("|")})(?![A-Za-z0-9_])`,
-  "g",
-);
+const PLACEHOLDER = new RegExp(`\\?(${[...NAMES].sort((a, b) => b.length - a.length).join("|")})(?![A-Za-z0-9_])`, "g");
 
 /** Anything `?word`-shaped, so what is left behind can be reported. */
 const ANY_TOKEN = /\?[A-Za-z][A-Za-z0-9_]*/g;
@@ -50,25 +36,19 @@ const TARGETS = [
 
 const apply = process.argv.includes("--apply");
 
-const context = (text, index, length) =>
-  text
-    .slice(Math.max(0, index - 40), index + length + 30)
-    .replace(/\n/g, "⏎");
+const context = (text, index, length) => text.slice(Math.max(0, index - 40), index + length + 30).replace(/\n/g, "⏎");
 
 const client = new Client({ connectionString: process.env.DATABASE_URL });
 await client.connect();
 
-const database = (await client.query("select current_database() as name"))
-  .rows[0].name;
+const database = (await client.query("select current_database() as name")).rows[0].name;
 console.log(`${apply ? "APPLY" : "DRY RUN"} against ${database}\n`);
 
 const changes = [];
 const leftAlone = new Map();
 
 for (const { table, fields } of TARGETS) {
-  const { rows } = await client.query(
-    `select id, slug, ${fields.join(", ")} from ${table} order by slug`,
-  );
+  const { rows } = await client.query(`select id, slug, ${fields.join(", ")} from ${table} order by slug`);
 
   for (const row of rows) {
     const updates = {};
@@ -83,14 +63,12 @@ for (const { table, fields } of TARGETS) {
         const key = m[0];
         const seen = leftAlone.get(key) ?? { count: 0, where: [] };
         seen.count += 1;
-        if (seen.where.length < 3)
-          seen.where.push(`${table}/${row.slug} [${field}] …${context(after, m.index, m[0].length)}…`);
+        if (seen.where.length < 3) seen.where.push(`${table}/${row.slug} [${field}] …${context(after, m.index, m[0].length)}…`);
         leftAlone.set(key, seen);
       }
     }
 
-    if (Object.keys(updates).length > 0)
-      changes.push({ table, id: row.id, slug: row.slug, updates });
+    if (Object.keys(updates).length > 0) changes.push({ table, id: row.id, slug: row.slug, updates });
   }
 }
 
@@ -104,8 +82,7 @@ if (changes.length === 0) {
       const hits = [...before.matchAll(PLACEHOLDER)];
       total += hits.length;
       console.log(`  [${field}] ${hits.length} placeholder${hits.length === 1 ? "" : "s"}`);
-      for (const m of hits.slice(0, 8))
-        console.log(`     ${m[0]} → {{${m[1]}}}   …${context(before, m.index, m[0].length)}…`);
+      for (const m of hits.slice(0, 8)) console.log(`     ${m[0]} → {{${m[1]}}}   …${context(before, m.index, m[0].length)}…`);
       if (hits.length > 8) console.log(`     …and ${hits.length - 8} more`);
       void after;
     }
@@ -124,10 +101,7 @@ if (leftAlone.size > 0) {
 if (apply && changes.length > 0) {
   // The old text, in full, before a single row is touched.
   const backup = `/tmp/guide-placeholders-backup-${Date.now()}.json`;
-  writeFileSync(
-    backup,
-    JSON.stringify({ database, when: new Date().toISOString(), changes }, null, 2),
-  );
+  writeFileSync(backup, JSON.stringify({ database, when: new Date().toISOString(), changes }, null, 2));
   console.log(`\nBackup of the previous text: ${backup}`);
 
   await client.query("begin");
@@ -136,10 +110,7 @@ if (apply && changes.length > 0) {
       const fields = Object.keys(change.updates);
       const sets = fields.map((field, i) => `${field} = $${i + 2}`).join(", ");
       const values = fields.map((field) => change.updates[field].after);
-      await client.query(
-        `update ${change.table} set ${sets} where id = $1`,
-        [change.id, ...values],
-      );
+      await client.query(`update ${change.table} set ${sets} where id = $1`, [change.id, ...values]);
     }
     await client.query("commit");
     console.log(`Committed ${changes.length} row update(s).`);
@@ -150,13 +121,9 @@ if (apply && changes.length > 0) {
 
   // Read back, rather than trusting the write.
   for (const { table, fields } of TARGETS) {
-    const { rows } = await client.query(
-      `select slug, ${fields.join(", ")} from ${table}`,
-    );
+    const { rows } = await client.query(`select slug, ${fields.join(", ")} from ${table}`);
     const remaining = rows.flatMap((row) =>
-      fields.flatMap((field) =>
-        [...(row[field] ?? "").matchAll(PLACEHOLDER)].map(() => `${table}/${row.slug}.${field}`),
-      ),
+      fields.flatMap((field) => [...(row[field] ?? "").matchAll(PLACEHOLDER)].map(() => `${table}/${row.slug}.${field}`)),
     );
     console.log(
       `${table}: ${remaining.length === 0 ? "no `?name` placeholders remain" : `STILL PRESENT in ${[...new Set(remaining)].join(", ")}`}`,

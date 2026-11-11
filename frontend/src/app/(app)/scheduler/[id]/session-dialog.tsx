@@ -57,8 +57,7 @@ import { confirmDialog, noticeDialog } from "@/components/ui/confirm";
 
 export type SessionTarget =
   /** `start` is the unscheduled time it was added in; without one it goes after the last session of the day. */
-  | { mode: "new"; track: ScheduleTrack; day: number; start?: number }
-  | { mode: "edit"; session: SessionRow };
+  { mode: "new"; track: ScheduleTrack; day: number; start?: number } | { mode: "edit"; session: SessionRow };
 
 const ERRORS: Record<string, string> = {
   invalid: "Give it a name, and a length in whole quarter hours.",
@@ -194,7 +193,11 @@ export function SessionDialog({
   const taughtBeside = useMemo(
     () =>
       where
-        ? audienceClashes(placed, { track: where.track, kind: look.kind, audience }, { day: where.day, start: where.start, end: where.start + look.minutes, excludeId: existing?.id })
+        ? audienceClashes(
+            placed,
+            { track: where.track, kind: look.kind, audience },
+            { day: where.day, start: where.start, end: where.start + look.minutes, excludeId: existing?.id },
+          )
         : [],
     [placed, where, look.kind, look.minutes, audience, existing?.id],
   );
@@ -213,7 +216,9 @@ export function SessionDialog({
   const pool: PoolPerson[] = [
     ...instructors,
     // Someone kept on the session who is no longer an instructor of this bootcamp.
-    ...staff.filter((p) => !instructors.some((i) => i.email === p.email)).map((p) => ({ email: p.email, fullName: p.fullName, role: "former" as const })),
+    ...staff
+      .filter((p) => !instructors.some((i) => i.email === p.email))
+      .map((p) => ({ email: p.email, fullName: p.fullName, role: "former" as const })),
   ];
 
   const toggle = (p: { email: string; fullName: string }) => {
@@ -267,7 +272,10 @@ export function SessionDialog({
         typeId,
         roomId: look.kind === "main" ? roomId : null,
         assessmentId: look.kind === "breakout" ? assessmentId : null,
-        staff: look.kind === "unstructured" ? [] : staff.map((s) => ({ email: s.email, leader: s.leader, roomId: look.kind === "breakout" ? s.roomId : null })),
+        staff:
+          look.kind === "unstructured"
+            ? []
+            : staff.map((s) => ({ email: s.email, leader: s.leader, roomId: look.kind === "breakout" ? s.roomId : null })),
       };
       const res = await fetch(
         existing ? `/api/scheduler/bootcamps/${bootcampId}/sessions/${existing.id}` : `/api/scheduler/bootcamps/${bootcampId}/sessions`,
@@ -283,7 +291,8 @@ export function SessionDialog({
           setClashes(out.clashes ?? []);
           return setError("Someone or a room you added is busy then.");
         }
-        if (out?.error === "not_instructor") return setError(`${out.email} is not a Training administrator or a guest judge of this bootcamp.`);
+        if (out?.error === "not_instructor")
+          return setError(`${out.email} is not a Training administrator or a guest judge of this bootcamp.`);
         return setError(ERRORS[out?.error ?? ""] ?? `Could not save (${res.status}).`);
       }
       const grouped = look.kind === "breakout" && groups ? await saveGroups(out.id, groups) : null;
@@ -310,7 +319,9 @@ export function SessionDialog({
     const res = await fetch(`/api/scheduler/bootcamps/${bootcampId}/sessions/${sessionId}/groups`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ groups: keptGroups(rows, staff, audience).map((g) => ({ email: g.email, instructorEmail: g.instructorEmail })) }),
+      body: JSON.stringify({
+        groups: keptGroups(rows, staff, audience).map((g) => ({ email: g.email, instructorEmail: g.instructorEmail })),
+      }),
     });
     if (res.ok) {
       setGroups(null);
@@ -321,7 +332,16 @@ export function SessionDialog({
   }
 
   async function remove() {
-    if (!existing || !(await confirmDialog({ title: `Remove ${existing.name}?`, description: "Its time becomes unscheduled.", confirmLabel: "Remove", destructive: true }))) return;
+    if (
+      !existing ||
+      !(await confirmDialog({
+        title: `Remove ${existing.name}?`,
+        description: "Its time becomes unscheduled.",
+        confirmLabel: "Remove",
+        destructive: true,
+      }))
+    )
+      return;
     setPending(true);
     setError(null);
     try {
@@ -381,12 +401,16 @@ export function SessionDialog({
                 onClick={() => setTab(t)}
                 className={cn(
                   "-mb-px border-b-2 px-3 py-2 text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                  shown === t ? "border-brand font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+                  shown === t
+                    ? "border-brand font-medium text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
                 )}
               >
                 {TAB_LABELS[t]}
                 {t === "comments" && existing && (
-                  <span className="ml-1.5 font-normal text-muted-foreground tabular-nums">{Math.max(0, existing.comments + commentDelta)}</span>
+                  <span className="ml-1.5 font-normal text-muted-foreground tabular-nums">
+                    {Math.max(0, existing.comments + commentDelta)}
+                  </span>
                 )}
               </button>
             ))}
@@ -555,7 +579,12 @@ export function SessionDialog({
                   <ul className="mt-1 list-disc pl-5">
                     {clashes.map((c, i) => (
                       <li key={i}>
-                        {c.what.kind === "person" ? c.what.fullName : c.what.kind === "room" ? roomName(c.what.roomId) : GROUP_NAMES[c.what.group]}: {describeClash(c)}
+                        {c.what.kind === "person"
+                          ? c.what.fullName
+                          : c.what.kind === "room"
+                            ? roomName(c.what.roomId)
+                            : GROUP_NAMES[c.what.group]}
+                        : {describeClash(c)}
                       </li>
                     ))}
                   </ul>
@@ -566,7 +595,13 @@ export function SessionDialog({
             <DialogFooter className="sm:justify-between">
               <div>
                 {existing && (
-                  <Button type="button" variant="ghost" disabled={pending} onClick={remove} className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={pending}
+                    onClick={remove}
+                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  >
                     <Trash2 />
                     Remove
                   </Button>
@@ -768,7 +803,9 @@ function RoomPicker({
       <DropdownMenu onOpenChange={(open) => !open && setFilter("")}>
         <DropdownMenuTrigger aria-labelledby="session-room" disabled={!hasFacility || rooms.length === 0} className={TRIGGER}>
           {!hasFacility ? (
-            <span className="truncate text-muted-foreground">Pick a facility for this bootcamp on the Scheduler to give sessions rooms</span>
+            <span className="truncate text-muted-foreground">
+              Pick a facility for this bootcamp on the Scheduler to give sessions rooms
+            </span>
           ) : rooms.length === 0 ? (
             <span className="truncate text-muted-foreground">This bootcamp&apos;s facility has no rooms yet</span>
           ) : picked ? (
@@ -815,7 +852,12 @@ function RoomPicker({
                   className="items-start"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className={cn("flex items-baseline justify-between gap-2", theirs.length > 0 && "font-medium text-red-700 dark:text-red-400")}>
+                    <span
+                      className={cn(
+                        "flex items-baseline justify-between gap-2",
+                        theirs.length > 0 && "font-medium text-red-700 dark:text-red-400",
+                      )}
+                    >
                       <span className="truncate">{r.name}</span>
                       <span className="shrink-0 text-xs font-normal text-muted-foreground tabular-nums">Holds {r.capacity}</span>
                     </span>
@@ -842,7 +884,12 @@ function RoomPicker({
 }
 
 function ReadOnly({ session: s, roomName }: { session: SessionRow; roomName: (id: string) => string }) {
-  const rooms = s.kind === "main" ? (s.roomId ? [roomName(s.roomId)] : []) : s.staff.flatMap((p) => (p.roomId ? [`${p.fullName}: ${roomName(p.roomId)}`] : []));
+  const rooms =
+    s.kind === "main"
+      ? s.roomId
+        ? [roomName(s.roomId)]
+        : []
+      : s.staff.flatMap((p) => (p.roomId ? [`${p.fullName}: ${roomName(p.roomId)}`] : []));
   return (
     <dl className="grid gap-3 text-sm sm:grid-cols-[8rem_1fr]">
       <dt className="text-muted-foreground">Kind</dt>

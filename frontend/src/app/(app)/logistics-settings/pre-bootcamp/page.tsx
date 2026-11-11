@@ -4,11 +4,5 @@ import { getEditableIntakeForm } from "@/lib/logistics/intake";
 import { IntakeEditor } from "../intake-editor";
 
 export default async function PreBootcampSettingsPage() {
-  return (
-    <IntakeEditor
-      key="bootcamp"
-      id="bootcamp"
-      form={await getEditableIntakeForm("bootcamp")}
-    />
-  );
+  return <IntakeEditor key="bootcamp" id="bootcamp" form={await getEditableIntakeForm("bootcamp")} />;
 }

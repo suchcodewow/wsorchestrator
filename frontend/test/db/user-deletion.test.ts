@@ -26,8 +26,7 @@ const scope = testScope("delete");
 
 const BOOTSTRAP_EMAIL = "delete-bootstrap@roles.test";
 
-const exists = async (id: string) =>
-  (await db.select({ id: users.id }).from(users).where(eq(users.id, id))).length > 0;
+const exists = async (id: string) => (await db.select({ id: users.id }).from(users).where(eq(users.id, id))).length > 0;
 
 let savedAdmins: string | undefined;
 before(async () => {
@@ -108,14 +107,8 @@ describe("deleteUser", () => {
     try {
       assert.deepEqual(await deleteUser(admin, target.id), { ok: true });
       assert.equal(await exists(target.id), false);
-      assert.equal(
-        (await db.select().from(sessions).where(eq(sessions.sessionToken, token))).length,
-        0,
-      );
-      assert.equal(
-        (await db.select().from(apiTokens).where(eq(apiTokens.userId, target.id))).length,
-        0,
-      );
+      assert.equal((await db.select().from(sessions).where(eq(sessions.sessionToken, token))).length, 0);
+      assert.equal((await db.select().from(apiTokens).where(eq(apiTokens.userId, target.id))).length, 0);
       assert.equal(await resolveToken(minted.token.token), null);
       const [kept] = await db.select().from(labGuides).where(eq(labGuides.id, guide!.id));
       assert.equal(kept?.authorId, null);

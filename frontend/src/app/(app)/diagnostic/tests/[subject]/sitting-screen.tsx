@@ -29,10 +29,7 @@ const START_ERRORS: Record<string, string> = {
 };
 
 type State =
-  | { kind: "loading" }
-  | { kind: "asking"; sitting: SittingView }
-  | { kind: "done"; questions: number }
-  | { kind: "error"; message: string };
+  { kind: "loading" } | { kind: "asking"; sitting: SittingView } | { kind: "done"; questions: number } | { kind: "error"; message: string };
 
 export function SittingScreen({
   subject,

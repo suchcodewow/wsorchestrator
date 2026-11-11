@@ -19,15 +19,10 @@ export async function takeDownTestGroup(): Promise<{
   cancelled: number;
   failures: string[];
 }> {
-  const [channels, meetings] = await Promise.all([
-    archiveTestChannels(),
-    cancelTestMeetingInvites(),
-  ]);
+  const [channels, meetings] = await Promise.all([archiveTestChannels(), cancelTestMeetingInvites()]);
   const failures = [...channels.failures, ...meetings.failures];
   if (failures.length === 0) {
-    await db
-      .delete(evalsSettings)
-      .where(eq(evalsSettings.key, EVALS_SETTINGS_KEYS.intakeRemindersSentOn));
+    await db.delete(evalsSettings).where(eq(evalsSettings.key, EVALS_SETTINGS_KEYS.intakeRemindersSentOn));
     // The answers the group filled in are test data.
     await db.delete(intakeResponses).where(eq(intakeResponses.test, true));
   }

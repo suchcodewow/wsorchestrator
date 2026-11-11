@@ -21,16 +21,11 @@ function selectionOf(body: Body): DeploySelection {
   return {
     official: body.official === true,
     mySecrets: body.mySecrets === true,
-    myTemplates: Array.isArray(body.myTemplates)
-      ? body.myTemplates.filter((id): id is string => typeof id === "string")
-      : [],
+    myTemplates: Array.isArray(body.myTemplates) ? body.myTemplates.filter((id): id is string => typeof id === "string") : [],
   };
 }
 
-export const POST = audited(async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const POST = audited(async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error, user } = await requireAdministrator(req);
   if (error) return error;
 
@@ -42,10 +37,7 @@ export const POST = audited(async function POST(
   const { id } = await params;
   const result = await deployContent(user.id, id, body.org, selectionOf(body));
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, detail: result.detail },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error, detail: result.detail }, { status: STATUS_FOR[result.error] });
   }
 
   return NextResponse.json({ report: result.report });

@@ -45,15 +45,33 @@ function parseArgs(argv) {
     const arg = argv[i];
     const value = () => argv[++i];
     switch (arg) {
-      case "--clean": opts.clean = true; break;
-      case "--name": opts.name = value(); break;
-      case "--mode": opts.mode = value(); break;
-      case "--users": opts.users = Number(value()); break;
-      case "--clouds": opts.clouds = value().split(",").filter(Boolean); break;
-      case "--status": opts.status = value(); break;
-      case "--days": opts.days = Number(value()); break;
-      case "--claimed": opts.claimed = Number(value()); break;
-      case "--owner": opts.owner = value(); break;
+      case "--clean":
+        opts.clean = true;
+        break;
+      case "--name":
+        opts.name = value();
+        break;
+      case "--mode":
+        opts.mode = value();
+        break;
+      case "--users":
+        opts.users = Number(value());
+        break;
+      case "--clouds":
+        opts.clouds = value().split(",").filter(Boolean);
+        break;
+      case "--status":
+        opts.status = value();
+        break;
+      case "--days":
+        opts.days = Number(value());
+        break;
+      case "--claimed":
+        opts.claimed = Number(value());
+        break;
+      case "--owner":
+        opts.owner = value();
+        break;
       default:
         console.error(`Unknown option: ${arg}`);
         process.exit(1);
@@ -73,9 +91,7 @@ function databaseUrl() {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
   const envFile = path.resolve(here, "../.env");
   if (!fs.existsSync(envFile)) return null;
-  const match = fs
-    .readFileSync(envFile, "utf8")
-    .match(/^DATABASE_URL\s*=\s*"?([^"\n]+)"?/m);
+  const match = fs.readFileSync(envFile, "utf8").match(/^DATABASE_URL\s*=\s*"?([^"\n]+)"?/m);
   return match ? match[1] : null;
 }
 
@@ -104,20 +120,46 @@ const AWS_REGION = process.env.AWS_REGION ?? "us-east-1";
 const AZURE_SUBSCRIPTION = "3f9d2c81-64ab-4e77-9a52-8c0d15b7e4a6";
 
 const ADJECTIVES = [
-  "bouncy", "clever", "dapper", "feisty", "giddy", "jaunty", "mellow",
-  "nimble", "plucky", "quirky", "snazzy", "spiffy", "sunny", "witty", "zesty",
+  "bouncy",
+  "clever",
+  "dapper",
+  "feisty",
+  "giddy",
+  "jaunty",
+  "mellow",
+  "nimble",
+  "plucky",
+  "quirky",
+  "snazzy",
+  "spiffy",
+  "sunny",
+  "witty",
+  "zesty",
 ];
 const NOUNS = [
-  "axolotl", "badger", "capybara", "dumpling", "flamingo", "gecko",
-  "hedgehog", "kestrel", "lemur", "marmot", "narwhal", "otter", "pangolin",
-  "quokka", "toucan", "walrus", "wombat",
+  "axolotl",
+  "badger",
+  "capybara",
+  "dumpling",
+  "flamingo",
+  "gecko",
+  "hedgehog",
+  "kestrel",
+  "lemur",
+  "marmot",
+  "narwhal",
+  "otter",
+  "pangolin",
+  "quokka",
+  "toucan",
+  "walrus",
+  "wombat",
 ];
 
 const pick = (list) => list[crypto.randomInt(list.length)];
 
 /** Matches the runner: base64url, plus `aA1!` for the required character mix. */
-const password = () =>
-  crypto.randomBytes(12).toString("base64url").slice(0, 16) + "aA1!";
+const password = () => crypto.randomBytes(12).toString("base64url").slice(0, 16) + "aA1!";
 
 /** An Entra Temporary Access Pass is a short alphanumeric code. */
 const accessPass = () => crypto.randomBytes(8).toString("hex").slice(0, 8);
@@ -146,8 +188,7 @@ function slugify(name) {
 const trim = (slug, max) => slug.slice(0, max).replace(/-+$/, "");
 
 /** ws-<slug>-<short>, the id the runner builds a workshop's project under. */
-const projectId = (slug, runId) =>
-  `ws-${trim(slug, 20)}-${runId.replace(/-/g, "").slice(0, 6)}`;
+const projectId = (slug, runId) => `ws-${trim(slug, 20)}-${runId.replace(/-/g, "").slice(0, 6)}`;
 
 /**
  * The `-<short>-<who>` tail every per-competitor identifier ends in, matching
@@ -155,8 +196,7 @@ const projectId = (slug, runId) =>
  * roster position, so a challenge that grows never renames what already exists.
  */
 const challengeSuffix = (runId, email) =>
-  `-${runId.replace(/-/g, "").slice(0, 4)}-` +
-  crypto.createHash("sha1").update(email).digest("hex").slice(0, 6);
+  `-${runId.replace(/-/g, "").slice(0, 4)}-` + crypto.createHash("sha1").update(email).digest("hex").slice(0, 6);
 
 /** One competitor's own GCP project id — `makeChallengeProjectId`, capped at 30. */
 const challengeProjectId = (slug, runId, email) => {
@@ -165,16 +205,14 @@ const challengeProjectId = (slug, runId, email) => {
 };
 
 /** One competitor's own Azure resource group — `makeChallengeResourceGroup`. */
-const challengeResourceGroup = (slug, runId, email) =>
-  `ch-${slug}` + challengeSuffix(runId, email);
+const challengeResourceGroup = (slug, runId, email) => `ch-${slug}` + challengeSuffix(runId, email);
 
 /**
  * A workshop's AWS account name, which is also its sign-in alias —
  * `makeAwsAccountName`. The console link is keyed by the alias rather than the
  * account id, so this is what the attendee page's AWS button is built from.
  */
-const awsAccountName = (slug, runId) =>
-  trim(`ws-${slug}-${runId.replace(/-/g, "").slice(0, 6)}`, 50);
+const awsAccountName = (slug, runId) => trim(`ws-${slug}-${runId.replace(/-/g, "").slice(0, 6)}`, 50);
 
 /** A competitor's own AWS account name/alias — `makeChallengeAwsAccountName`. */
 const challengeAwsAccountName = (slug, runId, email) => {
@@ -186,20 +224,16 @@ const challengeAwsAccountName = (slug, runId, email) => {
 const awsAccountId = () => String(100000000000 + crypto.randomInt(899999999999));
 
 /** The sign-in page, region-scoped, exactly as `aws-base` outputs it. */
-const awsConsoleUrl = (alias) =>
-  `https://${alias}.signin.aws.amazon.com/console?region=${AWS_REGION}`;
+const awsConsoleUrl = (alias) => `https://${alias}.signin.aws.amazon.com/console?region=${AWS_REGION}`;
 
 /** <identifier>_<short>, matching `orgIdentifier` in the runner. */
-const harnessOrgId = (name, runId) =>
-  `${name.replace(/[^A-Za-z0-9_$]/g, "_").slice(0, 55)}_${runId.replace(/-/g, "").slice(0, 6)}`;
+const harnessOrgId = (name, runId) => `${name.replace(/[^A-Za-z0-9_$]/g, "_").slice(0, 55)}_${runId.replace(/-/g, "").slice(0, 6)}`;
 
 /** The org's console page, matching `orgUrl` in the runner. */
-const harnessOrgUrl = (orgId) =>
-  `${HARNESS_BASE}/ng/account/${HARNESS_ACCOUNT}/settings/organizations/${orgId}/details`;
+const harnessOrgUrl = (orgId) => `${HARNESS_BASE}/ng/account/${HARNESS_ACCOUNT}/settings/organizations/${orgId}/details`;
 
 /** One attendee's project id, matching `projectIdentifier` in the runner. */
-const harnessProjectId = (email) =>
-  (email.split("@")[0] ?? email).replace(/[^0-9a-zA-Z_$]+/g, "_") || "attendee";
+const harnessProjectId = (email) => (email.split("@")[0] ?? email).replace(/[^0-9a-zA-Z_$]+/g, "_") || "attendee";
 
 /** That project's console page, matching `projectUrl` in the runner. */
 const harnessProjectUrl = (orgId, projectId) =>
@@ -222,8 +256,7 @@ const CLAIMS = [
 
 /** The portal deep link for one resource group, as both Azure roots emit it. */
 const azurePortalUrl = (group) =>
-  `https://portal.azure.com/#@${AZURE_TENANT}/resource/subscriptions/` +
-  `${AZURE_SUBSCRIPTION}/resourceGroups/${group}`;
+  `https://portal.azure.com/#@${AZURE_TENANT}/resource/subscriptions/` + `${AZURE_SUBSCRIPTION}/resourceGroups/${group}`;
 
 /**
  * The Terraform outputs a workshop's roots emit, restricted to the clouds the
@@ -257,9 +290,7 @@ function workshopOutputs(clouds, slug, runId, emails) {
     out.aws_console_url = awsConsoleUrl(alias);
     // AWS is the one cloud whose password is not the shared Google one, so the
     // attendee page shows a second credential on every row.
-    out.aws_attendee_passwords = Object.fromEntries(
-      emails.map((email) => [email, password()]),
-    );
+    out.aws_attendee_passwords = Object.fromEntries(emails.map((email) => [email, password()]));
     out.eks_cluster_name = `ws-${trim(slug, 16)}-${short}`;
   }
   return out;
@@ -272,30 +303,19 @@ function workshopOutputs(clouds, slug, runId, emails) {
  */
 function challengeOutputs(clouds, slug, runId, emails) {
   const out = {};
-  const byEmail = (fn) =>
-    Object.fromEntries(emails.map((email) => [email, fn(email)]));
+  const byEmail = (fn) => Object.fromEntries(emails.map((email) => [email, fn(email)]));
 
   if (clouds.includes("gcp")) {
     out.gcp_projects = byEmail((e) => challengeProjectId(slug, runId, e));
-    out.gcp_console_urls = byEmail(
-      (e) =>
-        "https://console.cloud.google.com/home/dashboard?project=" +
-        out.gcp_projects[e],
-    );
+    out.gcp_console_urls = byEmail((e) => "https://console.cloud.google.com/home/dashboard?project=" + out.gcp_projects[e]);
   }
   if (clouds.includes("azure")) {
-    out.azure_resource_groups = byEmail((e) =>
-      challengeResourceGroup(slug, runId, e),
-    );
-    out.azure_portal_urls = byEmail((e) =>
-      azurePortalUrl(out.azure_resource_groups[e]),
-    );
+    out.azure_resource_groups = byEmail((e) => challengeResourceGroup(slug, runId, e));
+    out.azure_portal_urls = byEmail((e) => azurePortalUrl(out.azure_resource_groups[e]));
   }
   if (clouds.includes("aws")) {
     out.aws_accounts = byEmail(() => awsAccountId());
-    out.aws_account_aliases = byEmail((e) =>
-      challengeAwsAccountName(slug, runId, e),
-    );
+    out.aws_account_aliases = byEmail((e) => challengeAwsAccountName(slug, runId, e));
     out.aws_attendee_passwords = byEmail(() => password());
     out.aws_region = AWS_REGION;
   }
@@ -415,10 +435,12 @@ function buildLogs(opts, outputs, orgUnitPath, orgId, emails) {
   const challenge = opts.mode === "challenge";
   const noun = challenge ? "competitor" : "attendee";
 
-  say("system",
+  say(
+    "system",
     `Scheduled ${opts.mode} "${opts.name}" to start now — ` +
-    `${opts.users} ${noun}s, ${opts.clouds.join(", ")}, ` +
-    `runs ${opts.days} days before teardown`);
+      `${opts.users} ${noun}s, ${opts.clouds.join(", ")}, ` +
+      `runs ${opts.days} days before teardown`,
+  );
   say("system", `Creating organizational unit "${opts.name}"`);
   say("system", `Org unit ready at ${orgUnitPath}`);
   say("system", `Creating ${opts.users} ${noun} account(s)`);
@@ -427,11 +449,12 @@ function buildLogs(opts, outputs, orgUnitPath, orgId, emails) {
   say("stdout", `${opts.users} Harness project(s) created`);
 
   for (const cloud of opts.clouds) {
-    say("system",
+    say(
+      "system",
       challenge
-        ? `Provisioning ${opts.users} ${cloud.toUpperCase()} environment(s), ` +
-          `one per competitor`
-        : `Applying ${cloud.toUpperCase()} environment`);
+        ? `Provisioning ${opts.users} ${cloud.toUpperCase()} environment(s), ` + `one per competitor`
+        : `Applying ${cloud.toUpperCase()} environment`,
+    );
     say("stdout", "Terraform has been successfully initialized!");
     say("stdout", "Apply complete! Resources: 34 added, 0 changed, 0 destroyed.");
   }
@@ -476,11 +499,7 @@ try {
     opts.owner ? [opts.owner] : [],
   );
   if (owners.length === 0) {
-    console.error(
-      opts.owner
-        ? `No user with email ${opts.owner}.`
-        : "No users in this database — sign in locally once first.",
-    );
+    console.error(opts.owner ? `No user with email ${opts.owner}.` : "No users in this database — sign in locally once first.");
     process.exit(1);
   }
   const owner = owners[0];
@@ -500,9 +519,7 @@ try {
   outputs.harness_org_url = harnessOrgUrl(orgId);
   // One project per attendee, keyed by address — the map the attendee page
   // reads to put a project link on each row.
-  outputs.harness_project_urls = Object.fromEntries(
-    emails.map((email) => [email, harnessProjectUrl(orgId, harnessProjectId(email))]),
-  );
+  outputs.harness_project_urls = Object.fromEntries(emails.map((email) => [email, harnessProjectUrl(orgId, harnessProjectId(email))]));
 
   const now = Date.now();
   const ttlSeconds = opts.days * 86400;
@@ -575,23 +592,22 @@ try {
   // Spread evenly across the build window so the log reads as a timeline.
   const step = (now - startedAt.getTime()) / (logs.length + 1);
   for (const [i, entry] of logs.entries()) {
-    await client.query(
-      `insert into run_logs (run_id, ts, stream, message) values ($1,$2,$3,$4)`,
-      [runId, new Date(startedAt.getTime() + step * (i + 1)), entry.stream, entry.message],
-    );
+    await client.query(`insert into run_logs (run_id, ts, stream, message) values ($1,$2,$3,$4)`, [
+      runId,
+      new Date(startedAt.getTime() + step * (i + 1)),
+      entry.stream,
+      entry.message,
+    ]);
   }
 
-  const resources = buildResources(
-    opts.mode, opts.clouds, outputs, orgUnitPath, orgId, opts.users,
-  );
+  const resources = buildResources(opts.mode, opts.clouds, outputs, orgUnitPath, orgId, opts.users);
   for (const [i, r] of resources.entries()) {
     const at = new Date(startedAt.getTime() + step * (i + 1));
     await client.query(
       `insert into run_resources
          (run_id, kind, key, label, detail, url, done, total, created_at, updated_at)
        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9)`,
-      [runId, r.kind, r.key ?? "", r.label, r.detail ?? null, r.url ?? null,
-       r.done ?? null, r.total ?? null, at],
+      [runId, r.kind, r.key ?? "", r.label, r.detail ?? null, r.url ?? null, r.done ?? null, r.total ?? null, at],
     );
   }
 

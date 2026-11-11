@@ -15,11 +15,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function EditWorkshopGuidePage({
-  params,
-}: {
-  params: Promise<{ workshopSlug: string; guideSlug: string }>;
-}) {
+export default async function EditWorkshopGuidePage({ params }: { params: Promise<{ workshopSlug: string; guideSlug: string }> }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   if (!canManageLabGuides(session.user.access)) notFound();
@@ -44,15 +40,9 @@ export default async function EditWorkshopGuidePage({
         Back to the lab
       </Link>
 
-      <h1 className="mt-6 mb-8 text-2xl font-medium tracking-tight">
-        Edit lab guide
-      </h1>
+      <h1 className="mt-6 mb-8 text-2xl font-medium tracking-tight">Edit lab guide</h1>
 
-      <GuideEditor
-        guide={guide}
-        usedIn={usedIn}
-        within={{ slug: found.workshop.slug, title: found.workshop.title }}
-      />
+      <GuideEditor guide={guide} usedIn={usedIn} within={{ slug: found.workshop.slug, title: found.workshop.title }} />
     </div>
   );
 }

@@ -8,12 +8,7 @@ import { usePathname } from "next/navigation";
 import { PanelLeftClose, PanelLeftOpen, Settings, Star } from "lucide-react";
 import { useFavoriteTabs } from "@/components/favorite-tabs";
 import { UserMenu, type Impersonator } from "@/components/user-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ThemePreference } from "@/db/schema";
 import type { BuildInfo } from "@/lib/build-info";
 import { favoriteIcon } from "@/lib/favorite-icons";
@@ -52,7 +47,10 @@ export function AppSidebar({
   const gearPages = new Set(sections.flatMap((sec) => sec.items.flatMap((i) => (i.settings ? [i.settings] : []))));
   // On a settings page that has a gear, its parent's row is the selected one and shows the gear.
   const onSettings = (item: NavItem) =>
-    !collapsed && !!item.settings && gearPages.has(item.settings) && (pathname === item.settings || pathname.startsWith(`${item.settings}/`));
+    !collapsed &&
+    !!item.settings &&
+    gearPages.has(item.settings) &&
+    (pathname === item.settings || pathname.startsWith(`${item.settings}/`));
   const favoriteTabs = useFavoriteTabs();
   const favorites = favoriteTabs?.tabs ?? [];
 
@@ -99,35 +97,30 @@ export function AppSidebar({
               {collapsed ? (
                 <div aria-hidden className="mx-2 mb-2 border-t border-border/70" />
               ) : (
-                <h2 className="px-3 pb-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                  {section.heading}
-                </h2>
+                <h2 className="px-3 pb-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{section.heading}</h2>
               )}
 
-              {section.items.filter((item) => collapsed || !gearPages.has(item.href)).map((item) => (
-                <NavLink
-                  key={item.href}
-                  item={item}
-                  active={isNavItemActive(pathname, item) || onSettings(item)}
-                  onSettings={onSettings(item)}
-                  collapsed={collapsed}
-                  settings={item.settings && sections.some((sec) => sec.items.some((i) => i.href === item.settings)) ? item.settings : undefined}
-                  starred={favoriteTabs?.has(item.href)}
-                  onStar={
-                    favoriteTabs && !item.hasTabs ? () => favoriteTabs.toggle({ href: item.href, label: item.label }) : undefined
-                  }
-                />
-              ))}
+              {section.items
+                .filter((item) => collapsed || !gearPages.has(item.href))
+                .map((item) => (
+                  <NavLink
+                    key={item.href}
+                    item={item}
+                    active={isNavItemActive(pathname, item) || onSettings(item)}
+                    onSettings={onSettings(item)}
+                    collapsed={collapsed}
+                    settings={
+                      item.settings && sections.some((sec) => sec.items.some((i) => i.href === item.settings)) ? item.settings : undefined
+                    }
+                    starred={favoriteTabs?.has(item.href)}
+                    onStar={favoriteTabs && !item.hasTabs ? () => favoriteTabs.toggle({ href: item.href, label: item.label }) : undefined}
+                  />
+                ))}
             </div>
           ))}
         </nav>
 
-        <div
-          className={cn(
-            "shrink-0 border-t border-border/70 p-2",
-            collapsed && "flex justify-center",
-          )}
-        >
+        <div className={cn("shrink-0 border-t border-border/70 p-2", collapsed && "flex justify-center")}>
           <UserMenu
             name={name}
             email={email}
@@ -152,11 +145,7 @@ export function AppSidebar({
             collapsed && "justify-center",
           )}
         >
-          {collapsed ? (
-            <PanelLeftOpen className="size-4 shrink-0" />
-          ) : (
-            <PanelLeftClose className="size-4 shrink-0" />
-          )}
+          {collapsed ? <PanelLeftOpen className="size-4 shrink-0" /> : <PanelLeftClose className="size-4 shrink-0" />}
           {!collapsed && <span>Collapse</span>}
         </button>
       </aside>
@@ -198,7 +187,14 @@ function NavLink({
           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground group-hover/nav:bg-accent group-hover/nav:text-accent-foreground",
       )}
     >
-      <item.Icon className={cn("size-4 shrink-0", settings && !collapsed && (onSettings ? "opacity-0" : "group-hover/nav:opacity-0 group-has-[[data-gear]:focus-visible]/nav:opacity-0"))} />
+      <item.Icon
+        className={cn(
+          "size-4 shrink-0",
+          settings &&
+            !collapsed &&
+            (onSettings ? "opacity-0" : "group-hover/nav:opacity-0 group-has-[[data-gear]:focus-visible]/nav:opacity-0"),
+        )}
+      />
       {!collapsed && <span className="truncate">{item.label}</span>}
     </Link>
   );
@@ -214,25 +210,28 @@ function NavLink({
             aria-label={`${item.label} settings`}
             title={`${item.label} settings`}
             data-gear
-            className={cn("absolute inset-y-0 left-0 flex w-[34px] items-center justify-center rounded-l-lg bg-foreground/10 text-muted-foreground opacity-0 outline-none transition-opacity hover:bg-foreground/15 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 group-hover/nav:opacity-100", onSettings && "opacity-100")}
+            className={cn(
+              "absolute inset-y-0 left-0 flex w-[34px] items-center justify-center rounded-l-lg bg-foreground/10 text-muted-foreground opacity-0 outline-none transition-opacity hover:bg-foreground/15 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 group-hover/nav:opacity-100",
+              onSettings && "opacity-100",
+            )}
           >
             <Settings className="size-4" />
           </Link>
         )}
         {onStar && (
-        <button
-          type="button"
-          onClick={onStar}
-          aria-pressed={starred}
-          aria-label={starred ? `Remove ${item.label} from favorites` : `Add ${item.label} to favorites`}
-          title={starred ? "Remove from favorites" : "Add to favorites"}
-          className={cn(
-            "absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer rounded p-1 outline-none transition-opacity hover:bg-accent focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50",
-            starred ? "opacity-100" : "opacity-0 group-hover/nav:opacity-100",
-          )}
-        >
-          <Star className={cn("size-3.5", starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground")} />
-        </button>
+          <button
+            type="button"
+            onClick={onStar}
+            aria-pressed={starred}
+            aria-label={starred ? `Remove ${item.label} from favorites` : `Add ${item.label} to favorites`}
+            title={starred ? "Remove from favorites" : "Add to favorites"}
+            className={cn(
+              "absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer rounded p-1 outline-none transition-opacity hover:bg-accent focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              starred ? "opacity-100" : "opacity-0 group-hover/nav:opacity-100",
+            )}
+          >
+            <Star className={cn("size-3.5", starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground")} />
+          </button>
         )}
       </div>
     );
@@ -245,4 +244,3 @@ function NavLink({
     </Tooltip>
   );
 }
-

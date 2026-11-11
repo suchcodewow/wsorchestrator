@@ -232,14 +232,7 @@ export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; previe
   }
 
   return (
-    <motion.form
-      variants={staggerParent(0.05)}
-      initial="hidden"
-      animate="show"
-      onSubmit={submit}
-      noValidate
-      className="space-y-6"
-    >
+    <motion.form variants={staggerParent(0.05)} initial="hidden" animate="show" onSubmit={submit} noValidate className="space-y-6">
       <motion.div variants={riseChild}>
         <h1 className="text-3xl font-medium tracking-tight">{intake.heading}</h1>
       </motion.div>
@@ -258,8 +251,7 @@ export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; previe
           <DialogHeader>
             <DialogTitle>Defer to the next {stage}?</DialogTitle>
             <DialogDescription>
-              You will not attend this {stage}. You will be moved to the next one, and the training team will message you about
-              it.
+              You will not attend this {stage}. You will be moved to the next one, and the training team will message you about it.
             </DialogDescription>
           </DialogHeader>
           {deferError && (
@@ -288,9 +280,7 @@ export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; previe
               </p>
             )}
             {savedAt && (
-              <p className="text-muted-foreground">
-                Answered {new Date(savedAt).toLocaleString()}. Change anything below and save again.
-              </p>
+              <p className="text-muted-foreground">Answered {new Date(savedAt).toLocaleString()}. Change anything below and save again.</p>
             )}
             {!savedAt && intake.carriedFrom && (
               <p className="rounded-lg border border-brand-border bg-brand-subtle px-4 py-3">
@@ -334,11 +324,7 @@ export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; previe
                 {q.description && <p className="whitespace-pre-line text-sm text-muted-foreground">{q.description}</p>}
               </div>
               {isDietaryQuestion(q) ? (
-                <DietaryChecklist
-                  title={q.title}
-                  answers={answers}
-                  onChange={(patch) => setAnswers((a) => ({ ...a, ...patch }))}
-                />
+                <DietaryChecklist title={q.title} answers={answers} onChange={(patch) => setAnswers((a) => ({ ...a, ...patch }))} />
               ) : (
                 <Answer
                   question={q}

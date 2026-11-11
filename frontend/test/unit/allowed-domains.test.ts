@@ -98,14 +98,8 @@ describe("domainInputSchema", () => {
     const at = (n: number) => "a".repeat(n);
     assert.equal(domainInputSchema.safeParse({ domain: at(ALLOWED_DOMAIN_LIMITS.domain) }).success, true);
     assert.equal(domainInputSchema.safeParse({ domain: at(ALLOWED_DOMAIN_LIMITS.domain + 1) }).success, false);
-    assert.equal(
-      domainInputSchema.safeParse({ domain: "a.b", note: at(ALLOWED_DOMAIN_LIMITS.note) }).success,
-      true,
-    );
-    assert.equal(
-      domainInputSchema.safeParse({ domain: "a.b", note: at(ALLOWED_DOMAIN_LIMITS.note + 1) }).success,
-      false,
-    );
+    assert.equal(domainInputSchema.safeParse({ domain: "a.b", note: at(ALLOWED_DOMAIN_LIMITS.note) }).success, true);
+    assert.equal(domainInputSchema.safeParse({ domain: "a.b", note: at(ALLOWED_DOMAIN_LIMITS.note + 1) }).success, false);
   });
 
   test("keeps only domain and note", () => {

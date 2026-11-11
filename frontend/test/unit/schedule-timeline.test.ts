@@ -60,7 +60,13 @@ describe("times", () => {
     assert.deepEqual(dayTotal([]), { end: 480, left: 540, over: 0 });
     assert.deepEqual(dayTotal([{ start: 480, minutes: 480 }]), { end: 960, left: 60, over: 0 });
     assert.deepEqual(dayTotal([{ start: 480, minutes: 540 }]), { end: 1020, left: 0, over: 0 });
-    assert.deepEqual(dayTotal([{ start: 480, minutes: 300 }, { start: 780, minutes: 270 }]), { end: 1050, left: 0, over: 30 });
+    assert.deepEqual(
+      dayTotal([
+        { start: 480, minutes: 300 },
+        { start: 780, minutes: 270 },
+      ]),
+      { end: 1050, left: 0, over: 30 },
+    );
   });
 
   test("time between sessions counts as left, not just time after the last", () => {
@@ -239,13 +245,16 @@ describe("clashes", () => {
 
 describe("audience clashes", () => {
   test("a Bootcamp session for both clashes with an SE Bootcamp session for engineers beside it", () => {
-    const placed = place([
-      [session("overview")],
-      [session("demo", { track: "btc_se", audience: "engineers", start: 510 })],
-    ]);
+    const placed = place([[session("overview")], [session("demo", { track: "btc_se", audience: "engineers", start: 510 })]]);
     const clashes = findClashes(placed);
-    assert.deepEqual(clashes.get("overview")?.map((c) => [c.sessionId, c.what]), [["demo", { kind: "audience", group: "engineers" }]]);
-    assert.deepEqual(clashes.get("demo")?.map((c) => [c.sessionId, c.what]), [["overview", { kind: "audience", group: "engineers" }]]);
+    assert.deepEqual(
+      clashes.get("overview")?.map((c) => [c.sessionId, c.what]),
+      [["demo", { kind: "audience", group: "engineers" }]],
+    );
+    assert.deepEqual(
+      clashes.get("demo")?.map((c) => [c.sessionId, c.what]),
+      [["overview", { kind: "audience", group: "engineers" }]],
+    );
   });
 
   test("sales on Bootcamp while engineers break out is the plan, not a clash", () => {
@@ -256,7 +265,9 @@ describe("audience clashes", () => {
   test("two sessions for both clash once for each group", () => {
     const placed = place([[session("a")], [session("b", { track: "btc_se" })]]);
     assert.deepEqual(
-      findClashes(placed).get("a")?.map((c) => c.what),
+      findClashes(placed)
+        .get("a")
+        ?.map((c) => c.what),
       [
         { kind: "audience", group: "sales" },
         { kind: "audience", group: "engineers" },
@@ -269,10 +280,13 @@ describe("audience clashes", () => {
     assert.equal(findClashes(placed).size, 0);
   });
 
-  test("an unstructured session teaches no one: SE's \"With Bootcamp\" does not clash with what it points at", () => {
+  test('an unstructured session teaches no one: SE\'s "With Bootcamp" does not clash with what it points at', () => {
     const placed = place([
       [session("exam"), session("lunch", { start: 540, kind: "unstructured" })],
-      [session("with", { track: "btc_se", kind: "unstructured", audience: "engineers" }), session("demo", { track: "btc_se", start: 540, audience: "engineers" })],
+      [
+        session("with", { track: "btc_se", kind: "unstructured", audience: "engineers" }),
+        session("demo", { track: "btc_se", start: 540, audience: "engineers" }),
+      ],
     ]);
     assert.equal(findClashes(placed).size, 0);
   });
@@ -280,8 +294,16 @@ describe("audience clashes", () => {
   test("the dialog sees the same clash for a session not yet saved, and leaves out the one being edited", () => {
     const placed = place([[session("overview")], [session("demo", { track: "btc_se", audience: "engineers" })]]);
     const slot = { day: 1, start: 480, end: 540 };
-    assert.deepEqual(audienceClashes(placed, { track: "btc", kind: "main", audience: "both" }, slot).map((c) => c.sessionId), ["demo"]);
+    assert.deepEqual(
+      audienceClashes(placed, { track: "btc", kind: "main", audience: "both" }, slot).map((c) => c.sessionId),
+      ["demo"],
+    );
     assert.deepEqual(audienceClashes(placed, { track: "btc", kind: "main", audience: "sales" }, slot), []);
-    assert.deepEqual(audienceClashes(placed, { track: "btc_se", kind: "main", audience: "engineers" }, { ...slot, excludeId: "demo" }).map((c) => c.sessionId), ["overview"]);
+    assert.deepEqual(
+      audienceClashes(placed, { track: "btc_se", kind: "main", audience: "engineers" }, { ...slot, excludeId: "demo" }).map(
+        (c) => c.sessionId,
+      ),
+      ["overview"],
+    );
   });
 });

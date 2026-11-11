@@ -67,11 +67,7 @@ describe("restoreBackup confirmation", () => {
 
   test("anything but the instance name is a mismatch", async () => {
     for (const typed of ["", "workshops", "Workshops-Prod", "workshops-prod-x", "admin-project", "yes"]) {
-      assert.deepEqual(
-        await restoreBackup("123", typed),
-        { ok: false, error: "confirmation_mismatch" },
-        JSON.stringify(typed),
-      );
+      assert.deepEqual(await restoreBackup("123", typed), { ok: false, error: "confirmation_mismatch" }, JSON.stringify(typed));
     }
   });
 });

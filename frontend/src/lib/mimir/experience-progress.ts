@@ -50,13 +50,23 @@ export async function recordExperienceRun(userId: string, run: WholeRun): Promis
 export async function recordSlideRun(userId: string, run: SlideRun): Promise<MimirSlideReviewRun> {
   const [row] = await db
     .insert(mimirSlideReviewRuns)
-    .values({ userId, seed: run.seed, theme: run.theme, found: run.found, total: run.total, wrongClicks: run.wrongClicks, score: run.score })
+    .values({
+      userId,
+      seed: run.seed,
+      theme: run.theme,
+      found: run.found,
+      total: run.total,
+      wrongClicks: run.wrongClicks,
+      score: run.score,
+    })
     .returning();
   return row!;
 }
 
 /** This person's experiences kept whole, and their latest slides of the slide review, newest first. */
-export async function myExperienceProgress(userId: string): Promise<{ progress: MimirExperienceProgress[]; slides: MimirSlideReviewRun[] }> {
+export async function myExperienceProgress(
+  userId: string,
+): Promise<{ progress: MimirExperienceProgress[]; slides: MimirSlideReviewRun[] }> {
   const [progress, slides] = await Promise.all([
     db.select().from(mimirExperienceProgress).where(eq(mimirExperienceProgress.userId, userId)).orderBy(mimirExperienceProgress.experience),
     db

@@ -68,10 +68,13 @@ export function RefreshControl({ configured, initial }: { configured: boolean; i
   useEffect(() => {
     if (!running) return;
     const timer = setInterval(() => {
-      read().then((next) => {
-        setPull(next);
-        if (next?.status === "succeeded") router.refresh();
-      }, () => {});
+      read().then(
+        (next) => {
+          setPull(next);
+          if (next?.status === "succeeded") router.refresh();
+        },
+        () => {},
+      );
     }, POLL_MS);
     return () => clearInterval(timer);
   }, [running, read, router]);
@@ -99,7 +102,10 @@ export function RefreshControl({ configured, initial }: { configured: boolean; i
   return (
     <>
       {running ? (
-        <span className="flex h-9 items-center gap-2 rounded-full border bg-card px-3.5 text-xs text-muted-foreground shadow-sm" role="status">
+        <span
+          className="flex h-9 items-center gap-2 rounded-full border bg-card px-3.5 text-xs text-muted-foreground shadow-sm"
+          role="status"
+        >
           <Loader2 className="size-3.5 animate-spin" />
           {pull.total > 0 && (
             <span className="h-1.5 w-32 overflow-hidden rounded-full bg-muted">

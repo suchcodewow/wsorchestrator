@@ -10,8 +10,7 @@ export function BootcampNotice({ stage, bootcamp }: { stage: EvalsAssessmentStag
     return (
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <CalendarCheck className="size-4 shrink-0" />
-        Scoring at the bootcamp starting{" "}
-        <span className="font-medium text-foreground">{formatDate(bootcamp.startDate)}</span>
+        Scoring at the bootcamp starting <span className="font-medium text-foreground">{formatDate(bootcamp.startDate)}</span>
       </p>
     );
   }

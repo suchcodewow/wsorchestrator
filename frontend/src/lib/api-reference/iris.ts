@@ -2,7 +2,13 @@
 
 import { IRIS_NOTE_MAX, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { SUBJECT_KEYS } from "@/lib/iris/subjects";
-import { IRIS_FEEDBACK_LIST, IRIS_PARTICIPANT_LIST, IRIS_RECORD_LIST, IRIS_REMINDER_MESSAGE_LIST, IRIS_REMINDER_RUN_LIST } from "@/lib/list-specs";
+import {
+  IRIS_FEEDBACK_LIST,
+  IRIS_PARTICIPANT_LIST,
+  IRIS_RECORD_LIST,
+  IRIS_REMINDER_MESSAGE_LIST,
+  IRIS_REMINDER_RUN_LIST,
+} from "@/lib/list-specs";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup, Field } from "./types";
 
@@ -61,7 +67,11 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         returns: `201 { sitting: ${SITTING_SHAPE}, resumed: false }, or 200 with resumed: true`,
         errors: [
           { status: 400, error: "invalid_body", when: "the body does not parse" },
-          { status: 403, error: "forbidden", when: "a live sitting and you are not a Participant, or a preview and you are not an Assessments Administrator" },
+          {
+            status: 403,
+            error: "forbidden",
+            when: "a live sitting and you are not a Participant, or a preview and you are not an Assessments Administrator",
+          },
           { status: 409, error: "no_track", when: "a live sitting before you have set your track" },
           { status: 409, error: "already_taken", when: "you have finished a live sitting of this subject and form" },
           { status: 409, error: "not_ready", when: "too few approved questions to run it, or a subject with none yet" },
@@ -75,7 +85,13 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         token: true,
         params: [SITTING_ID],
         returns: `{ sitting: ${SITTING_SHAPE} }`,
-        errors: [{ status: 404, error: "not_found", when: "no open sitting of yours has that id, or it is live and you are no longer a Participant" }],
+        errors: [
+          {
+            status: 404,
+            error: "not_found",
+            when: "no open sitting of yours has that id, or it is live and you are no longer a Participant",
+          },
+        ],
       },
       {
         method: "POST",
@@ -84,7 +100,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         access: "diagnosticSitter",
         token: true,
         notes:
-          "A question is sent as its wording and options only, never its id or level. Each taker sees the options in their own shuffled order, and choice is the position on their screen, from 0, or -1 for \"I don't know\", which is graded as wrong. A sitting ends after 10 to 14 questions plus up to 3 tiebreak questions; the last answer returns done: true and the number of questions, never a placement or confidence.",
+          'A question is sent as its wording and options only, never its id or level. Each taker sees the options in their own shuffled order, and choice is the position on their screen, from 0, or -1 for "I don\'t know", which is graded as wrong. A sitting ends after 10 to 14 questions plus up to 3 tiebreak questions; the last answer returns done: true and the number of questions, never a placement or confidence.',
         params: [SITTING_ID],
         body: {
           kind: "json",
@@ -130,10 +146,12 @@ export const IRIS_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/diagnostic/feedback",
-        summary: "Lists the ratings given while taking a test, with any comment and the question they were about, a page at a time, the newest first.",
+        summary:
+          "Lists the ratings given while taking a test, with any comment and the question they were about, a page at a time, the newest first.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "number is the question's place in its sitting, from 1. itemId and stem are the question as it was when rated. Previews' ratings are included, with mode preview. Closed ratings are left out unless closed=1. user is null once the account that gave it is deleted, and closedBy likewise, or while it is open. answers has the question's options in the bank's order (not the taker's shuffled order), the correct one, and chosen, what the taker went on to answer: -1 for \"I don't know\", null before they answer or once the sitting is reset (attemptId is then null too). reworded is true when the question has changed since it was rated. answers is null for a question no longer in the bank.",
+        notes:
+          "number is the question's place in its sitting, from 1. itemId and stem are the question as it was when rated. Previews' ratings are included, with mode preview. Closed ratings are left out unless closed=1. user is null once the account that gave it is deleted, and closedBy likewise, or while it is open. answers has the question's options in the bank's order (not the taker's shuffled order), the correct one, and chosen, what the taker went on to answer: -1 for \"I don't know\", null before they answer or once the sitting is reset (attemptId is then null too). reworded is true when the question has changed since it was rated. answers is null for a question no longer in the bank.",
         query: [
           ...listQuery(IRIS_FEEDBACK_LIST.sorts, "the comment, the question, or the name or email of who gave it", "desc"),
           { name: "closed", type: `"1"`, note: "1 includes closed ratings; otherwise only open ones are listed." },
@@ -242,12 +260,11 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         summary: "Returns one person's live sittings on one form, each with every answer in order.",
         access: "assessmentsAdmin",
         token: true,
-        notes:
-          "chosen is null for \"I don't know\". stem and chosen.text are null for an answer given to an older version of a question.",
+        notes: 'chosen is null for "I don\'t know". stem and chosen.text are null for an answer given to an older version of a question.',
         params: [{ name: "id", type: "string", required: true, note: "the user's id" }],
         query: [FORM_QUERY],
         returns:
-          "{ userId, name, email, track, form, composite, sittings: { subject, placement, confidence: \"high\" | \"medium\" | \"low\" | null, questions, startedAt, finishedAt, answers: { seq, itemId, itemVersion, level, phase: \"main\" | \"tiebreak\", stem, chosen: { index, text } | null, correct, ms }[] }[] }",
+          '{ userId, name, email, track, form, composite, sittings: { subject, placement, confidence: "high" | "medium" | "low" | null, questions, startedAt, finishedAt, answers: { seq, itemId, itemVersion, level, phase: "main" | "tiebreak", stem, chosen: { index, text } | null, correct, ms }[] }[] }',
         errors: [FORM_ERROR, { status: 404, error: "not_found", when: "no such user" }],
       },
       {
@@ -267,7 +284,8 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         summary: "Resets one person's live sitting of one subject, so they can take it again.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "Finished or in progress, with every answer in it. Their other subjects are kept. Irreversible, and recorded in the audit trail. deleted is 0 when they had no sitting of it.",
+        notes:
+          "Finished or in progress, with every answer in it. Their other subjects are kept. Irreversible, and recorded in the audit trail. deleted is 0 when they had no sitting of it.",
         params: [
           { name: "id", type: "string", required: true, note: "the user's id" },
           { name: "subject", type: SUBJECT_TYPE, required: true },
@@ -300,7 +318,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         notes:
           "A dry run while reminders are not live, or with preview. Unlike the daily schedule, it sends even when today's have already gone out. Each person is sent a direct message with the subjects they have done, started and not started, and a link to their tests; someone with no Slack account for their address is logged as not_in_slack.",
         body: { kind: "json", fields: [{ name: "preview", type: "boolean", note: "Default false." }] },
-        returns: "{ ok: true, runId, status: \"succeeded\" | \"skipped\", dryRun, due, messaged, notInSlack, failed, note }",
+        returns: '{ ok: true, runId, status: "succeeded" | "skipped", dryRun, due, messaged, notInSlack, failed, note }',
         errors: [
           { status: 400, error: "invalid", when: "the body has anything but preview" },
           { status: 409, error: "already_running", when: "a run is under way" },

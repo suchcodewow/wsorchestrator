@@ -92,7 +92,10 @@ function flame(id: string, pageId: string, x: number, y: number, w: number, h: n
         objectId: id,
         shapeProperties: {
           shapeBackgroundFill: { solidFill: { color: { rgbColor: { red: 0.85, green: 0.2, blue: 0.05 } } } },
-          outline: { outlineFill: { solidFill: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } }, weight: { magnitude: 0.75, unit: "PT" } },
+          outline: {
+            outlineFill: { solidFill: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+            weight: { magnitude: 0.75, unit: "PT" },
+          },
         },
         fields: "shapeBackgroundFill,outline",
       },
@@ -154,14 +157,17 @@ export async function createThankYouDeck(
       includeItemsFromAllDrives: "true",
     },
   });
-  for (const file of old?.files ?? []) await drive.call("PATCH", `/files/${file.id}`, { query: { supportsAllDrives: "true" }, body: { trashed: true } });
+  for (const file of old?.files ?? [])
+    await drive.call("PATCH", `/files/${file.id}`, { query: { supportsAllDrives: "true" }, body: { trashed: true } });
   const deck = await slides.call<{ presentationId: string; slides: { objectId: string }[] }>("POST", "/presentations", {
     body: { title: input.title },
   });
   await slides.call("POST", `/presentations/${deck.presentationId}:batchUpdate`, {
     body: { requests: thankYouRequests(deck.slides[0].objectId, input.judges).flat() },
   });
-  await drive.call("PATCH", `/files/${deck.presentationId}`, { query: { addParents: input.folderId, removeParents: "root", supportsAllDrives: "true" } });
+  await drive.call("PATCH", `/files/${deck.presentationId}`, {
+    query: { addParents: input.folderId, removeParents: "root", supportsAllDrives: "true" },
+  });
   await drive.call("POST", `/files/${deck.presentationId}/permissions`, {
     query: { sendNotificationEmail: "false", supportsAllDrives: "true" },
     body: { type: "user", role: "writer", emailAddress: input.shareWith },

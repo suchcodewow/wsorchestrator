@@ -59,11 +59,7 @@ describe("matchesMention", () => {
 
 describe("mentionSegments", () => {
   test("cuts the text into plain runs and tags", () => {
-    assert.deepEqual(mentionSegments("ping @Bo Chen now", [bo]), [
-      { text: "ping " },
-      { text: "@Bo Chen", mention: bo },
-      { text: " now" },
-    ]);
+    assert.deepEqual(mentionSegments("ping @Bo Chen now", [bo]), [{ text: "ping " }, { text: "@Bo Chen", mention: bo }, { text: " now" }]);
   });
 
   test("the longest name wins, so @Ann Lee is not read as @Ann", () => {

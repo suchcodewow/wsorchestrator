@@ -36,7 +36,9 @@ export function FeedbackSwitch({ current }: { current: FeedbackKind }) {
             aria-current={on ? "page" : undefined}
             className={cn(
               "inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-sm font-medium shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
-              on ? "border-brand-border bg-brand-subtle text-foreground" : "bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              on
+                ? "border-brand-border bg-brand-subtle text-foreground"
+                : "bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
             <Icon className="size-4" />

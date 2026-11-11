@@ -15,8 +15,7 @@ export const EVENT_GROUPS: EndpointGroup[] = [
         summary: "Lists the events you booked, newest first.",
         access: "contributor",
         token: true,
-        notes:
-          "Only the caller's own events, even for an Event Manager. Use /api/runs/calendar to see everyone's.",
+        notes: "Only the caller's own events, even for an Event Manager. Use /api/runs/calendar to see everyone's.",
         returns: "{ runs: Run[] }",
       },
       {
@@ -50,8 +49,7 @@ export const EVENT_GROUPS: EndpointGroup[] = [
             {
               name: "scenarios[]",
               type: "string[]",
-              note:
-                "default []; ids gcp-cluster, gcp-connectivity-egress, gcp-connectivity-binauthz, gcp-delegate-blocked-manager, aws-cluster, aws-connectivity-egress, azure-cluster, azure-connectivity-egress; each must belong to a cloud in `clouds`",
+              note: "default []; ids gcp-cluster, gcp-connectivity-egress, gcp-connectivity-binauthz, gcp-delegate-blocked-manager, aws-cluster, aws-connectivity-egress, azure-cluster, azure-connectivity-egress; each must belong to a cloud in `clouds`",
             },
             {
               name: "scheduledStart",
@@ -183,8 +181,7 @@ export const EVENT_GROUPS: EndpointGroup[] = [
         summary: "Restarts a teardown that gave up.",
         access: "eventOwner",
         token: true,
-        notes:
-          "Sets the event back to destroying, and the reaper starts the teardown again from the top within a few minutes.",
+        notes: "Sets the event back to destroying, and the reaper starts the teardown again from the top within a few minutes.",
         params: [{ name: "id", type: "string", required: true, note: "event UUID" }],
         returns: "{ ok: true }",
         errors: [
@@ -207,8 +204,7 @@ export const EVENT_GROUPS: EndpointGroup[] = [
             note: `"all" needs Event Manager or above; overrides the saved scope`,
           },
         ],
-        returns:
-          `{ scope: "own" | "all", runs: { id, name, mode, status, scheduledStart, ttlSeconds, expiresAt, userCount, clouds, ownerId, ownerName, ownerEmail }[] }`,
+        returns: `{ scope: "own" | "all", runs: { id, name, mode, status, scheduledStart, ttlSeconds, expiresAt, userCount, clouds, ownerId, ownerName, ownerEmail }[] }`,
         errors: [
           { status: 400, error: "invalid_scope", when: "`scope` is not own or all" },
           { status: 403, error: "forbidden", when: "`scope=all` from someone below Event Manager" },
@@ -240,8 +236,7 @@ export const EVENT_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "Lists live resources in GCP, AWS, Azure and Harness and matches each to the event that owns it. Read-only, but it calls all four providers, so it is slow. One provider failing does not fail the request; that target reports `ok: false`.",
-        returns:
-          `{ report: Record<"gcp" | "aws" | "azure" | "harness", { ok: true, audit: { target, scope, columns, resources, missing, counts } } | { ok: false, error: "not_configured" | "permission_denied" | "unavailable" }> }`,
+        returns: `{ report: Record<"gcp" | "aws" | "azure" | "harness", { ok: true, audit: { target, scope, columns, resources, missing, counts } } | { ok: false, error: "not_configured" | "permission_denied" | "unavailable" }> }`,
       },
     ],
   },
@@ -257,11 +252,9 @@ export const EVENT_GROUPS: EndpointGroup[] = [
         summary: "Reads an event's attendee page: its console links and every attendee's sign-in details.",
         access: "public",
         token: true,
-        notes:
-          "Includes each attendee's temporary password, AWS password and Azure access pass, so treat the link as a secret.",
+        notes: "Includes each attendee's temporary password, AWS password and Azure access pass, so treat the link as a secret.",
         params: [{ name: "id", type: "string", required: true, note: "event UUID" }],
-        returns:
-          `{ name, mode: "workshop" | "challenge", status, links: { cloud, url }[], harnessOrgUrl: string | null, accounts: { id, email, tempPassword, azureAccessPass, azureAccessPassExpiresAt, awsPassword, claimedName, claimedFrom, claimedVacation, claimedAt, links: { cloud, url }[], harnessProjectUrl }[] }`,
+        returns: `{ name, mode: "workshop" | "challenge", status, links: { cloud, url }[], harnessOrgUrl: string | null, accounts: { id, email, tempPassword, azureAccessPass, azureAccessPassExpiresAt, awsPassword, claimedName, claimedFrom, claimedVacation, claimedAt, links: { cloud, url }[], harnessProjectUrl }[] }`,
         errors: [{ status: 404, error: "not_found", when: "`id` is not a UUID, or no such event" }],
       },
       {

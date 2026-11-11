@@ -16,10 +16,7 @@ const STATUS_FOR: Record<ExtendRunError, number> = {
   not_extendable: 409,
 };
 
-export const POST = audited(async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const POST = audited(async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const who = await viewer(req);
   if (!who) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -28,10 +25,7 @@ export const POST = audited(async function POST(
   const { id } = await params;
   const result = await extendRun(id, who);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
   return NextResponse.json({ run: result.run });
 });

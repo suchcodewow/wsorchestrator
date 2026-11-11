@@ -23,9 +23,7 @@ import {
 
 export type Caller = TokenBearer;
 
-export type CallerGate =
-  | { error: NextResponse; user: null }
-  | { error: null; user: Caller };
+export type CallerGate = { error: NextResponse; user: null } | { error: null; user: Caller };
 
 export async function sessionOrToken(req: Request): Promise<Caller | null> {
   const session = await auth();
@@ -60,10 +58,7 @@ export async function sessionOrToken(req: Request): Promise<Caller | null> {
  * The caller, from a session or a token: 401 if neither, 403 if `allowed`
  * says no. Without `allowed`, any signed-in account passes.
  */
-export async function requireCaller(
-  req: Request,
-  allowed?: (access: Access) => boolean,
-): Promise<CallerGate> {
+export async function requireCaller(req: Request, allowed?: (access: Access) => boolean): Promise<CallerGate> {
   const caller = await sessionOrToken(req);
   if (!caller) {
     return {

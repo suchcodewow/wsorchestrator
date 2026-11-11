@@ -12,10 +12,7 @@ export function MentionText({ text, mentions, viewerEmail }: { text: string; men
           <span
             key={i}
             title={s.mention.email}
-            className={cn(
-              "rounded px-0.5 font-medium",
-              s.mention.email === me ? "bg-brand/15 text-foreground" : "text-brand",
-            )}
+            className={cn("rounded px-0.5 font-medium", s.mention.email === me ? "bg-brand/15 text-foreground" : "text-brand")}
           >
             {s.text}
           </span>

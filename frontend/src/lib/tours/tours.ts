@@ -161,11 +161,7 @@ export async function resetToursSeen(userId: string): Promise<number> {
 
 /** Records that `userId` has seen `version` of the tour; never lowers it. False when there is no such tour. */
 export async function markTourSeen(userId: string, tourId: string, version: number): Promise<boolean> {
-  const [tour] = await db
-    .select({ version: pageTours.version })
-    .from(pageTours)
-    .where(eq(pageTours.id, tourId))
-    .limit(1);
+  const [tour] = await db.select({ version: pageTours.version }).from(pageTours).where(eq(pageTours.id, tourId)).limit(1);
   if (!tour) return false;
   const seen = Math.min(version, tour.version);
   await db

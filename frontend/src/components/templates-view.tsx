@@ -8,15 +8,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  AlertTriangle,
-  Check,
-  Eye,
-  EyeOff,
-  Loader2,
-  Trash2,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Check, Eye, EyeOff, Loader2, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -34,8 +26,7 @@ const shortDate = (iso: string) =>
     day: "numeric",
   });
 
-const scopeLabel = (name: string | null, identifier: string) =>
-  name && name !== identifier ? `${name} (${identifier})` : identifier;
+const scopeLabel = (name: string | null, identifier: string) => (name && name !== identifier ? `${name} (${identifier})` : identifier);
 
 export function TemplatesView({
   sources,
@@ -63,11 +54,7 @@ export function TemplatesView({
 
   const full = sources.length >= MAX_TEMPLATE_SOURCES;
 
-  async function call(
-    key: string,
-    path: string,
-    init: RequestInit,
-  ): Promise<Record<string, unknown> | null> {
+  async function call(key: string, path: string, init: RequestInit): Promise<Record<string, unknown> | null> {
     setBusy(key);
     setError(null);
     setSaved(null);
@@ -115,9 +102,7 @@ export function TemplatesView({
       setError("That token works, but it can't see any organizations.");
       return;
     }
-    setSaved(
-      `${scopes.length} organization${scopes.length === 1 ? "" : "s"} visible to this token.`,
-    );
+    setSaved(`${scopes.length} organization${scopes.length === 1 ? "" : "s"} visible to this token.`);
   }
 
   async function pickOrg(identifier: string) {
@@ -151,9 +136,7 @@ export function TemplatesView({
     resetScopes();
     setSaved(
       `Saved ${scopeLabel(added.orgName, added.orgIdentifier)}${
-        added.projectIdentifier
-          ? ` / ${scopeLabel(added.projectName, added.projectIdentifier)}`
-          : ""
+        added.projectIdentifier ? ` / ${scopeLabel(added.projectName, added.projectIdentifier)}` : ""
       }.`,
     );
     router.refresh();
@@ -166,16 +149,9 @@ export function TemplatesView({
   }
 
   return (
-    <motion.div
-      variants={staggerParent(0.05)}
-      initial="hidden"
-      animate="show"
-      className="space-y-6"
-    >
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild}>
-        <h2 className="text-xl font-medium tracking-tight">
-          {mine ? "My templates" : "Templates"}
-        </h2>
+        <h2 className="text-xl font-medium tracking-tight">{mine ? "My templates" : "Templates"}</h2>
       </motion.div>
 
       {!configured && (
@@ -185,10 +161,7 @@ export function TemplatesView({
           className="flex gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm"
         >
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
-          <span>
-            This deployment has no encryption key, so a token cannot be stored
-            safely.
-          </span>
+          <span>This deployment has no encryption key, so a token cannot be stored safely.</span>
         </motion.div>
       )}
 
@@ -232,23 +205,11 @@ export function TemplatesView({
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                   onClick={() => setReveal((r) => !r)}
                 >
-                  {reveal ? (
-                    <EyeOff className="size-4" />
-                  ) : (
-                    <Eye className="size-4" />
-                  )}
+                  {reveal ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
-              <Button
-                variant="outline"
-                disabled={
-                  token.trim().length === 0 || busy !== null || !configured || full
-                }
-                onClick={load}
-              >
-                {busy === "load" ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : null}
+              <Button variant="outline" disabled={token.trim().length === 0 || busy !== null || !configured || full} onClick={load}>
+                {busy === "load" ? <Loader2 className="size-4 animate-spin" /> : null}
                 Load
               </Button>
             </div>
@@ -281,33 +242,19 @@ export function TemplatesView({
                   />
                 )}
 
-                <Button
-                  variant="brand"
-                  disabled={org.length === 0 || busy !== null}
-                  onClick={save}
-                >
-                  {busy === "save" ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : null}
+                <Button variant="brand" disabled={org.length === 0 || busy !== null} onClick={save}>
+                  {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : null}
                   Save
                 </Button>
               </div>
             )}
 
-            {full && (
-              <p className="text-xs text-muted-foreground">
-                Remove a source to add another ({MAX_TEMPLATE_SOURCES} is the
-                limit).
-              </p>
-            )}
+            {full && <p className="text-xs text-muted-foreground">Remove a source to add another ({MAX_TEMPLATE_SOURCES} is the limit).</p>}
           </CardContent>
         </Card>
       </motion.div>
 
-      <motion.div
-        variants={riseChild}
-        className="overflow-hidden rounded-2xl border bg-card shadow-sm"
-      >
+      <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-160 text-sm">
             <thead>
@@ -323,13 +270,8 @@ export function TemplatesView({
             <tbody>
               {sources.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="px-5 py-8 text-center text-muted-foreground"
-                  >
-                    {mine
-                      ? "No template sources of your own yet."
-                      : "No template sources yet."}
+                  <td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">
+                    {mine ? "No template sources of your own yet." : "No template sources yet."}
                   </td>
                 </tr>
               )}
@@ -337,32 +279,21 @@ export function TemplatesView({
               {sources.map((row) => {
                 const state = status[row.id];
                 return (
-                  <tr
-                    key={row.id}
-                    className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
-                  >
+                  <tr key={row.id} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
                     <td className="px-5 py-3">
                       <StatusMark row={row} status={state} />
                     </td>
                     <td className="px-5 py-3 font-medium">
                       {scopeLabel(row.orgName, row.orgIdentifier)}
-                      <span className="block text-xs font-normal text-muted-foreground">
-                        {row.accountName ?? row.accountId}
-                      </span>
+                      <span className="block text-xs font-normal text-muted-foreground">{row.accountName ?? row.accountId}</span>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
-                      {row.projectIdentifier
-                        ? scopeLabel(row.projectName, row.projectIdentifier)
-                        : "The whole organization"}
+                      {row.projectIdentifier ? scopeLabel(row.projectName, row.projectIdentifier) : "The whole organization"}
                     </td>
-                    <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
-                      …{row.tail}
-                    </td>
+                    <td className="px-5 py-3 font-mono text-xs text-muted-foreground">…{row.tail}</td>
                     <td className="px-5 py-3 text-muted-foreground">
                       {shortDate(row.createdAt)}
-                      {row.addedBy && (
-                        <span className="block text-xs">{row.addedBy}</span>
-                      )}
+                      {row.addedBy && <span className="block text-xs">{row.addedBy}</span>}
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex justify-end">
@@ -374,11 +305,7 @@ export function TemplatesView({
                           className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           onClick={() => remove(row.id)}
                         >
-                          {busy === row.id ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="size-3.5" />
-                          )}
+                          {busy === row.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
                         </Button>
                       </div>
                     </td>
@@ -435,13 +362,7 @@ function ScopePicker({
   );
 }
 
-function StatusMark({
-  row,
-  status,
-}: {
-  row: TemplateSourceRow;
-  status: SourceStatus | undefined;
-}) {
+function StatusMark({ row, status }: { row: TemplateSourceRow; status: SourceStatus | undefined }) {
   if (!status) {
     return <span className="text-muted-foreground">—</span>;
   }
@@ -449,9 +370,7 @@ function StatusMark({
   const reasons = [
     status.tokenOk ? null : "Harness rejected the stored token.",
     status.orgOk ? null : `The organization ${row.orgIdentifier} isn't there, or this token can't see it.`,
-    status.projectOk === false
-      ? `The project ${row.projectIdentifier} isn't there, or this token can't see it.`
-      : null,
+    status.projectOk === false ? `The project ${row.projectIdentifier} isn't there, or this token can't see it.` : null,
     status.detail ? `Harness said: ${status.detail}` : null,
   ].filter((r): r is string => r !== null);
 
@@ -460,9 +379,7 @@ function StatusMark({
       title={status.ok ? "Checked when this page loaded — all of it works." : reasons.join(" ")}
       className={cn(
         "inline-flex size-6 items-center justify-center rounded-full",
-        status.ok
-          ? "bg-brand/10 text-brand"
-          : "bg-destructive/10 text-destructive",
+        status.ok ? "bg-brand/10 text-brand" : "bg-destructive/10 text-destructive",
       )}
       role="img"
       aria-label={status.ok ? "Working" : reasons.join(" ")}

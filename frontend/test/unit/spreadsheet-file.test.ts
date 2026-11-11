@@ -9,24 +9,10 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { deflateRawSync } from "node:zlib";
 
-import {
-  excelSerialToIsoDate,
-  readCsv,
-  readSpreadsheet,
-  readXlsx,
-  unzip,
-} from "@/lib/spreadsheet-file";
+import { excelSerialToIsoDate, readCsv, readSpreadsheet, readXlsx, unzip } from "@/lib/spreadsheet-file";
 import { zip } from "../support/zip";
 
-function workbook({
-  sheet,
-  shared = [],
-  date1904 = false,
-}: {
-  sheet: string;
-  shared?: string[];
-  date1904?: boolean;
-}): Buffer {
+function workbook({ sheet, shared = [], date1904 = false }: { sheet: string; shared?: string[]; date1904?: boolean }): Buffer {
   return zip([
     {
       path: "xl/workbook.xml",
@@ -140,10 +126,7 @@ describe("readCsv", () => {
 describe("readSpreadsheet", () => {
   test("tells .xlsx from .csv by content, not name", () => {
     assert.deepEqual(readSpreadsheet(Buffer.from("email\na@x.com")).rows, [["email"], ["a@x.com"]]);
-    assert.deepEqual(
-      readSpreadsheet(workbook({ sheet: '<row r="1"><c r="A1"><v>1</v></c></row>' })).rows,
-      [[1]],
-    );
+    assert.deepEqual(readSpreadsheet(workbook({ sheet: '<row r="1"><c r="A1"><v>1</v></c></row>' })).rows, [[1]]);
   });
 });
 

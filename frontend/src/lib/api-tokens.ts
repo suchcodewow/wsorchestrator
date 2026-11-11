@@ -4,11 +4,7 @@ import "server-only";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  apiTokens,
-  users,
-  MAX_TOKENS_PER_USER,
-} from "@/db/schema";
+import { apiTokens, users, MAX_TOKENS_PER_USER } from "@/db/schema";
 import type { Access } from "@/lib/roles";
 import { isJudgingNow } from "@/lib/scheduler/judging";
 import { isManagerNow } from "@/lib/evals/managers";
@@ -19,8 +15,7 @@ const TOKEN_PREFIX = "wo";
 const PREFIX_BYTES = 8;
 const SECRET_BYTES = 32;
 
-const sha256 = (value: string) =>
-  createHash("sha256").update(value, "utf8").digest("hex");
+const sha256 = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
 
 /** `bundle` tokens came with the contributor bundle download, now removed; old ones run out. */
 export type TokenSource = "manual" | "bundle";
@@ -43,9 +38,7 @@ export async function mintToken(
   if (trimmed.length === 0) return { ok: false, error: "invalid_name" };
 
   const live = await listTokens(userId);
-  const manual = live.filter(
-    (t) => t.status === "active" && t.source === "manual",
-  );
+  const manual = live.filter((t) => t.status === "active" && t.source === "manual");
   if (manual.length >= MAX_TOKENS_PER_USER) {
     return { ok: false, error: "too_many" };
   }
@@ -83,11 +76,7 @@ export type TokenSummary = {
 };
 
 export async function listTokens(userId: string): Promise<TokenSummary[]> {
-  const rows = await db
-    .select()
-    .from(apiTokens)
-    .where(eq(apiTokens.userId, userId))
-    .orderBy(asc(apiTokens.createdAt));
+  const rows = await db.select().from(apiTokens).where(eq(apiTokens.userId, userId)).orderBy(asc(apiTokens.createdAt));
 
   const now = Date.now();
   return rows.map((r) => ({
@@ -95,31 +84,18 @@ export async function listTokens(userId: string): Promise<TokenSummary[]> {
     name: r.name,
     source: r.source as TokenSource,
     prefix: r.prefix,
-    status: r.revokedAt
-      ? ("revoked" as const)
-      : r.expiresAt && r.expiresAt.getTime() < now
-        ? ("expired" as const)
-        : ("active" as const),
+    status: r.revokedAt ? ("revoked" as const) : r.expiresAt && r.expiresAt.getTime() < now ? ("expired" as const) : ("active" as const),
     createdAt: r.createdAt.toISOString(),
     expiresAt: r.expiresAt?.toISOString() ?? null,
     lastUsedAt: r.lastUsedAt?.toISOString() ?? null,
   }));
 }
 
-export async function revokeToken(
-  userId: string,
-  tokenId: string,
-): Promise<boolean> {
+export async function revokeToken(userId: string, tokenId: string): Promise<boolean> {
   const revoked = await db
     .update(apiTokens)
     .set({ revokedAt: new Date() })
-    .where(
-      and(
-        eq(apiTokens.id, tokenId),
-        eq(apiTokens.userId, userId),
-        isNull(apiTokens.revokedAt),
-      ),
-    )
+    .where(and(eq(apiTokens.id, tokenId), eq(apiTokens.userId, userId), isNull(apiTokens.revokedAt)))
     .returning({ id: apiTokens.id });
 
   return revoked.length > 0;
@@ -127,12 +103,8 @@ export async function revokeToken(
 
 export type TokenBearer = { id: string; access: Access; email: string | null };
 
-export async function resolveToken(
-  presented: string,
-): Promise<TokenBearer | null> {
-  const match = new RegExp(`^${TOKEN_PREFIX}_([0-9a-f]{${PREFIX_BYTES * 2}})_(.+)$`).exec(
-    presented,
-  );
+export async function resolveToken(presented: string): Promise<TokenBearer | null> {
+  const match = new RegExp(`^${TOKEN_PREFIX}_([0-9a-f]{${PREFIX_BYTES * 2}})_(.+)$`).exec(presented);
   if (!match) return null;
   const prefix = match[1]!;
 

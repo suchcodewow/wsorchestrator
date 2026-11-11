@@ -22,11 +22,7 @@ export default async function DiagnosticParticipantsPage({
 
   const params = await searchParams;
   const query = parseListQuery(params, IRIS_PARTICIPANT_LIST);
-  const [page, counts, autoEnroll] = await Promise.all([
-    listParticipants(query, "A"),
-    participantCounts(),
-    getAutoEnroll(),
-  ]);
+  const [page, counts, autoEnroll] = await Promise.all([listParticipants(query, "A"), participantCounts(), getAutoEnroll()]);
   return (
     <ParticipantsView
       query={query}

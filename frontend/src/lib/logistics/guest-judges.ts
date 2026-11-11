@@ -9,7 +9,14 @@ import "server-only";
 
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { employees, guestSpeakerCohorts, guestSpeakerHistory, type BootcampStatus, type GuestSpeakerRole, type ScheduleTrack } from "@/db/schema";
+import {
+  employees,
+  guestSpeakerCohorts,
+  guestSpeakerHistory,
+  type BootcampStatus,
+  type GuestSpeakerRole,
+  type ScheduleTrack,
+} from "@/db/schema";
 import { employeeNameOf } from "@/lib/evals/roster";
 import type { GuestJudgeSort, JudgeProspectSort } from "@/lib/list-specs";
 import {
@@ -94,9 +101,7 @@ export async function listGuestJudges(query: ListQuery<GuestJudgeSort>): Promise
   // Always grouped by month, so the page can head each cohort: `cohort` orders
   // the months themselves, and the other sorts order people within each.
   const within =
-    query.sort === "cohort"
-      ? []
-      : [sql`${WITHIN_COHORT[query.sort]} ${sql.raw(query.dir === "asc" ? "asc" : "desc")} nulls last`];
+    query.sort === "cohort" ? [] : [sql`${WITHIN_COHORT[query.sort]} ${sql.raw(query.dir === "asc" ? "asc" : "desc")} nulls last`];
   const order = orderFor(sql`g.month`, query.sort === "cohort" ? query.dir : "desc", ...within, sql`lower(g.full_name)`, sql`g.id`);
   const { rows } = await db.execute<{
     id: string;
@@ -177,9 +182,13 @@ export type JudgeProspectRow = {
 };
 
 /** Whole months since the start date, counted by the database so every viewer sees the same. */
-const tenureMonths = sql<number | null>`(extract(year from age(current_date, ${employees.startDate})) * 12 + extract(month from age(current_date, ${employees.startDate})))::int`;
+const tenureMonths = sql<
+  number | null
+>`(extract(year from age(current_date, ${employees.startDate})) * 12 + extract(month from age(current_date, ${employees.startDate})))::int`;
 
-const location = sql<string | null>`nullif(${employees.raw} -> 'humanReadable' -> 'work' -> 'customColumns' ->> ${sql.raw(`'${HIBOB_WORK_LOCATION_COLUMN}'`)}, '')`;
+const location = sql<
+  string | null
+>`nullif(${employees.raw} -> 'humanReadable' -> 'work' -> 'customColumns' ->> ${sql.raw(`'${HIBOB_WORK_LOCATION_COLUMN}'`)}, '')`;
 
 // Written out in full: on a query of `employees` alone Drizzle leaves its columns
 // unqualified, and a bare "email" in here would be the report's own.
@@ -227,7 +236,9 @@ export async function listJudgeProspects(
       tenureMonths,
     })
     .from(employees)
-    .where(and(isProspect, inGroup(group), searchAny(query.q, [employees.fullName, employees.email, employees.title, location, employees.site])))
+    .where(
+      and(isProspect, inGroup(group), searchAny(query.q, [employees.fullName, employees.email, employees.title, location, employees.site])),
+    )
     .orderBy(...orderFor(PROSPECT_SORTS[query.sort], query.dir, sql`lower(${employees.fullName})`, employees.email))
     .limit(limit)
     .offset(offset);
@@ -244,7 +255,12 @@ export type GuestJudgeCounts = {
 
 /** Everyone who has judged, the cohorts they judged, and the leaders yet to; whatever the search. */
 export async function guestJudgeCounts(): Promise<GuestJudgeCounts> {
-  const [{ rows: [judgedCounts] }, [prospects]] = await Promise.all([
+  const [
+    {
+      rows: [judgedCounts],
+    },
+    [prospects],
+  ] = await Promise.all([
     db.execute<{ judges: number; cohorts: number }>(sql`
       select count(distinct coalesce(g.email, lower(g.full_name)))::int as judges, count(distinct g.month)::int as cohorts
       from ${judged} g
@@ -291,7 +307,10 @@ export async function removeGuestSpeaker(cohort: string, person: string): Promis
     .where(
       and(
         eq(guestSpeakerHistory.cohort, cohort),
-        or(eq(guestSpeakerHistory.email, key), and(sql`${guestSpeakerHistory.email} is null`, sql`lower(${guestSpeakerHistory.fullName}) = ${key}`)),
+        or(
+          eq(guestSpeakerHistory.email, key),
+          and(sql`${guestSpeakerHistory.email} is null`, sql`lower(${guestSpeakerHistory.fullName}) = ${key}`),
+        ),
       ),
     )
     .returning({ id: guestSpeakerHistory.id });

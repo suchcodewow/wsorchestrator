@@ -6,13 +6,7 @@
  * class on its root and reaches the face through that custom property.
  */
 
-import {
-  Anton,
-  Permanent_Marker,
-  Playfair_Display,
-  Press_Start_2P,
-  UnifrakturMaguntia,
-} from "next/font/google";
+import { Anton, Permanent_Marker, Playfair_Display, Press_Start_2P, UnifrakturMaguntia } from "next/font/google";
 
 export const anton = Anton({
   weight: "400",

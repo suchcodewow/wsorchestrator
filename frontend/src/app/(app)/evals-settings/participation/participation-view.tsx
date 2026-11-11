@@ -131,7 +131,12 @@ export function ParticipationView({ settings }: { settings: ParticipationSetting
                     >
                       <ArrowDown />
                     </Button>
-                    <Button variant="ghost" size="icon" aria-label={`Remove ${row.name}`} onClick={() => change(rows.filter((r) => r !== row))}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove ${row.name}`}
+                      onClick={() => change(rows.filter((r) => r !== row))}
+                    >
                       <X />
                     </Button>
                   </li>

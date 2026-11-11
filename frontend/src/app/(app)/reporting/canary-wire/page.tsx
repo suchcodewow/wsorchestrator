@@ -13,11 +13,7 @@ import { CanaryWireReport } from "./canary-wire-report";
 
 export const metadata: Metadata = { title: "Canary Wire" };
 
-export default async function CanaryWirePage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function CanaryWirePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   if (!canSeeCanaryWire(session.user.access)) notFound();

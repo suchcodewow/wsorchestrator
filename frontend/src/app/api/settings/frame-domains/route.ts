@@ -18,9 +18,7 @@ export async function GET(req: Request) {
   const { error } = await requireCaller(req, canManageSignInDomains);
   if (error) return error;
 
-  const { rows, page, hasMore } = await listFrameDomains(
-    parseListQuery(new URL(req.url).searchParams, FRAME_DOMAIN_LIST),
-  );
+  const { rows, page, hasMore } = await listFrameDomains(parseListQuery(new URL(req.url).searchParams, FRAME_DOMAIN_LIST));
   return NextResponse.json({ domains: rows, page, hasMore });
 }
 

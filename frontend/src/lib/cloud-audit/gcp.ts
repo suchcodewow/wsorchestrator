@@ -4,12 +4,7 @@ import "server-only";
 
 import { GoogleAuth } from "google-auth-library";
 import { missingFromCloud, type OwnerMaps } from "./owners";
-import {
-  summarize,
-  type AuditedResource,
-  type AuditUnavailable,
-  type CloudAuditResult,
-} from "./types";
+import { summarize, type AuditedResource, type AuditUnavailable, type CloudAuditResult } from "./types";
 
 const BILLING_API = "https://cloudbilling.googleapis.com/v1";
 const RESOURCE_MANAGER_API = "https://cloudresourcemanager.googleapis.com/v3";
@@ -43,8 +38,7 @@ export function infraProjectIds(): Set<string> {
  */
 const UNMANAGED_PREFIXES = ["event-"];
 
-export const isUnmanagedProject = (projectId: string) =>
-  UNMANAGED_PREFIXES.some((p) => projectId.startsWith(p));
+export const isUnmanagedProject = (projectId: string) => UNMANAGED_PREFIXES.some((p) => projectId.startsWith(p));
 
 let auth: GoogleAuth | null = null;
 
@@ -71,9 +65,7 @@ async function listBillingProjects(accountId: string): Promise<BillingProject[]>
   do {
     const qs = new URLSearchParams({ pageSize: "200" });
     if (pageToken) qs.set("pageToken", pageToken);
-    const data = await gcpGet<ProjectsResponse>(
-      `${BILLING_API}/billingAccounts/${accountId}/projects?${qs}`,
-    );
+    const data = await gcpGet<ProjectsResponse>(`${BILLING_API}/billingAccounts/${accountId}/projects?${qs}`);
     for (const p of data.projectBillingInfo ?? []) {
       if (p.projectId) {
         projects.push({
@@ -99,9 +91,7 @@ async function projectDisplayNames(): Promise<Map<string, string>> {
     do {
       const qs = new URLSearchParams({ pageSize: "500" });
       if (pageToken) qs.set("pageToken", pageToken);
-      const data = await gcpGet<ProjectSearchResponse>(
-        `${RESOURCE_MANAGER_API}/projects:search?${qs}`,
-      );
+      const data = await gcpGet<ProjectSearchResponse>(`${RESOURCE_MANAGER_API}/projects:search?${qs}`);
       for (const p of data.projects ?? []) {
         if (p.projectId && p.displayName) names.set(p.projectId, p.displayName);
       }
@@ -117,8 +107,7 @@ function classify(err: unknown): AuditUnavailable {
   return "unavailable";
 }
 
-const consoleUrl = (projectId: string) =>
-  `https://console.cloud.google.com/home/dashboard?project=${encodeURIComponent(projectId)}`;
+const consoleUrl = (projectId: string) => `https://console.cloud.google.com/home/dashboard?project=${encodeURIComponent(projectId)}`;
 
 export async function auditGcp(owners: OwnerMaps): Promise<CloudAuditResult> {
   const accountId = billingAccountId();
@@ -145,13 +134,7 @@ export async function auditGcp(owners: OwnerMaps): Promise<CloudAuditResult> {
         name: names.get(p.projectId) ?? null,
         url: consoleUrl(p.projectId),
         state: { label: "enabled", ok: true },
-        classification: owner
-          ? "tracked"
-          : infra.has(p.projectId)
-            ? "infra"
-            : isUnmanagedProject(p.projectId)
-              ? "unmanaged"
-              : "untracked",
+        classification: owner ? "tracked" : infra.has(p.projectId) ? "infra" : isUnmanagedProject(p.projectId) ? "unmanaged" : "untracked",
         owner,
       } satisfies AuditedResource,
     ];

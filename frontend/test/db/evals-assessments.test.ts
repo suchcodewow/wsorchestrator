@@ -139,7 +139,10 @@ describe("assessments", () => {
     });
     assert.ok(saved.ok);
     const after = (await getAssessment(a.id))!;
-    assert.deepEqual(after.criteria.map((c) => c.name), ["Demo, renamed", "Close"]);
+    assert.deepEqual(
+      after.criteria.map((c) => c.name),
+      ["Demo, renamed", "Close"],
+    );
     assert.equal(after.criteria[0]!.id, demo!.id);
     const gone = await db.select().from(evalsAssessmentCriteria).where(eq(evalsAssessmentCriteria.id, discovery!.id));
     assert.deepEqual(gone, []);
@@ -184,14 +187,14 @@ describe("attendees", () => {
 describe("submissions", () => {
   test("store the average to one decimal, and the whole number decides which feedback is required", async () => {
     const a = await made();
-    assert.deepEqual(
-      await saveSubmission(judge.id, a.id, sales.id, submission({ scores: scores(a.criteria, 1, 2) })),
-      { ok: false, error: "feedback_required" },
-    );
-    assert.deepEqual(
-      await saveSubmission(judge.id, a.id, sales.id, submission({ scores: scores(a.criteria, 3, 4) })),
-      { ok: false, error: "feedback_required" },
-    );
+    assert.deepEqual(await saveSubmission(judge.id, a.id, sales.id, submission({ scores: scores(a.criteria, 1, 2) })), {
+      ok: false,
+      error: "feedback_required",
+    });
+    assert.deepEqual(await saveSubmission(judge.id, a.id, sales.id, submission({ scores: scores(a.criteria, 3, 4) })), {
+      ok: false,
+      error: "feedback_required",
+    });
     const saved = await saveSubmission(
       judge.id,
       a.id,
@@ -208,10 +211,10 @@ describe("submissions", () => {
     assert.ok(first.ok);
 
     // A second first save, or a revision of a stale version, is a conflict.
-    assert.deepEqual(
-      await saveSubmission(admin.id, a.id, engineer.id, submission({ scores: scores(a.criteria, 3, 3) })),
-      { ok: false, error: "conflict" },
-    );
+    assert.deepEqual(await saveSubmission(admin.id, a.id, engineer.id, submission({ scores: scores(a.criteria, 3, 3) })), {
+      ok: false,
+      error: "conflict",
+    });
     const revises = first.submission.updatedAt.toISOString();
     const revised = await saveSubmission(
       admin.id,
@@ -221,10 +224,10 @@ describe("submissions", () => {
     );
     assert.ok(revised.ok);
     assert.equal(revised.submission.id, first.submission.id);
-    assert.deepEqual(
-      await saveSubmission(judge.id, a.id, engineer.id, submission({ scores: scores(a.criteria, 3, 3), revises })),
-      { ok: false, error: "conflict" },
-    );
+    assert.deepEqual(await saveSubmission(judge.id, a.id, engineer.id, submission({ scores: scores(a.criteria, 3, 3), revises })), {
+      ok: false,
+      error: "conflict",
+    });
 
     const form = (await getScoringForm(a.id, engineer.id, bootcampId))!;
     assert.equal(form.submission?.ownerId, admin.id);
@@ -338,7 +341,10 @@ describe("tags in a criterion's comment", () => {
     const form = (await getScoringForm(a.id, engineer.id, bootcampId))!;
     assert.deepEqual(form.submission!.scores[discovery!.id]!.mentions.map((m) => m.email).sort(), [admin.email, judge.email].sort());
     assert.deepEqual(form.submission!.scores[demo!.id]!.mentions, []);
-    assert.ok(form.people.some((p) => p.email === judge.email), "a guest judge of the bootcamp can be tagged");
+    assert.ok(
+      form.people.some((p) => p.email === judge.email),
+      "a guest judge of the bootcamp can be tagged",
+    );
 
     const [mine] = await tagsIn(admin, admin.access, a.id);
     assert.equal(mine?.text, "Ask @them");

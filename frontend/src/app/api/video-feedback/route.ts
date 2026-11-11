@@ -66,7 +66,13 @@ export const POST = audited(async function POST(req: Request) {
   noteAudit({
     target: feedback.id,
     targetLabel: video.label,
-    detail: { rating: feedback.rating, position: feedback.positionSeconds, commented: comment !== null, language: feedback.language, object: feedback.videoObject },
+    detail: {
+      rating: feedback.rating,
+      position: feedback.positionSeconds,
+      commented: comment !== null,
+      language: feedback.language,
+      object: feedback.videoObject,
+    },
   });
   return NextResponse.json({ feedback }, { status: 201 });
 });

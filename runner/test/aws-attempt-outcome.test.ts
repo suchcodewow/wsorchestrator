@@ -11,11 +11,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  AWS_RETRY_DELAYS_MS,
-  awsAttemptOutcome,
-  type AwsRetryKind,
-} from "../src/classify.js";
+import { AWS_RETRY_DELAYS_MS, awsAttemptOutcome, type AwsRetryKind } from "../src/classify.js";
 import { expecting, failure } from "./fixtures/production-failures.js";
 
 const fresh = (): Record<AwsRetryKind, number> => ({
@@ -27,10 +23,7 @@ describe("awsAttemptOutcome", () => {
   test("retries the warm-up every AWS run actually hits", () => {
     // The pair from run fe1c540a (2026-09-12), which recovered on the first
     // retry and built its cluster — the run that prompted this.
-    const stderr = [
-      failure("aws-ec2-optin-describe-azs").message,
-      failure("aws-ec2-optin-createvpc").message,
-    ].join("\n");
+    const stderr = [failure("aws-ec2-optin-describe-azs").message, failure("aws-ec2-optin-createvpc").message].join("\n");
 
     assert.deepEqual(awsAttemptOutcome(stderr, fresh()), {
       action: "retry",
@@ -63,19 +56,16 @@ describe("awsAttemptOutcome", () => {
       contention: 0,
     };
 
-    assert.deepEqual(
-      awsAttemptOutcome(failure("aws-org-concurrent-modification").message, spent),
-      { action: "retry", kind: "contention", delayMs: 60_000 },
-    );
+    assert.deepEqual(awsAttemptOutcome(failure("aws-org-concurrent-modification").message, spent), {
+      action: "retry",
+      kind: "contention",
+      delayMs: 60_000,
+    });
   });
 
   test("fails on a message no retry can fix, whatever the budget", () => {
     for (const f of expecting("fail")) {
-      assert.deepEqual(
-        awsAttemptOutcome(f.message, fresh()),
-        { action: "fail" },
-        `${f.id} should not be retried`,
-      );
+      assert.deepEqual(awsAttemptOutcome(f.message, fresh()), { action: "fail" }, `${f.id} should not be retried`);
     }
   });
 });

@@ -10,15 +10,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
-import {
-  HEADER_ROW,
-  LINK_ROW,
-  Pager,
-  PlainHeader,
-  SortHeader,
-  TableSearch,
-  useRowLink,
-} from "@/components/data-table";
+import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { SessionLookFields, type SessionLook } from "@/components/session-look-fields";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -50,7 +42,15 @@ export function SessionTypesView({ query, page }: { query: ListQuery<SessionType
   const sortProps = { sort: query.sort, dir: query.dir };
 
   async function remove(t: SessionTypeRow) {
-    if (!(await confirmDialog({ title: `Remove the ${t.name} session type?`, description: "Sessions started from it keep what they took from it.", confirmLabel: "Remove", destructive: true }))) return;
+    if (
+      !(await confirmDialog({
+        title: `Remove the ${t.name} session type?`,
+        description: "Sessions started from it keep what they took from it.",
+        confirmLabel: "Remove",
+        destructive: true,
+      }))
+    )
+      return;
     setBusy(t.id);
     setError(null);
     try {
@@ -154,7 +154,14 @@ export function SessionTypesView({ query, page }: { query: ListQuery<SessionType
                   <td className="px-5 py-2">
                     {ordered ? (
                       <div className="flex">
-                        <Button variant="ghost" size="icon" className="size-7" aria-label={`Move ${t.name} up`} disabled={i === 0 || busy !== null} onClick={() => move(t, -1)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7"
+                          aria-label={`Move ${t.name} up`}
+                          disabled={i === 0 || busy !== null}
+                          onClick={() => move(t, -1)}
+                        >
                           ↑
                         </Button>
                         <Button
@@ -173,7 +180,12 @@ export function SessionTypesView({ query, page }: { query: ListQuery<SessionType
                     )}
                   </td>
                   <td className="px-5 py-3">
-                    <span className={cn("inline-flex items-center gap-2 rounded-md border border-l-4 px-2 py-0.5 font-medium", SESSION_STYLES[t.color].card)}>
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-2 rounded-md border border-l-4 px-2 py-0.5 font-medium",
+                        SESSION_STYLES[t.color].card,
+                      )}
+                    >
                       {t.emoji && <span aria-hidden>{t.emoji}</span>}
                       {t.name}
                     </span>
@@ -183,7 +195,13 @@ export function SessionTypesView({ query, page }: { query: ListQuery<SessionType
                   <td className="max-w-80 truncate px-5 py-3 text-muted-foreground">{t.description || "—"}</td>
                   <td className="px-5 py-2">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" aria-label={`Edit ${t.name}`} disabled={busy === t.id} onClick={() => setEditing(t)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Edit ${t.name}`}
+                        disabled={busy === t.id}
+                        onClick={() => setEditing(t)}
+                      >
                         <Pencil className="size-3.5" />
                       </Button>
                       <Button

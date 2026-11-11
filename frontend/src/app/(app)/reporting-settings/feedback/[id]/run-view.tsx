@@ -163,11 +163,7 @@ export function NoticeRunView({
               {page.rows.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-5 py-8 text-center text-muted-foreground">
-                    {query.q || kind
-                      ? "Nothing matches."
-                      : run.status === "running"
-                        ? "Starting…"
-                        : "Nobody was messaged."}
+                    {query.q || kind ? "Nothing matches." : run.status === "running" ? "Starting…" : "Nobody was messaged."}
                   </td>
                 </tr>
               )}

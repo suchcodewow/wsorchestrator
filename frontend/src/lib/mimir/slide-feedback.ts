@@ -60,7 +60,9 @@ export async function listSlideFeedback(query: ListQuery<SlideFeedbackSort>): Pr
   const { limit, offset } = pageWindow(query.page);
   const where = searchAny(query.q, [sql`f.comment`, sql`u.name`, sql`u.email`]) ?? sql`true`;
   const order = orderFor(SORT_COLUMNS[query.sort], query.dir, sql`f.created_at desc`, sql`f.id`);
-  const { rows } = await db.execute<Omit<SlideFeedbackRow, "user"> & { userName: string | null; userEmail: string | null; userId: string | null }>(sql`
+  const { rows } = await db.execute<
+    Omit<SlideFeedbackRow, "user"> & { userName: string | null; userEmail: string | null; userId: string | null }
+  >(sql`
     select f.id, f.seed, f.theme, f.rating, f.comment, f.created_at as "createdAt",
            f.user_id as "userId", u.name as "userName", u.email as "userEmail"
       from ${mimirSlideFeedback} f

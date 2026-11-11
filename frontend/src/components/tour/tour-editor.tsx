@@ -109,7 +109,13 @@ export function TourEditor({
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
-    setDrafts((d) => arrayMove(d, d.findIndex((s) => s.key === active.id), d.findIndex((s) => s.key === over.id)));
+    setDrafts((d) =>
+      arrayMove(
+        d,
+        d.findIndex((s) => s.key === active.id),
+        d.findIndex((s) => s.key === over.id),
+      ),
+    );
   };
 
   const change = (key: string, patch: Partial<Draft>) => setDrafts((d) => d.map((s) => (s.key === key ? { ...s, ...patch } : s)));
@@ -122,7 +128,13 @@ export function TourEditor({
         setDrafts((d) => d.map((s) => (s.key === key ? { ...s, target } : s)));
         return;
       }
-      const fresh: Draft = { key: crypto.randomUUID(), title: target.label.slice(0, TOUR_LIMITS.title), body: "", placement: "auto", target };
+      const fresh: Draft = {
+        key: crypto.randomUUID(),
+        title: target.label.slice(0, TOUR_LIMITS.title),
+        body: "",
+        placement: "auto",
+        target,
+      };
       setDrafts((d) => [...d, fresh]);
       setOpen(fresh.key);
     },
@@ -223,9 +235,16 @@ export function TourEditor({
               <code className="rounded-md bg-muted px-2 py-1.5 text-xs">{tour.pathPattern}</code>
             ) : (
               <>
-                <Input value={pattern} onChange={(e) => setPattern(e.target.value.trim())} aria-invalid={!patternOk} className="font-mono text-xs" />
+                <Input
+                  value={pattern}
+                  onChange={(e) => setPattern(e.target.value.trim())}
+                  aria-invalid={!patternOk}
+                  className="font-mono text-xs"
+                />
                 <span className={cn("text-xs", patternOk ? "text-muted-foreground" : "text-destructive")}>
-                  {patternOk ? "[id] stands for any one part of the path." : "Start with /, and use only letters, digits, - . _ ~ and [name]."}
+                  {patternOk
+                    ? "[id] stands for any one part of the path."
+                    : "Start with /, and use only letters, digits, - . _ ~ and [name]."}
                 </span>
               </>
             )}
@@ -260,7 +279,12 @@ export function TourEditor({
             </DndContext>
           )}
 
-          <Button variant="outline" className="self-start" disabled={drafts.length >= TOUR_LIMITS.steps} onClick={() => setPicking({ key: null })}>
+          <Button
+            variant="outline"
+            className="self-start"
+            disabled={drafts.length >= TOUR_LIMITS.steps}
+            onClick={() => setPicking({ key: null })}
+          >
             <Plus /> Add a step
           </Button>
         </div>
@@ -384,7 +408,9 @@ function StepRow({
           className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-1 text-left text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <span className="w-5 shrink-0 text-muted-foreground tabular-nums">{number}.</span>
-          <span className={cn("min-w-0 flex-1 truncate", !draft.title && "text-muted-foreground italic")}>{draft.title || "Untitled step"}</span>
+          <span className={cn("min-w-0 flex-1 truncate", !draft.title && "text-muted-foreground italic")}>
+            {draft.title || "Untitled step"}
+          </span>
           {!found && (
             <span title={`Can't find "${draft.target.label}" on this page`} className="shrink-0 text-amber-600 dark:text-amber-400">
               <TriangleAlert className="size-4" aria-label="Element not found" />
@@ -434,4 +460,3 @@ function StepRow({
     </li>
   );
 }
-

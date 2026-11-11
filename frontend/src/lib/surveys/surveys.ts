@@ -421,10 +421,7 @@ const RESPONSE_SORTS = {
 } as const;
 
 /** The answered copies of survey `surveyId`, a page at a time. */
-export async function listSurveyResponses(
-  surveyId: string,
-  query: ListQuery<SurveyResponseSort>,
-): Promise<Page<SurveyResponseRow>> {
+export async function listSurveyResponses(surveyId: string, query: ListQuery<SurveyResponseSort>): Promise<Page<SurveyResponseRow>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({

@@ -57,9 +57,7 @@ async function main() {
       await importProduction();
       break;
     default:
-      throw new Error(
-        `unknown command "${command}" (expected "run", "reap", "provision-due", or "import-production")`,
-      );
+      throw new Error(`unknown command "${command}" (expected "run", "reap", "provision-due", or "import-production")`);
   }
 }
 

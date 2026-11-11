@@ -23,9 +23,6 @@ export async function GET(req: Request) {
 
   const reader = readerOf(user);
   const query = parseListQuery(params, BOOTCAMP_RECORD_LIST);
-  const [{ rows, page, hasMore }, counts] = await Promise.all([
-    listBootcampRecords(reader, query, status),
-    bootcampRecordCounts(reader),
-  ]);
+  const [{ rows, page, hasMore }, counts] = await Promise.all([listBootcampRecords(reader, query, status), bootcampRecordCounts(reader)]);
   return NextResponse.json({ people: rows, page, hasMore, status, counts });
 }

@@ -16,7 +16,10 @@ const task = (id: string) => TASKS.find((t) => t.id === id)!;
 describe("lineDiff", () => {
   test("an unchanged file is all kept lines", () => {
     const lines = lineDiff("a\nb", "a\nb");
-    assert.deepEqual(lines.map((l) => l.kind), ["same", "same"]);
+    assert.deepEqual(
+      lines.map((l) => l.kind),
+      ["same", "same"],
+    );
     assert.deepEqual(diffStats(lines), { added: 0, removed: 0 });
   });
 
@@ -48,8 +51,13 @@ describe("lineDiff", () => {
 
 describe("highlightHtml", () => {
   test("the tokens join back into the source, starting page included", () => {
-    for (const src of [START_CODE, "<div class=\"x", "a < b", "<style>a { color: red", "<!-- open", ""]) {
-      assert.equal(highlightHtml(src).map((t) => t.text).join(""), src);
+    for (const src of [START_CODE, '<div class="x', "a < b", "<style>a { color: red", "<!-- open", ""]) {
+      assert.equal(
+        highlightHtml(src)
+          .map((t) => t.text)
+          .join(""),
+        src,
+      );
     }
   });
 
@@ -84,7 +92,10 @@ describe("highlightHtml", () => {
 
 describe("the ticket's tasks", () => {
   test("none is done on the starting page", () => {
-    assert.deepEqual(TASKS.filter((t) => t.done(START_CODE)).map((t) => t.id), []);
+    assert.deepEqual(
+      TASKS.filter((t) => t.done(START_CODE)).map((t) => t.id),
+      [],
+    );
   });
 
   test("each is done by the change its hint describes", () => {

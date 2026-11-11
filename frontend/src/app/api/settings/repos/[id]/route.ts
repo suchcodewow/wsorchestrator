@@ -5,10 +5,7 @@ import { requireAdministrator } from "@/lib/api-auth";
 import { deleteRepo, STATUS_FOR, updateRepo } from "@/lib/harness-repos";
 import { audited } from "@/lib/audit";
 
-export const PATCH = audited(async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireAdministrator(req);
   if (error) return error;
 
@@ -24,28 +21,19 @@ export const PATCH = audited(async function PATCH(
   const { id } = await params;
   const result = await updateRepo(id, body);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
   return NextResponse.json({ ok: true });
 });
 
-export const DELETE = audited(async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireAdministrator(req);
   if (error) return error;
 
   const { id } = await params;
   const result = await deleteRepo(id);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
   return NextResponse.json({ ok: true });
 });

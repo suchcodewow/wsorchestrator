@@ -15,15 +15,12 @@ import { TITLE_LIST, type TitleSort } from "@/lib/list-specs";
 import { parseListQuery, type ListQuery } from "@/lib/paging";
 import { AutomationView, type ListedTitles } from "../automation-view";
 
-export default async function AutomationPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function AutomationPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
-  const queries = Object.fromEntries(
-    EVALS_TITLE_LISTS.map((list) => [list, parseListQuery(params, TITLE_LIST, list)]),
-  ) as Record<EvalsTitleList, ListQuery<TitleSort>>;
+  const queries = Object.fromEntries(EVALS_TITLE_LISTS.map((list) => [list, parseListQuery(params, TITLE_LIST, list)])) as Record<
+    EvalsTitleList,
+    ListQuery<TitleSort>
+  >;
 
   const [pages, counts, roster, orgLeaderEmail, cutoffs, deferralDays, bootcampStart] = await Promise.all([
     Promise.all(EVALS_TITLE_LISTS.map((list) => listTitles({ ...queries[list], list }))),

@@ -2,12 +2,7 @@
 
 import { notFound } from "next/navigation";
 import { z } from "zod";
-import {
-  countMeetingSyncChanges,
-  getMeetingSyncRun,
-  isMeetingChangeKind,
-  listMeetingSyncChanges,
-} from "@/lib/evals/google-meetings";
+import { countMeetingSyncChanges, getMeetingSyncRun, isMeetingChangeKind, listMeetingSyncChanges } from "@/lib/evals/google-meetings";
 import { MEETING_SYNC_CHANGE_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { MeetingRunView } from "./run-view";
@@ -19,7 +14,10 @@ export default async function MeetingRunPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const id = z.string().uuid().safeParse((await params).id);
+  const id = z
+    .string()
+    .uuid()
+    .safeParse((await params).id);
   const run = id.success ? await getMeetingSyncRun(id.data) : null;
   if (!run) notFound();
 

@@ -77,19 +77,28 @@ describe("saving", () => {
     const second = await saveTour(admin.id, pattern, { version: 1, steps: [step("c")] });
     assert.ok(second.ok);
     assert.equal(second.tour.version, 2);
-    assert.deepEqual((await tourByPattern(pattern))?.steps.map((s) => s.title), ["c"]);
+    assert.deepEqual(
+      (await tourByPattern(pattern))?.steps.map((s) => s.title),
+      ["c"],
+    );
   });
 
   test("an edit started from an older version is refused, and changes nothing", async () => {
     const stale = await saveTour(admin.id, pattern, { version: 1, steps: [step("stale")] });
     assert.deepEqual(stale, { ok: false, error: "conflict", version: 2 });
-    assert.deepEqual((await tourByPattern(pattern))?.steps.map((s) => s.title), ["c"]);
+    assert.deepEqual(
+      (await tourByPattern(pattern))?.steps.map((s) => s.title),
+      ["c"],
+    );
   });
 
   test("steps come back in the order they were saved", async () => {
     const order = ["z", "a", "m", "b"];
     await saveTour(admin.id, pattern, { steps: order.map(step) });
-    assert.deepEqual((await tourByPattern(pattern))?.steps.map((s) => s.title), order);
+    assert.deepEqual(
+      (await tourByPattern(pattern))?.steps.map((s) => s.title),
+      order,
+    );
   });
 });
 

@@ -12,26 +12,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { SPRING_SNAPPY } from "@/lib/motion";
-import {
-  CLOUDS,
-  CLOUD_LABELS,
-  limitsFor,
-  type Cloud,
-  type ScenarioId,
-  type WorkshopRun,
-} from "@/db/schema";
+import { CLOUDS, CLOUD_LABELS, limitsFor, type Cloud, type ScenarioId, type WorkshopRun } from "@/db/schema";
 import { ScenarioPicker } from "@/components/scenario-picker";
 import { withClusterScenario } from "@/lib/scenario-catalog";
 
 const ERRORS: Record<string, string> = {
   locked: "This event can no longer be changed.",
-  shrink_not_allowed:
-    "A running event can only grow — attendee accounts are already in use.",
-  cloud_removal_not_allowed:
-    "A cloud already provisioned for a running event can't be removed.",
+  shrink_not_allowed: "A running event can only grow — attendee accounts are already in use.",
+  cloud_removal_not_allowed: "A cloud already provisioned for a running event can't be removed.",
   invalid_body: "Check the attendee count and cloud selection.",
-  exceeds_mode_limits:
-    "That user count or cloud selection is outside what this event kind allows.",
+  exceeds_mode_limits: "That user count or cloud selection is outside what this event kind allows.",
   not_found: "This event no longer exists.",
 };
 
@@ -80,16 +70,12 @@ export function RunConfig({
       setClouds([cloud]);
       return;
     }
-    setClouds((prev) =>
-      prev.includes(cloud) ? prev.filter((c) => c !== cloud) : [...prev, cloud],
-    );
+    setClouds((prev) => (prev.includes(cloud) ? prev.filter((c) => c !== cloud) : [...prev, cloud]));
   }
 
   function toggleScenario(id: ScenarioId) {
     setScenarios((prev) => {
-      const next = prev.includes(id)
-        ? prev.filter((s) => s !== id)
-        : [...prev, id];
+      const next = prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id];
       return withClusterScenario(next, clouds);
     });
   }
@@ -137,9 +123,7 @@ export function RunConfig({
       ) : (
         <p className="text-sm text-muted-foreground">
           {growOnly
-            ? `This ${run.mode} is live, so you can add users${
-                singleCloud ? "" : " and clouds"
-              } but not remove them.`
+            ? `This ${run.mode} is live, so you can add users${singleCloud ? "" : " and clouds"} but not remove them.`
             : `This ${run.mode} hasn't been provisioned yet, so anything can change.`}
         </p>
       )}
@@ -163,9 +147,7 @@ export function RunConfig({
       </div>
 
       <fieldset className="grid gap-2">
-        <legend className="mb-2 text-sm font-medium">
-          {singleCloud ? "Cloud" : "Clouds"}
-        </legend>
+        <legend className="mb-2 text-sm font-medium">{singleCloud ? "Cloud" : "Clouds"}</legend>
         <div className="grid gap-2">
           {CLOUDS.map((cloud) => {
             const provisioned = growOnly && run.clouds.includes(cloud);
@@ -187,19 +169,14 @@ export function RunConfig({
                   selected ? "border-brand-border bg-brand/8" : "",
                   disabled
                     ? "cursor-not-allowed opacity-70"
-                    : cn(
-                        "cursor-pointer",
-                        !selected && "hover:border-brand-border/60 hover:bg-accent/40",
-                      ),
+                    : cn("cursor-pointer", !selected && "hover:border-brand-border/60 hover:bg-accent/40"),
                 )}
               >
                 <span
                   className={cn(
                     "flex size-4.5 shrink-0 items-center justify-center border transition-colors",
                     singleCloud ? "rounded-full" : "rounded-[5px]",
-                    selected
-                      ? "border-brand bg-brand text-brand-foreground"
-                      : "border-input",
+                    selected ? "border-brand bg-brand text-brand-foreground" : "border-input",
                   )}
                 >
                   {selected && <Check className="size-3" strokeWidth={3} />}
@@ -231,9 +208,7 @@ export function RunConfig({
       )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {saved && !dirty && !error && (
-        <p className="text-sm text-emerald-600">Saved.</p>
-      )}
+      {saved && !dirty && !error && <p className="text-sm text-emerald-600">Saved.</p>}
 
       {!locked && (
         <div>
@@ -242,10 +217,7 @@ export function RunConfig({
             {pending ? "Saving…" : "Save changes"}
           </Button>
           {growOnly && dirty && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Saving creates the additions; existing accounts keep their
-              credentials.
-            </p>
+            <p className="mt-2 text-xs text-muted-foreground">Saving creates the additions; existing accounts keep their credentials.</p>
           )}
         </div>
       )}

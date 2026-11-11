@@ -4,14 +4,7 @@
 
 import { StatusBadge } from "@/components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  CLOUD_LABELS,
-  editabilityOf,
-  type RunLog,
-  type RunResource,
-  type WorkshopAccount,
-  type WorkshopRun,
-} from "@/db/schema";
+import { CLOUD_LABELS, editabilityOf, type RunLog, type RunResource, type WorkshopAccount, type WorkshopRun } from "@/db/schema";
 import {
   ArrowLeft,
   Boxes,
@@ -67,14 +60,10 @@ function humanDuration(seconds: number): string {
   return plural(Math.round(seconds / 60), "minute");
 }
 
-function destroyMoment(
-  run: WorkshopRun,
-): { label: string; when: Date; projected: boolean } | null {
+function destroyMoment(run: WorkshopRun): { label: string; when: Date; projected: boolean } | null {
   if (run.status === "failed") return null;
   if (run.status === "destroyed") {
-    return run.destroyedAt
-      ? { label: "Destroyed", when: new Date(run.destroyedAt), projected: false }
-      : null;
+    return run.destroyedAt ? { label: "Destroyed", when: new Date(run.destroyedAt), projected: false } : null;
   }
   if (run.expiresAt) {
     const when = new Date(run.expiresAt);
@@ -89,9 +78,7 @@ function destroyMoment(
   if (run.scheduledStart) {
     return {
       label: "Destroys",
-      when: new Date(
-        new Date(run.scheduledStart).getTime() + run.ttlSeconds * 1000,
-      ),
+      when: new Date(new Date(run.scheduledStart).getTime() + run.ttlSeconds * 1000),
       projected: true,
     };
   }
@@ -146,8 +133,7 @@ export function RunView({
   }, [runId, router]);
 
   const { status, scheduledStart, deleteRequested, expiresAt } = data.run;
-  const overdue =
-    status === "ready" && expiresAt !== null && new Date(expiresAt) <= new Date();
+  const overdue = status === "ready" && expiresAt !== null && new Date(expiresAt) <= new Date();
   useEffect(() => {
     if (ACTIVE.has(status) || deleteRequested) {
       const timer = setInterval(refresh, 2500);
@@ -166,10 +152,13 @@ export function RunView({
       const lead = new Date(scheduledStart).getTime() - Date.now();
       if (lead > 12 * 60 * 60 * 1000) return;
       let interval: ReturnType<typeof setInterval>;
-      const start = setTimeout(() => {
-        void refresh();
-        interval = setInterval(refresh, 3000);
-      }, Math.max(0, lead));
+      const start = setTimeout(
+        () => {
+          void refresh();
+          interval = setInterval(refresh, 3000);
+        },
+        Math.max(0, lead),
+      );
       return () => {
         clearTimeout(start);
         clearInterval(interval);
@@ -191,12 +180,7 @@ export function RunView({
   const destroy = destroyMoment(run);
 
   return (
-    <motion.div
-      variants={staggerParent(0.05)}
-      initial="hidden"
-      animate="show"
-      className="space-y-6"
-    >
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild}>
         <Link
           href="/events"
@@ -212,33 +196,19 @@ export function RunView({
               <span className="capitalize">{run.mode}</span>
               {" · "}
               {run.userCount} user{run.userCount === 1 ? "" : "s"}
-              {run.clouds.length > 0 &&
-                ` · ${run.clouds.map((c) => CLOUD_LABELS[c]).join(", ")}`}
+              {run.clouds.length > 0 && ` · ${run.clouds.map((c) => CLOUD_LABELS[c]).join(", ")}`}
             </p>
             {run.status === "scheduled" && run.scheduledStart && (
-              <p className="text-sm text-muted-foreground">
-                Scheduled for {new Date(run.scheduledStart).toLocaleString()}
-              </p>
+              <p className="text-sm text-muted-foreground">Scheduled for {new Date(run.scheduledStart).toLocaleString()}</p>
             )}
             {destroy && (
               <p className="text-sm text-muted-foreground">
                 {destroy.projected ? "Destroys around " : `${destroy.label} `}
-                <span className="font-medium text-foreground">
-                  {destroy.when.toLocaleString()}
-                </span>
-                {destroy.projected && (
-                  <span className="text-muted-foreground">
-                    {" "}
-                    — {humanDuration(run.ttlSeconds)} after it starts
-                  </span>
-                )}
+                <span className="font-medium text-foreground">{destroy.when.toLocaleString()}</span>
+                {destroy.projected && <span className="text-muted-foreground"> — {humanDuration(run.ttlSeconds)} after it starts</span>}
               </p>
             )}
-            {overdue && (
-              <p className="text-sm text-muted-foreground">
-                Teardown starts within a few minutes.
-              </p>
-            )}
+            {overdue && <p className="text-sm text-muted-foreground">Teardown starts within a few minutes.</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {!owned && owner && (
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
@@ -269,10 +239,8 @@ export function RunView({
         <motion.div variants={riseChild}>
           <Card className="border-amber-500/40 bg-amber-500/5">
             <CardContent className="py-4 text-sm">
-              Imported from production. This is a read-only copy of the
-              production event, so it cannot be changed, started or deleted
-              here, and this deployment&apos;s runner never acts on it. Its
-              attendee passwords were removed during the import.
+              Imported from production. This is a read-only copy of the production event, so it cannot be changed, started or deleted here,
+              and this deployment&apos;s runner never acts on it. Its attendee passwords were removed during the import.
             </CardContent>
           </Card>
         </motion.div>
@@ -282,8 +250,7 @@ export function RunView({
         <motion.div variants={riseChild}>
           <Card className="border-amber-500/40 bg-amber-500/5">
             <CardContent className="py-4 text-sm">
-              Deletion requested — this event is being torn down and will
-              disappear in a few minutes.
+              Deletion requested — this event is being torn down and will disappear in a few minutes.
             </CardContent>
           </Card>
         </motion.div>
@@ -295,9 +262,7 @@ export function RunView({
             <CardHeader>
               <CardTitle className="text-destructive">Error</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm whitespace-pre-line">
-              {run.error}
-            </CardContent>
+            <CardContent className="text-sm whitespace-pre-line">{run.error}</CardContent>
           </Card>
         </motion.div>
       )}
@@ -308,27 +273,15 @@ export function RunView({
       >
         {accounts.length > 0 && <AttendeeLink runId={run.id} mode={run.mode} />}
 
-        {(resources.length > 0 || ACTIVE.has(run.status)) && (
-          <BuiltPanel run={run} resources={resources} />
-        )}
+        {(resources.length > 0 || ACTIVE.has(run.status)) && <BuiltPanel run={run} resources={resources} />}
 
         {outputs && Object.keys(outputs).length > 0 && (
           <Panel
             title="Raw outputs"
             action={
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowOutputs((on) => !on)}
-                aria-expanded={showOutputs}
-              >
+              <Button variant="outline" size="sm" onClick={() => setShowOutputs((on) => !on)} aria-expanded={showOutputs}>
                 {showOutputs ? "Hide" : "Show"} outputs
-                <ChevronDown
-                  className={cn(
-                    "transition-transform duration-200",
-                    showOutputs && "rotate-180",
-                  )}
-                />
+                <ChevronDown className={cn("transition-transform duration-200", showOutputs && "rotate-180")} />
               </Button>
             }
           >
@@ -336,9 +289,7 @@ export function RunView({
               <div className="grid gap-2.5 text-sm">
                 {Object.entries(outputs).map(([k, v]) => (
                   <div key={k} className="flex gap-3">
-                    <span className="w-40 shrink-0 text-muted-foreground">
-                      {k}
-                    </span>
+                    <span className="w-40 shrink-0 text-muted-foreground">{k}</span>
                     <OutputValue value={v} />
                   </div>
                 ))}
@@ -348,11 +299,7 @@ export function RunView({
         )}
 
         <Panel title="Configuration">
-          <RunConfig
-            run={run}
-            editability={imported ? "locked" : editabilityOf(run.status)}
-            onSaved={refresh}
-          />
+          <RunConfig run={run} editability={imported ? "locked" : editabilityOf(run.status)} onSaved={refresh} />
         </Panel>
 
         {accounts.length > 0 && (
@@ -365,19 +312,9 @@ export function RunView({
               </>
             }
             action={
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowCredentials((on) => !on)}
-                aria-expanded={showCredentials}
-              >
+              <Button variant="outline" size="sm" onClick={() => setShowCredentials((on) => !on)} aria-expanded={showCredentials}>
                 {showCredentials ? "Hide" : "Show"} credentials
-                <ChevronDown
-                  className={cn(
-                    "transition-transform duration-200",
-                    showCredentials && "rotate-180",
-                  )}
-                />
+                <ChevronDown className={cn("transition-transform duration-200", showCredentials && "rotate-180")} />
               </Button>
             }
           >
@@ -389,44 +326,28 @@ export function RunView({
                       <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                         <th className="pb-2 font-medium">Email</th>
                         <th className="pb-2 font-medium">Temporary password</th>
-                        {hasAccessPass && (
-                          <th className="pb-2 font-medium">Azure access pass</th>
-                        )}
+                        {hasAccessPass && <th className="pb-2 font-medium">Azure access pass</th>}
                         <th className="pb-2 font-medium">Claimed by</th>
                       </tr>
                     </thead>
                     <tbody className="font-mono">
                       {accounts.map((a) => (
-                        <tr
-                          key={a.id}
-                          className="border-t transition-colors hover:bg-muted/40"
-                        >
+                        <tr key={a.id} className="border-t transition-colors hover:bg-muted/40">
                           <td className="py-2 pr-4 break-all">{a.email}</td>
                           <td className="py-2 pr-4">{a.tempPassword}</td>
                           {hasAccessPass && (
                             <td className="py-2 pr-4">
-                              {a.azureAccessPass ?? (
-                                <span className="font-sans text-muted-foreground">
-                                  none
-                                </span>
-                              )}
+                              {a.azureAccessPass ?? <span className="font-sans text-muted-foreground">none</span>}
                             </td>
                           )}
-                          <td className="py-2 font-sans">
-                            {a.claimedName ?? (
-                              <span className="text-muted-foreground">
-                                unclaimed
-                              </span>
-                            )}
-                          </td>
+                          <td className="py-2 font-sans">{a.claimedName ?? <span className="text-muted-foreground">unclaimed</span>}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  This password works in every cloud except AWS, which generates
-                  its own on the attendee page
+                  This password works in every cloud except AWS, which generates its own on the attendee page
                   {hasAccessPass && ", and Azure, which asks for the access pass"}.
                 </p>
               </div>
@@ -445,17 +366,9 @@ export function RunView({
               className="group inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               Follow
-              <span
-                className={cn(
-                  "relative h-5 w-9 rounded-full transition-colors",
-                  tail ? "bg-brand" : "bg-input",
-                )}
-              >
+              <span className={cn("relative h-5 w-9 rounded-full transition-colors", tail ? "bg-brand" : "bg-input")}>
                 <span
-                  className={cn(
-                    "absolute top-0.5 size-4 rounded-full bg-white shadow-xs transition-all",
-                    tail ? "left-4.5" : "left-0.5",
-                  )}
+                  className={cn("absolute top-0.5 size-4 rounded-full bg-white shadow-xs transition-all", tail ? "left-4.5" : "left-0.5")}
                 />
               </span>
             </button>
@@ -465,27 +378,16 @@ export function RunView({
             ref={logBoxRef}
             className="scrollbar-on-dark max-h-112 overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200"
           >
-            {logs.length === 0 && (
-              <span className="text-slate-500">Waiting for output…</span>
-            )}
+            {logs.length === 0 && <span className="text-slate-500">Waiting for output…</span>}
             {logs.map((l) => (
               <motion.div
                 key={l.id}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.2 }}
-                className={cn(
-                  "flex gap-3",
-                  l.stream === "stderr"
-                    ? "text-red-400"
-                    : l.stream === "system"
-                      ? "text-sky-400"
-                      : "",
-                )}
+                className={cn("flex gap-3", l.stream === "stderr" ? "text-red-400" : l.stream === "system" ? "text-sky-400" : "")}
               >
-                <span className="shrink-0 text-slate-600 tnum">
-                  {new Date(l.ts).toLocaleTimeString()}
-                </span>
+                <span className="shrink-0 text-slate-600 tnum">{new Date(l.ts).toLocaleTimeString()}</span>
                 <span className="break-all">{l.message}</span>
               </motion.div>
             ))}
@@ -517,17 +419,10 @@ const RESOURCE_ICONS: Record<string, LucideIcon> = {
   harness_repos: Github,
 };
 
-function BuiltPanel({
-  run,
-  resources,
-}: {
-  run: WorkshopRun;
-  resources: RunResource[];
-}) {
+function BuiltPanel({ run, resources }: { run: WorkshopRun; resources: RunResource[] }) {
   const building = ACTIVE.has(run.status) && run.status !== "destroying";
   const teardownGaveUp = run.status === "destroy_failed";
-  const tearingDown =
-    !teardownGaveUp && (run.status === "destroying" || run.deleteRequested);
+  const tearingDown = !teardownGaveUp && (run.status === "destroying" || run.deleteRequested);
 
   return (
     <Panel
@@ -543,9 +438,7 @@ function BuiltPanel({
       }
     >
       {resources.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Nothing built yet — the first items appear within a minute.
-        </p>
+        <p className="text-sm text-muted-foreground">Nothing built yet — the first items appear within a minute.</p>
       ) : (
         <ul className="grid gap-2">
           <AnimatePresence initial={false}>
@@ -580,20 +473,11 @@ function ResourceRow({ resource }: { resource: RunResource }) {
 
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium">{resource.label}</div>
-        {resource.detail && (
-          <div className="truncate font-mono text-xs text-muted-foreground">
-            {resource.detail}
-          </div>
-        )}
+        {resource.detail && <div className="truncate font-mono text-xs text-muted-foreground">{resource.detail}</div>}
       </div>
 
       {counted && (
-        <span
-          className={cn(
-            "shrink-0 text-sm tnum",
-            pending ? "text-muted-foreground" : "text-foreground",
-          )}
-        >
+        <span className={cn("shrink-0 text-sm tnum", pending ? "text-muted-foreground" : "text-foreground")}>
           {done}
           <span className="text-muted-foreground">/{total}</span>
         </span>
@@ -634,13 +518,9 @@ function AttendeeLink({ runId, mode }: { runId: string; mode: string }) {
   return (
     <Panel title="Attendee page">
       <div>
-        <p className="text-sm text-muted-foreground">
-          Share this link with the room to let attendees claim an account.
-        </p>
+        <p className="text-sm text-muted-foreground">Share this link with the room to let attendees claim an account.</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2.5 py-1.5 font-mono text-xs">
-            {path}
-          </code>
+          <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2.5 py-1.5 font-mono text-xs">{path}</code>
           <Button variant="outline" size="sm" onClick={copy}>
             {copied ? <Check className="text-emerald-600" /> : <Copy />}
             {copied ? "Copied" : "Copy link"}
@@ -652,10 +532,7 @@ function AttendeeLink({ runId, mode }: { runId: string; mode: string }) {
             </Link>
           </Button>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          This link is available to anyone and will be removed when the {mode}{" "}
-          ends.
-        </p>
+        <p className="mt-3 text-xs text-muted-foreground">This link is available to anyone and will be removed when the {mode} ends.</p>
       </div>
     </Panel>
   );
@@ -675,17 +552,10 @@ function Panel({
 }) {
   return (
     <motion.section variants={riseChild} className="space-y-4 px-5 py-4">
-      <div
-        className={cn(
-          "flex justify-between gap-4",
-          description ? "items-start" : "items-center",
-        )}
-      >
+      <div className={cn("flex justify-between gap-4", description ? "items-start" : "items-center")}>
         <div className="grid gap-1.5">
           <h2 className="font-medium leading-none tracking-tight">{title}</h2>
-          {description && (
-            <p className="text-sm text-muted-foreground">{description}</p>
-          )}
+          {description && <p className="text-sm text-muted-foreground">{description}</p>}
         </div>
         {action}
       </div>
@@ -695,9 +565,5 @@ function Panel({
 }
 
 function MetaChip({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
-      {children}
-    </span>
-  );
+  return <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">{children}</span>;
 }

@@ -13,11 +13,7 @@ import { canManageTrainingSettings } from "@/lib/roles";
 import { PROSPECTS, isProspectGroup } from "@/lib/logistics/guest-judge-values";
 import { GuestJudgesView } from "./guest-judges-view";
 
-export default async function GuestJudgesPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function GuestJudgesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   const judgeQuery = parseListQuery(params, GUEST_JUDGE_LIST);
   const prospectQuery = parseListQuery(params, JUDGE_PROSPECT_LIST, PROSPECTS);

@@ -2,12 +2,7 @@
 
 import { desc, eq, ilike, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  LAB_IMAGE_LIMITS,
-  LAB_IMAGE_MIME_TYPES,
-  labImages,
-  type LabImage,
-} from "@/db/schema";
+import { LAB_IMAGE_LIMITS, LAB_IMAGE_MIME_TYPES, labImages, type LabImage } from "@/db/schema";
 import { isUuid } from "@/lib/utils";
 
 export type LabImageSummary = Omit<LabImage, "data">;
@@ -36,9 +31,7 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-export async function getLabImageData(
-  id: string,
-): Promise<{ data: Buffer; mimeType: string } | null> {
+export async function getLabImageData(id: string): Promise<{ data: Buffer; mimeType: string } | null> {
   if (!isUuid(id)) return null;
 
   const [row] = await db
@@ -59,20 +52,13 @@ export async function missingLabImages(ids: string[]): Promise<string[]> {
   const wanted = ids.filter(isUuid);
   if (wanted.length === 0) return [];
 
-  const found = await db
-    .select({ id: labImages.id })
-    .from(labImages)
-    .where(inArray(labImages.id, wanted));
+  const found = await db.select({ id: labImages.id }).from(labImages).where(inArray(labImages.id, wanted));
 
   const have = new Set(found.map((row) => row.id));
   return wanted.filter((id) => !have.has(id));
 }
 
-export type UploadLabImageError =
-  | "empty"
-  | "too_large"
-  | "unsupported_type"
-  | "corrupt";
+export type UploadLabImageError = "empty" | "too_large" | "unsupported_type" | "corrupt";
 
 export async function uploadLabImage(input: {
   name: string;
@@ -80,9 +66,7 @@ export async function uploadLabImage(input: {
   data: Buffer;
   authorId: string;
   autoName?: boolean;
-}): Promise<
-  { ok: true; image: LabImageSummary } | { ok: false; error: UploadLabImageError }
-> {
+}): Promise<{ ok: true; image: LabImageSummary } | { ok: false; error: UploadLabImageError }> {
   if (input.data.byteLength === 0) return { ok: false, error: "empty" };
   if (input.data.byteLength > LAB_IMAGE_LIMITS.bytes) {
     return { ok: false, error: "too_large" };
@@ -123,10 +107,7 @@ async function availableImageName(base: string): Promise<string> {
   }
 }
 
-export async function renameLabImage(
-  id: string,
-  name: string,
-): Promise<LabImageSummary | null> {
+export async function renameLabImage(id: string, name: string): Promise<LabImageSummary | null> {
   if (!isUuid(id)) return null;
 
   const trimmed = name.trim().slice(0, LAB_IMAGE_LIMITS.name);
@@ -141,9 +122,7 @@ export async function renameLabImage(
   return image ?? null;
 }
 
-export function sniffImageType(
-  data: Buffer,
-): (typeof LAB_IMAGE_MIME_TYPES)[number] | null {
+export function sniffImageType(data: Buffer): (typeof LAB_IMAGE_MIME_TYPES)[number] | null {
   if (data.byteLength < 12) return null;
 
   if (
@@ -163,14 +142,16 @@ export function sniffImageType(
     return "image/jpeg";
   }
 
-  if (data.subarray(0, 6).toString("latin1").match(/^GIF8[79]a$/)) {
+  if (
+    data
+      .subarray(0, 6)
+      .toString("latin1")
+      .match(/^GIF8[79]a$/)
+  ) {
     return "image/gif";
   }
 
-  if (
-    data.subarray(0, 4).toString("latin1") === "RIFF" &&
-    data.subarray(8, 12).toString("latin1") === "WEBP"
-  ) {
+  if (data.subarray(0, 4).toString("latin1") === "RIFF" && data.subarray(8, 12).toString("latin1") === "WEBP") {
     return "image/webp";
   }
 
@@ -180,10 +161,7 @@ export function sniffImageType(
 export async function deleteLabImage(id: string): Promise<boolean> {
   if (!isUuid(id)) return false;
 
-  const deleted = await db
-    .delete(labImages)
-    .where(eq(labImages.id, id))
-    .returning({ id: labImages.id });
+  const deleted = await db.delete(labImages).where(eq(labImages.id, id)).returning({ id: labImages.id });
 
   return deleted.length > 0;
 }

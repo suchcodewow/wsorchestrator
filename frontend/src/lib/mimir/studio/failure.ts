@@ -32,9 +32,6 @@ export function failureReason(error: string | null): string | null {
   if (!error?.trim()) return null;
   const translation = error.match(TRANSLATION);
   const rest = translation ? error.slice(translation[0].length) : error;
-  const cause =
-    CAUSES.find(([pattern]) => pattern.test(rest))?.[1] ??
-    providerMessage(rest) ??
-    rest.replace(/^(\w*Error: )+/, "").trim();
+  const cause = CAUSES.find(([pattern]) => pattern.test(rest))?.[1] ?? providerMessage(rest) ?? rest.replace(/^(\w*Error: )+/, "").trim();
   return translation ? `${translation[1]} failed, so it plays in English. ${cause}` : cause;
 }

@@ -54,7 +54,9 @@ export const POST = audited(async function POST(req: Request, { params }: Params
   };
   const job = await createVideoJob(user.id, concept, input);
   if (job === "busy") return NextResponse.json({ error: "busy" }, { status: 409 });
-  noteAudit({ detail: { job: job.id, videoId: input.videoId, notes: input.notes.length, first: !concept.video, languages, translationsOnly } });
+  noteAudit({
+    detail: { job: job.id, videoId: input.videoId, notes: input.notes.length, first: !concept.video, languages, translationsOnly },
+  });
   const started = await runStudioJob(job.id);
   return NextResponse.json({ job, started }, { status: 201 });
 });

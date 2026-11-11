@@ -22,13 +22,9 @@ export async function GET(req: Request) {
   }
 
   const status = new URL(req.url).searchParams.get("status");
-  const sets = await listComponentSets(
-    (status as ComponentSetStatus | null) ?? undefined,
-  );
+  const sets = await listComponentSets((status as ComponentSetStatus | null) ?? undefined);
 
-  const mine = canPublishComponents(viewer.access)
-    ? sets
-    : sets.filter((s) => s.authorId === viewer.id);
+  const mine = canPublishComponents(viewer.access) ? sets : sets.filter((s) => s.authorId === viewer.id);
 
   return NextResponse.json({ sets: mine });
 }
@@ -49,10 +45,7 @@ export const POST = audited(async function POST(req: Request) {
   } | null;
 
   if (!body || typeof body.name !== "string" || body.name.trim().length === 0) {
-    return NextResponse.json(
-      { error: "invalid_body", message: "a set needs a name" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "invalid_body", message: "a set needs a name" }, { status: 400 });
   }
 
   const { issues, valid } = validateSet(body.components);

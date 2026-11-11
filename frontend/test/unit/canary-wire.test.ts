@@ -31,10 +31,22 @@ const SE = "SE";
 /** Ada manages Bo and Cy (AE) and Di (SE); Eve (SE) reports to Fay, who isn't in any group. */
 function pull(): CanaryWireSnapshot {
   const learner = (email: string, name: string, role: string, manager: string, manager_email: string, state = "ACTIVE") => ({
-    email, name, role, manager, manager_email, title: "Account Executive", state,
+    email,
+    name,
+    role,
+    manager,
+    manager_email,
+    title: "Account Executive",
+    state,
   });
   const mod = (module_id: string, label: string, month: string, edition: string, series_id: string, type = "UPDATE") => ({
-    module_id, name: `${month} - ${label}`, label, month, edition, series_id, type,
+    module_id,
+    name: `${month} - ${label}`,
+    label,
+    month,
+    edition,
+    series_id,
+    type,
   });
   return {
     fetched_at: "2026-10-01T16:00:00+00:00",
@@ -151,7 +163,16 @@ describe("accountability", () => {
   });
 
   test("SDRs never attend bootcamp, so they count from their first full month, record or not", () => {
-    const sdr = accountability(known([["oct2@harness.io", "2026-08-12"]], [["oct2@harness.io", "2026-10-02"], ["oct1@harness.io", "2026-10-01"]], "2025-04-01"));
+    const sdr = accountability(
+      known(
+        [["oct2@harness.io", "2026-08-12"]],
+        [
+          ["oct2@harness.io", "2026-10-02"],
+          ["oct1@harness.io", "2026-10-01"],
+        ],
+        "2025-04-01",
+      ),
+    );
     // Starting October 2nd: not October, from November.
     assert.deepEqual(sdr("oct2@harness.io", "October 2026", "SDR"), { exempt: true, from: "November 2026", source: "first_month" });
     assert.deepEqual(sdr("oct2@harness.io", "November 2026", "SDR"), { exempt: false, from: "November 2026", source: "first_month" });
@@ -184,7 +205,11 @@ describe("completion by learner", () => {
     const snap = pull();
     // Give Ada both AE modules done; Bo keeps one of two.
     snap.progress["ada@harness.io"]!["m-obj"] = { state: "Completed", on: "2026-09-11", at: "2026-09-11T10:00:00Z" };
-    const view = monthView(snap, "September 2026", accountability(known(snap.learners.filter((l) => l.email !== "cy@harness.io").map((l) => [l.email, EXEMPT]))));
+    const view = monthView(
+      snap,
+      "September 2026",
+      accountability(known(snap.learners.filter((l) => l.email !== "cy@harness.io").map((l) => [l.email, EXEMPT]))),
+    );
     const ae = view.roles.find((r) => r.role === AE)!;
     // Cy is pre-bootcamp: out of the rate, counted as exempt.
     assert.deepEqual([ae.learners, ae.finished, ae.pct, ae.exempt], [2, 1, 50, 1]);
@@ -195,9 +220,15 @@ describe("completion by learner", () => {
 
 describe("withHiBob", () => {
   const people = new Map<string, Person>([
-    ["bo@harness.io", { email: "bo@harness.io", fullName: "Bo Hibob", title: "Senior AE", reportsToEmail: "zed@harness.io", reportsToName: "Zed (HiBob)" }],
+    [
+      "bo@harness.io",
+      { email: "bo@harness.io", fullName: "Bo Hibob", title: "Senior AE", reportsToEmail: "zed@harness.io", reportsToName: "Zed (HiBob)" },
+    ],
     ["zed@harness.io", { email: "zed@harness.io", fullName: "Zed Manager", title: "RVP", reportsToEmail: "", reportsToName: "" }],
-    ["cy@harness.io", { email: "cy@harness.io", fullName: "Cy Hibob", title: "", reportsToEmail: "gone@harness.io", reportsToName: "Gone Person" }],
+    [
+      "cy@harness.io",
+      { email: "cy@harness.io", fullName: "Cy Hibob", title: "", reportsToEmail: "gone@harness.io", reportsToName: "Gone Person" },
+    ],
   ]);
 
   test("HiBob's name, title and manager win, and the manager is named as the employee list names them", () => {
@@ -213,14 +244,28 @@ describe("withHiBob", () => {
 
   test("an IC is someone nobody in HiBob reports to, org-wide", () => {
     // Eve manages nobody in the Canary Wire groups, but HiBob has someone reporting to her.
-    const org = managersOf(new Map([...people, ["x@harness.io", { email: "x@harness.io", fullName: "X", title: "", reportsToEmail: "eve@harness.io", reportsToName: "Eve" }]]));
+    const org = managersOf(
+      new Map([
+        ...people,
+        ["x@harness.io", { email: "x@harness.io", fullName: "X", title: "", reportsToEmail: "eve@harness.io", reportsToName: "Eve" }],
+      ]),
+    );
     const view = monthView(pull(), "September 2026", everyoneAccountable, null, org);
     assert.equal(view.teams.flatMap((t) => t.directs).find((r) => r.email === "eve@harness.io")!.ic, false);
   });
 });
 
 describe("scope", () => {
-  const access = (over: Partial<Access>): Access => ({ event: "none", training: null, assessments: null, platform: false, judging: false, manager: false, participating: false, ...over });
+  const access = (over: Partial<Access>): Access => ({
+    event: "none",
+    training: null,
+    assessments: null,
+    platform: false,
+    judging: false,
+    manager: false,
+    participating: false,
+    ...over,
+  });
   const boss = { access: access({ manager: true }), email: "zed@harness.io" };
   const admin = { access: access({ platform: true }), email: "root@harness.io" };
 
@@ -238,11 +283,20 @@ describe("scope", () => {
   test("my org is me and everyone under me, every level down, and nobody beside me", () => {
     const p = (email: string, reportsToEmail: string): Person => ({ email, fullName: email, title: "", reportsToEmail, reportsToName: "" });
     const people = new Map(
-      [p("ceo@harness.io", ""), p("zed@harness.io", "ceo@harness.io"), p("bo@harness.io", "zed@harness.io"), p("cy@harness.io", "bo@harness.io"), p("peer@harness.io", "ceo@harness.io")].map((x) => [x.email, x]),
+      [
+        p("ceo@harness.io", ""),
+        p("zed@harness.io", "ceo@harness.io"),
+        p("bo@harness.io", "zed@harness.io"),
+        p("cy@harness.io", "bo@harness.io"),
+        p("peer@harness.io", "ceo@harness.io"),
+      ].map((x) => [x.email, x]),
     );
     assert.deepEqual([...orgOf(people, "Zed@Harness.io")].sort(), ["bo@harness.io", "cy@harness.io", "zed@harness.io"]);
     const mine = onlyOrg(pull(), new Set(["bo@harness.io", "cy@harness.io"]));
-    assert.deepEqual(mine.learners.map((l) => l.email), ["bo@harness.io", "cy@harness.io"]);
+    assert.deepEqual(
+      mine.learners.map((l) => l.email),
+      ["bo@harness.io", "cy@harness.io"],
+    );
   });
 });
 
@@ -257,10 +311,26 @@ describe("history", () => {
   test("from June 2026, a month with no content skipped, and none before its time", () => {
     const snap = pull();
     for (const [i, m] of ["April", "May", "June", "July"].entries()) {
-      snap.modules.push({ module_id: `m-${i}`, name: `${m} 2026 - X`, label: "X", month: `${m} 2026`, edition: AE, series_id: "s-ae", type: "UPDATE" });
+      snap.modules.push({
+        module_id: `m-${i}`,
+        name: `${m} 2026 - X`,
+        label: "X",
+        month: `${m} 2026`,
+        edition: AE,
+        series_id: "s-ae",
+        type: "UPDATE",
+      });
     }
     // Published ahead of time, and already finished by someone.
-    snap.modules.push({ module_id: "m-nov", name: "November 2026 - X", label: "X", month: "November 2026", edition: AE, series_id: "s-ae", type: "UPDATE" });
+    snap.modules.push({
+      module_id: "m-nov",
+      name: "November 2026 - X",
+      label: "X",
+      month: "November 2026",
+      edition: AE,
+      series_id: "s-ae",
+      type: "UPDATE",
+    });
     snap.progress["ada@harness.io"]!["m-nov"] = { state: "Completed", on: "2026-10-03", at: "2026-10-03T10:00:00Z" };
 
     // October has content, but nobody has finished any of it yet: September is the newest.
@@ -280,47 +350,95 @@ describe("history", () => {
     const h = historyView(twoMonths(), ["September 2026", "October 2026"], everyoneAccountable);
     const rep = (email: string) => h.teams.flatMap((t) => t.directs).find((d) => d.email === email)!;
     // Ada: Flex but not Objections in September; the one October module.
-    assert.deepEqual(rep("ada@harness.io").marks.map((m) => m.pct), [50, 100]);
+    assert.deepEqual(
+      rep("ada@harness.io").marks.map((m) => m.pct),
+      [50, 100],
+    );
     // Di (SE) owes nothing in October: no SE module that month.
-    assert.deepEqual(rep("di@harness.io").marks.map((m) => m.pct), [50, null]);
+    assert.deepEqual(
+      rep("di@harness.io").marks.map((m) => m.pct),
+      [50, null],
+    );
     const v = monthView(twoMonths(), "September 2026", everyoneAccountable);
     assert.deepEqual([h.totals[0]!.learners, h.totals[0]!.finished], [v.totals!.learners, v.totals!.finished]);
   });
 
   test("a month someone didn't count yet is marked, not a 0%", () => {
-    const standing = accountability(known(pull().learners.filter((l) => l.email !== "bo@harness.io").map((l) => [l.email, EXEMPT])));
+    const standing = accountability(
+      known(
+        pull()
+          .learners.filter((l) => l.email !== "bo@harness.io")
+          .map((l) => [l.email, EXEMPT]),
+      ),
+    );
     const h = historyView(twoMonths(), ["September 2026", "October 2026"], standing);
     const bo = h.teams.flatMap((t) => t.directs).find((d) => d.email === "bo@harness.io")!;
-    assert.deepEqual(bo.marks.map((m) => [m.pct, m.exempt]), [[null, true], [null, true]]);
+    assert.deepEqual(
+      bo.marks.map((m) => [m.pct, m.exempt]),
+      [
+        [null, true],
+        [null, true],
+      ],
+    );
   });
 
   test("team and role rates are people who finished; teams sort best first, newest month first", () => {
     const h = historyView(twoMonths(), ["September 2026", "October 2026"], everyoneAccountable);
     const ada = h.teams.find((t) => t.manager === "Ada")!;
     // October: Bo and Cy owe Pricing 2; neither has it.
-    assert.deepEqual(ada.rates.map((r) => [r.finished, r.learners]), [[0, 3], [0, 2]]);
+    assert.deepEqual(
+      ada.rates.map((r) => [r.finished, r.learners]),
+      [
+        [0, 3],
+        [0, 2],
+      ],
+    );
     // Ada's own team, under nobody, finished October: first. Ada's team is at
     // 0% in October and Fay's owed nothing then, so Ada's comes next.
-    assert.deepEqual(h.teams.map((t) => t.manager), ["(no manager on record)", "Ada", "Fay"]);
-    assert.deepEqual(h.roles.find((r) => r.role === AE)!.rates.map((r) => r.pct), [0, 33.3]);
+    assert.deepEqual(
+      h.teams.map((t) => t.manager),
+      ["(no manager on record)", "Ada", "Fay"],
+    );
+    assert.deepEqual(
+      h.roles.find((r) => r.role === AE)!.rates.map((r) => r.pct),
+      [0, 33.3],
+    );
   });
 
   test("the dots carry each rep's months and the day they last finished something of their own", () => {
     const snap = twoMonths();
     // Another role's module, finished later, isn't keeping up with their own.
-    snap.modules.push({ module_id: "m-se-oct", name: "October 2026 - SE only", label: "SE only", month: "October 2026", edition: SE, series_id: "s-se", type: "UPDATE" });
+    snap.modules.push({
+      module_id: "m-se-oct",
+      name: "October 2026 - SE only",
+      label: "SE only",
+      month: "October 2026",
+      edition: SE,
+      series_id: "s-se",
+      type: "UPDATE",
+    });
     snap.progress["ada@harness.io"]!["m-se-oct"] = { state: "Completed", on: "2026-10-05", at: "2026-10-05T10:00:00Z" };
     const t = repTrends(historyView(snap, ["September 2026", "October 2026"], everyoneAccountable));
     assert.deepEqual(t.months, ["September 2026", "October 2026"]);
-    assert.deepEqual(t.reps["ada@harness.io"]!.marks.map((m) => m.pct), [50, 100]);
+    assert.deepEqual(
+      t.reps["ada@harness.io"]!.marks.map((m) => m.pct),
+      [50, 100],
+    );
     assert.equal(t.reps["ada@harness.io"]!.lastCompleted, "Oct 2, 2026");
-    assert.deepEqual(Object.keys(t.reps).sort(), pull().learners.map((l) => l.email).sort());
+    assert.deepEqual(
+      Object.keys(t.reps).sort(),
+      pull()
+        .learners.map((l) => l.email)
+        .sort(),
+    );
   });
 
   test("the CSV's months are every one from June 2026, where the dots stop at six", () => {
     const snap = pull();
     // Eight months of content, June 2026 to January 2027, each finished by someone.
-    const names = ["June", "July", "September", "October", "November", "December"].map((m) => `${m} 2026`).concat(["January 2027", "February 2027"]);
+    const names = ["June", "July", "September", "October", "November", "December"]
+      .map((m) => `${m} 2026`)
+      .concat(["January 2027", "February 2027"]);
     names.forEach((month, i) => {
       snap.modules.push({ module_id: `x-${i}`, name: `${month} - X`, label: "X", month, edition: AE, series_id: "s-ae", type: "UPDATE" });
       snap.progress["ada@harness.io"]![`x-${i}`] = { state: "Completed", on: "2026-10-03", at: "2026-10-03T10:00:00Z" };
@@ -335,7 +453,10 @@ describe("history", () => {
   });
 
   test("the CSV is a row per rep and a column per month, blank where nothing was owed", () => {
-    const csv = historyCsv({ ...historyView(twoMonths(), ["September 2026", "October 2026"], everyoneAccountable), scope: "everyone" }).split("\r\n");
+    const csv = historyCsv({
+      ...historyView(twoMonths(), ["September 2026", "October 2026"], everyoneAccountable),
+      scope: "everyone",
+    }).split("\r\n");
     assert.equal(csv[0], "Name,Email,Role,Manager,Manager Email,September 2026 %,October 2026 %");
     assert.ok(csv.includes("Ada,ada@harness.io,AE and Supporting Orgs,(no manager on record),,50.0,100.0"));
     assert.ok(csv.some((l) => l.startsWith("Di,") && l.endsWith(",50.0,")));
@@ -390,7 +511,13 @@ describe("monthView", () => {
 
   test("pre-bootcamp: unstarted work leaves the lineup, finished work stays uncounted", () => {
     // Bo has no bootcamp on record; everyone else is exempt from it.
-    const pre = accountability(known(pull().learners.filter((l) => l.email !== "bo@harness.io").map((l) => [l.email, EXEMPT])));
+    const pre = accountability(
+      known(
+        pull()
+          .learners.filter((l) => l.email !== "bo@harness.io")
+          .map((l) => [l.email, EXEMPT]),
+      ),
+    );
     const v = monthView(pull(), "September 2026", pre);
     const bo = v.teams.flatMap((t) => t.directs).find((d) => d.email === "bo@harness.io")!;
     assert.deepEqual([bo.exempt, bo.assigned, bo.pct], [true, 0, null]);
@@ -412,8 +539,14 @@ describe("monthView", () => {
   });
 
   test("teams best first, directs best first then by name, and a never-activated rep is labelled", () => {
-    assert.deepEqual(view.teams.map((t) => t.manager), ["(no manager on record)", "Fay", "Ada"]);
-    assert.deepEqual(view.teams.find((t) => t.manager === "Ada")!.directs.map((d) => d.name), ["Bo", "Di", "Cy"]);
+    assert.deepEqual(
+      view.teams.map((t) => t.manager),
+      ["(no manager on record)", "Fay", "Ada"],
+    );
+    assert.deepEqual(
+      view.teams.find((t) => t.manager === "Ada")!.directs.map((d) => d.name),
+      ["Bo", "Di", "Cy"],
+    );
     assert.equal(rep("cy@harness.io").notActivated, true);
     assert.equal(view.totals!.notActivated, 1);
   });
@@ -436,23 +569,46 @@ describe("monthView", () => {
 
   test("the CSV says why a square isn't counted, and quotes what needs it", () => {
     const csv = monthCsv(view).split("\r\n");
-    assert.equal(csv[0], "Name,Email,Role,Manager,Manager Email,Objections,Flex Pricing,Demo Day,Modules Assigned,Modules Completed,Completion %,Account");
+    assert.equal(
+      csv[0],
+      "Name,Email,Role,Manager,Manager Email,Objections,Flex Pricing,Demo Day,Modules Assigned,Modules Completed,Completion %,Account",
+    );
     const bo = csv.find((l) => l.startsWith("Bo,"))!;
     assert.match(bo, /In Progress,Completed,Completed \(off-role\),2,1,50\.0,Active$/);
-    assert.match(csv.find((l) => l.startsWith("Cy,"))!, /Never activated Mindtickle$/);
-    const quoted = monthView({ ...pull(), learners: pull().learners.map((l) => ({ ...l, name: `${l.name}, "Jr"` })) }, "September 2026", everyoneAccountable);
+    assert.match(
+      csv.find((l) => l.startsWith("Cy,"))!,
+      /Never activated Mindtickle$/,
+    );
+    const quoted = monthView(
+      { ...pull(), learners: pull().learners.map((l) => ({ ...l, name: `${l.name}, "Jr"` })) },
+      "September 2026",
+      everyoneAccountable,
+    );
     assert.ok(monthCsv(quoted).includes('"Bo, ""Jr"""'));
   });
 });
 
 const cell = (over: Partial<Cell>): Cell => ({
-  state: "Completed", on: "2026-09-28", atPt: "Sep 28, 2026 at 11:29 AM PDT", moduleId: "m 1", seriesId: "s-ae",
-  moduleType: "UPDATE", accountable: true, exempt: false, also: [], ...over,
+  state: "Completed",
+  on: "2026-09-28",
+  atPt: "Sep 28, 2026 at 11:29 AM PDT",
+  moduleId: "m 1",
+  seriesId: "s-ae",
+  moduleType: "UPDATE",
+  accountable: true,
+  exempt: false,
+  also: [],
+  ...over,
 });
 
 describe("squares", () => {
   test("colour from the state's wording", () => {
-    assert.deepEqual(["Completed", "In Progress", "Not Started", "timedout"].map(stateClass), ["completed", "progress", "notstarted", "blank"]);
+    assert.deepEqual(["Completed", "In Progress", "Not Started", "timedout"].map(stateClass), [
+      "completed",
+      "progress",
+      "notstarted",
+      "blank",
+    ]);
   });
 
   test("unfinished work's stamp is the last activity, not a finish time", () => {

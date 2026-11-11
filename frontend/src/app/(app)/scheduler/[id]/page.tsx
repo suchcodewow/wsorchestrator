@@ -24,9 +24,6 @@ export default async function BootcampSchedulePage({ params }: { params: Promise
   if (!schedule) notFound();
 
   return (
-    <SchedulePage
-      schedule={schedule}
-      viewer={{ id: session.user.id, email: session.user.email ?? "", access: session.user.access }}
-    />
+    <SchedulePage schedule={schedule} viewer={{ id: session.user.id, email: session.user.email ?? "", access: session.user.access }} />
   );
 }

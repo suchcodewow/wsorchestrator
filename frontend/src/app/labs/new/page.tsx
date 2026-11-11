@@ -29,9 +29,7 @@ export default async function NewWorkshopPage() {
         All workshops
       </Link>
 
-      <h1 className="mt-6 mb-8 text-2xl font-medium tracking-tight">
-        New workshop
-      </h1>
+      <h1 className="mt-6 mb-8 text-2xl font-medium tracking-tight">New workshop</h1>
 
       <WorkshopEditor guides={await listGuidesForPicker()} />
     </div>

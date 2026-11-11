@@ -10,7 +10,10 @@ import { forReplay } from "@/lib/mimir/chat";
 
 describe("replaying a coach turn", () => {
   test("is sent back exactly as it came, when no fallback happened", () => {
-    const content = [{ type: "thinking", thinking: "", signature: "s" }, { type: "text", text: "Hi." }];
+    const content = [
+      { type: "thinking", thinking: "", signature: "s" },
+      { type: "text", text: "Hi." },
+    ];
     assert.equal(forReplay(content), content);
     assert.equal(forReplay("An opener."), "An opener.");
   });

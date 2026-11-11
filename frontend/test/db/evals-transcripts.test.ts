@@ -50,7 +50,9 @@ function deepgram(answer: { transcript: string } | { status: number }) {
     if ("status" in answer) return new Response("refused", { status: answer.status });
     return Response.json({
       results: {
-        channels: [{ alternatives: [{ transcript: answer.transcript.replace(/\n+/g, " "), paragraphs: { transcript: `\n${answer.transcript}` } }] }],
+        channels: [
+          { alternatives: [{ transcript: answer.transcript.replace(/\n+/g, " "), paragraphs: { transcript: `\n${answer.transcript}` } }] },
+        ],
       },
     });
   }) as typeof fetch;
@@ -120,7 +122,10 @@ describe("filing a transcript", () => {
     assert.equal(saved.transcript.recordedAt.getTime(), r.recordedAt.getTime());
 
     const form = await getScoringForm(assessmentId, sales.id, bootcampId);
-    assert.deepEqual(form?.transcripts.map((t) => t.recordingId), [r.recordingId]);
+    assert.deepEqual(
+      form?.transcripts.map((t) => t.recordingId),
+      [r.recordingId],
+    );
     assert.deepEqual(await getScoringForm(assessmentId, sales.id, null).then((f) => f?.transcripts), []);
   });
 

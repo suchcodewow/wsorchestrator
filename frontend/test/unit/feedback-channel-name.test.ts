@@ -76,7 +76,14 @@ describe("feedbackChannelText", () => {
   test("leaves out empty feedback, a missing exam average, and the breakdown when every exercise is a 3", () => {
     const text = feedbackChannelText("Pat", "Jane Doe", url, {
       stage: "intermediate",
-      summary: { ...summary, score: null, positiveFeedback: " ", constructiveFeedback: "", examAverage: null, exercises: [{ name: "Demo", score: 3, feedback: null }] },
+      summary: {
+        ...summary,
+        score: null,
+        positiveFeedback: " ",
+        constructiveFeedback: "",
+        examAverage: null,
+        exercises: [{ name: "Demo", score: 3, feedback: null }],
+      },
     });
     assert.equal(text.split("\n").slice(1).join("\n"), "\n*Overall Score (Intermediate):* —");
   });

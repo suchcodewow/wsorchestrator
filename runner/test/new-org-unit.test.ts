@@ -21,15 +21,10 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  deleteUserOnceCreated,
-  insertIntoNewOrgUnit,
-  orgUnitAbsent,
-} from "../src/directory.js";
+import { deleteUserOnceCreated, insertIntoNewOrgUnit, orgUnitAbsent } from "../src/directory.js";
 
 /** The shape gaxios hands back; `directory.ts` reads the status off `code`. */
-const gaxiosError = (status: number, message = "request failed") =>
-  Object.assign(new Error(message), { code: status, status });
+const gaxiosError = (status: number, message = "request failed") => Object.assign(new Error(message), { code: status, status });
 
 const CTX = { email: "bouncypenguin@example.com", orgUnitPath: "/Workshop" };
 
@@ -223,10 +218,7 @@ describe("orgUnitAbsent", () => {
   });
 
   test("INVALID_OU_ID for an OU that is not listed is gone", async () => {
-    const absent = await orgUnitAbsent(invalidOuId(), "/gcp challenge", async () => [
-      "/SE Bootcamp Workshop",
-      "/Parent/gcp challenge",
-    ]);
+    const absent = await orgUnitAbsent(invalidOuId(), "/gcp challenge", async () => ["/SE Bootcamp Workshop", "/Parent/gcp challenge"]);
     assert.equal(absent, true);
   });
 

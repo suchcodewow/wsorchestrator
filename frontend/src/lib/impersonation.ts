@@ -80,10 +80,7 @@ export async function impersonationTarget(email: string): Promise<ImpersonationT
 }
 
 /** Why `admin` may not view the app as `target`, or null if they may. */
-export function impersonationRefusal(
-  admin: { email?: string | null },
-  target: ImpersonationTarget | null,
-): ImpersonationError | null {
+export function impersonationRefusal(admin: { email?: string | null }, target: ImpersonationTarget | null): ImpersonationError | null {
   if (!target) return "not_found";
   if (target.email === admin.email?.toLowerCase()) return "self";
   // They already see everything, so viewing as one shows nothing new.
@@ -94,11 +91,7 @@ export function impersonationRefusal(
 /** Auth.js's cookie, under the name it uses over https and the one it uses over http. */
 async function sessionToken(): Promise<string | null> {
   const jar = await cookies();
-  return (
-    jar.get("__Secure-authjs.session-token")?.value ??
-    jar.get("authjs.session-token")?.value ??
-    null
-  );
+  return jar.get("__Secure-authjs.session-token")?.value ?? jar.get("authjs.session-token")?.value ?? null;
 }
 
 /**

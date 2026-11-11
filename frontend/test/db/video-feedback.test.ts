@@ -88,7 +88,14 @@ describe("which videos can be rated", () => {
   test("a recording only by whoever may watch recordings", async () => {
     assert.equal(await findVideo(viewer.access, { kind: "recording", id: trackId }), "forbidden");
     const found = await findVideo(admin.access, { kind: "recording", id: trackId });
-    assert.deepEqual(found, { kind: "recording", conceptId: null, recordingTrackId: trackId, label: "Feedback Test — camera", language: "en", object: null });
+    assert.deepEqual(found, {
+      kind: "recording",
+      conceptId: null,
+      recordingTrackId: trackId,
+      label: "Feedback Test — camera",
+      language: "en",
+      object: null,
+    });
     assert.equal(await findVideo(admin.access, { kind: "recording", id: "not-a-uuid" }), null);
     assert.equal(await findVideo(admin.access, { kind: "recording", id: randomUUID() }), null);
   });
@@ -109,11 +116,17 @@ describe("saving and reading back", () => {
     assert.equal(down.comment, null);
 
     const page = await listVideoFeedback({ ...VIDEO_FEEDBACK_LIST, q: MARK, page: 1 });
-    assert.deepEqual(page.rows.map((r) => r.id), [up.id]);
+    assert.deepEqual(
+      page.rows.map((r) => r.id),
+      [up.id],
+    );
     assert.equal(page.rows[0]!.user?.email, viewer.email);
 
     const downs = await listVideoFeedback({ ...VIDEO_FEEDBACK_LIST, q: viewer.email, page: 1 }, { rating: "down" });
-    assert.deepEqual(downs.rows.map((r) => r.id), [down.id]);
+    assert.deepEqual(
+      downs.rows.map((r) => r.id),
+      [down.id],
+    );
     const recordings = await listVideoFeedback({ ...VIDEO_FEEDBACK_LIST, q: viewer.email, page: 1 }, { kind: "recording" });
     assert.deepEqual(recordings.rows, []);
   });
@@ -200,7 +213,10 @@ describe("the summary of each Mimir video", () => {
       { kind: "mimir_concept", video: "alpha" },
     );
     const positions = page.rows.map((r) => r.positionSeconds);
-    assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
+    assert.deepEqual(
+      positions,
+      [...positions].sort((a, b) => a - b),
+    );
     assert.ok(page.rows.length >= 3);
     assert.ok(page.rows.every((r) => r.video.id === "alpha"));
   });

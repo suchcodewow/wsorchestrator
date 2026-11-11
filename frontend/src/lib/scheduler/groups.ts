@@ -99,10 +99,7 @@ export async function saveGroups(
   await db.transaction(async (tx) => {
     await tx.delete(scheduleSessionGroups).where(eq(scheduleSessionGroups.sessionId, sessionId));
     if (rows.length === 0) return;
-    await tx
-      .insert(scheduleSessionGroups)
-      .values(rows.map((r, position) => ({ sessionId, ...r, position })));
+    await tx.insert(scheduleSessionGroups).values(rows.map((r, position) => ({ sessionId, ...r, position })));
   });
   return { ok: true, groups: await groupsOf(sessionId) };
 }
-

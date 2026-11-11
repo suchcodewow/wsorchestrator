@@ -36,8 +36,7 @@ export type AttendeeView = {
   accounts: AttendeeAccount[];
 };
 
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type RunOutputs = {
   gcp_project_id?: unknown;
@@ -64,15 +63,11 @@ function str(value: unknown): string | null {
 }
 
 function map(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 function gcpConsoleUrl(projectId: string): string {
-  return `https://console.cloud.google.com/home/dashboard?project=${encodeURIComponent(
-    projectId,
-  )}`;
+  return `https://console.cloud.google.com/home/dashboard?project=${encodeURIComponent(projectId)}`;
 }
 
 const DEFAULT_AWS_REGION = "us-east-1";
@@ -85,22 +80,14 @@ function awsRegion(outputs: RunOutputs): string {
 }
 
 function awsConsoleUrl(alias: string, region: string): string {
-  return (
-    `https://${encodeURIComponent(alias)}.signin.aws.amazon.com/console` +
-    `?region=${region}`
-  );
+  return `https://${encodeURIComponent(alias)}.signin.aws.amazon.com/console` + `?region=${region}`;
 }
 
-function linksOf(
-  parts: Array<{ cloud: Cloud; url: string | null }>,
-): CloudLink[] {
+function linksOf(parts: Array<{ cloud: Cloud; url: string | null }>): CloudLink[] {
   return parts.flatMap(({ cloud, url }) => (url ? [{ cloud, url }] : []));
 }
 
-function sharedLinks(
-  outputs: RunOutputs,
-  gcpProjectId: string | null,
-): CloudLink[] {
+function sharedLinks(outputs: RunOutputs, gcpProjectId: string | null): CloudLink[] {
   const project = str(outputs.gcp_project_id) ?? gcpProjectId;
   const sandbox = str(outputs.sandbox_project_id);
   const awsAlias = str(outputs.aws_account_alias);
@@ -108,9 +95,7 @@ function sharedLinks(
   return linksOf([
     {
       cloud: "aws",
-      url:
-        (awsAlias && awsConsoleUrl(awsAlias, awsRegion(outputs))) ??
-        str(outputs.aws_console_url),
+      url: (awsAlias && awsConsoleUrl(awsAlias, awsRegion(outputs))) ?? str(outputs.aws_console_url),
     },
     { cloud: "azure", url: str(outputs.azure_portal_url) },
     {
@@ -136,16 +121,12 @@ function competitorLinks(outputs: RunOutputs, email: string): CloudLink[] {
     { cloud: "azure", url: str(map(outputs.azure_portal_urls)[email]) },
     {
       cloud: "gcp",
-      url:
-        str(map(outputs.gcp_console_urls)[email]) ??
-        (project && gcpConsoleUrl(project)),
+      url: str(map(outputs.gcp_console_urls)[email]) ?? (project && gcpConsoleUrl(project)),
     },
   ]);
 }
 
-export async function getAttendeeView(
-  runId: string,
-): Promise<AttendeeView | null> {
+export async function getAttendeeView(runId: string): Promise<AttendeeView | null> {
   if (!UUID.test(runId)) return null;
 
   const run = await db.query.workshopRuns.findFirst({
@@ -219,11 +200,7 @@ export async function saveAttendeeFields(
   const from = input.from.trim();
   const vacation = input.vacation.trim();
 
-  if (
-    name.length > CLAIM_LIMITS.name ||
-    from.length > CLAIM_LIMITS.from ||
-    vacation.length > CLAIM_LIMITS.vacation
-  ) {
+  if (name.length > CLAIM_LIMITS.name || from.length > CLAIM_LIMITS.from || vacation.length > CLAIM_LIMITS.vacation) {
     return { ok: false, error: "invalid" };
   }
 
@@ -235,12 +212,7 @@ export async function saveAttendeeFields(
       claimedVacation: vacation || null,
       claimedAt: sql`case when ${name} <> '' then coalesce(${workshopAccounts.claimedAt}, now()) else null end`,
     })
-    .where(
-      and(
-        eq(workshopAccounts.id, accountId),
-        eq(workshopAccounts.runId, runId),
-      ),
-    )
+    .where(and(eq(workshopAccounts.id, accountId), eq(workshopAccounts.runId, runId)))
     .returning({ id: workshopAccounts.id });
 
   return saved ? { ok: true } : { ok: false, error: "not_found" };

@@ -38,9 +38,7 @@ describe("missingFromCloud", () => {
   ]);
 
   test("lists claimed ids the cloud did not return, with their owner", () => {
-    assert.deepEqual(missingFromCloud(owners, ["p1", "p3", "unclaimed"]), [
-      { id: "p2", ...owner("r2", { attendee: "a@example.com" }) },
-    ]);
+    assert.deepEqual(missingFromCloud(owners, ["p1", "p3", "unclaimed"]), [{ id: "p2", ...owner("r2", { attendee: "a@example.com" }) }]);
   });
 
   test("ignores the ids it is told to", () => {
@@ -63,7 +61,10 @@ describe("missingFromCloud", () => {
       yield "p1";
       yield "p2";
     }
-    assert.deepEqual(missingFromCloud(owners, present()).map((m) => m.id), ["p3"]);
+    assert.deepEqual(
+      missingFromCloud(owners, present()).map((m) => m.id),
+      ["p3"],
+    );
   });
 
   test("compares exactly, so callers must normalise first", () => {

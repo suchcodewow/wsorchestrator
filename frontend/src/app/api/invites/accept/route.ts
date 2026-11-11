@@ -28,10 +28,7 @@ export const POST = audited(async function POST(req: Request) {
 
   const result = await acceptInvite(session.user.id, parsed.data.token);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
 
   const access: Access = result.applied

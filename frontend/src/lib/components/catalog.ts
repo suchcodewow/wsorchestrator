@@ -3,29 +3,18 @@
 import "server-only";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  harnessComponentSets,
-  harnessComponents,
-  workshopRuns,
-  type ComponentSetStatus,
-} from "@/db/schema";
+import { harnessComponentSets, harnessComponents, workshopRuns, type ComponentSetStatus } from "@/db/schema";
 import type { ValidComponent } from "./validate";
 
 export type CatalogComponent = ValidComponent & { builtin: boolean };
 
 export async function listBaseline(): Promise<CatalogComponent[]> {
-  const rows = await db
-    .select()
-    .from(harnessComponents)
-    .where(isNull(harnessComponents.setId))
-    .orderBy(asc(harnessComponents.identifier));
+  const rows = await db.select().from(harnessComponents).where(isNull(harnessComponents.setId)).orderBy(asc(harnessComponents.identifier));
 
   return rows.map(toCatalogComponent);
 }
 
-export async function listSetComponents(
-  setId: string,
-): Promise<CatalogComponent[]> {
+export async function listSetComponents(setId: string): Promise<CatalogComponent[]> {
   const rows = await db
     .select()
     .from(harnessComponents)
@@ -37,8 +26,7 @@ export async function listSetComponents(
 
 type ComponentRow = typeof harnessComponents.$inferSelect;
 
-const stringArray = (v: unknown): string[] =>
-  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+const stringArray = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
 function toCatalogComponent(r: ComponentRow): CatalogComponent {
   return {
@@ -55,11 +43,7 @@ function toCatalogComponent(r: ComponentRow): CatalogComponent {
   };
 }
 
-export async function createComponentSet(input: {
-  name: string;
-  authorId: string;
-  components: ValidComponent[];
-}): Promise<{ id: string }> {
+export async function createComponentSet(input: { name: string; authorId: string; components: ValidComponent[] }): Promise<{ id: string }> {
   return db.transaction(async (tx) => {
     const [set] = await tx
       .insert(harnessComponentSets)
@@ -86,10 +70,7 @@ export async function createComponentSet(input: {
   });
 }
 
-export async function replaceSetComponents(
-  setId: string,
-  components: ValidComponent[],
-): Promise<boolean> {
+export async function replaceSetComponents(setId: string, components: ValidComponent[]): Promise<boolean> {
   return db.transaction(async (tx) => {
     const [set] = await tx
       .select({ status: harnessComponentSets.status })
@@ -114,21 +95,13 @@ export async function replaceSetComponents(
         builtin: false,
       })),
     );
-    await tx
-      .update(harnessComponentSets)
-      .set({ updatedAt: new Date() })
-      .where(eq(harnessComponentSets.id, setId));
+    await tx.update(harnessComponentSets).set({ updatedAt: new Date() }).where(eq(harnessComponentSets.id, setId));
 
     return true;
   });
 }
 
-export async function setStatus(
-  setId: string,
-  from: ComponentSetStatus,
-  to: ComponentSetStatus,
-  notes?: string,
-): Promise<boolean> {
+export async function setStatus(setId: string, from: ComponentSetStatus, to: ComponentSetStatus, notes?: string): Promise<boolean> {
   const updated = await db
     .update(harnessComponentSets)
     .set({
@@ -136,21 +109,13 @@ export async function setStatus(
       updatedAt: new Date(),
       ...(notes === undefined ? {} : { notes }),
     })
-    .where(
-      and(
-        eq(harnessComponentSets.id, setId),
-        eq(harnessComponentSets.status, from),
-      ),
-    )
+    .where(and(eq(harnessComponentSets.id, setId), eq(harnessComponentSets.status, from)))
     .returning({ id: harnessComponentSets.id });
 
   return updated.length > 0;
 }
 
-export async function approveComponentSet(
-  setId: string,
-  notes: string,
-): Promise<boolean> {
+export async function approveComponentSet(setId: string, notes: string): Promise<boolean> {
   return db.transaction(async (tx) => {
     const [set] = await tx
       .select({ status: harnessComponentSets.status })
@@ -159,10 +124,7 @@ export async function approveComponentSet(
 
     if (!set || set.status !== "submitted") return false;
 
-    const proposed = await tx
-      .select()
-      .from(harnessComponents)
-      .where(eq(harnessComponents.setId, setId));
+    const proposed = await tx.select().from(harnessComponents).where(eq(harnessComponents.setId, setId));
 
     for (const c of proposed) {
       await tx

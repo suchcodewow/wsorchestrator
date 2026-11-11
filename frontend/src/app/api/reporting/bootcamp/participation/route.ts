@@ -53,7 +53,9 @@ export const POST = audited(async function POST(req: Request) {
   });
   return NextResponse.json({
     ...counts,
-    overall: overall.ok ? { written: overall.written, failed: overall.failed, error: null } : { written: 0, failed: 0, error: overall.error },
+    overall: overall.ok
+      ? { written: overall.written, failed: overall.failed, error: null }
+      : { written: 0, failed: 0, error: overall.error },
     stage,
     bootcamp,
   });

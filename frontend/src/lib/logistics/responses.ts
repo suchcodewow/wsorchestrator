@@ -9,26 +9,11 @@ import "server-only";
 
 import { and, count, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  INTAKE_LIMITS,
-  employees,
-  intakeResponses,
-  type IntakeFormId,
-} from "@/db/schema";
+import { INTAKE_LIMITS, employees, intakeResponses, type IntakeFormId } from "@/db/schema";
 import { getTestGroup } from "@/lib/cohorts/test-group";
 import { currentCohortSubquery } from "@/lib/evals/current-cohort";
-import type {
-  DietaryStage,
-  IntakeResponseSort,
-  UnregisteredSort,
-  WriteInSort,
-} from "@/lib/list-specs";
-import {
-  DIETARY_ITEMS,
-  DIETARY_KEYS,
-  DIETARY_OTHER,
-  type IntakeAnswers,
-} from "@/lib/logistics/intake-values";
+import type { DietaryStage, IntakeResponseSort, UnregisteredSort, WriteInSort } from "@/lib/list-specs";
+import { DIETARY_ITEMS, DIETARY_KEYS, DIETARY_OTHER, type IntakeAnswers } from "@/lib/logistics/intake-values";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
 
@@ -50,14 +35,10 @@ export type AnswerFilter = { question: string; answer: string };
  * The answer filter a page's `searchParams` or a route's URL asks for, from
  * `question` and `answer`; null unless both are given.
  */
-export function answerFilter(
-  params: URLSearchParams | Record<string, string | string[] | undefined>,
-): AnswerFilter | null {
+export function answerFilter(params: URLSearchParams | Record<string, string | string[] | undefined>): AnswerFilter | null {
   const read = (key: string) => {
     const v = params instanceof URLSearchParams ? params.get(key) : params[key];
-    return (
-      (Array.isArray(v) ? v[0] : v)?.trim().slice(0, INTAKE_LIMITS.option) ?? ""
-    );
+    return (Array.isArray(v) ? v[0] : v)?.trim().slice(0, INTAKE_LIMITS.option) ?? "";
   };
   const question = read("question");
   const answer = read("answer");
@@ -76,26 +57,16 @@ const iso = <T extends { submittedAt: Date }>(row: T) => ({
  */
 function latestOf(form: IntakeFormId | null, perForm = false) {
   return db
-    .selectDistinctOn(
-      perForm
-        ? [intakeResponses.email, intakeResponses.form]
-        : [intakeResponses.email],
-      {
-        id: intakeResponses.id,
-        form: intakeResponses.form,
-        email: intakeResponses.email,
-        answers: intakeResponses.answers,
-        submittedAt: intakeResponses.submittedAt,
-      },
-    )
+    .selectDistinctOn(perForm ? [intakeResponses.email, intakeResponses.form] : [intakeResponses.email], {
+      id: intakeResponses.id,
+      form: intakeResponses.form,
+      email: intakeResponses.email,
+      answers: intakeResponses.answers,
+      submittedAt: intakeResponses.submittedAt,
+    })
     .from(intakeResponses)
     .where(form ? eq(intakeResponses.form, form) : undefined)
-    .orderBy(
-      ...(perForm
-        ? [intakeResponses.email, intakeResponses.form]
-        : [intakeResponses.email]),
-      desc(intakeResponses.submittedAt),
-    )
+    .orderBy(...(perForm ? [intakeResponses.email, intakeResponses.form] : [intakeResponses.email]), desc(intakeResponses.submittedAt))
     .as("latest");
 }
 
@@ -144,14 +115,10 @@ export async function listIntakeResponses(
     .where(
       and(
         searchAny(query.q, [latest.email, name, sql`${latest.answers}::text`]),
-        filter
-          ? sql`${latest.answers} -> ${filter.question}::text @> to_jsonb(${filter.answer}::text)`
-          : undefined,
+        filter ? sql`${latest.answers} -> ${filter.question}::text @> to_jsonb(${filter.answer}::text)` : undefined,
       ),
     )
-    .orderBy(
-      ...orderFor(sortColumn, query.dir, desc(latest.submittedAt), latest.id),
-    )
+    .orderBy(...orderFor(sortColumn, query.dir, desc(latest.submittedAt), latest.id))
     .limit(limit)
     .offset(offset);
   return toPage(rows.map(iso), query.page);
@@ -168,17 +135,11 @@ const named = namedEmployees();
  * still count, but someone no longer in the cohort is not catered for.
  */
 async function dietaryScope() {
-  const [cohort, group] = await Promise.all([
-    currentCohortSubquery(),
-    getTestGroup(),
-  ]);
+  const [cohort, group] = await Promise.all([currentCohortSubquery(), getTestGroup()]);
   const testers = group.on ? group.members.map((m) => m.email) : [];
   return {
     cohort,
-    inScope: or(
-      isNotNull(cohort.email),
-      testers.length ? inArray(latest.email, testers) : undefined,
-    ),
+    inScope: or(isNotNull(cohort.email), testers.length ? inArray(latest.email, testers) : undefined),
   };
 }
 
@@ -187,12 +148,10 @@ const listAnswer = (key: string) =>
   sql`(case when jsonb_typeof(${latest.answers} -> ${sql.raw(`'${key}'`)}) = 'array' then ${latest.answers} -> ${sql.raw(`'${key}'`)} else '[]'::jsonb end)`;
 
 /** `stageOf`, narrowed to the one stage asked for; nothing to narrow for everyone. */
-const inStage = (stageOf: ReturnType<typeof sql>, stage: DietaryStage) =>
-  stage === "all" ? undefined : sql`${stageOf} = ${stage}`;
+const inStage = (stageOf: ReturnType<typeof sql>, stage: DietaryStage) => (stage === "all" ? undefined : sql`${stageOf} = ${stage}`);
 
 /** The stage someone is in now, or for a test group member the form they answered. */
-const stageOfLatest = (cohortStage: ReturnType<typeof sql>) =>
-  sql`coalesce(${cohortStage}, ${latest.form})`;
+const stageOfLatest = (cohortStage: ReturnType<typeof sql>) => sql`coalesce(${cohortStage}, ${latest.form})`;
 
 export type DietaryItemCount = { item: string; count: number };
 
@@ -214,10 +173,7 @@ export type DietaryCounts = {
 };
 
 /** How many people have each item in `key`'s answer, for those in the current cohort at `stage`. */
-async function itemCounts(
-  key: string,
-  stage: DietaryStage,
-): Promise<Map<string, number>> {
+async function itemCounts(key: string, stage: DietaryStage): Promise<Map<string, number>> {
   const { cohort, inScope } = await dietaryScope();
   const exploded = db
     .select({
@@ -227,10 +183,7 @@ async function itemCounts(
     .leftJoin(cohort, eq(cohort.email, latest.email))
     .where(and(inScope, inStage(stageOfLatest(sql`${cohort.stage}`), stage)))
     .as("exploded");
-  const rows = await db
-    .select({ item: exploded.item, n: count() })
-    .from(exploded)
-    .groupBy(exploded.item);
+  const rows = await db.select({ item: exploded.item, n: count() }).from(exploded).groupBy(exploded.item);
   return new Map(rows.map((r) => [r.item, r.n]));
 }
 
@@ -247,9 +200,7 @@ function ranked(counts: Map<string, number>): DietaryItemCount[] {
  * search. Critical is a subset of checked, so an item's not-critical count is
  * what is left of its checked count.
  */
-export async function dietaryCounts(
-  stage: DietaryStage,
-): Promise<DietaryCounts> {
+export async function dietaryCounts(stage: DietaryStage): Promise<DietaryCounts> {
   const { cohort, inScope } = await dietaryScope();
   const stageOf = stageOfLatest(sql`${cohort.stage}`);
   const hasChecked = sql`jsonb_array_length(${listAnswer(DIETARY_KEYS.restrictions)}) > 0`;
@@ -274,9 +225,7 @@ export async function dietaryCounts(
     itemCounts(DIETARY_KEYS.restrictions, stage),
     itemCounts(DIETARY_KEYS.critical, stage),
   ]);
-  const notCritical = new Map(
-    [...checked].map(([item, n]) => [item, n - (marked.get(item) ?? 0)]),
-  );
+  const notCritical = new Map([...checked].map(([item, n]) => [item, n - (marked.get(item) ?? 0)]));
   return {
     responded: totals?.responded ?? 0,
     withNeeds: totals?.withNeeds ?? 0,
@@ -303,11 +252,7 @@ export type WriteInRow = {
  * and what: those who also marked it Critical (`critical`) or those who did
  * not, a page at a time.
  */
-export async function listWriteIns(
-  critical: boolean,
-  stage: DietaryStage,
-  query: ListQuery<WriteInSort>,
-): Promise<Page<WriteInRow>> {
+export async function listWriteIns(critical: boolean, stage: DietaryStage, query: ListQuery<WriteInSort>): Promise<Page<WriteInRow>> {
   const { limit, offset } = pageWindow(query.page);
   const { cohort, inScope } = await dietaryScope();
   const other = JSON.stringify([DIETARY_OTHER]);
@@ -356,10 +301,7 @@ export type UnregisteredRow = {
  * intermediate who registered for bootcamp a cohort ago has answers, so is
  * not here: their bootcamp needs are counted until they answer again.
  */
-export async function listUnregistered(
-  query: ListQuery<UnregisteredSort>,
-  stage: DietaryStage = "all",
-): Promise<Page<UnregisteredRow>> {
+export async function listUnregistered(query: ListQuery<UnregisteredSort>, stage: DietaryStage = "all"): Promise<Page<UnregisteredRow>> {
   const { limit, offset } = pageWindow(query.page);
   const cohort = await currentCohortSubquery();
   const named = namedEmployees();
@@ -384,9 +326,7 @@ export async function listUnregistered(
         searchAny(query.q, [email, named.fullName]),
       ),
     )
-    .orderBy(
-      ...orderFor(sortColumn, query.dir, sql`lower(${named.fullName})`, email),
-    )
+    .orderBy(...orderFor(sortColumn, query.dir, sql`lower(${named.fullName})`, email))
     .limit(limit)
     .offset(offset);
   return toPage(rows, query.page);

@@ -18,13 +18,7 @@ import assert from "node:assert/strict";
 
 import { pool } from "@/db";
 import { LAB_GUIDE_LIMITS } from "@/db/schema";
-import {
-  deleteLabGuide,
-  getLabGuideById,
-  labGuideSchema,
-  updateLabGuide,
-  workshopsUsingGuide,
-} from "@/lib/lab-guides";
+import { deleteLabGuide, getLabGuideById, labGuideSchema, updateLabGuide, workshopsUsingGuide } from "@/lib/lab-guides";
 
 const p = pool as unknown as Record<string, unknown>;
 const saved = { connect: p.connect, query: p.query };

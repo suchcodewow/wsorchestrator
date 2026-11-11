@@ -129,11 +129,7 @@ export async function saveParticipationSettings(
 
   const result = await db.transaction(async (tx) => {
     const now = new Date();
-    const current = await tx
-      .select({ id: d.id })
-      .from(d)
-      .where(isNull(d.retiredAt))
-      .limit(PARTICIPATION_LIMITS.descriptors);
+    const current = await tx.select({ id: d.id }).from(d).where(isNull(d.retiredAt)).limit(PARTICIPATION_LIMITS.descriptors);
     const known = new Set(current.map((x) => x.id));
     if (input.descriptors.some((x) => x.id && !known.has(x.id))) return "not_found" as const;
 
@@ -223,16 +219,16 @@ async function isReleased(bootcampId: string, stage: EvalsAssessmentStage): Prom
 }
 
 /** `admin` is an Assessments Administrator, who reads what was saved and may mark them after release. */
-async function readSheet(
-  bootcamp: ActiveBootcamp,
-  attendee: Attendee,
-  admin: boolean,
-): Promise<ParticipationSheet> {
+async function readSheet(bootcamp: ActiveBootcamp, attendee: Attendee, admin: boolean): Promise<ParticipationSheet> {
   const scope = and(eq(m.bootcampId, bootcamp.id), eq(m.stage, attendee.stage), eq(m.attendeeEmail, attendee.email));
   const e = participationMarkEvents;
   const [descriptors, marks, events, bands, saved, released] = await Promise.all([
     activeDescriptors(),
-    db.select({ descriptorId: m.descriptorId, count: m.count }).from(m).where(scope).limit(PARTICIPATION_LIMITS.descriptors * 2),
+    db
+      .select({ descriptorId: m.descriptorId, count: m.count })
+      .from(m)
+      .where(scope)
+      .limit(PARTICIPATION_LIMITS.descriptors * 2),
     db
       .select({ descriptorId: e.descriptorId, name: e.actorName, net: sql<number>`sum(${e.delta})::int` })
       .from(e)
@@ -386,9 +382,7 @@ export async function adjustMark(
             isNull(evalsAssessments.builtIn),
           ),
         );
-      await tx
-        .delete(s)
-        .where(and(ofAttendee, eq(s.positiveFeedback, ""), eq(s.constructiveFeedback, ""), notExists(other)));
+      await tx.delete(s).where(and(ofAttendee, eq(s.positiveFeedback, ""), eq(s.constructiveFeedback, ""), notExists(other)));
     }
     return true;
   });

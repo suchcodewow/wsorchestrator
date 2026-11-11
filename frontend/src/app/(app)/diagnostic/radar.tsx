@@ -44,8 +44,7 @@ export function Radar({
     const d = (level / 3) * r;
     return [c + d * Math.cos(angle(i)), c + d * Math.sin(angle(i))] as const;
   };
-  const ring = (level: number) =>
-    axes.map((_, i) => at(i, level).join(",")).join(" ");
+  const ring = (level: number) => axes.map((_, i) => at(i, level).join(",")).join(" ");
   const shape = (values: readonly (number | null)[]) =>
     values
       .map((v, i) => (v ? at(i, v).join(",") : null))

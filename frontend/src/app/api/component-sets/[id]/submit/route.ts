@@ -9,10 +9,7 @@ import { canContributeComponents } from "@/lib/roles";
 import { setStatus } from "@/lib/components/catalog";
 import { audited } from "@/lib/audit";
 
-export const POST = audited(async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const POST = audited(async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const viewer = await sessionOrToken(req);
   if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -22,10 +19,7 @@ export const POST = audited(async function POST(
   }
 
   const { id } = await params;
-  const [set] = await db
-    .select()
-    .from(harnessComponentSets)
-    .where(eq(harnessComponentSets.id, id));
+  const [set] = await db.select().from(harnessComponentSets).where(eq(harnessComponentSets.id, id));
 
   if (!set || set.authorId !== viewer.id) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });

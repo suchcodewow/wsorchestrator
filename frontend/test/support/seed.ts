@@ -116,9 +116,7 @@ export function testScope(name: string) {
     score = 3,
   ): Promise<string> {
     const released =
-      stage === "bootcamp"
-        ? { btcReleasedAt: new Date(), btcReleasedBy: userId }
-        : { intReleasedAt: new Date(), intReleasedBy: userId };
+      stage === "bootcamp" ? { btcReleasedAt: new Date(), btcReleasedBy: userId } : { intReleasedAt: new Date(), intReleasedBy: userId };
     let [bootcamp] = await db
       .select({ id: bootcamps.id })
       .from(bootcamps)

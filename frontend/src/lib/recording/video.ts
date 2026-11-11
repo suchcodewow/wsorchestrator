@@ -141,28 +141,21 @@ export function retryDelayMs(attempt: number, random: () => number = Math.random
 }
 
 /** `Dana Smith - 2026-10-09 15-43 UTC - screen.mp4`, safe on every filesystem. */
-export function trackFileName(input: {
-  contributor: string;
-  startedAt: Date;
-  kind: RecordingTrackKind;
-  mimeType: string;
-}): string {
+export function trackFileName(input: { contributor: string; startedAt: Date; kind: RecordingTrackKind; mimeType: string }): string {
   const at = input.startedAt.toISOString();
   const stamp = `${at.slice(0, 10)} ${at.slice(11, 13)}-${at.slice(14, 16)} UTC`;
   const parts = [input.contributor || "Recording", stamp, input.kind]
-    .map((p) => p.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim())
+    .map((p) =>
+      p
+        .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
     .filter(Boolean);
   return `${parts.join(" - ")}.${videoExtensionFor(input.mimeType)}`;
 }
 
-export type CameraProblem =
-  | "blocked"
-  | "blocked_by_system"
-  | "no_camera"
-  | "in_use"
-  | "device_gone"
-  | "unsupported"
-  | "unknown";
+export type CameraProblem = "blocked" | "blocked_by_system" | "no_camera" | "in_use" | "device_gone" | "unsupported" | "unknown";
 
 /** What a `getUserMedia` rejection for the camera means; the same names as the microphone's. */
 export function cameraProblem(error: unknown): CameraProblem {

@@ -13,10 +13,7 @@ import { Check, ChevronRight } from "lucide-react";
 import { LevelBadge } from "@/app/(app)/diagnostic/level-badge";
 import { ShapeCard } from "@/app/(app)/diagnostic-settings/records/person-view";
 import { SUBJECTS, bandOf } from "@/lib/iris/subjects";
-import type {
-  PersonCoachCanary,
-  PersonDiagnostic,
-} from "@/lib/reporting/person-training";
+import type { PersonCoachCanary, PersonDiagnostic } from "@/lib/reporting/person-training";
 import { cn } from "@/lib/utils";
 
 /** A line that opens on click: a title and its summary, with the detail beneath once open. */
@@ -54,12 +51,7 @@ function OpenLine({
               }}
               className="-mx-1 cursor-pointer rounded-md px-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
-              <ChevronRight
-                className={cn(
-                  "size-3.5 text-muted-foreground transition-transform",
-                  open && "rotate-90",
-                )}
-              />
+              <ChevronRight className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-90")} />
             </button>
             <h2 className="text-2xl font-medium tracking-tight">{title}</h2>
           </div>
@@ -76,26 +68,16 @@ function OpenLine({
   );
 }
 
-export function DiagnosticLine({
-  diagnostic,
-}: {
-  diagnostic: PersonDiagnostic;
-}) {
-  const placed = new Map(
-    diagnostic.sittings.map((s) => [s.subject, s.placement]),
-  );
+export function DiagnosticLine({ diagnostic }: { diagnostic: PersonDiagnostic }) {
+  const placed = new Map(diagnostic.sittings.map((s) => [s.subject, s.placement]));
   return (
     <OpenLine
       title="Diagnostic"
       summary={
         diagnostic.composite !== null && (
           <span className="whitespace-nowrap">
-            <span className="text-2xl font-medium tabular-nums">
-              {diagnostic.composite}
-            </span>{" "}
-            <span className="text-xs text-muted-foreground">
-              {bandOf(diagnostic.composite)}
-            </span>
+            <span className="text-2xl font-medium tabular-nums">{diagnostic.composite}</span>{" "}
+            <span className="text-xs text-muted-foreground">{bandOf(diagnostic.composite)}</span>
           </span>
         )
       }
@@ -103,33 +85,20 @@ export function DiagnosticLine({
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-sm">
           {[...placed].map(([subject, level]) => (
             <span key={subject} className="inline-flex items-center gap-1.5">
-              <span className="text-muted-foreground">
-                {SUBJECTS[subject].short}
-              </span>
+              <span className="text-muted-foreground">{SUBJECTS[subject].short}</span>
               <LevelBadge level={level} />
             </span>
           ))}
         </span>
       }
     >
-      <ShapeCard
-        detail={{ name: diagnostic.name, sittings: diagnostic.sittings }}
-        summary={diagnostic.summary}
-      />
+      <ShapeCard detail={{ name: diagnostic.name, sittings: diagnostic.sittings }} summary={diagnostic.summary} />
     </OpenLine>
   );
 }
 
 /** A circle that fills with how much is done, its count written inside. */
-function CountRing({
-  done,
-  total,
-  label,
-}: {
-  done: number;
-  total: number;
-  label: string;
-}) {
+function CountRing({ done, total, label }: { done: number; total: number; label: string }) {
   const size = 44;
   const stroke = 4;
   const r = (size - stroke) / 2;
@@ -143,22 +112,8 @@ function CountRing({
         className="relative inline-flex shrink-0 items-center justify-center"
         style={{ width: size, height: size }}
       >
-        <svg
-          width={size}
-          height={size}
-          viewBox={`0 0 ${size} ${size}`}
-          className="-rotate-90"
-          aria-hidden
-        >
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={r}
-            fill="none"
-            stroke="currentColor"
-            strokeOpacity={0.2}
-            strokeWidth={stroke}
-          />
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeOpacity={0.2} strokeWidth={stroke} />
           <circle
             cx={size / 2}
             cy={size / 2}
@@ -171,10 +126,7 @@ function CountRing({
             strokeDashoffset={circumference * (1 - fraction)}
           />
         </svg>
-        <span
-          className="absolute text-[11px] font-medium tabular-nums"
-          aria-hidden
-        >
+        <span className="absolute text-[11px] font-medium tabular-nums" aria-hidden>
           {done}/{total}
         </span>
       </span>
@@ -189,8 +141,7 @@ function Mark({ done, label }: { done: boolean; label: string }) {
       <span
         className={cn(
           "inline-flex size-4 items-center justify-center rounded-full border",
-          done &&
-            "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+          done && "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
         )}
       >
         {done && <Check className="size-3" strokeWidth={3} aria-hidden />}
@@ -209,16 +160,8 @@ export function CoachCanaryLine({ canary }: { canary: PersonCoachCanary }) {
       title="Coach Canary"
       summary={
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <CountRing
-            done={canary.videos.watched}
-            total={canary.videos.total}
-            label="Videos watched"
-          />
-          <CountRing
-            done={canary.topics.mastered}
-            total={canary.topics.total}
-            label="Topics mastered"
-          />
+          <CountRing done={canary.videos.watched} total={canary.videos.total} label="Videos watched" />
+          <CountRing done={canary.topics.mastered} total={canary.topics.total} label="Topics mastered" />
         </div>
       }
     >
@@ -229,18 +172,12 @@ export function CoachCanaryLine({ canary }: { canary: PersonCoachCanary }) {
               {level.level * 100} · {level.name}
             </h3>
             <ul className="divide-y rounded-lg border text-sm">
-              {level.topics.length === 0 && (
-                <li className="px-3 py-1.5 text-muted-foreground">
-                  No topics.
-                </li>
-              )}
+              {level.topics.length === 0 && <li className="px-3 py-1.5 text-muted-foreground">No topics.</li>}
               {level.topics.map((topic) => (
                 <li key={topic.id} className="space-y-1 px-3 py-1.5">
                   <p className="wrap-break-word">{topic.name}</p>
                   <div className="flex flex-wrap gap-x-3 gap-y-1">
-                    {topic.hasVideo && (
-                      <Mark done={topic.watched} label="Watched" />
-                    )}
+                    {topic.hasVideo && <Mark done={topic.watched} label="Watched" />}
                     <Mark done={topic.mastered} label="Mastered" />
                   </div>
                 </li>

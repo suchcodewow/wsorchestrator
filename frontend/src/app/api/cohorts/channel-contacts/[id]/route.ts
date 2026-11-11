@@ -12,10 +12,7 @@ import { canManageTrainingSettings } from "@/lib/roles";
 
 const idSchema = z.string().uuid();
 
-export const DELETE = audited(async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireCaller(req, canManageTrainingSettings);
   if (error) return error;
 

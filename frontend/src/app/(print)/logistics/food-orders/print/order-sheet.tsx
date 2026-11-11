@@ -31,7 +31,10 @@ export function OrderSheet({ orders, single }: { orders: FoodOrderRow[]; single:
           <div className="space-y-4 print:space-y-6">
             {!single && <h1 className="hidden text-xl font-semibold print:block">Food orders</h1>}
             {orders.map((o) => {
-              const lines = o.needs.split("\n").map((l) => l.trim()).filter(Boolean);
+              const lines = o.needs
+                .split("\n")
+                .map((l) => l.trim())
+                .filter(Boolean);
               return (
                 <section
                   key={o.id}

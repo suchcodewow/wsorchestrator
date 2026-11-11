@@ -135,7 +135,10 @@ export function VideoDialog({
   return (
     <VideoPlayerDialog title={name} description="Your place is kept: close it and carry on later." onClose={onClose}>
       {error ? (
-        <p role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-6 text-sm text-destructive">
+        <p
+          role="alert"
+          className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-6 text-sm text-destructive"
+        >
           <TriangleAlert className="size-4 shrink-0" />
           {error}
         </p>
@@ -148,7 +151,14 @@ export function VideoDialog({
           {...FILL_VIDEO}
           videoRef={video}
           feedback={{ kind: "mimir_concept", id: conceptId, language: ready.language, object: ready.object }}
-          barStart={<LanguageMenu language={ready.language} languages={ready.languages} disabled={switching} onChoose={(l) => void chooseLanguage(l)} />}
+          barStart={
+            <LanguageMenu
+              language={ready.language}
+              languages={ready.languages}
+              disabled={switching}
+              onChoose={(l) => void chooseLanguage(l)}
+            />
+          }
           src={ready.url}
           controls
           playsInline

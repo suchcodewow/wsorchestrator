@@ -123,9 +123,7 @@ export async function openCamera(
   };
 }
 
-export type OpenedScreen =
-  | { ok: true; stream: MediaStream }
-  | { ok: false; problem: ReturnType<typeof screenProblem> };
+export type OpenedScreen = { ok: true; stream: MediaStream } | { ok: false; problem: ReturnType<typeof screenProblem> };
 
 /**
  * Asks to share a screen, window or tab, with its audio where the browser

@@ -165,10 +165,7 @@ export function SubmissionGroups({
   editing: boolean;
 }) {
   const groups: { key: string; first: ViewSubmission; items: ViewSubmission[] }[] = [];
-  const ordered = [
-    ...submissions.filter((s) => s.stage === "intermediate"),
-    ...submissions.filter((s) => s.stage !== "intermediate"),
-  ];
+  const ordered = [...submissions.filter((s) => s.stage === "intermediate"), ...submissions.filter((s) => s.stage !== "intermediate")];
   for (const s of ordered) {
     const key = `${s.bootcamp.id}:${s.stage}`;
     const group = groups.find((g) => g.key === key);
@@ -338,10 +335,7 @@ function Collapsible({
   const detailsId = `assessment-${s.id}`;
   return (
     <section>
-      <div
-        onClick={onToggle}
-        className="flex cursor-pointer items-start gap-2 px-5 py-4 transition-colors hover:bg-muted/30"
-      >
+      <div onClick={onToggle} className="flex cursor-pointer items-start gap-2 px-5 py-4 transition-colors hover:bg-muted/30">
         <button
           type="button"
           aria-expanded={open}
@@ -390,9 +384,7 @@ function SubmissionRow({ submission: s, personKey }: { submission: ViewSubmissio
                 <span className="min-w-0 wrap-break-word">{c.criterionName}</span>
                 <span className="tabular-nums">{c.score}</span>
               </div>
-              {c.comment && (
-                <p className="whitespace-pre-line text-sm text-muted-foreground wrap-break-word">{c.comment}</p>
-              )}
+              {c.comment && <p className="whitespace-pre-line text-sm text-muted-foreground wrap-break-word">{c.comment}</p>}
             </li>
           ))}
         </ul>
@@ -464,9 +456,7 @@ function SubmissionForm({
   const average = direct ? (typedValid ? typedScore : null) : averageScore(scores.map((c) => c.score));
   const needed = direct || average === null ? null : requiredFeedback(wholeScore(average));
   const missing =
-    (direct && !typedValid) ||
-    (needed === "positive" && !positive.trim()) ||
-    (needed === "constructive" && !constructive.trim());
+    (direct && !typedValid) || (needed === "positive" && !positive.trim()) || (needed === "constructive" && !constructive.trim());
   const changed =
     positive !== s.positiveFeedback ||
     constructive !== s.constructiveFeedback ||
@@ -523,9 +513,7 @@ function SubmissionForm({
                     onClick={() => set(i, { score: n })}
                     className={cn(
                       "flex size-8 items-center justify-center rounded-md border text-sm font-medium transition-colors",
-                      c.score === n
-                        ? "border-brand bg-brand text-brand-foreground"
-                        : "border-input bg-field hover:bg-muted/50",
+                      c.score === n ? "border-brand bg-brand text-brand-foreground" : "border-input bg-field hover:bg-muted/50",
                     )}
                   >
                     {n}
@@ -783,13 +771,7 @@ function ClassReviewForm({
           {suggestError}
         </p>
       )}
-      <FeedbackBox
-        id={`${id}-other-notes`}
-        label="Other notes"
-        value={notes}
-        onChange={setNotes}
-        note={null}
-      />
+      <FeedbackBox id={`${id}-other-notes`} label="Other notes" value={notes} onChange={setNotes} note={null} />
       <div className="grid gap-3 sm:grid-cols-3">
         <ExamInput id={`${id}-entrance`} label="Entrance exam" value={entranceTyped} onChange={setEntranceTyped} />
         <ExamInput id={`${id}-exit`} label="Exit exam" value={exitTyped} onChange={setExitTyped} />
@@ -811,17 +793,7 @@ function ClassReviewForm({
   );
 }
 
-function ExamInput({
-  id,
-  label,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
+function ExamInput({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (value: string) => void }) {
   return (
     <div className="space-y-1.5">
       <label htmlFor={id} className="text-sm font-medium">

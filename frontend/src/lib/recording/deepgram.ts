@@ -69,16 +69,13 @@ type Alternative = { transcript?: unknown; paragraphs?: { transcript?: unknown }
  * when only one voice was heard.
  */
 export function prerecordedTranscript(body: unknown): string {
-  const alt = (body as { results?: { channels?: { alternatives?: Alternative[] }[] } } | null)
-    ?.results?.channels?.[0]?.alternatives?.[0];
+  const alt = (body as { results?: { channels?: { alternatives?: Alternative[] }[] } } | null)?.results?.channels?.[0]?.alternatives?.[0];
   const paragraphs = alt?.paragraphs?.transcript;
   if (typeof paragraphs === "string" && paragraphs.trim()) {
     const text = paragraphs.trim();
     const label = /^Speaker (\d+): /gm;
     const speakers = new Set([...text.matchAll(label)].map((m) => m[1]));
-    return speakers.size > 1
-      ? text.replace(label, (_, n: string) => `Speaker ${Number(n) + 1}: `)
-      : text.replace(label, "");
+    return speakers.size > 1 ? text.replace(label, (_, n: string) => `Speaker ${Number(n) + 1}: `) : text.replace(label, "");
   }
   return typeof alt?.transcript === "string" ? alt.transcript : "";
 }

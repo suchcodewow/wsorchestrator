@@ -38,10 +38,20 @@ import {
   type Target,
 } from "@/lib/mimir/slide-review/slides";
 import { cn } from "@/lib/utils";
-import { ArrowRight, Check, Eye, EyeOff, Flag, MousePointerClick, RotateCcw, Timer, X } from "lucide-react";
+import { ArrowRight, Check, Eye, EyeOff, Flag, MousePointerClick, RotateCcw, X } from "lucide-react";
 import { Geist } from "next/font/google";
 import Image from "next/image";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { recordRun } from "./record-run";
 import { SlideFeedback } from "./slide-feedback";
 import "./slide-review.css";
@@ -96,40 +106,33 @@ export function SlideReviewView() {
 function Intro({ onStart }: { onStart: () => void }) {
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Timer className="size-4" />
-        About a minute a slide, for as long as you like
-      </p>
       <section className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="flex gap-3 bg-brand-subtle/50 px-5 py-4 text-sm">
           <span className="text-base leading-5" aria-hidden>
             🔍
           </span>
           <p className="max-w-3xl">
-            <span className="font-medium">The customer meeting is in an hour.</span> Your team keeps drafting “Our
-            understanding” slides, and every one of them has small mistakes in it. Find them before the customer does.
+            <span className="font-medium">We need your help!</span> The customer meeting is just around the corner and the “Our
+            Understanding” slide has problems!
           </p>
         </div>
         <div className="space-y-2 px-5 py-4 text-sm">
           <p className="font-medium">How it works</p>
           <ul className="list-disc space-y-1 pl-5 marker:text-muted-foreground">
             <li>
-              You see one slide at a time. Each has between {FLAWS_PER_SLIDE.min} and {FLAWS_PER_SLIDE.max} things wrong with
-              it, and there’s always another slide.
+              You’ll see an Our Understanding slide with {FLAWS_PER_SLIDE.min}-{FLAWS_PER_SLIDE.max} problems.
             </li>
-            <li>Click anything that’s wrong and it corrects itself.</li>
-            <li>When you think you’ve found everything, click Next. You’ll see what you missed before the next slide.</li>
-            <li>Stop whenever you like with Finish for now, and see how this session went.</li>
+            <li>Click anything incorrect to fix it.</li>
+            <li>When you’ve found everything you can, click “next”.</li>
           </ul>
         </div>
         <div className="flex flex-wrap gap-x-8 gap-y-1 px-5 py-2.5 text-sm">
           <span>
-            <span className="font-semibold text-emerald-600 tabular-nums dark:text-emerald-400">+{POINTS.found}</span> for each
-            mistake you fix
+            <span className="font-semibold text-emerald-600 tabular-nums dark:text-emerald-400">+{POINTS.found}</span> for each mistake you
+            fix
           </span>
           <span>
-            <span className="font-semibold text-destructive tabular-nums">{POINTS.wrongClick}</span> for clicking something that
-            was fine
+            <span className="font-semibold text-destructive tabular-nums">{POINTS.wrongClick}</span> for clicking something that was fine
           </span>
           <span>
             <span className="font-semibold text-destructive tabular-nums">{POINTS.missed}</span> for each mistake you miss
@@ -137,11 +140,13 @@ function Intro({ onStart }: { onStart: () => void }) {
         </div>
         <div className="space-y-2 px-5 py-4 text-sm">
           <p className="font-medium">What to look for</p>
-          <p className="text-muted-foreground">
-            Spelling and grammar, punctuation, capitalization, a font or size that doesn’t match the rest, bold or italic out of
-            place, colors, anything out of line or unevenly spaced, the wrong icon, text that runs over its column, and anything
-            left behind from an edit.
-          </p>
+          <p className="text-muted-foreground">Look for:</p>
+          <ul className="list-disc space-y-1 pl-5 text-muted-foreground marker:text-muted-foreground">
+            <li>spelling and grammar errors</li>
+            <li>punctuation problems &amp; extra spaces</li>
+            <li>formatting issues</li>
+          </ul>
+          <p className="text-muted-foreground">Don’t worry about the content itself. The goal is to practice spotting the issues above.</p>
         </div>
       </section>
       <Button variant="brand" onClick={onStart}>
@@ -192,7 +197,11 @@ function SlideRound({
 
   const flawOf = (t: Target) => slide.flaws.find((fl) => fl.target === t);
   const missed = slide.flaws.filter((fl) => !fixed.has(fl.target));
-  const score = earlier + (reviewing ? pointsFor({ found: fixed.size, wrongClicks, missed: missed.length }) : fixed.size * POINTS.found + wrongClicks * POINTS.wrongClick);
+  const score =
+    earlier +
+    (reviewing
+      ? pointsFor({ found: fixed.size, wrongClicks, missed: missed.length })
+      : fixed.size * POINTS.found + wrongClicks * POINTS.wrongClick);
 
   const click = (target: Target, at: { x: number; y: number }) => {
     if (reviewing || fixed.has(target)) return;
@@ -223,13 +232,11 @@ function SlideRound({
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <p className="text-sm text-muted-foreground">Slide {number}</p>
         <p className="text-sm">
-          <span className="text-muted-foreground">Fixed on this slide:</span>{" "}
-          <span className="font-medium tabular-nums">{fixed.size}</span>
+          <span className="text-muted-foreground">Fixed on this slide:</span> <span className="font-medium tabular-nums">{fixed.size}</span>
           {reviewing && <span className="text-muted-foreground tabular-nums"> of {slide.flaws.length}</span>}
         </p>
         <p className="text-sm">
-          <span className="text-muted-foreground">Wrong clicks:</span>{" "}
-          <span className="font-medium tabular-nums">{wrongClicks}</span>
+          <span className="text-muted-foreground">Wrong clicks:</span> <span className="font-medium tabular-nums">{wrongClicks}</span>
         </p>
         <PillSwitch label="Show fixed" title="Keep a green edge on everything you have fixed" on={showFixed} onChange={onShowFixed} />
         {reviewing && (
@@ -565,7 +572,13 @@ function Logo() {
 
 function Divider() {
   return (
-    <Piece target="divider" x={L.divider - 4} y={L.columnTop} label="Column divider" style={{ width: 9, height: L.columnBottom - L.columnTop }}>
+    <Piece
+      target="divider"
+      x={L.divider - 4}
+      y={L.columnTop}
+      label="Column divider"
+      style={{ width: 9, height: L.columnBottom - L.columnTop }}
+    >
       <span className="absolute inset-y-0 left-1 w-px" style={{ backgroundColor: RULE }} />
     </Piece>
   );
@@ -587,7 +600,16 @@ function ArrowShape() {
 
 function Mark({ kind, size }: { kind: "check" | "cross"; size: number }) {
   return (
-    <svg viewBox="0 0 12 12" width={size} height={size} className="block" fill="none" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      viewBox="0 0 12 12"
+      width={size}
+      height={size}
+      className="block"
+      fill="none"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       {kind === "cross" ? (
         <path d="M2.5 2.5 L9.5 9.5 M9.5 2.5 L2.5 9.5" stroke="#e5484d" />
       ) : (
@@ -611,6 +633,7 @@ function Column({ side, rows }: { side: Side; rows: Slide["current"] }) {
         x={x - 35 - (headerSize - 22) / 2}
         y={L.headerY + middleOf(L.headerSize) - headerSize / 2}
         label={`${side === "current" ? "Current" : "Future"} state icon`}
+        className="z-10"
       >
         <span
           className="grid place-items-center rounded-full"
@@ -633,15 +656,20 @@ function Column({ side, rows }: { side: Side; rows: Slide["current"] }) {
             </TextPiece>
             <Piece
               target={`${side}.${i as RowIndex}.icon`}
-              // Centred on the outcome line beside it; the 2px is the button's padding.
+              // Centred on the outcome line beside it; the 2px is the button's padding. z-10 keeps a moved or enlarged icon above the text it overlaps, so what is seen is what a click hits.
               x={x + 1 - (size - 13) / 2}
               y={y + L.sub.dy + middleOf(L.sub.size) - size / 2 - 2}
               label={`${side === "current" ? "Cross" : "Tick"} beside “${row.sub}”`}
-              className="p-0.5"
+              className="z-10 p-0.5"
             >
               <Mark kind={iconLook.icon ?? mark} size={size} />
             </Piece>
-            <TextPiece target={`${side}.${i as RowIndex}.sub`} x={x + 19} y={y + L.sub.dy} base={{ font: "geist", size: L.sub.size, italic: true }}>
+            <TextPiece
+              target={`${side}.${i as RowIndex}.sub`}
+              x={x + 19}
+              y={y + L.sub.dy}
+              base={{ font: "geist", size: L.sub.size, italic: true }}
+            >
               {row.sub}
             </TextPiece>
           </span>
@@ -659,10 +687,7 @@ function CapabilitiesBox() {
   );
   return (
     <Piece target="capabilitiesBox" x={L.box.x} y={L.box.y} label="Required capabilities box" style={{ width: w, height: h }}>
-      <span
-        className="absolute inset-0 bg-neutral-50"
-        style={{ border: look.solid ? "2px solid #8a8a86" : "1.5px dashed #dcdcd9" }}
-      />
+      <span className="absolute inset-0 bg-neutral-50" style={{ border: look.solid ? "2px solid #8a8a86" : "1.5px dashed #dcdcd9" }} />
       {corner({ left: -7, top: -7 }, "border-t border-l")}
       {corner({ right: -7, top: -7 }, "border-t border-r")}
       {corner({ left: -7, bottom: -7 }, "border-b border-l")}

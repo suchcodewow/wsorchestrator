@@ -6,8 +6,9 @@
  * 1. Reads the Revenue Enablement calendar's next 60 days, and stores each
  *    event of every picked meeting's name as one of its occurrences, with the
  *    Zoom meeting in its link and each guest's reply.
- * 2. For each occurrence over for half an hour whose attendance is not known,
- *    asks the connected Zoom user who joined.
+ * 2. For each occurrence over for a quarter of an hour whose attendance is not
+ *    known, asks the connected Zoom user who joined, again on each later run
+ *    until six hours after it ended (`readAttendance`).
  * 3. Invites each person on the Cohorts page's Current tab whom a meeting is
  *    for to its next occurrence in their window, and anyone who missed or
  *    declined theirs to the next one after it, or to every occurrence in it when the meeting
@@ -30,9 +31,12 @@
  * The first live run also cancels, once, the upcoming invites and Zoom
  * meetings the old create-a-meeting flow made, and forgets them.
  *
- * Google never emails anyone about a change the sync makes: every write to the
- * calendar is sent with sendUpdates=none, so a guest finds the invite on their
- * calendar rather than in their inbox. An invite already right is left alone.
+ * Unless an administrator chooses Email Invites, Google never emails anyone
+ * about a change the sync makes: every write to the calendar is sent with
+ * sendUpdates=none, so a guest finds the invite on their calendar rather than
+ * in their inbox. With Email Invites, an invite change and a Zoom link rewrite
+ * are sent with sendUpdates=all, and Google emails every guest as it does for
+ * any edit. The old form's cancellations stay silent. An invite already right is left alone.
  * The sync takes off an invite only those it put there.
  */
 
@@ -61,6 +65,7 @@ import {
 import { forgetTestArtifact, outboundCohort, testArtifacts } from "@/lib/cohorts/test-group";
 import { PAGE_SIZE } from "@/lib/paging";
 import {
+  getMeetingEmailInvites,
   getMeetingFacilitators,
   getMeetingSyncLive,
   googleConnection,
@@ -77,6 +82,7 @@ import {
   meetingKey,
   mergeAttendees,
   planMeeting,
+  rewriteZoomLink,
   sameGuests,
   windowsFor,
   zoomMeetingIdIn,
@@ -90,7 +96,15 @@ import {
 import { accessToken, calendarClient, GoogleError, oauthClient, type CalendarClient } from "@/lib/google-calendar";
 import { openSecret } from "@/lib/secret-box";
 import { classDate } from "@/lib/evals/attendance";
-import { ZoomError, type ZoomClient } from "@/lib/zoom";
+import {
+  alternativeHostsOf,
+  createMeeting,
+  getMeeting,
+  setAlternativeHosts,
+  ZoomError,
+  type ZoomClient,
+  type ZoomMeeting,
+} from "@/lib/zoom";
 import { connectedZoom } from "@/lib/zoom-connection";
 
 /** The calendar the meetings are picked from, and invites sent on. */
@@ -99,8 +113,15 @@ export const REVENUE_ENABLEMENT_CALENDAR_ID = "c_3pt3qoc60a1cn5lre92sc9r7s0@grou
 /** How far ahead the calendar is read: the names offered, and the occurrences invited to. */
 export const CALENDAR_WINDOW_DAYS = 60;
 
-/** How long after an occurrence ends Zoom is asked who joined, so its report is complete. */
-const ATTENDANCE_DELAY_MS = 30 * 60_000;
+/**
+ * How long after an occurrence ends Zoom is first asked who joined. Its
+ * report can lag the end of a meeting, so those it lists are credited at once
+ * and those it does not are asked about again by each later run.
+ */
+const ATTENDANCE_FIRST_READ_MS = 15 * 60_000;
+
+/** How long after an occurrence ends Zoom's report is complete, and whoever it does not list is counted as missing. */
+const ATTENDANCE_FINAL_READ_MS = 6 * 60 * 60_000;
 
 const DAY_MS = 24 * 60 * 60_000;
 
@@ -129,7 +150,11 @@ async function connect(): Promise<Connected | NotConnected> {
   if (!client) return { ok: false, error: "not_configured", message: "AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET are not set." };
   const connection = await googleConnection();
   if (!connection) {
-    return { ok: false, error: "not_connected", message: "No Google account is connected — connect one on Admin Settings → External Connectors." };
+    return {
+      ok: false,
+      error: "not_connected",
+      message: "No Google account is connected — connect one on Admin Settings → External Connectors.",
+    };
   }
   const refreshToken = openSecret(connection.refreshToken);
   if (!refreshToken) {
@@ -183,6 +208,11 @@ function dayIn(instant: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(instant);
 }
 
+/** An instant in a time zone, like `Nov 11, 3:30 PM`. */
+function formatClock(instant: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(instant);
+}
+
 export type CalendarMeetingName = { name: string; next: Date; occurrences: number };
 
 /** The names of the meetings on the calendar in the next 60 days, each once, with when it next starts; for the picker. */
@@ -221,13 +251,23 @@ function googleFailure(err: unknown, account: string): NotConnected {
   return { ok: false, error: "google_error", message: (err as Error).message };
 }
 
-/** Sets an event's guests without emailing anyone; Google numbers each instance of a recurring one on its own. */
-async function patchGuests(calendar: CalendarClient, eventId: string, attendees: CalendarAttendee[]): Promise<void> {
-  await calendar.call("PATCH", `${events}/${enc(eventId)}`, { query: { sendUpdates: "none" }, body: { attendees } });
+/** Whether Google emails the guests about a change: `all` for Email Invites, otherwise `none`. */
+type SendUpdates = "none" | "all";
+
+const sendUpdatesFor = (email: boolean): SendUpdates => (email ? "all" : "none");
+
+/** Sets an event's guests, emailing them only for `all`; Google numbers each instance of a recurring one on its own. */
+async function patchGuests(
+  calendar: CalendarClient,
+  eventId: string,
+  attendees: CalendarAttendee[],
+  sendUpdates: SendUpdates,
+): Promise<void> {
+  await calendar.call("PATCH", `${events}/${enc(eventId)}`, { query: { sendUpdates }, body: { attendees } });
 }
 
 /** Takes `emails` off one event, leaving everyone else; an event gone already has no one to take off. */
-async function takeOff(calendar: CalendarClient, eventId: string, emails: readonly string[]): Promise<void> {
+async function takeOff(calendar: CalendarClient, eventId: string, emails: readonly string[], sendUpdates: SendUpdates): Promise<void> {
   let event: CalendarEvent;
   try {
     event = await calendar.call<CalendarEvent>("GET", `${events}/${enc(eventId)}`);
@@ -237,7 +277,7 @@ async function takeOff(calendar: CalendarClient, eventId: string, emails: readon
   }
   const current = event.attendees ?? [];
   const next = mergeAttendees(current, [], emails);
-  if (!sameGuests(current, next)) await patchGuests(calendar, eventId, next);
+  if (!sameGuests(current, next)) await patchGuests(calendar, eventId, next, sendUpdates);
 }
 
 /* ------------------------------------------------------------------ */
@@ -264,7 +304,14 @@ async function startRun(trigger: MeetingSyncTrigger, actorId: string | null, dry
 
 type Tally = { invited: number; removed: number; attended: number; missed: number; noneLeft: number; failures: number };
 
-type ChangeRow = { meetingName: string; occurrenceStartsAt?: Date | null; action: MeetingSyncAction; email?: string; detail?: string | null; at?: Date };
+type ChangeRow = {
+  meetingName: string;
+  occurrenceStartsAt?: Date | null;
+  action: MeetingSyncAction;
+  email?: string;
+  detail?: string | null;
+  at?: Date;
+};
 
 const TALLIED: Partial<Record<MeetingSyncAction, keyof Tally>> = {
   invited: "invited",
@@ -387,7 +434,13 @@ type Invite = PlanInvite & { test: boolean; responseStatus: string | null };
 type Context = {
   calendar: CalendarClient;
   zoom: ZoomClient | null;
+  /** The connected Zoom user, who hosts the meetings the sync makes. */
+  zoomEmail: string | null;
+  /** Zoom would make no more meetings today, so no more are tried this run. */
+  zoomCapped: boolean;
   dryRun: boolean;
+  /** Whether Google emails the guests about the run's changes to an invite. */
+  sendUpdates: SendUpdates;
   testGroup: boolean;
   now: Date;
   timeZone: string;
@@ -452,15 +505,18 @@ async function occurrencesOf(ctx: Context, meeting: MeetingSelection): Promise<O
         },
       });
   }
-  await db
-    .delete(meetingOccurrences)
-    .where(
-      and(
-        eq(meetingOccurrences.meetingId, meeting.id),
-        gt(meetingOccurrences.startsAt, ctx.now),
-        listed.length > 0 ? notInArray(meetingOccurrences.eventId, listed.map((e) => e.id)) : undefined,
-      ),
-    );
+  await db.delete(meetingOccurrences).where(
+    and(
+      eq(meetingOccurrences.meetingId, meeting.id),
+      gt(meetingOccurrences.startsAt, ctx.now),
+      listed.length > 0
+        ? notInArray(
+            meetingOccurrences.eventId,
+            listed.map((e) => e.id),
+          )
+        : undefined,
+    ),
+  );
 
   const stored = await db
     .select()
@@ -505,15 +561,19 @@ async function storeReplies(occurrences: readonly Occurrence[], invites: Invite[
         from jsonb_to_recordset(${JSON.stringify(changed)}::jsonb) as x(email text, status text)
         where i.occurrence_id = ${occ.id}::uuid and i.email = x.email`);
     }
-    for (const inv of invites) if (inv.occurrenceId === occ.id && replies.has(inv.email)) inv.responseStatus = replies.get(inv.email) ?? null;
+    for (const inv of invites)
+      if (inv.occurrenceId === occ.id && replies.has(inv.email)) inv.responseStatus = replies.get(inv.email) ?? null;
   }
 }
 
 /**
- * Reads who joined each occurrence over for half an hour whose attendance is
- * not known, and marks each of the run's members invited to it attended or
- * missed. One with no Zoom link, or that Zoom will not report on, stays
- * unknown until an administrator marks it on the Current tab.
+ * Reads who joined each occurrence over for a quarter of an hour whose
+ * attendance is not known, and marks each of the run's members invited to it
+ * who joined attended. Zoom's report can lag, so a member it does not list is
+ * left unknown, and asked about again by each later run, until six hours after
+ * the occurrence ended; only then are they marked missed. One with no Zoom
+ * link, or that Zoom will not report on, stays unknown until an administrator
+ * marks it on the Current tab.
  *
  * A run reads only its own mode's invites, the test group's or the cohort's,
  * so an occurrence is marked read only once every member invited to it, in
@@ -525,27 +585,43 @@ async function readAttendance(ctx: Context, meeting: MeetingSelection, occurrenc
   const due = occurrences.filter(
     (occ) =>
       occ.attendanceReadAt === null &&
-      occ.endsAt.getTime() + ATTENDANCE_DELAY_MS <= ctx.now.getTime() &&
+      occ.endsAt.getTime() + ATTENDANCE_FIRST_READ_MS <= ctx.now.getTime() &&
       mode.some((inv) => inv.occurrenceId === occ.id && inv.attendance === null),
   );
   if (due.length === 0) return;
   if (!ctx.zoom) {
-    noteOnce(ctx, "no-zoom", "No Zoom user is connected, so who attended was not read. Connect one on Admin Settings → External Connectors, or mark attendance on the Cohorts page's Current tab.");
+    noteOnce(
+      ctx,
+      "no-zoom",
+      "No Zoom user is connected, so who attended was not read. Connect one on Admin Settings → External Connectors, or mark attendance on the Cohorts page's Current tab.",
+    );
     return;
   }
   const names = new Map(ctx.cohort.map((m) => [m.email, m.fullName]));
   for (const occ of due) {
     if (!occ.zoomMeetingId) {
-      noteOnce(ctx, `no-link:${meeting.id}`, `"${meeting.name}" has no Zoom link on the calendar, so who attended is not known. Mark attendance on the Cohorts page's Current tab.`);
+      noteOnce(
+        ctx,
+        `no-link:${meeting.id}`,
+        `"${meeting.name}" has no Zoom link on the calendar, so who attended is not known. Mark attendance on the Cohorts page's Current tab.`,
+      );
       continue;
     }
-    let joined: Set<string> | null;
+    // Before the report is complete, only those it lists are credited.
+    const final = occ.endsAt.getTime() + ATTENDANCE_FINAL_READ_MS <= ctx.now.getTime();
+    let joined: Set<string>;
     try {
       const participants = await zoomJoiners(ctx.zoom, occ.zoomMeetingId, occ.startsAt, occ.endsAt);
-      const invited = mode.filter((inv) => inv.occurrenceId === occ.id).map((inv) => ({ email: inv.email, fullName: names.get(inv.email) ?? "" }));
+      const invited = mode
+        .filter((inv) => inv.occurrenceId === occ.id)
+        .map((inv) => ({ email: inv.email, fullName: names.get(inv.email) ?? "" }));
       joined = participants === null ? new Set() : joinedFrom(participants, invited);
-      if (participants === null) {
-        noteOnce(ctx, `not-held:${occ.id}`, `Zoom has no record of "${meeting.name}" being held on ${occ.startDate}, so everyone invited to it is counted as missing it.`);
+      if (participants === null && final) {
+        noteOnce(
+          ctx,
+          `not-held:${occ.id}`,
+          `Zoom has no record of "${meeting.name}" being held on ${occ.startDate}, so everyone invited to it is counted as missing it.`,
+        );
       }
     } catch (err) {
       if (!(err instanceof ZoomError)) throw err;
@@ -561,10 +637,18 @@ async function readAttendance(ctx: Context, meeting: MeetingSelection, occurrenc
     const read: { email: string; attendance: MeetingAttendance }[] = [];
     for (const inv of mode) {
       if (inv.occurrenceId !== occ.id || inv.attendance !== null) continue;
+      if (!joined.has(inv.email) && !final) continue;
       const attendance: MeetingAttendance = joined.has(inv.email) ? "attended" : "missed";
       inv.attendance = attendance;
       read.push({ email: inv.email, attendance });
       ctx.log.note({ meetingName: meeting.name, occurrenceStartsAt: occ.startsAt, action: attendance, email: inv.email });
+    }
+    if (!final && mode.some((inv) => inv.occurrenceId === occ.id && inv.attendance === null)) {
+      noteOnce(
+        ctx,
+        `waiting:${occ.id}`,
+        `"${meeting.name}" on ${occ.startDate}: Zoom's report may still be filling in, so those it has not listed are asked about again on each run until ${formatClock(new Date(occ.endsAt.getTime() + ATTENDANCE_FINAL_READ_MS), ctx.timeZone)}, and only then counted as missing.`,
+      );
     }
     const allRead = invites.every((inv) => inv.occurrenceId !== occ.id || inv.role !== "member" || inv.attendance !== null);
     if (allRead) occ.attendanceReadAt = ctx.now;
@@ -578,6 +662,130 @@ async function readAttendance(ctx: Context, meeting: MeetingSelection, occurrenc
       if (allRead) await db.update(meetingOccurrences).set({ attendanceReadAt: ctx.now }).where(eq(meetingOccurrences.id, occ.id));
     }
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Holding an occurrence in the connected Zoom user's own meeting      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Zoom answers a meeting the connected user does not host as one that does
+ * not exist or is not theirs. A refusal about the token or its scopes is not
+ * that, and is no reason to make a second meeting.
+ */
+function notOurs(err: unknown): boolean {
+  return err instanceof ZoomError && [400, 403, 404].includes(err.status) && !/scope|token/i.test(err.message);
+}
+
+/**
+ * Makes sure an upcoming occurrence is held in a Zoom meeting the connected
+ * Zoom user hosts, since Zoom reports who joined only for a meeting its
+ * connected user hosts, and that every meeting facilitator can start it.
+ *
+ * - A link to a meeting that user already hosts keeps it, and has any
+ *   facilitator it lacks added as an alternative host.
+ * - Any other link, a meeting someone else hosts, is replaced: a meeting is
+ *   made for the occurrence and the event's link, and its Zoom add-on's, are
+ *   changed to it. The old meeting is the owner's and is left alone.
+ * - An event with no Zoom link is left as it is.
+ *
+ * A dry run reads Zoom and logs what a live run would do.
+ */
+async function ensureOwnZoom(ctx: Context, meeting: MeetingSelection, occ: Occurrence): Promise<void> {
+  const event = occ.event;
+  if (!event) return;
+  const oldId = zoomMeetingIdIn(event.location, event.description, ...(event.conferenceData?.entryPoints ?? []).map((p) => p.uri));
+  if (!oldId) return;
+  if (!ctx.zoom || !ctx.zoomEmail) {
+    noteOnce(
+      ctx,
+      "no-zoom-own",
+      "No Zoom user is connected, so the meetings' Zoom links were left as they are. Connect one on Admin Settings → External Connectors.",
+    );
+    return;
+  }
+  const zoom = ctx.zoom;
+  const wanted = [...new Set(ctx.facilitators.map((e) => e.trim().toLowerCase()))].filter((e) => e && e !== ctx.zoomEmail);
+  const where = { meetingName: meeting.name, occurrenceStartsAt: occ.startsAt };
+
+  let existing: ZoomMeeting | null = null;
+  try {
+    existing = await getMeeting(zoom, oldId);
+    if (existing.host_email?.trim().toLowerCase() !== ctx.zoomEmail) existing = null;
+  } catch (err) {
+    if (!notOurs(err)) {
+      ctx.log.note({ ...where, action: "failed", detail: (err as Error).message });
+      return;
+    }
+  }
+
+  if (existing) {
+    const have = new Set(alternativeHostsOf(existing));
+    const missing = wanted.filter((e) => !have.has(e));
+    if (missing.length === 0) return;
+    for (const email of missing) ctx.log.note({ ...where, action: "zoom_hosts", email });
+    if (ctx.dryRun) return;
+    try {
+      await setAlternativeHosts(zoom, oldId, [...have, ...missing]);
+      const now = new Set(alternativeHostsOf(await getMeeting(zoom, oldId)));
+      const refused = missing.filter((e) => !now.has(e));
+      if (refused.length > 0) noteOnce(ctx, `hosts:${refused.join()}`, hostsRefused(refused));
+    } catch (err) {
+      ctx.log.note({ ...where, action: "failed", detail: (err as Error).message });
+    }
+    return;
+  }
+
+  ctx.log.note({ ...where, action: "zoom_replaced", detail: `The Zoom meeting in the invite is not hosted by ${ctx.zoomEmail}.` });
+  if (ctx.dryRun || ctx.zoomCapped) return;
+  let made: ZoomMeeting;
+  try {
+    made = await createMeeting(zoom, {
+      topic: event.summary!.trim(),
+      startsAt: occ.startsAt,
+      minutes: Math.max(1, Math.round((occ.endsAt.getTime() - occ.startsAt.getTime()) / 60_000)),
+      timeZone: ctx.timeZone,
+      alternativeHosts: wanted,
+    });
+  } catch (err) {
+    if (err instanceof ZoomError && err.status === 429) {
+      ctx.zoomCapped = true;
+      noteOnce(ctx, "zoom-capped", "Zoom would make no more meetings for now, so the rest are replaced on a later run.");
+      return;
+    }
+    ctx.log.note({ ...where, action: "failed", detail: (err as Error).message });
+    return;
+  }
+
+  const rewrite = rewriteZoomLink(event, { url: made.join_url, id: made.id, passcode: made.password });
+  try {
+    await ctx.calendar.call("PATCH", `${events}/${enc(occ.eventId)}`, {
+      query: { sendUpdates: ctx.sendUpdates, ...(rewrite.clearConference ? { conferenceDataVersion: "1" } : {}) },
+      body: {
+        description: rewrite.description,
+        ...(rewrite.location === undefined ? {} : { location: rewrite.location }),
+        ...(rewrite.clearConference ? { conferenceData: null } : {}),
+      },
+    });
+  } catch (err) {
+    // The calendar kept the old link, so the new meeting would be one nobody is sent to.
+    await zoom.call("DELETE", `/meetings/${enc(String(made.id))}`).catch(() => {});
+    if (err instanceof GoogleError && err.revoked) throw err;
+    ctx.log.note({ ...where, action: "failed", detail: (err as Error).message });
+    return;
+  }
+  await db
+    .update(meetingOccurrences)
+    .set({ zoomMeetingId: String(made.id) })
+    .where(eq(meetingOccurrences.id, occ.id));
+
+  const accepted = new Set(alternativeHostsOf(made));
+  const refused = wanted.filter((e) => !accepted.has(e));
+  if (refused.length > 0) noteOnce(ctx, `hosts:${refused.join()}`, hostsRefused(refused));
+}
+
+function hostsRefused(emails: readonly string[]): string {
+  return `Zoom would not make ${emails.join(", ")} an alternative host, probably because they have no licensed Zoom account in this account: they can join but not start the meeting.`;
 }
 
 async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<void> {
@@ -614,9 +822,12 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
   );
   const plan = planMeeting({
     audience: [...windows.keys()],
-    occurrences: occurrences.map(
-      (occ): PlanOccurrence => ({ id: occ.id, startsAt: occ.startsAt, startDate: occ.startDate, attendanceRead: occ.attendanceReadAt !== null }),
-    ),
+    occurrences: occurrences.map((occ): PlanOccurrence => ({
+      id: occ.id,
+      startsAt: occ.startsAt,
+      startDate: occ.startDate,
+      attendanceRead: occ.attendanceReadAt !== null,
+    })),
     invites: mode,
     marks,
     now: ctx.now,
@@ -651,7 +862,12 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
     });
   }
   for (const inv of plan.remove) {
-    ctx.log.note({ meetingName: meeting.name, occurrenceStartsAt: byId.get(inv.occurrenceId)?.startsAt, action: "removed", email: inv.email });
+    ctx.log.note({
+      meetingName: meeting.name,
+      occurrenceStartsAt: byId.get(inv.occurrenceId)?.startsAt,
+      action: "removed",
+      email: inv.email,
+    });
   }
 
   const membersOn = new Map<string, Set<string>>();
@@ -668,7 +884,8 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
     for (const occ of upcoming) {
       const want = new Set(facilitators.get(occ.id) ?? []);
       const have = mode.filter((inv) => inv.occurrenceId === occ.id && inv.role === "administrator");
-      for (const email of want) if (!have.some((inv) => inv.email === email)) add.push({ occurrenceId: occ.id, email, role: "administrator" });
+      for (const email of want)
+        if (!have.some((inv) => inv.email === email)) add.push({ occurrenceId: occ.id, email, role: "administrator" });
       for (const inv of have) if (!want.has(inv.email) && inv.attendance === null) drop.add(`${inv.occurrenceId} ${inv.email}`);
     }
   }
@@ -692,7 +909,7 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
       invites.filter((inv) => inv.occurrenceId === occ.id && inv.addedBySync).map((inv) => inv.email),
     );
     try {
-      if (!sameGuests(current, next)) await patchGuests(ctx.calendar, occ.eventId, next);
+      if (!sameGuests(current, next)) await patchGuests(ctx.calendar, occ.eventId, next, ctx.sendUpdates);
     } catch (err) {
       if (err instanceof GoogleError && err.revoked) throw err;
       ctx.log.note({ meetingName: meeting.name, occurrenceStartsAt: occ.startsAt, action: "failed", detail: (err as Error).message });
@@ -714,10 +931,21 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
         .onConflictDoNothing();
     }
     if (dropping.length > 0) {
-      await db
-        .delete(meetingInvites)
-        .where(and(eq(meetingInvites.occurrenceId, occ.id), inArray(meetingInvites.email, dropping.map((inv) => inv.email))));
+      await db.delete(meetingInvites).where(
+        and(
+          eq(meetingInvites.occurrenceId, occ.id),
+          inArray(
+            meetingInvites.email,
+            dropping.map((inv) => inv.email),
+          ),
+        ),
+      );
     }
+  }
+
+  // An occurrence a cohort member is on is held in a meeting the connected Zoom user hosts, with the facilitators as its hosts.
+  for (const occ of upcoming) {
+    if ((membersOn.get(occ.id)?.size ?? 0) > 0) await ensureOwnZoom(ctx, meeting, occ);
   }
 
   if (!ctx.dryRun) await db.update(meetingSelections).set({ syncedAt: ctx.now }).where(eq(meetingSelections.id, meeting.id));
@@ -737,7 +965,13 @@ async function cancelLegacyMeetings(ctx: Context, calendarId: string | null): Pr
   for (const meeting of rows) {
     const endsAt = new Date(meeting.startsAt.getTime() + meeting.durationMinutes * 60_000);
     const live = endsAt > ctx.now && (meeting.googleEventId || meeting.zoomMeetingId);
-    if (live) ctx.log.note({ meetingName: meeting.title, occurrenceStartsAt: meeting.startsAt, action: "cancelled", detail: "Made by the old create-a-meeting flow." });
+    if (live)
+      ctx.log.note({
+        meetingName: meeting.title,
+        occurrenceStartsAt: meeting.startsAt,
+        action: "cancelled",
+        detail: "Made by the old create-a-meeting flow.",
+      });
     if (ctx.dryRun) continue;
     try {
       if (live && meeting.googleEventId && calendarId) {
@@ -778,7 +1012,9 @@ export type MeetingSyncResult =
   | { ok: false; runId: string | null; error: MeetingSyncError; detail?: string };
 
 /** `cohort` with each person's time zone and start date from the employee record, for the test group, which carries neither. */
-async function withEmployeeRecord<T extends { email: string }>(cohort: readonly T[]): Promise<(T & { timezone: string | null; startDate: string | null })[]> {
+async function withEmployeeRecord<T extends { email: string }>(
+  cohort: readonly T[],
+): Promise<(T & { timezone: string | null; startDate: string | null })[]> {
   const emails = [...new Set(cohort.map((m) => m.email))];
   if (emails.length === 0) return [];
   const rows = await db
@@ -787,7 +1023,11 @@ async function withEmployeeRecord<T extends { email: string }>(cohort: readonly 
     .where(inArray(sql`lower(${employees.email})`, emails))
     .limit(PAGE_SIZE);
   const records = new Map(rows.map((r) => [r.email, r]));
-  return cohort.map((m) => ({ ...m, timezone: records.get(m.email)?.timezone ?? null, startDate: records.get(m.email)?.startDate ?? null }));
+  return cohort.map((m) => ({
+    ...m,
+    timezone: records.get(m.email)?.timezone ?? null,
+    startDate: records.get(m.email)?.startDate ?? null,
+  }));
 }
 
 /**
@@ -861,10 +1101,14 @@ export async function runMeetingSync(
     const { connection, calendar } = connected;
     const now = new Date();
     const bootcamp = await meetingBootcamp();
+    const zoom = await connectedZoom();
     const ctx: Context = {
       calendar,
-      zoom: (await connectedZoom())?.client ?? null,
+      zoom: zoom?.client ?? null,
+      zoomEmail: zoom?.email.trim().toLowerCase() ?? null,
+      zoomCapped: false,
       dryRun,
+      sendUpdates: sendUpdatesFor(await getMeetingEmailInvites()),
       testGroup: group.on,
       now,
       timeZone: "UTC",
@@ -886,7 +1130,7 @@ export async function runMeetingSync(
       await log.flush();
 
       const meetings: MeetingSelection[] = [];
-      for (let after: string | null = null; ; ) {
+      for (let after: string | null = null; ;) {
         const page = await meetingSelectionsAfter(after);
         meetings.push(...page);
         if (page.length === 0) break;
@@ -894,7 +1138,10 @@ export async function runMeetingSync(
       }
       idle = meetings.length === 0 || !bootcamp;
       if (meetings.length === 0) notes.push("No meeting is picked yet.");
-      else if (!bootcamp) notes.push("No bootcamp is active in the Scheduler, so no one is invited: each person is invited only before their bootcamp starts.");
+      else if (!bootcamp)
+        notes.push(
+          "No bootcamp is active in the Scheduler, so no one is invited: each person is invited only before their bootcamp starts.",
+        );
       else {
         const listed = await listEvents(calendar, now, new Date(now.getTime() + CALENDAR_WINDOW_DAYS * DAY_MS));
         ctx.timeZone = listed.timeZone;
@@ -948,7 +1195,8 @@ export async function takeMeetingGuestsOff(
   const connected = await connect();
   if (!connected.ok) return { ok: false, error: "not_connected", message: `Its invites cannot be taken back: ${connected.message}` };
   try {
-    for (const { eventId, emails } of guests) await takeOff(connected.calendar, eventId, emails);
+    const sendUpdates = sendUpdatesFor(await getMeetingEmailInvites());
+    for (const { eventId, emails } of guests) await takeOff(connected.calendar, eventId, emails, sendUpdates);
     return { ok: true, events: guests.length };
   } catch (err) {
     return { ok: false, error: "remote_failed", message: googleFailure(err, connected.connection.email).message };
@@ -966,7 +1214,12 @@ export async function cancelTestMeetingInvites(): Promise<{ cancelled: number; f
   let cancelled = 0;
 
   const upcoming = await db
-    .select({ occurrenceId: meetingOccurrences.id, eventId: meetingOccurrences.eventId, email: meetingInvites.email, addedBySync: meetingInvites.addedBySync })
+    .select({
+      occurrenceId: meetingOccurrences.id,
+      eventId: meetingOccurrences.eventId,
+      email: meetingInvites.email,
+      addedBySync: meetingInvites.addedBySync,
+    })
     .from(meetingInvites)
     .innerJoin(meetingOccurrences, eq(meetingOccurrences.id, meetingInvites.occurrenceId))
     .where(and(eq(meetingInvites.test, true), gt(meetingOccurrences.startsAt, sql`now()`)))
@@ -980,6 +1233,7 @@ export async function cancelTestMeetingInvites(): Promise<{ cancelled: number; f
   const kept = new Set<string>();
   if ([...byEvent.values()].some((e) => e.emails.length > 0)) {
     const connected = await connect();
+    const sendUpdates = sendUpdatesFor(await getMeetingEmailInvites());
     if (!connected.ok) {
       failures.push(`Test invites could not be taken back: ${connected.message}`);
       for (const { occurrenceId } of byEvent.values()) kept.add(occurrenceId);
@@ -987,7 +1241,7 @@ export async function cancelTestMeetingInvites(): Promise<{ cancelled: number; f
       for (const [eventId, { occurrenceId, emails }] of byEvent) {
         if (emails.length === 0) continue;
         try {
-          await takeOff(connected.calendar, eventId, emails);
+          await takeOff(connected.calendar, eventId, emails, sendUpdates);
           cancelled++;
         } catch (err) {
           failures.push(`${eventId}: ${(err as Error).message}`);

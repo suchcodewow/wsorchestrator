@@ -10,12 +10,7 @@
  */
 
 import "server-only";
-import {
-  GRANT_URL,
-  TOKEN_TTL_SECONDS,
-  prerecordedListenUrl,
-  prerecordedTranscript,
-} from "./deepgram";
+import { GRANT_URL, TOKEN_TTL_SECONDS, prerecordedListenUrl, prerecordedTranscript } from "./deepgram";
 
 type Failure = { error: "unconfigured" | "upstream"; detail?: string };
 

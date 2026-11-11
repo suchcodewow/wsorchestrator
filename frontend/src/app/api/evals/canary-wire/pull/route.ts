@@ -13,7 +13,10 @@ import { latestPull, startPull } from "@/lib/canary-wire/pull";
 export async function GET(req: Request) {
   const { error } = await requireCanaryWire(req);
   if (error) return error;
-  return NextResponse.json({ configured: mindtickleConfig() !== null, pull: await latestPull() }, { headers: { "cache-control": "no-store" } });
+  return NextResponse.json(
+    { configured: mindtickleConfig() !== null, pull: await latestPull() },
+    { headers: { "cache-control": "no-store" } },
+  );
 }
 
 const STATUS = { not_configured: 409, running: 409 } as const;

@@ -15,13 +15,7 @@ type Favorites = {
 
 const FavoritesContext = createContext<Favorites | null>(null);
 
-export function FavoriteTabsProvider({
-  initial,
-  children,
-}: {
-  initial: FavoriteTab[];
-  children: React.ReactNode;
-}) {
+export function FavoriteTabsProvider({ initial, children }: { initial: FavoriteTab[]; children: React.ReactNode }) {
   const [tabs, setTabs] = useState<FavoriteTab[]>(initial);
 
   const toggle = useCallback(
@@ -37,11 +31,7 @@ export function FavoriteTabsProvider({
 
   const has = useCallback((href: string) => tabs.some((t) => t.href === href), [tabs]);
 
-  return (
-    <FavoritesContext.Provider value={{ tabs, has, toggle }}>
-      {children}
-    </FavoritesContext.Provider>
-  );
+  return <FavoritesContext.Provider value={{ tabs, has, toggle }}>{children}</FavoritesContext.Provider>;
 }
 
 /** Null outside the signed-in shell, where there is nothing to star. */

@@ -31,7 +31,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Keeping running servers matched to their configuration files.",
     ],
     answer: 0,
-    rationale: "Continuous integration means merging changes often and verifying each with automated builds and tests. Ready-to-release is continuous delivery; automatic release is continuous deployment.",
+    rationale:
+      "Continuous integration means merging changes often and verifying each with automated builds and tests. Ready-to-release is continuous delivery; automatic release is continuous deployment.",
   },
   {
     id: "sdlc-l1-02",
@@ -41,14 +42,10 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     subtopic: "version-control",
     version: "3.0",
     stem: "A developer has permission to work inside the team's existing repository. Which creates an independent line of development within that repository?",
-    options: [
-      "A branch.",
-      "A fork.",
-      "A build artifact.",
-      "A release tag.",
-    ],
+    options: ["A branch.", "A fork.", "A build artifact.", "A release tag."],
     answer: 0,
-    rationale: "A branch creates a line of development in the repository. A fork creates a separate repository; a tag labels a point in history; an artifact is a build output.",
+    rationale:
+      "A branch creates a line of development in the repository. A fork creates a separate repository; a tag labels a point in history; an artifact is a build output.",
   },
   {
     id: "sdlc-l1-22",
@@ -82,7 +79,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Dynamic testing of a running application.",
     ],
     answer: 1,
-    rationale: "Composition analysis examines dependencies. Static analysis examines code, dynamic testing exercises a running application, and access monitoring examines runtime events. Tools can combine these functions.",
+    rationale:
+      "Composition analysis examines dependencies. Static analysis examines code, dynamic testing exercises a running application, and access monitoring examines runtime events. Tools can combine these functions.",
   },
   {
     id: "sdlc-l1-06",
@@ -99,7 +97,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "The same steps are repeated for successive application versions.",
     ],
     answer: 1,
-    rationale: "Automation executes and evaluates checks. A person may start an automated test; written expectations and repeatable steps can also exist in manual testing.",
+    rationale:
+      "Automation executes and evaluates checks. A person may start an automated test; written expectations and repeatable steps can also exist in manual testing.",
   },
   {
     id: "sdlc-l1-08",
@@ -116,7 +115,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Responsibility for approving the next set of planned product features.",
     ],
     answer: 1,
-    rationale: "On-call assigns incident-response responsibility. Product prioritization, code review, and acceptance testing have different purposes, although a person may perform several roles.",
+    rationale:
+      "On-call assigns incident-response responsibility. Product prioritization, code review, and acceptance testing have different purposes, although a person may perform several roles.",
   },
   {
     id: "sdlc-l1-10",
@@ -133,7 +133,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "The estimate of effort required to build the requested behavior.",
     ],
     answer: 0,
-    rationale: "Acceptance criteria define acceptable behavior. Tasks describe implementation, effort describes estimation, and demonstration dates describe scheduling.",
+    rationale:
+      "Acceptance criteria define acceptable behavior. Tasks describe implementation, effort describes estimation, and demonstration dates describe scheduling.",
   },
   {
     id: "sdlc-l1-11",
@@ -143,14 +144,10 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     subtopic: "version-control",
     version: "3.0",
     stem: "Two branches alter the same passage of code differently. The version-control system asks a person to choose how to combine them. What is this event?",
-    options: [
-      "A pull request.",
-      "A successful rebase.",
-      "A release tag.",
-      "A merge conflict.",
-    ],
+    options: ["A pull request.", "A successful rebase.", "A release tag.", "A merge conflict."],
     answer: 3,
-    rationale: "A merge conflict needs human reconciliation when edits cannot be combined automatically. A pull request proposes integration, a tag labels history, and a successful rebase has completed without an unresolved conflict.",
+    rationale:
+      "A merge conflict needs human reconciliation when edits cannot be combined automatically. A pull request proposes integration, a tag labels history, and a successful rebase has completed without an unresolved conflict.",
   },
   {
     id: "sdlc-l1-12",
@@ -167,7 +164,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "A small piece of application behavior in isolation.",
     ],
     answer: 3,
-    rationale: "Unit tests isolate a small unit of behavior. The alternatives describe broader end-to-end, load, and environment validation.",
+    rationale:
+      "Unit tests isolate a small unit of behavior. The alternatives describe broader end-to-end, load, and environment validation.",
   },
   {
     id: "sdlc-l1-23",
@@ -184,7 +182,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "A monitoring tool alerts when any server setting changes.",
     ],
     answer: 2,
-    rationale: "Infrastructure as code declares environment settings in versioned files that automation applies, so environments are repeatable and reviewable.",
+    rationale:
+      "Infrastructure as code declares environment settings in versioned files that automation applies, so environments are repeatable and reviewable.",
   },
   {
     id: "sdlc-l1-14",
@@ -194,12 +193,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     subtopic: "release-and-rollback",
     version: "3.0",
     stem: "After a release causes errors, the team fixes the defect and ships a new version instead of returning to the previous one. What is this recovery approach called?",
-    options: [
-      "A rollback.",
-      "A canary release.",
-      "A roll forward.",
-      "A blue-green switch.",
-    ],
+    options: ["A rollback.", "A canary release.", "A roll forward.", "A blue-green switch."],
     answer: 2,
     rationale: "Rolling forward recovers by deploying a corrected new version; rolling back recovers by returning to the previous version.",
   },
@@ -227,13 +221,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "release-and-rollback",
     version: "3.0",
-    stem: "A customer says, \"When a release goes bad, every user is hit at once.\" Which practice limits how many users a bad release reaches?",
-    options: [
-      "Continuous integration",
-      "Canary releases",
-      "Infrastructure as code",
-      "Code review",
-    ],
+    stem: 'A customer says, "When a release goes bad, every user is hit at once." Which practice limits how many users a bad release reaches?',
+    options: ["Continuous integration", "Canary releases", "Infrastructure as code", "Code review"],
     answer: 1,
     rationale: "Canary releases send a new version to a small share of users first, so a bad release reaches only a few.",
   },
@@ -244,13 +233,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "integration-and-delivery",
     version: "3.0",
-    stem: "A customer says, \"Code is tested and approved, but it waits days because deploying it is a manual, half-day job.\" What would remove that wait?",
-    options: [
-      "More automated testing",
-      "Faster build servers",
-      "Automated deployment",
-      "More approval meetings",
-    ],
+    stem: 'A customer says, "Code is tested and approved, but it waits days because deploying it is a manual, half-day job." What would remove that wait?',
+    options: ["More automated testing", "Faster build servers", "Automated deployment", "More approval meetings"],
     answer: 2,
     rationale: "The wait is the manual deployment step. Automating deployment removes it.",
   },
@@ -278,7 +262,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "observability-and-recovery",
     version: "3.0",
-    stem: "A customer says, \"When something breaks, it takes hours just to find which change caused it.\" What would help most?",
+    stem: 'A customer says, "When something breaks, it takes hours just to find which change caused it." What would help most?',
     options: [
       "More manual testing to catch problems before each release",
       "Monitoring that ties errors to specific releases",
@@ -295,13 +279,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "version-control",
     version: "3.0",
-    stem: "A customer says, \"Teams work on separate branches for weeks, and merging it all back is painful.\" Which practice addresses this?",
-    options: [
-      "Continuous integration",
-      "Feature flag management",
-      "Infrastructure as code",
-      "Blue-green deployment",
-    ],
+    stem: 'A customer says, "Teams work on separate branches for weeks, and merging it all back is painful." Which practice addresses this?',
+    options: ["Continuous integration", "Feature flag management", "Infrastructure as code", "Blue-green deployment"],
     answer: 0,
     rationale: "Continuous integration means merging small changes often, which avoids painful merges of long-lived branches.",
   },
@@ -312,7 +291,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "testing",
     version: "3.0",
-    stem: "A customer says, \"Our tests fail at random, so engineers just rerun them until they pass.\" What is the biggest business risk?",
+    stem: 'A customer says, "Our tests fail at random, so engineers just rerun them until they pass." What is the biggest business risk?',
     options: [
       "Higher cloud bills from all the extra test runs",
       "Slower releases because every change waits for reruns",
@@ -346,7 +325,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "security",
     version: "3.0",
-    stem: "A customer says, \"We only find vulnerable open-source libraries once code reaches staging, so fixes are slow.\" What helps most?",
+    stem: 'A customer says, "We only find vulnerable open-source libraries once code reaches staging, so fixes are slow." What helps most?',
     options: [
       "Scanning the production environment every night",
       "Scanning dependencies on every code change",
@@ -363,7 +342,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "requirements-and-design",
     version: "3.0",
-    stem: "A customer says, \"Features pass all our tests, but customers say they're not what they asked for.\" Where is the gap most likely?",
+    stem: 'A customer says, "Features pass all our tests, but customers say they\'re not what they asked for." Where is the gap most likely?',
     options: [
       "The acceptance criteria the tests are based on",
       "The number of unit tests covering each feature",
@@ -380,7 +359,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "environments",
     version: "3.0",
-    stem: "A customer says, \"Everything works in staging, then breaks in production.\" What is a common cause?",
+    stem: 'A customer says, "Everything works in staging, then breaks in production." What is a common cause?',
     options: [
       "Developers skipping code review on risky changes",
       "A build server that is too slow under load",
@@ -397,13 +376,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "infrastructure-as-code",
     version: "3.0",
-    stem: "A customer says, \"Our test and production environments are set up by hand, and they never match.\" Which practice addresses this?",
-    options: [
-      "Continuous integration",
-      "Blue-green deployment",
-      "Feature flag management",
-      "Infrastructure as code",
-    ],
+    stem: 'A customer says, "Our test and production environments are set up by hand, and they never match." Which practice addresses this?',
+    options: ["Continuous integration", "Blue-green deployment", "Feature flag management", "Infrastructure as code"],
     answer: 3,
     rationale: "Infrastructure as code builds every environment from the same versioned definitions, so they match.",
   },
@@ -431,7 +405,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "version-control",
     version: "3.0",
-    stem: "A customer says, \"Bugs keep reaching production that a second pair of eyes would have caught.\" Which practice addresses this?",
+    stem: 'A customer says, "Bugs keep reaching production that a second pair of eyes would have caught." Which practice addresses this?',
     options: [
       "Code review through pull requests",
       "Canary releases to a small group first",
@@ -465,7 +439,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 3,
     subtopic: "environments",
     version: "3.0",
-    stem: "A VP of Engineering says, \"We create a fresh test environment for every change, but bugs still slip into production.\" What should you ask next?",
+    stem: 'A VP of Engineering says, "We create a fresh test environment for every change, but bugs still slip into production." What should you ask next?',
     options: [
       "How many separate test environments do you run on a typical day?",
       "Which team owns and maintains your test environments?",
@@ -473,7 +447,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "How long does each new environment take to start up?",
     ],
     answer: 2,
-    rationale: "Fresh environments only help if they match production. Asking whether they are built from the same definitions and data probes the real gap.",
+    rationale:
+      "Fresh environments only help if they match production. Asking whether they are built from the same definitions and data probes the real gap.",
   },
   {
     id: "sdlc-l3-44",
@@ -482,7 +457,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 3,
     subtopic: "security",
     version: "3.0",
-    stem: "A CISO says, \"Our scanners report thousands of critical vulnerabilities, and developers have stopped paying attention.\" What is the most valuable point to raise?",
+    stem: 'A CISO says, "Our scanners report thousands of critical vulnerabilities, and developers have stopped paying attention." What is the most valuable point to raise?',
     options: [
       "Prioritizing findings by whether attackers can reach the code",
       "Adding a second scanner to double-check every finding they report",
@@ -490,7 +465,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Reporting the total count to the board each month",
     ],
     answer: 0,
-    rationale: "Severity alone floods teams. Prioritizing by reachability shrinks the list to what matters, which is what wins developers back.",
+    rationale:
+      "Severity alone floods teams. Prioritizing by reachability shrinks the list to what matters, which is what wins developers back.",
   },
   {
     id: "sdlc-l3-45",
@@ -499,7 +475,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 3,
     subtopic: "integration-and-delivery",
     version: "3.0",
-    stem: "A VP says, \"We now deploy twice as often, and our failure rate hasn't changed.\" Which follow-up best tests whether delivery actually improved?",
+    stem: 'A VP says, "We now deploy twice as often, and our failure rate hasn\'t changed." Which follow-up best tests whether delivery actually improved?',
     options: [
       "How many developers have joined the engineering team this year?",
       "How long it takes to recover when a deployment fails",
@@ -507,7 +483,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "How many new features shipped to customers last quarter",
     ],
     answer: 1,
-    rationale: "The same failure rate on twice the deployments means twice the failures. Recovery time shows whether that is under control.",
+    rationale:
+      "The same failure rate on twice the deployments means twice the failures. Recovery time shows whether that is under control.",
   },
   {
     id: "sdlc-l3-46",
@@ -524,7 +501,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Whether reviews could move to one weekly batch",
     ],
     answer: 0,
-    rationale: "Policy as code checks every change automatically before it applies, which addresses both the delay and the missed settings.",
+    rationale:
+      "Policy as code checks every change automatically before it applies, which addresses both the delay and the missed settings.",
   },
   {
     id: "sdlc-l3-47",
@@ -575,7 +553,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Whether releases change data the old version can't read",
     ],
     answer: 3,
-    rationale: "Rollback is only safe when the old version can still handle the data. Releases that change data or message formats break that assumption.",
+    rationale:
+      "Rollback is only safe when the old version can still handle the data. Releases that change data or message formats break that assumption.",
   },
   {
     id: "sdlc-l3-50",
@@ -601,7 +580,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 3,
     subtopic: "requirements-and-design",
     version: "3.0",
-    stem: "A product leader says, \"We ship on time, but half our features are barely used.\" Which point best connects to her goal?",
+    stem: 'A product leader says, "We ship on time, but half our features are barely used." Which point best connects to her goal?',
     options: [
       "Writing more detailed specifications and sign-offs before work starts",
       "Running more customer interviews and surveys before each project",
@@ -609,7 +588,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Releasing small versions to a few customers and measuring use",
     ],
     answer: 3,
-    rationale: "Her problem is building the wrong thing, not speed. Small releases measured with real users test value before more is built.",
+    rationale:
+      "Her problem is building the wrong thing, not speed. Small releases measured with real users test value before more is built.",
   },
   {
     id: "sdlc-l3-52",
@@ -643,7 +623,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Whether each deployed build records the components it contains",
     ],
     answer: 3,
-    rationale: "A recorded component list for each deployed build, such as a software bill of materials, shows what is actually running, even if source has changed.",
+    rationale:
+      "A recorded component list for each deployed build, such as a software bill of materials, shows what is actually running, even if source has changed.",
   },
   {
     id: "sdlc-l3-54",
@@ -652,7 +633,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 3,
     subtopic: "testing",
     version: "3.0",
-    stem: "A VP says, \"We raised code coverage to 90%, but defects didn't drop.\" Which point is most useful?",
+    stem: 'A VP says, "We raised code coverage to 90%, but defects didn\'t drop." Which point is most useful?',
     options: [
       "Coverage shows code ran in tests, not that tests checked the results",
       "Coverage needs to reach 100% before defects start to drop",
@@ -873,13 +854,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "source-control-platforms",
     version: "3.0",
-    stem: "A customer says, \"We're moving our code and pull requests off Atlassian and onto GitHub.\" Which product are they leaving?",
-    options: [
-      "Bitbucket",
-      "Confluence",
-      "Bamboo",
-      "Jira",
-    ],
+    stem: 'A customer says, "We\'re moving our code and pull requests off Atlassian and onto GitHub." Which product are they leaving?',
+    options: ["Bitbucket", "Confluence", "Bamboo", "Jira"],
     answer: 0,
     rationale: "Bitbucket is Atlassian's code hosting and pull request product, the direct counterpart to GitHub.",
   },
@@ -890,13 +866,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "ci",
     version: "3.0",
-    stem: "A customer says, \"Every commit kicks off a build and tests in our Microsoft DevOps tool.\" Which product runs that?",
-    options: [
-      "Azure Boards",
-      "Azure Pipelines",
-      "Azure Repos",
-      "Azure Artifacts",
-    ],
+    stem: 'A customer says, "Every commit kicks off a build and tests in our Microsoft DevOps tool." Which product runs that?',
+    options: ["Azure Boards", "Azure Pipelines", "Azure Repos", "Azure Artifacts"],
     answer: 1,
     rationale: "Azure Pipelines is the CI/CD part of Azure DevOps; Boards plans work, Repos hosts code, Artifacts stores packages.",
   },
@@ -907,15 +878,11 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "cd-and-gitops",
     version: "3.0",
-    stem: "A customer says, \"We want one tool to move releases from test to production, with approvals, including apps on virtual machines.\" Which product is built for that?",
-    options: [
-      "Argo CD",
-      "Argo Rollouts",
-      "Octopus Deploy",
-      "HashiCorp Terraform",
-    ],
+    stem: 'A customer says, "We want one tool to move releases from test to production, with approvals, including apps on virtual machines." Which product is built for that?',
+    options: ["Argo CD", "Argo Rollouts", "Octopus Deploy", "HashiCorp Terraform"],
     answer: 2,
-    rationale: "Octopus Deploy handles release promotion with approvals across Kubernetes and virtual machines; Argo CD is Kubernetes only.",
+    rationale:
+      "Octopus Deploy handles release promotion with approvals across Kubernetes and virtual machines; Argo CD is Kubernetes only.",
   },
   {
     id: "companies-l2-48",
@@ -924,13 +891,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "feature-management",
     version: "3.0",
-    stem: "A customer says, \"We ship code once, then turn new features on for a few customers at a time.\" Which company's product does that?",
-    options: [
-      "Octopus Deploy",
-      "Argo CD",
-      "Datadog",
-      "LaunchDarkly",
-    ],
+    stem: 'A customer says, "We ship code once, then turn new features on for a few customers at a time." Which company\'s product does that?',
+    options: ["Octopus Deploy", "Argo CD", "Datadog", "LaunchDarkly"],
     answer: 3,
     rationale: "LaunchDarkly is a feature flag platform: features turn on for chosen users without a new deploy.",
   },
@@ -941,13 +903,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "infrastructure-as-code",
     version: "3.0",
-    stem: "A customer says, \"Our platform team wants one managed place to run Terraform, with approvals and policy checks.\" Which product fits?",
-    options: [
-      "Spacelift",
-      "Pulumi",
-      "Ansible",
-      "HashiCorp Packer",
-    ],
+    stem: 'A customer says, "Our platform team wants one managed place to run Terraform, with approvals and policy checks." Which product fits?',
+    options: ["Spacelift", "Pulumi", "Ansible", "HashiCorp Packer"],
     answer: 0,
     rationale: "Spacelift is a managed platform for running Terraform with policy, approvals and drift detection.",
   },
@@ -958,13 +915,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "database-devops",
     version: "3.0",
-    stem: "A customer says, \"Our database changes are run by hand, so test and production keep drifting apart.\" Which product is built for that?",
-    options: [
-      "Amazon RDS",
-      "Liquibase",
-      "Terraform",
-      "Redgate Monitor",
-    ],
+    stem: 'A customer says, "Our database changes are run by hand, so test and production keep drifting apart." Which product is built for that?',
+    options: ["Amazon RDS", "Liquibase", "Terraform", "Redgate Monitor"],
     answer: 1,
     rationale: "Liquibase versions database schema changes and applies them the same way in every environment.",
   },
@@ -975,15 +927,11 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "artifacts-and-supply-chain",
     version: "3.0",
-    stem: "A customer says, \"We need one place to store our container images and our Java and JavaScript packages.\" Which product fits?",
-    options: [
-      "Docker Hub",
-      "Amazon Elastic Container Registry",
-      "JFrog Artifactory",
-      "GitHub Actions",
-    ],
+    stem: 'A customer says, "We need one place to store our container images and our Java and JavaScript packages." Which product fits?',
+    options: ["Docker Hub", "Amazon Elastic Container Registry", "JFrog Artifactory", "GitHub Actions"],
     answer: 2,
-    rationale: "Artifactory is a universal repository for container images and language packages; Docker Hub and ECR hold container images.",
+    rationale:
+      "Artifactory is a universal repository for container images and language packages; Docker Hub and ECR hold container images.",
   },
   {
     id: "companies-l2-52",
@@ -992,13 +940,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "application-security",
     version: "3.0",
-    stem: "A customer says, \"Code reviews keep finding bugs and messy code that our own developers wrote.\" Which product is built for that?",
-    options: [
-      "GitHub Dependabot",
-      "Snyk Open Source",
-      "Wiz",
-      "SonarQube",
-    ],
+    stem: 'A customer says, "Code reviews keep finding bugs and messy code that our own developers wrote." Which product is built for that?',
+    options: ["GitHub Dependabot", "Snyk Open Source", "Wiz", "SonarQube"],
     answer: 3,
     rationale: "SonarQube checks a team's own code for bugs, security issues and maintainability before merge.",
   },
@@ -1010,12 +953,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     subtopic: "runtime-and-cloud-security",
     version: "3.0",
     stem: "A customer's security lead says, \"We can't see which cloud storage is public or who has too much access.\" Which product fits?",
-    options: [
-      "Wiz",
-      "SonarQube",
-      "Snyk Code",
-      "Datadog",
-    ],
+    options: ["Wiz", "SonarQube", "Snyk Code", "Datadog"],
     answer: 0,
     rationale: "Wiz scans the live cloud environment for exposure, sensitive data and excess permissions.",
   },
@@ -1026,13 +964,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "observability",
     version: "3.0",
-    stem: "A customer says, \"Auditors want every production change tied to an approved change ticket.\" Which product usually holds those tickets?",
-    options: [
-      "Splunk",
-      "ServiceNow",
-      "PagerDuty",
-      "Confluence",
-    ],
+    stem: 'A customer says, "Auditors want every production change tied to an approved change ticket." Which product usually holds those tickets?',
+    options: ["Splunk", "ServiceNow", "PagerDuty", "Confluence"],
     answer: 1,
     rationale: "ServiceNow is the IT service management system most large enterprises use for change records.",
   },
@@ -1043,13 +976,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "cloud-cost-management",
     version: "3.0",
-    stem: "A customer says, \"Finance can't split our shared Kubernetes cluster bill across teams.\" Which product is built for that?",
-    options: [
-      "AWS Cost Explorer",
-      "Infracost",
-      "Kubecost",
-      "Microsoft Cost Management",
-    ],
+    stem: 'A customer says, "Finance can\'t split our shared Kubernetes cluster bill across teams." Which product is built for that?',
+    options: ["AWS Cost Explorer", "Infracost", "Kubecost", "Microsoft Cost Management"],
     answer: 2,
     rationale: "Kubecost allocates real Kubernetes costs to teams and apps; Infracost estimates costs before deploy.",
   },
@@ -1060,13 +988,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "engineering-insights",
     version: "3.0",
-    stem: "An engineering leader says, \"I want to see where our pull requests get stuck: coding, review or deploy.\" Which product fits?",
-    options: [
-      "LinearB",
-      "Atlassian Jira",
-      "GitHub Projects",
-      "SonarQube",
-    ],
+    stem: 'An engineering leader says, "I want to see where our pull requests get stuck: coding, review or deploy." Which product fits?',
+    options: ["LinearB", "Atlassian Jira", "GitHub Projects", "SonarQube"],
     answer: 0,
     rationale: "LinearB breaks cycle time into coding, pickup, review and deploy stages.",
   },
@@ -1077,13 +1000,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "developer-portals",
     version: "3.0",
-    stem: "A platform lead says, \"We want an open-source developer portal that we can build and change ourselves.\" Which one fits?",
-    options: [
-      "Port",
-      "Backstage",
-      "Atlassian Compass",
-      "OpsLevel",
-    ],
+    stem: 'A platform lead says, "We want an open-source developer portal that we can build and change ourselves." Which one fits?',
+    options: ["Port", "Backstage", "Atlassian Compass", "OpsLevel"],
     answer: 1,
     rationale: "Backstage is the open-source portal framework from Spotify; Port, Cortex and OpsLevel are commercial products.",
   },
@@ -1094,13 +1012,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "cloud-and-container-foundations",
     version: "3.0",
-    stem: "A customer says, \"Running our own Kubernetes clusters on AWS takes too much of our team's time.\" Which AWS service fits?",
-    options: [
-      "Amazon ECS",
-      "Amazon EC2",
-      "AWS Lambda",
-      "Amazon EKS",
-    ],
+    stem: 'A customer says, "Running our own Kubernetes clusters on AWS takes too much of our team\'s time." Which AWS service fits?',
+    options: ["Amazon ECS", "Amazon EC2", "AWS Lambda", "Amazon EKS"],
     answer: 3,
     rationale: "Amazon EKS is AWS's managed Kubernetes service; ECS is AWS's own container service, not Kubernetes.",
   },
@@ -1112,12 +1025,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     subtopic: "cd-and-gitops",
     version: "3.0",
     stem: "A customer uses GitHub for code, Jenkins for builds and Argo CD for Kubernetes. Many of their apps run on virtual machines. Where is their delivery gap?",
-    options: [
-      "Building and testing their code",
-      "Hosting code and reviews",
-      "Deploying to virtual machines",
-      "Deploying to Kubernetes",
-    ],
+    options: ["Building and testing their code", "Hosting code and reviews", "Deploying to virtual machines", "Deploying to Kubernetes"],
     answer: 2,
     rationale: "Argo CD covers Kubernetes only, so the virtual machine apps have no deployment tool.",
   },
@@ -1163,12 +1071,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     subtopic: "source-control-platforms",
     version: "3.0",
     stem: "A customer uses GitHub, Jenkins and Snyk and says keeping them connected is a full-time job. Which vendor pitches replacing all three?",
-    options: [
-      "Atlassian",
-      "GitLab",
-      "JFrog",
-      "CircleCI",
-    ],
+    options: ["Atlassian", "GitLab", "JFrog", "CircleCI"],
     answer: 1,
     rationale: "GitLab sells one platform for code, CI and security, which is its main pitch against tool sprawl.",
   },
@@ -1180,12 +1083,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     subtopic: "artifacts-and-supply-chain",
     version: "3.0",
     stem: "One division uses Azure DevOps and another uses GitHub. They need to share packages without either one migrating. Which product fills that gap?",
-    options: [
-      "GitLab",
-      "Backstage",
-      "JFrog Artifactory",
-      "GitHub Advanced Security",
-    ],
+    options: ["GitLab", "Backstage", "JFrog Artifactory", "GitHub Advanced Security"],
     answer: 2,
     rationale: "Artifactory works with both toolchains, so packages are shared without moving either division.",
   },
@@ -1197,12 +1095,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     subtopic: "ci",
     version: "3.0",
     stem: "A customer keeps code in both GitHub and Bitbucket and is tired of running Jenkins servers. Which CI fits both without moving code?",
-    options: [
-      "GitHub Actions",
-      "Bamboo",
-      "Argo CD",
-      "CircleCI",
-    ],
+    options: ["GitHub Actions", "Bamboo", "Argo CD", "CircleCI"],
     answer: 3,
     rationale: "CircleCI Cloud connects to both GitHub and Bitbucket and runs on vendor infrastructure.",
   },
@@ -1214,12 +1107,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     subtopic: "infrastructure-as-code",
     version: "3.0",
     stem: "A small platform team uses Terraform but can't take on running another server. Which option adds shared approvals with nothing to host?",
-    options: [
-      "HCP Terraform",
-      "Terraform Enterprise",
-      "A Jenkins job",
-      "Ansible",
-    ],
+    options: ["HCP Terraform", "Terraform Enterprise", "A Jenkins job", "Ansible"],
     answer: 0,
     rationale: "HCP Terraform is the vendor-managed service; Terraform Enterprise is the self-hosted edition.",
   },
@@ -1502,7 +1390,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 1,
     subtopic: "levels-of-automation",
     version: "3.0",
-    stem: "For AI coding agents, what does \"human in the loop\" mean?",
+    stem: 'For AI coding agents, what does "human in the loop" mean?',
     options: [
       "A person types out every line of code the agent suggests",
       "A person watches every step the agent takes in real time",
@@ -1519,13 +1407,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "ai-fundamentals",
     version: "3.0",
-    stem: "A developer says, \"Our AI assistant keeps calling functions that don't exist in our libraries.\" What is happening?",
-    options: [
-      "The model is hallucinating",
-      "The model's training is too old",
-      "The prompt was injected",
-      "The prompt was too short",
-    ],
+    stem: 'A developer says, "Our AI assistant keeps calling functions that don\'t exist in our libraries." What is happening?',
+    options: ["The model is hallucinating", "The model's training is too old", "The prompt was injected", "The prompt was too short"],
     answer: 0,
     rationale: "Confidently inventing functions that do not exist is a hallucination.",
   },
@@ -1536,7 +1419,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "ai-fundamentals",
     version: "3.0",
-    stem: "An engineering manager says, \"The AI tool gives generic answers that ignore how our own services work.\" What would help most?",
+    stem: 'An engineering manager says, "The AI tool gives generic answers that ignore how our own services work." What would help most?',
     options: [
       "A larger model with more data and training",
       "Our current code and docs as context",
@@ -1553,13 +1436,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "risk-and-governance",
     version: "3.0",
-    stem: "A CISO says, \"Developers are pasting our code into AI chat tools on their personal accounts.\" What is this called?",
-    options: [
-      "Prompt injection",
-      "A hallucination",
-      "Shadow AI",
-      "Vibe coding",
-    ],
+    stem: 'A CISO says, "Developers are pasting our code into AI chat tools on their personal accounts." What is this called?',
+    options: ["Prompt injection", "A hallucination", "Shadow AI", "Vibe coding"],
     answer: 2,
     rationale: "Using unapproved AI tools with company data is shadow AI.",
   },
@@ -1570,13 +1448,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "ai-coding-tools",
     version: "3.0",
-    stem: "A VP says, \"We want AI that picks up a ticket and opens a pull request on its own.\" What kind of tool is that?",
-    options: [
-      "An autocomplete assistant in the editor",
-      "An AI code reviewer",
-      "An AI chat assistant",
-      "An autonomous coding agent",
-    ],
+    stem: 'A VP says, "We want AI that picks up a ticket and opens a pull request on its own." What kind of tool is that?',
+    options: ["An autocomplete assistant in the editor", "An AI code reviewer", "An AI chat assistant", "An autonomous coding agent"],
     answer: 3,
     rationale: "Taking a ticket to a pull request without a developer driving is an autonomous agent, such as Devin or Codex.",
   },
@@ -1587,7 +1460,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "ai-coding-tools",
     version: "3.0",
-    stem: "A developer says, \"I want AI help right in my editor while I write and change code.\" Which kind of tool fits?",
+    stem: 'A developer says, "I want AI help right in my editor while I write and change code." Which kind of tool fits?',
     options: [
       "An AI code editor such as Cursor",
       "An autonomous agent such as Devin",
@@ -1604,7 +1477,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "agent-integration",
     version: "3.0",
-    stem: "A platform lead says, \"We want our agent to read Jira tickets and Datadog errors when it fixes bugs.\" What makes that possible?",
+    stem: 'A platform lead says, "We want our agent to read Jira tickets and Datadog errors when it fixes bugs." What makes that possible?',
     options: [
       "A larger context window",
       "MCP connections to those tools",
@@ -1621,13 +1494,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "risk-and-governance",
     version: "3.0",
-    stem: "A security lead says, \"A web page our agent read had hidden text telling it to send data out.\" What is this?",
-    options: [
-      "Shadow AI",
-      "A model hallucination",
-      "Prompt injection",
-      "Model drift",
-    ],
+    stem: 'A security lead says, "A web page our agent read had hidden text telling it to send data out." What is this?',
+    options: ["Shadow AI", "A model hallucination", "Prompt injection", "Model drift"],
     answer: 2,
     rationale: "Hidden instructions in content the model reads is prompt injection.",
   },
@@ -1638,7 +1506,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "downstream-bottleneck",
     version: "3.0",
-    stem: "A VP says, \"We write code twice as fast with AI, but releases haven't sped up.\" What is the likely cause?",
+    stem: 'A VP says, "We write code twice as fast with AI, but releases haven\'t sped up." What is the likely cause?',
     options: [
       "Developers need to write better prompts",
       "They need more AI seats and licenses",
@@ -1655,7 +1523,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "downstream-bottleneck",
     version: "3.0",
-    stem: "An engineering manager says, \"Our reviewers are drowning in AI-written pull requests.\" What does that point to?",
+    stem: 'An engineering manager says, "Our reviewers are drowning in AI-written pull requests." What does that point to?',
     options: [
       "Review is now the bottleneck",
       "The AI writes too little code",
@@ -1672,7 +1540,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "measuring-impact",
     version: "3.0",
-    stem: "A CTO says, \"We track how many AI suggestions developers accept.\" What is missing?",
+    stem: 'A CTO says, "We track how many AI suggestions developers accept." What is missing?',
     options: [
       "How many AI seats were bought",
       "Whether changes reach users faster",
@@ -1689,13 +1557,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "ai-across-stages",
     version: "3.0",
-    stem: "An AppSec lead says, \"Our scanner finds hundreds of issues and developers never get to them.\" Which AI feature fits?",
-    options: [
-      "AI that closes old alerts",
-      "AI that writes new policies",
-      "AI autofix that suggests fixes",
-      "AI that blocks every merge",
-    ],
+    stem: 'An AppSec lead says, "Our scanner finds hundreds of issues and developers never get to them." Which AI feature fits?',
+    options: ["AI that closes old alerts", "AI that writes new policies", "AI autofix that suggests fixes", "AI that blocks every merge"],
     answer: 2,
     rationale: "Autofix proposes fixes developers can review, so the backlog actually gets fixed.",
   },
@@ -1706,13 +1569,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "risk-and-governance",
     version: "3.0",
-    stem: "A legal team asks, \"Could AI-suggested code be copied from open-source projects?\" What risk are they raising?",
-    options: [
-      "Prompt injection",
-      "Model hallucination",
-      "Shadow AI use by developers",
-      "Code licensing risk",
-    ],
+    stem: 'A legal team asks, "Could AI-suggested code be copied from open-source projects?" What risk are they raising?',
+    options: ["Prompt injection", "Model hallucination", "Shadow AI use by developers", "Code licensing risk"],
     answer: 3,
     rationale: "Code matching open-source projects raises license and provenance risk.",
   },
@@ -1723,7 +1581,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "ai-across-stages",
     version: "3.0",
-    stem: "A QA lead says, \"AI writes our tests, but they just confirm what the code already does.\" What should the AI get?",
+    stem: 'A QA lead says, "AI writes our tests, but they just confirm what the code already does." What should the AI get?',
     options: [
       "What the code is supposed to do",
       "More of the existing code as examples",
@@ -1740,13 +1598,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "levels-of-automation",
     version: "3.0",
-    stem: "A platform lead says, \"Agents can fix small bugs alone, but must ask before touching shared APIs.\" What is this?",
-    options: [
-      "Full autonomy for the agent",
-      "A human-in-the-loop boundary",
-      "A ban on AI coding agents",
-      "A prompt injection defense",
-    ],
+    stem: 'A platform lead says, "Agents can fix small bugs alone, but must ask before touching shared APIs." What is this?',
+    options: ["Full autonomy for the agent", "A human-in-the-loop boundary", "A ban on AI coding agents", "A prompt injection defense"],
     answer: 1,
     rationale: "Letting agents act alone within a scope and requiring approval beyond it is a human-in-the-loop boundary.",
   },
@@ -1774,7 +1627,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 3,
     subtopic: "measuring-impact",
     version: "3.0",
-    stem: "A customer says, \"Our AI agent opened 200 pull requests last month.\" What is your top priority to learn?",
+    stem: 'A customer says, "Our AI agent opened 200 pull requests last month." What is your top priority to learn?',
     options: [
       "Which model wrote most of them",
       "How long each one took to write",
@@ -1850,7 +1703,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "An agent that works tickets on its own",
     ],
     answer: 3,
-    rationale: "Cursor helps a developer who is driving; working tickets without one needs an autonomous agent such as Devin, Codex or Factory.",
+    rationale:
+      "Cursor helps a developer who is driving; working tickets without one needs an autonomous agent such as Devin, Codex or Factory.",
   },
   {
     id: "aisdlc-l3-49",
@@ -1986,7 +1840,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "How many engineers are on call each week",
     ],
     answer: 1,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l1-56",
@@ -2020,7 +1875,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "What security problems slip through today",
     ],
     answer: 3,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l1-47",
@@ -2037,7 +1893,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "When their budget gets approved",
     ],
     answer: 0,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l1-48",
@@ -2054,7 +1911,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Who signs off on cloud budgets",
     ],
     answer: 1,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l1-49",
@@ -2105,7 +1963,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Whether they can sign a contract",
     ],
     answer: 0,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l1-58",
@@ -2156,7 +2015,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "How slow releases are hurting revenue and cost",
     ],
     answer: 3,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l2-59",
@@ -2173,7 +2033,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "How many engineers are on each team",
     ],
     answer: 0,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l2-46",
@@ -2190,7 +2051,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "To find out which vendors you're up against",
     ],
     answer: 1,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l2-47",
@@ -2207,7 +2069,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Exactly how long the outage lasted",
     ],
     answer: 2,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l2-48",
@@ -2224,7 +2087,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Where their approval evidence falls short today",
     ],
     answer: 3,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l2-49",
@@ -2241,7 +2105,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "To find out who their predecessor worked with",
     ],
     answer: 0,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l2-50",
@@ -2258,7 +2123,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "How many of their developers use AI tools every day",
     ],
     answer: 1,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l2-51",
@@ -2275,7 +2141,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Who in procurement runs the vendor review process",
     ],
     answer: 2,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l2-52",
@@ -2292,7 +2159,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "What problems the two toolchains are causing",
     ],
     answer: 3,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l2-60",
@@ -2326,7 +2194,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Who approves new tooling purchases",
     ],
     answer: 1,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l2-55",
@@ -2360,7 +2229,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Where costs hurt most and what is driving them",
     ],
     answer: 3,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l2-61",
@@ -2377,7 +2247,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Who handles procurement for new tools",
     ],
     answer: 0,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l2-58",
@@ -2394,7 +2265,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "When budget for next quarter is approved",
     ],
     answer: 1,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l3-43",
@@ -2403,7 +2275,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 3,
     subtopic: "who-to-target",
     version: "3.0",
-    stem: "A bank is hiring release engineers and a \"change management lead.\" Your contact, a release engineer, says approvals take weeks. Who should you reach next?",
+    stem: 'A bank is hiring release engineers and a "change management lead." Your contact, a release engineer, says approvals take weeks. Who should you reach next?',
     options: [
       "Whoever owns change approval, since approvals are the bottleneck",
       "The release engineer's manager, to ask about budget",
@@ -2428,7 +2300,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Which vendors they plan to replace this year",
     ],
     answer: 1,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l3-45",
@@ -2445,7 +2318,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Their budget for adding more testers",
     ],
     answer: 2,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l3-46",
@@ -2462,7 +2336,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Where their releases fall short of the new rule",
     ],
     answer: 3,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l3-47",
@@ -2479,7 +2354,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "To find out when their budget is set",
     ],
     answer: 0,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l3-56",
@@ -2496,7 +2372,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "What skills the new platform engineer will need",
     ],
     answer: 1,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l3-49",
@@ -2513,7 +2390,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "How much of their budget was cut",
     ],
     answer: 2,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l3-57",
@@ -2530,7 +2408,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Where missing visibility into AI code and spend hurts",
     ],
     answer: 3,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l3-58",
@@ -2547,7 +2426,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Which security vendors and tools they already use today",
     ],
     answer: 0,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l3-52",
@@ -2564,7 +2444,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Whether you can speak with the CFO about it directly",
     ],
     answer: 1,
-    rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
+    rationale:
+      "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
     id: "pipegen-l3-53",
@@ -2590,7 +2471,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 3,
     subtopic: "follow-up",
     version: "3.0",
-    stem: "A prospect replies, \"We just bought a tool for that.\" What is the best response?",
+    stem: 'A prospect replies, "We just bought a tool for that." What is the best response?',
     options: [
       "Explain clearly why the tool they just bought is worse than yours.",
       "Thank them politely and remove the account from your list for good.",
@@ -2744,14 +2625,10 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     subtopic: "stakeholder-support",
     version: "3.0",
     stem: "Besides DevOps leadership, engineering users and the economic buyer, which roles do you also need as champions?",
-    options: [
-      "The CISO and partners",
-      "Procurement and legal",
-      "Finance and HR",
-      "Support and QA",
-    ],
+    options: ["The CISO and partners", "Procurement and legal", "Finance and HR", "Support and QA"],
     answer: 0,
-    rationale: "The five legs of the stool: DevOps leadership, engineering users, the economic buyer (CTO or CIO), the CISO, and partners such as resellers and consultants.",
+    rationale:
+      "The five legs of the stool: DevOps leadership, engineering users, the economic buyer (CTO or CIO), the CISO, and partners such as resellers and consultants.",
   },
   {
     id: "champion-l1-52",
@@ -2812,12 +2689,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     subtopic: "champion-vs-contact",
     version: "3.0",
     stem: "A contact explains the buying process and warns you about concerns, but won't set up a meeting with the VP. What are they most likely?",
-    options: [
-      "A coach",
-      "A champion",
-      "The economic buyer",
-      "A competitor's champion",
-    ],
+    options: ["A coach", "A champion", "The economic buyer", "A competitor's champion"],
     answer: 0,
     rationale: "Information without access or action is coach behavior.",
   },
@@ -2828,7 +2700,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "validating",
     version: "3.0",
-    stem: "Early on, a contact says, \"A competitor told us you're expensive. How would you even fit our setup?\" What is most likely happening?",
+    stem: 'Early on, a contact says, "A competitor told us you\'re expensive. How would you even fit our setup?" What is most likely happening?',
     options: [
       "They have already decided against you",
       "They're testing you before backing you",
@@ -2845,7 +2717,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "stake-and-motivation",
     version: "3.0",
-    stem: "A contact says, \"I like it, but I wish it had this feature, and it's expensive.\" What does this suggest?",
+    stem: 'A contact says, "I like it, but I wish it had this feature, and it\'s expensive." What does this suggest?',
     options: [
       "They have quietly decided against you",
       "They are a coach, not a champion",
@@ -2931,12 +2803,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     subtopic: "roles",
     version: "3.0",
     stem: "The lead architect built the internal tool your product would replace. What role is she most likely to play?",
-    options: [
-      "Your natural internal champion",
-      "The economic buyer for it",
-      "A neutral coach",
-      "A blocker defending her tool",
-    ],
+    options: ["Your natural internal champion", "The economic buyer for it", "A neutral coach", "A blocker defending her tool"],
     answer: 3,
     rationale: "Whoever built the incumbent tool often defends it, acting as the competition's champion.",
   },
@@ -3016,12 +2883,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     subtopic: "prep-and-followup",
     version: "3.0",
     stem: "Your champion won't prepare with you for the economic buyer meeting. What does that signal?",
-    options: [
-      "They trust you to run it",
-      "Their support may be weak",
-      "They are too senior to prepare",
-      "The meeting is just a formality",
-    ],
+    options: ["They trust you to run it", "Their support may be weak", "They are too senior to prepare", "The meeting is just a formality"],
     answer: 1,
     rationale: "A real champion wants to look good in front of the EB; refusing to prepare is a warning.",
   },
@@ -3219,7 +3081,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 3,
     subtopic: "validating",
     version: "3.0",
-    stem: "Your champion keeps saying internal talks \"went well,\" but nothing moves forward. What should you ask?",
+    stem: 'Your champion keeps saying internal talks "went well," but nothing moves forward. What should you ask?',
     options: [
       "Which of your slides they liked best",
       "How they felt the meeting went",
@@ -3457,13 +3319,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "role-and-purchase",
     version: "3.0",
-    stem: "A rep hears, \"Every production change waits up to a week for the approval meeting.\" Whose process is this?",
-    options: [
-      "The change advisory board",
-      "The QA and test team",
-      "The developers on each team",
-      "The platform engineering team",
-    ],
+    stem: 'A rep hears, "Every production change waits up to a week for the approval meeting." Whose process is this?',
+    options: ["The change advisory board", "The QA and test team", "The developers on each team", "The platform engineering team"],
     answer: 0,
     rationale: "A weekly approval meeting for production changes is the CAB's process.",
   },
@@ -3474,7 +3331,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "role-and-purchase",
     version: "3.0",
-    stem: "A rep hears, \"We can't show auditors who approved each deployment.\" Which persona owns this problem most directly?",
+    stem: 'A rep hears, "We can\'t show auditors who approved each deployment." Which persona owns this problem most directly?',
     options: [
       "A developer on the team",
       "The security and compliance leader",
@@ -3491,7 +3348,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "owns-and-measures",
     version: "3.0",
-    stem: "A VP of Engineering says, \"My board keeps asking why features slip.\" Which metric would she most want to improve?",
+    stem: 'A VP of Engineering says, "My board keeps asking why features slip." Which metric would she most want to improve?',
     options: [
       "Time to restore service after outages",
       "Number of open critical security vulnerabilities",
@@ -3508,7 +3365,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "owns-and-measures",
     version: "3.0",
-    stem: "A platform lead says success means \"teams stop filing tickets to get a new service running.\" What is he measuring?",
+    stem: 'A platform lead says success means "teams stop filing tickets to get a new service running." What is he measuring?',
     options: [
       "Release frequency for each product team",
       "Production incidents reported each week",
@@ -3525,7 +3382,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "message-altitude",
     version: "3.0",
-    stem: "A CIO says, \"We have too many vendors doing the same job.\" What is she most likely trying to reduce?",
+    stem: 'A CIO says, "We have too many vendors doing the same job." What is she most likely trying to reduce?',
     options: [
       "Cost and complexity from overlapping tools",
       "Time developers spend waiting on builds",
@@ -3542,7 +3399,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "message-altitude",
     version: "3.0",
-    stem: "Senior developers say, \"Every release takes a dozen manual steps.\" What do they care about most?",
+    stem: 'Senior developers say, "Every release takes a dozen manual steps." What do they care about most?',
     options: [
       "Lowering the company's software spend",
       "Getting time back from repetitive work",
@@ -3559,13 +3416,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "role-and-purchase",
     version: "3.0",
-    stem: "A rep hears, \"Developers keep shipping open-source libraries with known flaws.\" Which persona owns this risk most directly?",
-    options: [
-      "The QA lead",
-      "The GM of the division",
-      "The security leader",
-      "The DevOps engineer",
-    ],
+    stem: 'A rep hears, "Developers keep shipping open-source libraries with known flaws." Which persona owns this risk most directly?',
+    options: ["The QA lead", "The GM of the division", "The security leader", "The DevOps engineer"],
     answer: 2,
     rationale: "Known-vulnerable dependencies are a security risk the security leader answers for.",
   },
@@ -3576,7 +3428,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "message-altitude",
     version: "3.0",
-    stem: "A GM says, \"Every slipped launch pushes our revenue out a quarter.\" What does he care about most?",
+    stem: 'A GM says, "Every slipped launch pushes our revenue out a quarter." What does he care about most?',
     options: [
       "Less configuration for each team",
       "Faster recovery after a failed deploy",
@@ -3593,7 +3445,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "message-altitude",
     version: "3.0",
-    stem: "A platform lead says, \"Five of us support sixty product teams.\" What is his biggest pressure?",
+    stem: 'A platform lead says, "Five of us support sixty product teams." What is his biggest pressure?',
     options: [
       "Scaling support without adding people",
       "Showing the board spend by product",
@@ -3610,7 +3462,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "message-altitude",
     version: "3.0",
-    stem: "A QA lead says, \"Our regression suite takes two days and blocks every release.\" What does she most want?",
+    stem: 'A QA lead says, "Our regression suite takes two days and blocks every release." What does she most want?',
     options: [
       "A bigger budget for testing tools",
       "Faster results with the same coverage",
@@ -3627,7 +3479,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "motivations-objections",
     version: "3.0",
-    stem: "A security leader says, \"Every new tool is another way in for attackers.\" What is her objection really about?",
+    stem: 'A security leader says, "Every new tool is another way in for attackers." What is her objection really about?',
     options: [
       "Risk she would own after a breach",
       "The tool's cost against her yearly budget",
@@ -3644,7 +3496,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "motivations-objections",
     version: "3.0",
-    stem: "Developers push back, \"We already have scripts that work.\" What are they most likely protecting?",
+    stem: 'Developers push back, "We already have scripts that work." What are they most likely protecting?',
     options: [
       "Their department's budget and tool contracts",
       "Their working flow and time to change it",
@@ -3661,7 +3513,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     level: 2,
     subtopic: "motivations-objections",
     version: "3.0",
-    stem: "An on-call DevOps engineer says a new deployment tool \"sounds like more pages at 2 a.m.\" What concern should you address?",
+    stem: 'An on-call DevOps engineer says a new deployment tool "sounds like more pages at 2 a.m." What concern should you address?',
     options: [
       "Whether it needs more training than today's tool",
       "Whether it fits the three-year cloud plan",

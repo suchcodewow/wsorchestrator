@@ -16,12 +16,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  decideDestroyFailure,
-  describeDestroyFailure,
-  MAX_DESTROY_ATTEMPTS,
-  type DestroyFailureKind,
-} from "../src/destroy-policy.js";
+import { decideDestroyFailure, describeDestroyFailure, MAX_DESTROY_ATTEMPTS, type DestroyFailureKind } from "../src/destroy-policy.js";
 import { failure } from "./fixtures/production-failures.js";
 
 /** A destroy failure that is final: a stale lock wants a person, not a tick. */
@@ -116,18 +111,10 @@ describe("decideDestroyFailure", () => {
   test("gives up on a self-clearing failure once the attempts run out", () => {
     // The cap is the difference between rule 3 and the unbounded loop that cost
     // 9,482 executions. At the boundary it must flag, not tick again.
-    const last = decideDestroyFailure(
-      "failed",
-      SELF_CLEARING,
-      MAX_DESTROY_ATTEMPTS,
-    );
+    const last = decideDestroyFailure("failed", SELF_CLEARING, MAX_DESTROY_ATTEMPTS);
     assert.equal(last.action, "flag");
 
-    const before = decideDestroyFailure(
-      "failed",
-      SELF_CLEARING,
-      MAX_DESTROY_ATTEMPTS - 1,
-    );
+    const before = decideDestroyFailure("failed", SELF_CLEARING, MAX_DESTROY_ATTEMPTS - 1);
     assert.equal(before.action, "retry");
   });
 
@@ -153,10 +140,7 @@ describe("decideDestroyFailure", () => {
 
     assert.match(decision.note, /attempt 2 of 3/);
     assert.match(decision.note, /No action is needed/);
-    assert.ok(
-      decision.note.includes(SELF_CLEARING),
-      "the provider's own words belong here too — this is still a failure",
-    );
+    assert.ok(decision.note.includes(SELF_CLEARING), "the provider's own words belong here too — this is still a failure");
     assert.doesNotMatch(decision.note, /Retry teardown/);
   });
 });

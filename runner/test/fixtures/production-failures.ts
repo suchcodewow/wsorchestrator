@@ -138,9 +138,7 @@ export const PRODUCTION_FAILURES: readonly ProductionFailure[] = [
       "api error OptInRequired: You are not subscribed to this service. Please " +
       "go to http://aws.amazon.com to subscribe.",
     expect: "retry-warmup",
-    because:
-      "Organizations reports the account ACTIVE before EC2 is switched on for " +
-      "it; the apply walks straight into that window.",
+    because: "Organizations reports the account ACTIVE before EC2 is switched on for " + "it; the apply walks straight into that window.",
   },
   {
     id: "aws-ec2-optin-describe-azs",
@@ -291,16 +289,13 @@ export const PRODUCTION_FAILURES: readonly ProductionFailure[] = [
       "later., ZONE_RESOURCE_POOL_EXHAUSTED",
     expect: "retry-other-zone",
     because:
-      "A stockout is the zone's problem, not the workshop's; another zone " +
-      "usually has room, so the runner moves rather than failing.",
+      "A stockout is the zone's problem, not the workshop's; another zone " + "usually has room, so the runner moves rather than failing.",
   },
   {
     id: "gke-create-timeout",
     run: "(synthetic — bounded create_timeout shape)",
     date: "2026-08-06",
-    message:
-      "Error: timeout while waiting for state to become 'DONE' (last state: " +
-      "'RUNNING', timeout: 20m0s)",
+    message: "Error: timeout while waiting for state to become 'DONE' (last state: " + "'RUNNING', timeout: 20m0s)",
     expect: "retry-other-zone",
     because:
       "A capacity-starved zone does not error, it retries the first node " +
@@ -318,7 +313,7 @@ export const PRODUCTION_FAILURES: readonly ProductionFailure[] = [
     message:
       "Error: Invalid for_each argument\n\n  on ../../modules/eks/main.tf line " +
       '180, in resource "aws_eks_access_entry" "attendees":\n 180: for_each = ' +
-      "toset(var.attendee_principal_arns)\n\nThe \"for_each\" set includes " +
+      'toset(var.attendee_principal_arns)\n\nThe "for_each" set includes ' +
       "values derived from resource attributes that cannot be determined until " +
       "apply, and so OpenTofu cannot determine the full set of keys that will " +
       "identify the instances of this resource.",

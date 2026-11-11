@@ -26,10 +26,7 @@ export async function GET() {
 
   const result = await listProductionBackups();
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] ?? 502 },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] ?? 502 });
   }
   return NextResponse.json({ backups: result.backups });
 }

@@ -14,15 +14,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import { MentionText } from "@/components/mention-text";
-import {
-  HEADER_ROW,
-  LINK_ROW,
-  Pager,
-  PlainHeader,
-  SortHeader,
-  TableSearch,
-  useRowLink,
-} from "@/components/data-table";
+import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { CHECKLIST_STATUSES, type ChecklistStatus, type MyChecklistSort, type MyMentionSort } from "@/lib/list-specs";
 import type { MyMentionRow } from "@/lib/mention-store";
 import { riseChild, staggerParent } from "@/lib/motion";
@@ -143,8 +135,8 @@ export function InboxView({
         <h1 className="text-3xl font-medium tracking-tight">My inbox</h1>
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground tabular-nums">{open.toLocaleString()}</span> checklist item
-          {open === 1 ? "" : "s"} to do ·{" "}
-          <span className="font-medium text-foreground tabular-nums">{mentionTotal.toLocaleString()}</span> tag
+          {open === 1 ? "" : "s"} to do · <span className="font-medium text-foreground tabular-nums">{mentionTotal.toLocaleString()}</span>{" "}
+          tag
           {mentionTotal === 1 ? "" : "s"} of {viewerEmail || "you"}
         </p>
       </motion.div>

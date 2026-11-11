@@ -2,12 +2,7 @@
 
 import { notFound } from "next/navigation";
 import { z } from "zod";
-import {
-  countSlackSyncChanges,
-  getSlackSyncRun,
-  isSlackChangeKind,
-  listSlackSyncChanges,
-} from "@/lib/cohorts/slack-sync";
+import { countSlackSyncChanges, getSlackSyncRun, isSlackChangeKind, listSlackSyncChanges } from "@/lib/cohorts/slack-sync";
 import { SLACK_SYNC_CHANGE_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { RunDetailView } from "./run-view";
@@ -19,7 +14,10 @@ export default async function SlackRunPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const id = z.string().uuid().safeParse((await params).id);
+  const id = z
+    .string()
+    .uuid()
+    .safeParse((await params).id);
   const run = id.success ? await getSlackSyncRun(id.data) : null;
   if (!run) notFound();
 

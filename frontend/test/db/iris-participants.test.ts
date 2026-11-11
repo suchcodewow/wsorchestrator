@@ -149,10 +149,7 @@ describe("Participants added by hand", () => {
     assert.equal(afterRemoval?.enrolled, false);
     assert.equal(afterRemoval?.manual, false);
     assert.equal(afterRemoval?.placements.sdlc, 2);
-    assert.equal(
-      (await listParticipants({ ...IRIS_PARTICIPANT_LIST, q: taker.email, page: 1 }, "A")).rows.length,
-      0,
-    );
+    assert.equal((await listParticipants({ ...IRIS_PARTICIPANT_LIST, q: taker.email, page: 1 }, "A")).rows.length, 0);
   });
 
   test("nobody known can be added", async () => {
@@ -191,13 +188,10 @@ describe("Bootcamp Auto-Enroll", () => {
     assert.equal(await isParticipantNow(engineer), true);
     assert.equal(await isParticipantNow(silent), false, "has not RSVP'd");
     assert.equal(await isParticipantNow(undecided), false, "has no track yet");
-    assert.deepEqual(
-      [...(await listed())].sort(),
-      [
-        [engineer, false],
-        [rsvped, false],
-      ],
-    );
+    assert.deepEqual([...(await listed())].sort(), [
+      [engineer, false],
+      [rsvped, false],
+    ]);
   });
 
   test("someone who RSVPs while it is on is enrolled at once", async () => {

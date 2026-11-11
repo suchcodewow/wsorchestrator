@@ -9,20 +9,12 @@ import type { RunStatus, WorkshopRun } from "@/db/schema";
 
 const ERRORS: Record<string, string> = {
   not_found: "This event no longer exists.",
-  not_retryable:
-    "This event isn't in a failed state anymore, so there's nothing to retry.",
-  trigger_failed:
-    "Couldn't start the runner just now — try again in a moment.",
+  not_retryable: "This event isn't in a failed state anymore, so there's nothing to retry.",
+  trigger_failed: "Couldn't start the runner just now — try again in a moment.",
   unauthorized: "Sign in again to retry this event.",
 };
 
-export function RetryEventButton({
-  run,
-  onRetried,
-}: {
-  run: WorkshopRun;
-  onRetried: () => void;
-}) {
+export function RetryEventButton({ run, onRetried }: { run: WorkshopRun; onRetried: () => void }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

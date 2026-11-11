@@ -59,9 +59,7 @@ export function AssessmentEditor({ assessment }: { assessment: Detail | null }) 
   const [audience, setAudience] = useState<EvalsAssessmentAudience>(assessment?.audience ?? "both");
   const [active, setActive] = useState(assessment?.active ?? true);
   const [criteria, setCriteria] = useState<Draft[]>(
-    assessment?.criteria.map((c) => ({ key: c.id, ...c })) ?? [
-      { key: newKey(), name: "", description: "", scored: false },
-    ],
+    assessment?.criteria.map((c) => ({ key: c.id, ...c })) ?? [{ key: newKey(), name: "", description: "", scored: false }],
   );
   const [busy, setBusy] = useState<"save" | "delete" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +122,11 @@ export function AssessmentEditor({ assessment }: { assessment: Detail | null }) 
   }
 
   async function remove() {
-    if (!assessment || !(await confirmDialog({ title: `Remove the assessment “${assessment.name}”?`, confirmLabel: "Remove", destructive: true }))) return;
+    if (
+      !assessment ||
+      !(await confirmDialog({ title: `Remove the assessment “${assessment.name}”?`, confirmLabel: "Remove", destructive: true }))
+    )
+      return;
     const body = await request("delete", `/api/evals/assessments/${assessment.id}`, { method: "DELETE" });
     if (!body) return;
     router.push(LIST);
@@ -155,21 +157,13 @@ export function AssessmentEditor({ assessment }: { assessment: Detail | null }) 
         </div>
       </motion.div>
 
-      <motion.div
-        variants={staggerParent(0.04)}
-        className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm"
-      >
+      <motion.div variants={staggerParent(0.04)} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
         <motion.section variants={riseChild} className="space-y-4 px-5 py-4">
           <div className="space-y-1.5">
             <label htmlFor="assessment-name" className="text-sm font-medium">
               Name
             </label>
-            <Input
-              id="assessment-name"
-              value={name}
-              maxLength={EVALS_ASSESSMENT_LIMITS.name}
-              onChange={(e) => setName(e.target.value)}
-            />
+            <Input id="assessment-name" value={name} maxLength={EVALS_ASSESSMENT_LIMITS.name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">

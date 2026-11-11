@@ -51,20 +51,8 @@ import {
   unknownScenarios,
   type Scenario,
 } from "./scenarios.js";
-import {
-  tfApply,
-  tfDestroy,
-  tfInit,
-  tfOutput,
-  warmProviderCache,
-  withWorkDir,
-  type TfLine,
-} from "./terraform.js";
-import {
-  awsAttemptOutcome,
-  isGkeCapacityError,
-  type AwsRetryKind,
-} from "./classify.js";
+import { tfApply, tfDestroy, tfInit, tfOutput, warmProviderCache, withWorkDir, type TfLine } from "./terraform.js";
+import { awsAttemptOutcome, isGkeCapacityError, type AwsRetryKind } from "./classify.js";
 import { issueAccessPass, tapPolicy } from "./graph.js";
 import { allocateEmails, createAccount, createOrgUnit } from "./directory.js";
 import { recordOutputResources } from "./resources.js";
@@ -227,8 +215,7 @@ export async function runWorkshop(runId: string): Promise<void> {
         "system",
         `Harness-only run: ${first.applied.length} component(s) applied` +
           (first.pending.length
-            ? `; ${first.pending.length} not exercised for want of a cloud ` +
-              `credential (${first.pending.join(", ")})`
+            ? `; ${first.pending.length} not exercised for want of a cloud ` + `credential (${first.pending.join(", ")})`
             : ""),
       );
     } else if (run.clouds.length === 0) {
@@ -238,23 +225,11 @@ export async function runWorkshop(runId: string): Promise<void> {
     } else {
       for (const cloud of run.clouds) {
         if (cloud === "gcp") {
-          await merge(
-            run.mode === "challenge"
-              ? await provisionGcpPerUser(run)
-              : await provisionGcp(run),
-          );
+          await merge(run.mode === "challenge" ? await provisionGcpPerUser(run) : await provisionGcp(run));
         } else if (cloud === "azure") {
-          await merge(
-            run.mode === "challenge"
-              ? await provisionAzurePerUser(run)
-              : await provisionAzure(run),
-          );
+          await merge(run.mode === "challenge" ? await provisionAzurePerUser(run) : await provisionAzure(run));
         } else if (cloud === "aws") {
-          await merge(
-            run.mode === "challenge"
-              ? await provisionAwsPerUser(run)
-              : await provisionAws(run),
-          );
+          await merge(run.mode === "challenge" ? await provisionAwsPerUser(run) : await provisionAws(run));
         }
       }
     }
@@ -277,8 +252,7 @@ export async function runWorkshop(runId: string): Promise<void> {
 
     // Keep the original expiry when re-provisioning a workshop that grew —
     // editing its config must not silently extend how long it lives.
-    const expiresAt =
-      run.expires_at ?? new Date(Date.now() + run.ttl_seconds * 1000);
+    const expiresAt = run.expires_at ?? new Date(Date.now() + run.ttl_seconds * 1000);
     await setReady(runId, outputs, expiresAt);
     await log(runId, "system", `Ready. Auto-destroys at ${expiresAt.toISOString()}`);
     if (!run.expires_at) await notifyBuild(runId, "ready");
@@ -322,15 +296,11 @@ export async function runWorkshop(runId: string): Promise<void> {
  * Teardown is implicit: the reaper's cluster destroy takes the delegate with
  * it, so there is no separate delegate teardown to run.
  */
-async function installDelegates(
-  run: RunRow,
-  outputs: Record<string, unknown>,
-): Promise<void> {
+async function installDelegates(run: RunRow, outputs: Record<string, unknown>): Promise<void> {
   const cfg = harnessCfg();
   if (!cfg.delegatesEnabled || run.mode !== "workshop") return;
 
-  const str = (k: string): string | undefined =>
-    typeof outputs[k] === "string" ? (outputs[k] as string) : undefined;
+  const str = (k: string): string | undefined => (typeof outputs[k] === "string" ? (outputs[k] as string) : undefined);
 
   type Target = { cloud: Cloud; source: string; vars: Record<string, unknown> };
   const targets: Target[] = [];
@@ -339,8 +309,7 @@ async function installDelegates(
   // (sandbox_project_id / the configured shared project).
   const gkeName = str("gke_cluster_name");
   const gkeLoc = str("gke_cluster_location");
-  const gkeProject =
-    str("gcp_project_id") ?? str("sandbox_project_id") ?? gcpCfg().sandboxProjectId;
+  const gkeProject = str("gcp_project_id") ?? str("sandbox_project_id") ?? gcpCfg().sandboxProjectId;
   if (gkeName && gkeLoc && gkeProject) {
     targets.push({
       cloud: "gcp",
@@ -398,9 +367,7 @@ async function installDelegates(
     await log(
       run.id,
       "stderr",
-      `Skipping Harness delegates — could not get an org delegate token: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      `Skipping Harness delegates — could not get an org delegate token: ${err instanceof Error ? err.message : String(err)}`,
     );
     return;
   }
@@ -419,8 +386,8 @@ async function installDelegates(
       image
         ? `Harness delegate image: ${image}`
         : "Could not determine the current Harness delegate version; " +
-          "falling back to the Helm chart's default image, which may be old " +
-          "enough for Harness to mark the delegate expired.",
+            "falling back to the Helm chart's default image, which may be old " +
+            "enough for Harness to mark the delegate expired.",
     );
   }
 
@@ -438,8 +405,7 @@ async function installDelegates(
       await log(
         run.id,
         "system",
-        `Installing org Harness delegate "${delegateName}" into the ` +
-          `${target.cloud.toUpperCase()} cluster ${target.vars.cluster_name}`,
+        `Installing org Harness delegate "${delegateName}" into the ` + `${target.cloud.toUpperCase()} cluster ${target.vars.cluster_name}`,
       );
       const workDir = path.join(TF_ROOT, target.source);
       writeDelegateTfvars(workDir, {
@@ -451,12 +417,7 @@ async function installDelegates(
         // delegate running in the cluster that lab is about.
         delegate_tags: target.cloud,
       });
-      await tfInit(
-        workDir,
-        stateBucket(),
-        `${run.state_prefix}/delegate/${target.cloud}`,
-        (l) => log(run.id, l.stream, l.text),
-      );
+      await tfInit(workDir, stateBucket(), `${run.state_prefix}/delegate/${target.cloud}`, (l) => log(run.id, l.stream, l.text));
       await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
       await log(run.id, "stdout", `delegate ${delegateName} installed`);
       // Keyed by cloud: a multi-cloud workshop installs one per cluster, and
@@ -535,9 +496,7 @@ async function provisionAccounts(run: RunRow): Promise<string> {
   await log(
     run.id,
     "system",
-    existing.size > 0
-      ? `Adding ${todo} attendee account(s) to the existing ${existing.size}`
-      : `Creating ${todo} attendee account(s)`,
+    existing.size > 0 ? `Adding ${todo} attendee account(s) to the existing ${existing.size}` : `Creating ${todo} attendee account(s)`,
   );
 
   // Names are random, so they are reserved up front against the directory
@@ -626,11 +585,7 @@ async function provisionHarness(run: RunRow): Promise<HarnessProvision> {
   // that exercising a component needs.
   const creator = await runCreatorEmail(run.id);
   if (run.harness_only) {
-    await log(
-      run.id,
-      "system",
-      "sandbox run — the creator gets a project in this org, not account admin",
-    );
+    await log(run.id, "system", "sandbox run — the creator gets a project in this org, not account admin");
   } else if (creator) {
     await grantAccountAdmin(creator);
     await log(run.id, "stdout", `${creator} -> account admin (instructor)`);
@@ -643,12 +598,7 @@ async function provisionHarness(run: RunRow): Promise<HarnessProvision> {
   // Workspace accounts were created for a run that exists to exercise a
   // handful of Harness entities. They need somewhere to build a pipeline out
   // of the components being tested, and their own project is it.
-  const accounts =
-    run.harness_only
-      ? creator
-        ? [{ email: creator }]
-        : []
-      : await accountsFor(run.id);
+  const accounts = run.harness_only ? (creator ? [{ email: creator }] : []) : await accountsFor(run.id);
 
   await log(
     run.id,
@@ -678,11 +628,7 @@ async function provisionHarness(run: RunRow): Promise<HarnessProvision> {
 
   // Loaded once for the whole roster, then called with each project as it
   // lands, so the counted row spans the roster instead of one row per attendee.
-  const importProjectRepos = await projectRepoImporter(
-    run,
-    orgId,
-    accounts.length,
-  );
+  const importProjectRepos = await projectRepoImporter(run, orgId, accounts.length);
 
   let built = 0;
   await countProjects(built);
@@ -702,11 +648,7 @@ async function provisionHarness(run: RunRow): Promise<HarnessProvision> {
         run.id,
         "stdout",
         `${email} was already a member of ${
-          alreadyProject && alreadyOrg
-            ? `project ${projectId} and org ${orgId}`
-            : alreadyProject
-              ? `project ${projectId}`
-              : `org ${orgId}`
+          alreadyProject && alreadyOrg ? `project ${projectId} and org ${orgId}` : alreadyProject ? `project ${projectId}` : `org ${orgId}`
         } — Harness reported the binding as already applied`,
       );
     }
@@ -726,10 +668,7 @@ async function provisionHarness(run: RunRow): Promise<HarnessProvision> {
     await log(
       run.id,
       "stdout",
-      `${email} -> admin of project ${projectId}` +
-        (content.projects.length > 0
-          ? `, viewer of ${content.projects.join(", ")}`
-          : ""),
+      `${email} -> admin of project ${projectId}` + (content.projects.length > 0 ? `, viewer of ${content.projects.join(", ")}` : ""),
     );
     await countProjects(++built);
   }
@@ -746,11 +685,8 @@ async function provisionHarness(run: RunRow): Promise<HarnessProvision> {
 
 const AWS_RETRY_REASONS: Record<AwsRetryKind, string> = {
   contention:
-    "AWS Organizations is busy with another workshop's account (only one " +
-    "account is created at a time across the organization)",
-  warmup:
-    "the new AWS account is still activating (a brand-new account answers " +
-    "OptInRequired on EC2 for its first few minutes)",
+    "AWS Organizations is busy with another workshop's account (only one " + "account is created at a time across the organization)",
+  warmup: "the new AWS account is still activating (a brand-new account answers " + "OptInRequired on EC2 for its first few minutes)",
 };
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -809,8 +745,7 @@ async function applyAwsWithRetry(run: RunRow, workDir: string): Promise<void> {
       await log(
         run.id,
         "system",
-        `AWS apply stopped because ${AWS_RETRY_REASONS[outcome.kind]}; ` +
-          `retrying in ${outcome.delayMs / 1000}s.`,
+        `AWS apply stopped because ${AWS_RETRY_REASONS[outcome.kind]}; ` + `retrying in ${outcome.delayMs / 1000}s.`,
       );
       await replay(run.id, held, "stdout");
       await wait(outcome.delayMs);
@@ -824,23 +759,14 @@ async function applyAwsWithRetry(run: RunRow, workDir: string): Promise<void> {
  * reads as the reason followed by its detail rather than an unexplained wall
  * of red.
  */
-async function replay(
-  runId: string,
-  lines: string[],
-  stream: "stdout" | "stderr",
-): Promise<void> {
+async function replay(runId: string, lines: string[], stream: "stdout" | "stderr"): Promise<void> {
   for (const text of lines) await log(runId, stream, text);
 }
 
 /** Zone letter from a location like "us-west1-c" (region "us-west1"). */
-function zoneLetterFromLocation(
-  location: unknown,
-  region: string,
-): string | undefined {
+function zoneLetterFromLocation(location: unknown, region: string): string | undefined {
   const prefix = `${region}-`;
-  return typeof location === "string" && location.startsWith(prefix)
-    ? location.slice(prefix.length)
-    : undefined;
+  return typeof location === "string" && location.startsWith(prefix) ? location.slice(prefix.length) : undefined;
 }
 
 /**
@@ -906,11 +832,7 @@ function recordedClusterLocation(run: RunRow): unknown {
  * The walk is over the zones of the run's own region (`gcpRegionFor`), which
  * for a built run is where it stands rather than where new runs go.
  */
-async function applyGkeWithZoneFailover(
-  run: RunRow,
-  workDir: string,
-  writeVarsForZone: (zone: string) => void,
-): Promise<void> {
+async function applyGkeWithZoneFailover(run: RunRow, workDir: string, writeVarsForZone: (zone: string) => void): Promise<void> {
   const cfg = gcpCfg();
   const region = gcpRegionFor(run);
   const pinned = zoneLetterFromLocation(recordedClusterLocation(run), region);
@@ -928,11 +850,7 @@ async function applyGkeWithZoneFailover(
         return log(run.id, l.stream, l.text);
       });
       if (i > 0) {
-        await log(
-          run.id,
-          "system",
-          `GKE cluster created in ${region}-${zone}.`,
-        );
+        await log(run.id, "system", `GKE cluster created in ${region}-${zone}.`);
       }
       return;
     } catch (err) {
@@ -940,8 +858,7 @@ async function applyGkeWithZoneFailover(
       await log(
         run.id,
         "system",
-        `Zone ${region}-${zone} is out of capacity for the GKE cluster; ` +
-          `retrying in ${region}-${zones[i + 1]}.`,
+        `Zone ${region}-${zone} is out of capacity for the GKE cluster; ` + `retrying in ${region}-${zones[i + 1]}.`,
       );
     }
   }
@@ -957,11 +874,7 @@ async function applyGkeWithZoneFailover(
  * catalog separately. Harness holds the only copy that outlives the apply
  * (Terraform state aside, which is where the attendee passwords already live).
  */
-const CREDENTIAL_OUTPUTS = [
-  "harness_gcp_key_json",
-  "harness_azure_client_secret",
-  "harness_aws_secret_access_key",
-] as const;
+const CREDENTIAL_OUTPUTS = ["harness_gcp_key_json", "harness_azure_client_secret", "harness_aws_secret_access_key"] as const;
 
 /**
  * The name of the identity this run's connector for `cloud` authenticates as,
@@ -993,9 +906,7 @@ async function provisionGcp(run: RunRow): Promise<Record<string, unknown>> {
   const attendees = (await accountsFor(run.id)).map((a) => a.email);
 
   await log(run.id, "system", "terraform init");
-  await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
-    log(run.id, l.stream, l.text),
-  );
+  await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) => log(run.id, l.stream, l.text));
 
   await log(
     run.id,
@@ -1027,8 +938,7 @@ async function provisionSandbox(run: RunRow): Promise<Record<string, unknown>> {
   const cfg = gcpCfg();
   if (!cfg.sandboxProjectId) {
     throw new Error(
-      "no cloud was selected, which grants attendees the shared testing " +
-        "project, but GCP_SANDBOX_PROJECT_ID is not configured",
+      "no cloud was selected, which grants attendees the shared testing " + "project, but GCP_SANDBOX_PROJECT_ID is not configured",
     );
   }
   const workDir = path.join(TF_ROOT, GCP_SANDBOX_TF_SOURCE);
@@ -1049,9 +959,7 @@ async function provisionSandbox(run: RunRow): Promise<Record<string, unknown>> {
   const attendees = (await accountsFor(run.id)).map((a) => a.email);
 
   await log(run.id, "system", "terraform init");
-  await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
-    log(run.id, l.stream, l.text),
-  );
+  await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) => log(run.id, l.stream, l.text));
 
   await log(
     run.id,
@@ -1085,9 +993,7 @@ async function provisionSandbox(run: RunRow): Promise<Record<string, unknown>> {
  * the projects, because the container API it enables for them has to exist and
  * propagate before anything can be created inside one.
  */
-async function provisionGcpPerUser(
-  run: RunRow,
-): Promise<Record<string, unknown>> {
+async function provisionGcpPerUser(run: RunRow): Promise<Record<string, unknown>> {
   const cfg = gcpCfg();
   const workDir = path.join(TF_ROOT, GCP_CHALLENGE_TF_SOURCE);
 
@@ -1103,32 +1009,20 @@ async function provisionGcpPerUser(
   const count = Object.keys(projects).length;
   const scenarios = resolveScenarios(run.scenarios);
 
-  await log(
-    run.id,
-    "system",
-    `Provisioning ${count} GCP project(s), one per competitor`,
-  );
+  await log(run.id, "system", `Provisioning ${count} GCP project(s), one per competitor`);
 
   // The union of what the selected scenarios need, on top of the baseline. With
   // nothing selected this is the baseline alone, which is the root's own default
   // — so a bare challenge builds what it always did.
-  writeChallengeTfvars(
-    workDir,
-    run.id,
-    projects,
-    activateApisFor(CHALLENGE_BASELINE_APIS, scenarios),
-  );
+  writeChallengeTfvars(workDir, run.id, projects, activateApisFor(CHALLENGE_BASELINE_APIS, scenarios));
 
   await log(run.id, "system", "terraform init");
-  await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
-    log(run.id, l.stream, l.text),
-  );
+  await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) => log(run.id, l.stream, l.text));
 
   await log(
     run.id,
     "system",
-    `terraform apply — creating ${count} project(s), billing, and APIs, ` +
-      `granting each competitor owner on their own`,
+    `terraform apply — creating ${count} project(s), billing, and APIs, ` + `granting each competitor owner on their own`,
   );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
 
@@ -1141,9 +1035,7 @@ async function provisionGcpPerUser(
 
   const mapOf = (key: string): Record<string, string> => {
     const v = cluster[key];
-    return v && typeof v === "object" && !Array.isArray(v)
-      ? (v as Record<string, string>)
-      : {};
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, string>) : {};
   };
   const networkNames = mapOf("network_names");
   const nodeTags = mapOf("node_tags");
@@ -1155,16 +1047,7 @@ async function provisionGcpPerUser(
     outputs,
     await reconcileScenarios(run, "gcp", {
       emails: Object.keys(projects),
-      writeRoster: (dir, scenario) =>
-        writeScenarioTfvars(
-          dir,
-          run.id,
-          scenario.id,
-          projects,
-          region,
-          networkNames,
-          nodeTags,
-        ),
+      writeRoster: (dir, scenario) => writeScenarioTfvars(dir, run.id, scenario.id, projects, region, networkNames, nodeTags),
       writeOne: (dir, scenario, email) =>
         writeGcpCompetitorScenarioTfvars(dir, run.id, scenario.id, region, {
           email,
@@ -1206,22 +1089,11 @@ async function provisionChallengeCluster(
   const count = Object.keys(projects).length;
   const region = gcpRegionFor(run);
 
-  await log(
-    run.id,
-    "system",
-    `Provisioning ${count} GKE cluster(s), one per competitor, in parallel`,
-  );
+  await log(run.id, "system", `Provisioning ${count} GKE cluster(s), one per competitor, in parallel`);
 
-  await tfInit(
-    workDir,
-    stateBucket(),
-    clusterStatePrefix(run.state_prefix),
-    (l) => log(run.id, l.stream, l.text),
-  );
+  await tfInit(workDir, stateBucket(), clusterStatePrefix(run.state_prefix), (l) => log(run.id, l.stream, l.text));
 
-  await applyGkeWithZoneFailover(run, workDir, (zone) =>
-    writeChallengeClusterTfvars(workDir, run.id, projects, region, zone),
-  );
+  await applyGkeWithZoneFailover(run, workDir, (zone) => writeChallengeClusterTfvars(workDir, run.id, projects, region, zone));
 
   return tfOutput(workDir);
 }
@@ -1241,17 +1113,11 @@ async function provisionChallengeCluster(
  * left standing. Unchecking an issue is not a reason to delete the environment
  * someone is working in; that happens when the run is torn down.
  */
-async function reconcileScenarios(
-  run: RunRow,
-  cloud: Cloud,
-  ctx: ScenarioContext,
-): Promise<Record<string, unknown>> {
+async function reconcileScenarios(run: RunRow, cloud: Cloud, ctx: ScenarioContext): Promise<Record<string, unknown>> {
   // A challenge runs on one cloud, but filtering by it anyway means a run whose
   // cloud was changed before it was ever built does not try to apply the old
   // cloud's scenarios against the new cloud's environment.
-  const selected = resolveScenarios(run.scenarios).filter(
-    (s) => s.cloud === cloud,
-  );
+  const selected = resolveScenarios(run.scenarios).filter((s) => s.cloud === cloud);
   const previous = appliedScenarios(run.outputs);
   const wanted = new Set(selected.map((s) => s.id));
   const removed = resolveScenarios(previous).filter((s) => !wanted.has(s.id));
@@ -1289,10 +1155,7 @@ async function reconcileScenarios(
   // current build cannot resolve are carried through rather than dropped: their
   // layers really are still standing, and forgetting them here is how they get
   // left behind at teardown.
-  outputs.scenarios_applied = [
-    ...selected.map((s) => s.id),
-    ...unknownScenarios(previous),
-  ];
+  outputs.scenarios_applied = [...selected.map((s) => s.id), ...unknownScenarios(previous)];
   return outputs;
 }
 
@@ -1324,12 +1187,7 @@ async function runScenario(
   if (!scenario.perCompetitor) {
     const workDir = path.join(TF_ROOT, source);
     ctx.writeRoster(workDir, scenario);
-    await tfInit(
-      workDir,
-      bucket,
-      scenarioStatePrefix(run.state_prefix, scenario.id),
-      line,
-    );
+    await tfInit(workDir, bucket, scenarioStatePrefix(run.state_prefix, scenario.id), line);
     if (action === "destroy") {
       await tfDestroy(workDir, line);
       return {};
@@ -1344,11 +1202,7 @@ async function runScenario(
   //
   // The provider cache is populated once, serially, before the copies race for
   // it — see `warmProviderCache`.
-  await warmProviderCache(
-    source,
-    bucket,
-    scenarioStatePrefix(run.state_prefix, scenario.id),
-  );
+  await warmProviderCache(source, bucket, scenarioStatePrefix(run.state_prefix, scenario.id));
 
   await log(
     run.id,
@@ -1357,32 +1211,19 @@ async function runScenario(
       `${ctx.emails.length} competitor(s), ${SCENARIO_CONCURRENCY} at a time`,
   );
 
-  const perCompetitor = await mapConcurrent(
-    ctx.emails,
-    SCENARIO_CONCURRENCY,
-    async (email) => {
-      const slug = competitorSlug(email);
-      return withWorkDir(
-        source,
-        scenarioWorkName(run.id, scenario.id, slug),
-        async (workDir) => {
-          ctx.writeOne(workDir, scenario, email);
-          await tfInit(
-            workDir,
-            bucket,
-            scenarioStatePrefix(run.state_prefix, scenario.id, slug),
-            line,
-          );
-          if (action === "destroy") {
-            await tfDestroy(workDir, line);
-            return {};
-          }
-          await tfApply(workDir, line);
-          return tfOutput(workDir);
-        },
-      );
-    },
-  );
+  const perCompetitor = await mapConcurrent(ctx.emails, SCENARIO_CONCURRENCY, async (email) => {
+    const slug = competitorSlug(email);
+    return withWorkDir(source, scenarioWorkName(run.id, scenario.id, slug), async (workDir) => {
+      ctx.writeOne(workDir, scenario, email);
+      await tfInit(workDir, bucket, scenarioStatePrefix(run.state_prefix, scenario.id, slug), line);
+      if (action === "destroy") {
+        await tfDestroy(workDir, line);
+        return {};
+      }
+      await tfApply(workDir, line);
+      return tfOutput(workDir);
+    });
+  });
 
   // Per-competitor outputs are merged under the competitor's address, so two
   // competitors' values for the same output name do not overwrite each other.
@@ -1409,11 +1250,8 @@ type ScenarioContext = {
   writeOne: (workDir: string, scenario: Scenario, email: string) => void;
 };
 
-
 /** Address -> temp-password map the Azure roots turn into native Entra users. */
-async function attendeePasswords(
-  runId: string,
-): Promise<Record<string, string>> {
+async function attendeePasswords(runId: string): Promise<Record<string, string>> {
   const accounts = await accountsWithPasswordsFor(runId);
   return Object.fromEntries(accounts.map((a) => [a.email, a.tempPassword]));
 }
@@ -1440,10 +1278,7 @@ async function attendeePasswords(
  * to whatever bounds the tenant's policy sets, since a request outside them is
  * simply rejected.
  */
-async function issueAzureAccessPasses(
-  run: RunRow,
-  emails: string[],
-): Promise<void> {
+async function issueAzureAccessPasses(run: RunRow, emails: string[]): Promise<void> {
   const cfg = azureCfg();
   if (!cfg.tapEnabled || emails.length === 0) return;
 
@@ -1480,12 +1315,8 @@ async function issueAzureAccessPasses(
 
   // The workshop's life, plus the lead time it was built ahead of the start,
   // held inside the tenant's bounds.
-  const wanted =
-    Math.ceil(run.ttl_seconds / 60) + Math.ceil(PROVISION_LEAD_HOURS * 60);
-  const lifetimeInMinutes = Math.min(
-    policy.maximumLifetimeInMinutes,
-    Math.max(policy.minimumLifetimeInMinutes, wanted),
-  );
+  const wanted = Math.ceil(run.ttl_seconds / 60) + Math.ceil(PROVISION_LEAD_HOURS * 60);
+  const lifetimeInMinutes = Math.min(policy.maximumLifetimeInMinutes, Math.max(policy.minimumLifetimeInMinutes, wanted));
   // A tenant that mandates single-use passes wins over the runner's preference.
   const oneTime = cfg.tapOneTime || policy.isUsableOnce;
 
@@ -1546,22 +1377,10 @@ async function provisionAzure(run: RunRow): Promise<Record<string, unknown>> {
   await log(run.id, "system", `Provisioning Azure resource group ${resourceGroup}`);
 
   const attendees = await attendeePasswords(run.id);
-  writeAzureTfvars(
-    workDir,
-    run.id,
-    resourceGroup,
-    clusterName,
-    attendees,
-    harnessIdentityFor(run, "azure"),
-  );
+  writeAzureTfvars(workDir, run.id, resourceGroup, clusterName, attendees, harnessIdentityFor(run, "azure"));
 
   await log(run.id, "system", "terraform init");
-  await tfInit(
-    workDir,
-    stateBucket(),
-    cloudStatePrefix(run.state_prefix, "azure"),
-    (l) => log(run.id, l.stream, l.text),
-  );
+  await tfInit(workDir, stateBucket(), cloudStatePrefix(run.state_prefix, "azure"), (l) => log(run.id, l.stream, l.text));
 
   await log(
     run.id,
@@ -1584,39 +1403,23 @@ async function provisionAzure(run: RunRow): Promise<Record<string, unknown>> {
  * mirror of `provisionGcpPerUser`; the RG names are recomputed deterministically
  * from the address, so nothing extra is stored to tear them down.
  */
-async function provisionAzurePerUser(
-  run: RunRow,
-): Promise<Record<string, unknown>> {
+async function provisionAzurePerUser(run: RunRow): Promise<Record<string, unknown>> {
   const workDir = path.join(TF_ROOT, AZURE_CHALLENGE_TF_SOURCE);
 
   const attendees = await attendeePasswords(run.id);
-  const groups = challengeResourceGroupMap(
-    run.slug,
-    run.id,
-    Object.keys(attendees),
-  );
+  const groups = challengeResourceGroupMap(run.slug, run.id, Object.keys(attendees));
   const count = Object.keys(groups).length;
 
-  await log(
-    run.id,
-    "system",
-    `Provisioning ${count} Azure resource group(s), one per competitor`,
-  );
+  await log(run.id, "system", `Provisioning ${count} Azure resource group(s), one per competitor`);
   writeAzureChallengeTfvars(workDir, run.id, groups, attendees);
 
   await log(run.id, "system", "terraform init");
-  await tfInit(
-    workDir,
-    stateBucket(),
-    cloudStatePrefix(run.state_prefix, "azure"),
-    (l) => log(run.id, l.stream, l.text),
-  );
+  await tfInit(workDir, stateBucket(), cloudStatePrefix(run.state_prefix, "azure"), (l) => log(run.id, l.stream, l.text));
 
   await log(
     run.id,
     "system",
-    `terraform apply — creating ${count} resource group(s) and Entra user(s), ` +
-      `granting each competitor Owner on their own`,
+    `terraform apply — creating ${count} resource group(s) and Entra user(s), ` + `granting each competitor Owner on their own`,
   );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
 
@@ -1627,17 +1430,13 @@ async function provisionAzurePerUser(
 
   // The cluster layer, then the scenarios that sit on it — the same order and
   // for the same reasons as the GCP path.
-  const scenarios = resolveScenarios(run.scenarios).filter(
-    (s) => s.cloud === "azure",
-  );
+  const scenarios = resolveScenarios(run.scenarios).filter((s) => s.cloud === "azure");
   const cluster = await provisionAzureChallengeCluster(run, groups, scenarios);
   Object.assign(outputs, cluster);
 
   const mapOf = (key: string): Record<string, string> => {
     const v = cluster[key];
-    return v && typeof v === "object" && !Array.isArray(v)
-      ? (v as Record<string, string>)
-      : {};
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, string>) : {};
   };
   const subnetIds = mapOf("subnet_ids");
   const clusterNames = mapOf("aks_clusters");
@@ -1646,15 +1445,7 @@ async function provisionAzurePerUser(
     outputs,
     await reconcileScenarios(run, "azure", {
       emails: Object.keys(groups),
-      writeRoster: (dir, scenario) =>
-        writeAzureScenarioTfvars(
-          dir,
-          run.id,
-          scenario.id,
-          groups,
-          subnetIds,
-          clusterNames,
-        ),
+      writeRoster: (dir, scenario) => writeAzureScenarioTfvars(dir, run.id, scenario.id, groups, subnetIds, clusterNames),
       // No per-competitor Azure scenario ships yet; a future in-cluster one
       // would take this path, and the resource group is what identifies a
       // competitor's environment.
@@ -1691,18 +1482,11 @@ async function provisionAzureChallengeCluster(
   const workDir = path.join(TF_ROOT, AZURE_CHALLENGE_AKS_TF_SOURCE);
   const count = Object.keys(groups).length;
 
-  await log(
-    run.id,
-    "system",
-    `Provisioning ${count} AKS cluster(s), one per competitor, in parallel`,
-  );
+  await log(run.id, "system", `Provisioning ${count} AKS cluster(s), one per competitor, in parallel`);
 
   writeAzureClusterTfvars(workDir, run.id, groups);
-  await tfInit(
-    workDir,
-    stateBucket(),
-    clusterStatePrefix(cloudStatePrefix(run.state_prefix, "azure")),
-    (l) => log(run.id, l.stream, l.text),
+  await tfInit(workDir, stateBucket(), clusterStatePrefix(cloudStatePrefix(run.state_prefix, "azure")), (l) =>
+    log(run.id, l.stream, l.text),
   );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
 
@@ -1726,23 +1510,10 @@ async function provisionAws(run: RunRow): Promise<Record<string, unknown>> {
   await log(run.id, "system", `Provisioning AWS account ${accountName}`);
 
   const attendees = (await accountsFor(run.id)).map((a) => a.email);
-  writeAwsTfvars(
-    workDir,
-    run.id,
-    accountName,
-    accountEmail,
-    clusterName,
-    attendees,
-    harnessIdentityFor(run, "aws"),
-  );
+  writeAwsTfvars(workDir, run.id, accountName, accountEmail, clusterName, attendees, harnessIdentityFor(run, "aws"));
 
   await log(run.id, "system", "terraform init");
-  await tfInit(
-    workDir,
-    stateBucket(),
-    cloudStatePrefix(run.state_prefix, "aws"),
-    (l) => log(run.id, l.stream, l.text),
-  );
+  await tfInit(workDir, stateBucket(), cloudStatePrefix(run.state_prefix, "aws"), (l) => log(run.id, l.stream, l.text));
 
   await log(
     run.id,
@@ -1764,9 +1535,7 @@ async function provisionAws(run: RunRow): Promise<Record<string, unknown>> {
  * account has its own state under the run's aws prefix, keyed by account name,
  * so a challenge that grows only adds the new competitor's account.
  */
-async function provisionAwsPerUser(
-  run: RunRow,
-): Promise<Record<string, unknown>> {
+async function provisionAwsPerUser(run: RunRow): Promise<Record<string, unknown>> {
   const cfg = awsCfg();
   const workDir = path.join(TF_ROOT, AWS_CHALLENGE_TF_SOURCE);
   const emails = (await accountsFor(run.id)).map((a) => a.email);
@@ -1792,9 +1561,7 @@ async function provisionAwsPerUser(
     await log(run.id, "system", `AWS account ${accountName} for ${email}`);
     writeAwsChallengeTfvars(workDir, run.id, accountName, accountEmail, email);
 
-    await tfInit(workDir, stateBucket(), prefix, (l) =>
-      log(run.id, l.stream, l.text),
-    );
+    await tfInit(workDir, stateBucket(), prefix, (l) => log(run.id, l.stream, l.text));
     await applyAwsWithRetry(run, workDir);
 
     const out = await tfOutput(workDir);
@@ -1819,9 +1586,7 @@ async function provisionAwsPerUser(
   // The cluster layer, then the scenarios on it. Both need the account ids the
   // loop above collected, which is why they run here rather than beside the
   // other clouds' — there is nothing to assume into until the accounts exist.
-  const scenarios = resolveScenarios(run.scenarios).filter(
-    (s) => s.cloud === "aws",
-  );
+  const scenarios = resolveScenarios(run.scenarios).filter((s) => s.cloud === "aws");
   const clusters = await provisionAwsChallengeCluster(run, accountIds, scenarios);
   Object.assign(outputs, clusters.outputs);
 
@@ -1836,17 +1601,9 @@ async function provisionAwsPerUser(
       // be built dynamically — so nothing takes this path. It is here so that a
       // roster-shaped AWS scenario fails loudly at apply rather than silently
       // writing tfvars nothing declares.
-      writeRoster: (dir, scenario) =>
-        writeAwsCompetitorScenarioTfvars(dir, run.id, scenario.id, "", "", ""),
+      writeRoster: (dir, scenario) => writeAwsCompetitorScenarioTfvars(dir, run.id, scenario.id, "", "", ""),
       writeOne: (dir, scenario, email) =>
-        writeAwsCompetitorScenarioTfvars(
-          dir,
-          run.id,
-          scenario.id,
-          email,
-          accountIds[email],
-          clusters.names[email] ?? "",
-        ),
+        writeAwsCompetitorScenarioTfvars(dir, run.id, scenario.id, email, accountIds[email], clusters.names[email] ?? ""),
     }),
   );
 
@@ -1879,39 +1636,20 @@ async function provisionAwsChallengeCluster(
   const base = cloudStatePrefix(run.state_prefix, "aws");
   const line = (l: TfLine) => log(run.id, l.stream, l.text);
 
-  await log(
-    run.id,
-    "system",
-    `Provisioning ${emails.length} EKS cluster(s), one per competitor, ` +
-      `${SCENARIO_CONCURRENCY} at a time`,
-  );
+  await log(run.id, "system", `Provisioning ${emails.length} EKS cluster(s), one per competitor, ` + `${SCENARIO_CONCURRENCY} at a time`);
 
   await warmProviderCache(AWS_CHALLENGE_EKS_TF_SOURCE, bucket, `${base}/cluster`);
 
-  const built = await mapConcurrent(
-    emails,
-    SCENARIO_CONCURRENCY,
-    async (email) => {
-      const slug = competitorSlug(email);
-      const clusterName = makeChallengeAwsAccountName(run.slug, run.id, email);
-      return withWorkDir(
-        AWS_CHALLENGE_EKS_TF_SOURCE,
-        scenarioWorkName(run.id, "eks", slug),
-        async (workDir) => {
-          writeAwsClusterTfvars(
-            workDir,
-            run.id,
-            email,
-            accountIds[email],
-            clusterName,
-          );
-          await tfInit(workDir, bucket, `${base}/cluster/${slug}`, line);
-          await tfApply(workDir, line);
-          return { email, name: clusterName };
-        },
-      );
-    },
-  );
+  const built = await mapConcurrent(emails, SCENARIO_CONCURRENCY, async (email) => {
+    const slug = competitorSlug(email);
+    const clusterName = makeChallengeAwsAccountName(run.slug, run.id, email);
+    return withWorkDir(AWS_CHALLENGE_EKS_TF_SOURCE, scenarioWorkName(run.id, "eks", slug), async (workDir) => {
+      writeAwsClusterTfvars(workDir, run.id, email, accountIds[email], clusterName);
+      await tfInit(workDir, bucket, `${base}/cluster/${slug}`, line);
+      await tfApply(workDir, line);
+      return { email, name: clusterName };
+    });
+  });
 
   const names = Object.fromEntries(built.map((b) => [b.email, b.name]));
   return { outputs: { eks_clusters: names }, names };

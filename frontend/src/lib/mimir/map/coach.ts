@@ -33,7 +33,18 @@ import { and, asc, count, desc, eq, gt, lt } from "drizzle-orm";
 import { db } from "@/db";
 import { MIMIR_COACH_NAMES, mimirCoachConversations, mimirCoachMessages, users, type MimirMessageRole } from "@/db/schema";
 import { renderMarkdown } from "@/lib/markdown";
-import { MIMIR_CONTEXT_LIMIT, MIMIR_MODEL, askClaude, coachConfigured, forReplay, tokensOf, type ChatMessage, type Complete, type CompletionRequest, type ReplyStream } from "@/lib/mimir/chat";
+import {
+  MIMIR_CONTEXT_LIMIT,
+  MIMIR_MODEL,
+  askClaude,
+  coachConfigured,
+  forReplay,
+  tokensOf,
+  type ChatMessage,
+  type Complete,
+  type CompletionRequest,
+  type ReplyStream,
+} from "@/lib/mimir/chat";
 import { getProfile } from "@/lib/mimir/progress";
 import { getCoachingSettings } from "@/lib/mimir/settings";
 import { PAGE_SIZE } from "@/lib/paging";
@@ -135,7 +146,12 @@ export async function getCoachChat(userId: string, before?: number): Promise<Coa
   if (!conversation) return { hasMap: true, configured, conversation: null, needsGreeting: configured, progress };
 
   const rows = await db
-    .select({ seq: mimirCoachMessages.seq, role: mimirCoachMessages.role, text: mimirCoachMessages.text, createdAt: mimirCoachMessages.createdAt })
+    .select({
+      seq: mimirCoachMessages.seq,
+      role: mimirCoachMessages.role,
+      text: mimirCoachMessages.text,
+      createdAt: mimirCoachMessages.createdAt,
+    })
     .from(mimirCoachMessages)
     .where(
       and(
@@ -150,7 +166,11 @@ export async function getCoachChat(userId: string, before?: number): Promise<Coa
   return {
     hasMap: true,
     configured,
-    conversation: { startedAt: conversation.startedAt, messages: await shown(rows.slice(0, PAGE_SIZE).reverse()), earlier: rows.length > PAGE_SIZE },
+    conversation: {
+      startedAt: conversation.startedAt,
+      messages: await shown(rows.slice(0, PAGE_SIZE).reverse()),
+      earlier: rows.length > PAGE_SIZE,
+    },
     needsGreeting: configured && before === undefined && (stale || conversation.stateHash !== snapshot.hash),
     progress,
   };
@@ -213,7 +233,11 @@ export async function beginCoachTurn(
 
   type Claim = { seq: number; at: Date } | { error: "busy" | "full" };
   const claimed = await db.transaction(async (tx): Promise<Claim> => {
-    await tx.select({ id: mimirCoachConversations.userId }).from(mimirCoachConversations).where(eq(mimirCoachConversations.userId, userId)).for("update");
+    await tx
+      .select({ id: mimirCoachConversations.userId })
+      .from(mimirCoachConversations)
+      .where(eq(mimirCoachConversations.userId, userId))
+      .for("update");
     let [last] = await tx
       .select({ seq: mimirCoachMessages.seq, role: mimirCoachMessages.role, createdAt: mimirCoachMessages.createdAt })
       .from(mimirCoachMessages)
@@ -265,7 +289,10 @@ export async function beginCoachTurn(
       .insert(mimirCoachMessages)
       .values({ userId, seq, role: "user", shown: message !== null, content, text: message ?? hidden })
       .returning({ createdAt: mimirCoachMessages.createdAt });
-    await tx.update(mimirCoachConversations).set({ stateHash: snapshot.hash, updatedAt: new Date() }).where(eq(mimirCoachConversations.userId, userId));
+    await tx
+      .update(mimirCoachConversations)
+      .set({ stateHash: snapshot.hash, updatedAt: new Date() })
+      .where(eq(mimirCoachConversations.userId, userId));
     return { seq, at: row!.createdAt };
   });
   if ("error" in claimed) return { ok: false, error: claimed.error };
@@ -309,7 +336,8 @@ export async function finishCoachTurn(
   turn: CoachTurn,
   { complete = askClaude, stream }: { complete?: Complete; stream?: ReplyStream } = {},
 ): Promise<CoachSendResult> {
-  const takeBack = () => db.delete(mimirCoachMessages).where(and(eq(mimirCoachMessages.userId, turn.userId), eq(mimirCoachMessages.seq, turn.seq)));
+  const takeBack = () =>
+    db.delete(mimirCoachMessages).where(and(eq(mimirCoachMessages.userId, turn.userId), eq(mimirCoachMessages.seq, turn.seq)));
 
   let completion;
   try {
@@ -331,7 +359,14 @@ export async function finishCoachTurn(
 
   const [saved] = await db
     .insert(mimirCoachMessages)
-    .values({ userId: turn.userId, seq: turn.seq + 1, role: "assistant", content: completion.content, text: reply.text, usage: completion.usage })
+    .values({
+      userId: turn.userId,
+      seq: turn.seq + 1,
+      role: "assistant",
+      content: completion.content,
+      text: reply.text,
+      usage: completion.usage,
+    })
     .returning({ createdAt: mimirCoachMessages.createdAt });
   // A checklist first, so a reply that sets one and ticks it at once does both; then the ticks, which master a concept once complete.
   const map = await getMap();
@@ -351,7 +386,8 @@ export async function finishCoachTurn(
     const done = concept ? await coverPoints(turn.userId, concept, points) : null;
     if (!done || points.some((n) => n > done.checklist.length)) asItThinks = false;
     if (!done) continue;
-    if (done.ticked.length) covered.push({ id, points: done.ticked, covered: done.checklist.filter((p) => p.covered).length, total: done.checklist.length });
+    if (done.ticked.length)
+      covered.push({ id, points: done.ticked, covered: done.checklist.filter((p) => p.covered).length, total: done.checklist.length });
     if (done.complete && !mastered.includes(id)) mastered.push(id);
   }
   for (const id of mastered) await markMastered(turn.userId, id);
@@ -387,6 +423,9 @@ export async function sendCoachMessage(
 
 /** Throws the conversation away so the next one starts afresh, under the course as it is now. Their progress stays. */
 export async function resetCoachChat(userId: string): Promise<boolean> {
-  const deleted = await db.delete(mimirCoachConversations).where(eq(mimirCoachConversations.userId, userId)).returning({ id: mimirCoachConversations.userId });
+  const deleted = await db
+    .delete(mimirCoachConversations)
+    .where(eq(mimirCoachConversations.userId, userId))
+    .returning({ id: mimirCoachConversations.userId });
   return deleted.length > 0;
 }

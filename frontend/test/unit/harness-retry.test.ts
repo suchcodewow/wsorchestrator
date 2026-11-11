@@ -65,10 +65,7 @@ describe("isDuplicate", () => {
   });
 
   test("reads Harness's DUPLICATE_FIELD code on a 400", () => {
-    assert.equal(
-      isDuplicate(400, '{"status":"ERROR","code":"DUPLICATE_FIELD","message":"x"}'),
-      true,
-    );
+    assert.equal(isDuplicate(400, '{"status":"ERROR","code":"DUPLICATE_FIELD","message":"x"}'), true);
   });
 
   test("reads 'already exists' and 'duplicate' in any case", () => {

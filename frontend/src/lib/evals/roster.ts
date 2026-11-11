@@ -7,12 +7,7 @@ import "server-only";
 
 import { and, desc, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  employees,
-  hibobSyncRuns,
-  type Employee,
-  type EvalsTitleList,
-} from "@/db/schema";
+import { employees, hibobSyncRuns, type Employee, type EvalsTitleList } from "@/db/schema";
 import { classDate, classScore } from "@/lib/evals/attendance";
 import { orgUnder } from "@/lib/evals/org";
 import type { EmployeeSort, OrganizationSort } from "@/lib/list-specs";
@@ -95,10 +90,7 @@ export type EmployeeMatch = (typeof EMPLOYEE_MATCHES)[number];
  * One page of stored employees, for the Employees tab and the people pickers
  * — everyone the sync stored, not only those under the root.
  */
-export async function listEmployees(
-  query: ListQuery<EmployeeSort>,
-  match: EmployeeMatch = "all",
-): Promise<Page<EmployeeListing>> {
+export async function listEmployees(query: ListQuery<EmployeeSort>, match: EmployeeMatch = "all"): Promise<Page<EmployeeListing>> {
   const { limit, offset } = pageWindow(query.page);
   const searched =
     match === "person"
@@ -226,9 +218,7 @@ async function syncedLeaderEmail(): Promise<string | null> {
  * because the chain is only ever as fresh as the last sync — recomputing on
  * every page view would silently show a chain HiBob has not actually synced yet.
  */
-export async function listOrganizationMembers(
-  query: ListQuery<OrganizationSort>,
-): Promise<Page<OrganizationMember>> {
+export async function listOrganizationMembers(query: ListQuery<OrganizationSort>): Promise<Page<OrganizationMember>> {
   const { limit, offset } = pageWindow(query.page);
   const e = employees;
   const [rows, leaderEmail] = await Promise.all([
@@ -257,7 +247,10 @@ export async function listOrganizationMembers(
       .offset(offset),
     syncedLeaderEmail(),
   ]);
-  return toPage(rows.map((r) => ({ ...r, leaderEmail: leaderEmail ?? "" })), query.page);
+  return toPage(
+    rows.map((r) => ({ ...r, leaderEmail: leaderEmail ?? "" })),
+    query.page,
+  );
 }
 
 /** What the Organization tab shows when a row is opened: what HiBob and Slack hold on one person, and nothing from assessments. */
@@ -284,7 +277,8 @@ const ASSESSMENT_KEY = /btc|int(ermediate)?(date|score)|score|assess|bootcamp|tr
 function flattenRecord(value: unknown, path: string[], out: { label: string; value: string }[]) {
   if (value === null || value === undefined || value === "") return;
   if (Array.isArray(value)) {
-    if (value.length) out.push({ label: path.join(" › "), value: value.map((v) => (typeof v === "object" ? JSON.stringify(v) : String(v))).join(", ") });
+    if (value.length)
+      out.push({ label: path.join(" › "), value: value.map((v) => (typeof v === "object" ? JSON.stringify(v) : String(v))).join(", ") });
     return;
   }
   if (typeof value === "object") {

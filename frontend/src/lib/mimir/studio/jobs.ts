@@ -10,12 +10,7 @@ import "server-only";
 
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  MIMIR_STUDIO_ACTIVE,
-  mimirStudioJobs,
-  type MimirStudioJobKind,
-  type MimirStudioJobStatus,
-} from "@/db/schema";
+import { MIMIR_STUDIO_ACTIVE, mimirStudioJobs, type MimirStudioJobKind, type MimirStudioJobStatus } from "@/db/schema";
 import type { MimirStudioJobSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -195,6 +190,11 @@ export async function withVideoJobs<T extends { conceptId: string }>(rows: T[]):
   const jobs = await latestVideoJobs(rows.map((r) => r.conceptId));
   return rows.map((r) => {
     const j = jobs[r.conceptId];
-    return { ...r, job: j ? { id: j.id, status: j.status, progress: j.progress, error: j.error, createdAt: j.createdAt, finishedAt: j.finishedAt } : null };
+    return {
+      ...r,
+      job: j
+        ? { id: j.id, status: j.status, progress: j.progress, error: j.error, createdAt: j.createdAt, finishedAt: j.finishedAt }
+        : null,
+    };
   });
 }

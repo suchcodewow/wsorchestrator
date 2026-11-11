@@ -4,11 +4,7 @@ import { redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
 import { MySettingsTabs } from "./settings-tabs";
 
-export default async function MySettingsLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function MySettingsLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
 

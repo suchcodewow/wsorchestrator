@@ -60,14 +60,9 @@ export function DeployedCredentials({
       {scrub.problems.length > 0 && (
         <ul className="space-y-0.5 text-xs text-muted-foreground">
           {scrub.problems.map((problem) => (
-            <li
-              key={`${problem.orgIdentifier}:${problem.secretIdentifier}`}
-              className="flex flex-wrap items-baseline gap-x-1.5"
-            >
+            <li key={`${problem.orgIdentifier}:${problem.secretIdentifier}`} className="flex flex-wrap items-baseline gap-x-1.5">
               <code className="font-mono text-foreground">{problem.secretIdentifier}</code>
-              <span
-                className={problem.status === "failed" ? "text-destructive" : "text-amber-600 dark:text-amber-500"}
-              >
+              <span className={problem.status === "failed" ? "text-destructive" : "text-amber-600 dark:text-amber-500"}>
                 {problem.status === "failed" ? "failed" : "left alone"}
               </span>
               {problem.note && <span className="w-full">{problem.note}</span>}
@@ -90,8 +85,7 @@ function ScrubStatus({ scrub, where }: { scrub: ScrubSummary; where: ReactNode }
         <span>
           <span className="font-medium text-foreground">{scrub.pending}</span> of this site&apos;s secret
           {plural(scrub.pending)} {plural(scrub.pending, "are", "is")} live in {where} — scrubbed to{" "}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">123</code>{" "}
-          {scrub.dueAt ? until(scrub.dueAt) : "at the next sweep"}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono">123</code> {scrub.dueAt ? until(scrub.dueAt) : "at the next sweep"}
         </span>
       </>
     );
@@ -110,8 +104,7 @@ function ScrubStatus({ scrub, where }: { scrub: ScrubSummary; where: ReactNode }
             </>
           )}
           {" — "}
-          {scrub.scrubbed} value{plural(scrub.scrubbed)} in {where} now hold{plural(scrub.scrubbed, "", "s")} a
-          placeholder
+          {scrub.scrubbed} value{plural(scrub.scrubbed)} in {where} now hold{plural(scrub.scrubbed, "", "s")} a placeholder
         </span>
       </>
     );

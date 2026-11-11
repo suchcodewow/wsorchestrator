@@ -187,11 +187,7 @@ export function ChannelContactsView({ q, lists }: { q: string; lists: Record<Cha
                                 if (body) setNotice(`Removed ${c.fullName || c.email} from the ${heading}.`);
                               }}
                             >
-                              {busy === c.id ? (
-                                <Loader2 className="size-3.5 animate-spin" />
-                              ) : (
-                                <Trash2 className="size-3.5" />
-                              )}
+                              {busy === c.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
                             </Button>
                           </div>
                         </td>

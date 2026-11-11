@@ -5,46 +5,28 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  Check,
-  ExternalLink,
-  FolderKanban,
-  Layers,
-  Loader2,
-  Pencil,
-  Plus,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Check, ExternalLink, FolderKanban, Layers, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { REPO_LIMITS, type RepoScope } from "@/db/schema";
-import {
-  parseGithubUrl,
-  repoIdentifierValid,
-  suggestedIdentifier,
-  type RepoRow,
-} from "@/lib/github-repos";
+import { parseGithubUrl, repoIdentifierValid, suggestedIdentifier, type RepoRow } from "@/lib/github-repos";
 import type { RepoSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
 
 const ERRORS: Record<string, string> = {
-  invalid_url:
-    "Use the repository's own GitHub address, like https://github.com/owner/name.",
-  invalid_identifier:
-    "A Harness repository name holds letters, digits, dots, hyphens and underscores, starting with a letter or digit.",
+  invalid_url: "Use the repository's own GitHub address, like https://github.com/owner/name.",
+  invalid_identifier: "A Harness repository name holds letters, digits, dots, hyphens and underscores, starting with a letter or digit.",
   invalid_scope: "Choose org or project.",
   duplicate: "A repository with that name is already imported at that level.",
   not_found: "That entry was already removed — reload the page.",
   forbidden: "Your own role changed — reload the page.",
 };
 
-const message = (error: string | undefined, status: number) =>
-  ERRORS[error ?? ""] ?? `Could not save (${status})`;
+const message = (error: string | undefined, status: number) => ERRORS[error ?? ""] ?? `Could not save (${status})`;
 
 const SCOPES: { value: RepoScope; label: string; Icon: typeof Layers }[] = [
   { value: "org", label: "Org", Icon: Layers },
@@ -60,11 +42,7 @@ export function ReposView({ query, page }: { query: ListQuery<RepoSort>; page: P
   const [editing, setEditing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
-  async function send(
-    key: string,
-    url: string,
-    init: RequestInit,
-  ): Promise<boolean> {
+  async function send(key: string, url: string, init: RequestInit): Promise<boolean> {
     setBusy(key);
     setError(null);
     try {
@@ -88,12 +66,7 @@ export function ReposView({ query, page }: { query: ListQuery<RepoSort>; page: P
   }
 
   return (
-    <motion.div
-      variants={staggerParent(0.05)}
-      initial="hidden"
-      animate="show"
-      className="space-y-6"
-    >
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild}>
         <h2 className="text-xl font-medium tracking-tight">GitHub Repos</h2>
       </motion.div>
@@ -103,19 +76,12 @@ export function ReposView({ query, page }: { query: ListQuery<RepoSort>; page: P
       </motion.div>
 
       {error && (
-        <motion.p
-          variants={riseChild}
-          role="alert"
-          className="text-sm text-destructive"
-        >
+        <motion.p variants={riseChild} role="alert" className="text-sm text-destructive">
           {error}
         </motion.p>
       )}
 
-      <motion.div
-        variants={riseChild}
-        className="overflow-hidden rounded-2xl border bg-card shadow-sm"
-      >
+      <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-160 text-sm">
             <thead>
@@ -138,10 +104,7 @@ export function ReposView({ query, page }: { query: ListQuery<RepoSort>; page: P
             <tbody>
               {repos.length === 0 && !adding && (
                 <tr>
-                  <td
-                    colSpan={5}
-                    className="px-5 py-8 text-center text-muted-foreground"
-                  >
+                  <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
                     {query.q ? "No repositories match." : "No repositories yet."}
                   </td>
                 </tr>
@@ -155,19 +118,12 @@ export function ReposView({ query, page }: { query: ListQuery<RepoSort>; page: P
                     busy={busy === row.id}
                     onCancel={() => setEditing(null)}
                     onSave={async (values) => {
-                      const ok = await send(
-                        row.id,
-                        `/api/settings/repos/${row.id}`,
-                        { method: "PATCH", body: JSON.stringify(values) },
-                      );
+                      const ok = await send(row.id, `/api/settings/repos/${row.id}`, { method: "PATCH", body: JSON.stringify(values) });
                       if (ok) setEditing(null);
                     }}
                   />
                 ) : (
-                  <tr
-                    key={row.id}
-                    className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
-                  >
+                  <tr key={row.id} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
                     <td className="px-5 py-3">
                       <a
                         href={row.url}
@@ -179,9 +135,7 @@ export function ReposView({ query, page }: { query: ListQuery<RepoSort>; page: P
                         <ExternalLink className="size-3" />
                       </a>
                     </td>
-                    <td className="px-5 py-3 font-mono font-medium">
-                      {row.identifier}
-                    </td>
+                    <td className="px-5 py-3 font-mono font-medium">{row.identifier}</td>
                     <td className="px-5 py-3 text-muted-foreground">
                       {row.scope === "org" ? (
                         <span className="inline-flex items-center gap-1.5">
@@ -195,9 +149,7 @@ export function ReposView({ query, page }: { query: ListQuery<RepoSort>; page: P
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-muted-foreground">
-                      {row.addedBy ?? "—"}
-                    </td>
+                    <td className="px-5 py-3 text-muted-foreground">{row.addedBy ?? "—"}</td>
                     <td className="px-5 py-3">
                       <div className="flex justify-end gap-1">
                         <Button
@@ -224,11 +176,7 @@ export function ReposView({ query, page }: { query: ListQuery<RepoSort>; page: P
                             })
                           }
                         >
-                          {busy === row.id ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="size-3.5" />
-                          )}
+                          {busy === row.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
                         </Button>
                       </div>
                     </td>
@@ -278,26 +226,16 @@ export function ReposView({ query, page }: { query: ListQuery<RepoSort>; page: P
         <Card>
           <CardContent className="grid gap-2 py-5 text-sm text-muted-foreground">
             <p>
-              <span className="font-medium text-foreground">
-                Only public repositories.
-              </span>{" "}
-              The import runs with no GitHub credential, so a private repository
-              comes back as <span className="font-mono text-xs">Not Found</span>{" "}
-              in the run log.
+              <span className="font-medium text-foreground">Only public repositories.</span> The import runs with no GitHub credential, so a
+              private repository comes back as <span className="font-mono text-xs">Not Found</span> in the run log.
             </p>
             <p>
-              <span className="font-medium text-foreground">
-                A failed import does not fail the workshop.
-              </span>{" "}
-              Each repository is imported on its own and any that will not come
-              across is reported in the run log by name.
+              <span className="font-medium text-foreground">A failed import does not fail the workshop.</span> Each repository is imported
+              on its own and any that will not come across is reported in the run log by name.
             </p>
             <p>
-              <span className="font-medium text-foreground">
-                Nothing to tear down.
-              </span>{" "}
-              An imported repository is a copy inside the event&rsquo;s
-              organization, and goes when the organization does.
+              <span className="font-medium text-foreground">Nothing to tear down.</span> An imported repository is a copy inside the
+              event&rsquo;s organization, and goes when the organization does.
             </p>
           </CardContent>
         </Card>
@@ -314,11 +252,7 @@ function EditRow({
 }: {
   row?: RepoRow;
   busy: boolean;
-  onSave: (values: {
-    url: string;
-    identifier: string;
-    scope: RepoScope;
-  }) => void;
+  onSave: (values: { url: string; identifier: string; scope: RepoScope }) => void;
   onCancel: () => void;
 }) {
   const [url, setUrl] = useState(row?.url ?? "");
@@ -380,11 +314,7 @@ function EditRow({
         />
       </td>
       <td className="px-5 py-2.5" colSpan={2}>
-        <div
-          role="radiogroup"
-          aria-label="Where it is imported"
-          className="flex w-fit overflow-hidden rounded-md border"
-        >
+        <div role="radiogroup" aria-label="Where it is imported" className="flex w-fit overflow-hidden rounded-md border">
           {SCOPES.map(({ value, label, Icon }) => (
             <button
               key={value}
@@ -407,26 +337,10 @@ function EditRow({
       </td>
       <td className="px-5 py-2.5">
         <div className="flex justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Save"
-            disabled={!valid || busy}
-            onClick={submit}
-          >
-            {busy ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Check className="size-3.5" />
-            )}
+          <Button variant="ghost" size="icon" aria-label="Save" disabled={!valid || busy} onClick={submit}>
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Cancel"
-            disabled={busy}
-            onClick={onCancel}
-          >
+          <Button variant="ghost" size="icon" aria-label="Cancel" disabled={busy} onClick={onCancel}>
             <X className="size-3.5" />
           </Button>
         </div>

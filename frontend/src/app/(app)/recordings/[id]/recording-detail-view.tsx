@@ -40,7 +40,15 @@ export function RecordingDetailView({ take, canDelete }: { take: RecordingTake; 
   }, [pending, router]);
 
   async function remove() {
-    if (!(await confirmDialog({ title: `Delete this recording${take.contributor ? ` by ${take.contributor}` : ""}?`, description: "Every file of it goes too.", confirmLabel: "Delete", destructive: true }))) return;
+    if (
+      !(await confirmDialog({
+        title: `Delete this recording${take.contributor ? ` by ${take.contributor}` : ""}?`,
+        description: "Every file of it goes too.",
+        confirmLabel: "Delete",
+        destructive: true,
+      }))
+    )
+      return;
     setDeleting(true);
     setError(null);
     try {
@@ -126,9 +134,9 @@ function StalledNote({ take }: { take: RecordingTake }) {
       <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-500" />
       <p suppressHydrationWarning>
         <span className="font-medium">Nothing received since {last ? formatWhen(last) : "the take started"}.</span>{" "}
-        {take.contributor || "Whoever recorded it"} probably closed the page or lost their connection before the upload
-        finished. The recording is saved on their computer: ask them to open the recording link again, on the same computer
-        and browser, and keep the window open until it says the upload is complete.
+        {take.contributor || "Whoever recorded it"} probably closed the page or lost their connection before the upload finished. The
+        recording is saved on their computer: ask them to open the recording link again, on the same computer and browser, and keep the
+        window open until it says the upload is complete.
       </p>
     </motion.div>
   );
@@ -235,4 +243,3 @@ function Thumbnail({ src, durationMs }: { src: string; durationMs: number | null
     />
   );
 }
-

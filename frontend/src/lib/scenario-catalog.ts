@@ -101,8 +101,7 @@ export type Scenario = (typeof SCENARIOS)[number];
 
 export type ScenarioId = (typeof SCENARIOS)[number]["id"];
 
-export const scenariosForCloud = (cloud: ScenarioCloud) =>
-  SCENARIOS.filter((s) => s.cloud === cloud);
+export const scenariosForCloud = (cloud: ScenarioCloud) => SCENARIOS.filter((s) => s.cloud === cloud);
 
 /**
  * The scenarios on offer for a selection of clouds. A challenge runs on exactly
@@ -110,23 +109,17 @@ export const scenariosForCloud = (cloud: ScenarioCloud) =>
  * offers nothing, which is what makes the checkboxes appear only once a cloud
  * has been picked.
  */
-export const scenariosForClouds = (clouds: readonly ScenarioCloud[]) =>
-  SCENARIOS.filter((s) => clouds.includes(s.cloud));
+export const scenariosForClouds = (clouds: readonly ScenarioCloud[]) => SCENARIOS.filter((s) => clouds.includes(s.cloud));
 
-export const isScenarioId = (v: string): v is ScenarioId =>
-  SCENARIOS.some((s) => s.id === v);
+export const isScenarioId = (v: string): v is ScenarioId => SCENARIOS.some((s) => s.id === v);
 
 /** The scenario that builds a cloud's clusters, if that cloud has one. */
-export const clusterScenarioFor = (cloud: ScenarioCloud) =>
-  SCENARIOS.find((s) => s.cloud === cloud && "providesCluster" in s);
+export const clusterScenarioFor = (cloud: ScenarioCloud) => SCENARIOS.find((s) => s.cloud === cloud && "providesCluster" in s);
 
 const scenarioById = (id: string) => SCENARIOS.find((s) => s.id === id);
 
 /** Does this selection include something that cannot run without a cluster? */
-export function needsClusterScenario(
-  ids: readonly string[],
-  cloud: ScenarioCloud,
-): boolean {
+export function needsClusterScenario(ids: readonly string[], cloud: ScenarioCloud): boolean {
   return ids.some((id) => {
     const s = scenarioById(id);
     return s?.cloud === cloud && "requiresCluster" in s;
@@ -142,10 +135,7 @@ export function needsClusterScenario(
  * cluster without building one is not a state worth being able to store — and
  * the UI is not the only way to reach the API.
  */
-export function withClusterScenario<T extends string>(
-  ids: readonly T[],
-  clouds: readonly ScenarioCloud[],
-): T[] {
+export function withClusterScenario<T extends string>(ids: readonly T[], clouds: readonly ScenarioCloud[]): T[] {
   const out = new Set<string>(ids);
   for (const cloud of clouds) {
     if (!needsClusterScenario(ids, cloud)) continue;
@@ -161,9 +151,6 @@ export function withClusterScenario<T extends string>(
  * is selected, so turning it off would describe a challenge that cannot be
  * built.
  */
-export function clusterScenarioLocked(
-  ids: readonly string[],
-  clouds: readonly ScenarioCloud[],
-): boolean {
+export function clusterScenarioLocked(ids: readonly string[], clouds: readonly ScenarioCloud[]): boolean {
   return clouds.some((cloud) => needsClusterScenario(ids, cloud));
 }

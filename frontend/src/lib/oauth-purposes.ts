@@ -51,7 +51,12 @@ type Purpose = {
   cancelled: string;
   /** What the audit trail calls it. */
   action: string;
-  complete: (input: { req: NextRequest; code: string; actor: Actor; audit: (entry: Partial<AuditEntry>) => Promise<void> }) => Promise<Outcome>;
+  complete: (input: {
+    req: NextRequest;
+    code: string;
+    actor: Actor;
+    audit: (entry: Partial<AuditEntry>) => Promise<void>;
+  }) => Promise<Outcome>;
 };
 
 const PURPOSES: Record<OAuthPurpose, Purpose> = {
@@ -67,7 +72,12 @@ const PURPOSES: Record<OAuthPurpose, Purpose> = {
     async complete({ req, code, actor, audit }) {
       const result = await exchangeSlackCode(slackApp()!, code, oauthRedirectUri(req));
       if (!result.ok) {
-        await audit({ summary: "Tried to add the Slack app to the workspace.", status: 502, outcome: "failed", detail: { error: result.error } });
+        await audit({
+          summary: "Tried to add the Slack app to the workspace.",
+          status: 502,
+          outcome: "failed",
+          detail: { error: result.error },
+        });
         return { result: "slack_error", extra: { detail: result.error } };
       }
       const { teamId, teamName, appId, botUserId, scopes } = result.granted;
@@ -98,14 +108,25 @@ const PURPOSES: Record<OAuthPurpose, Purpose> = {
       try {
         account = await exchangeCode(oauthClient()!, code, oauthRedirectUri(req));
       } catch (err) {
-        await audit({ summary: "Tried to connect the Google account for Google Meetings.", status: 400, outcome: "failed", detail: { error: (err as Error).message } });
+        await audit({
+          summary: "Tried to connect the Google account for Google Meetings.",
+          status: 400,
+          outcome: "failed",
+          detail: { error: (err as Error).message },
+        });
         return { result: "failed" };
       }
       const label = { target: account.email, targetLabel: account.email };
 
       const granted = new Set(account.scope.split(" "));
       if (!GOOGLE_MEETING_SCOPES.filter((s) => s.startsWith("https://")).every((s) => granted.has(s))) {
-        await audit({ summary: "Connected a Google account without calendar access.", ...label, status: 400, outcome: "failed", detail: { scope: account.scope } });
+        await audit({
+          summary: "Connected a Google account without calendar access.",
+          ...label,
+          status: 400,
+          outcome: "failed",
+          detail: { scope: account.scope },
+        });
         return { result: "scope" };
       }
 
@@ -124,7 +145,13 @@ const PURPOSES: Record<OAuthPurpose, Purpose> = {
         });
         return { result: "different_account", extra: { current: saved.current } };
       }
-      await audit({ summary: "Connected the Google account Google Meetings sends invites from.", ...label, status: 200, outcome: "succeeded", detail: { replaced: saved.replaced } });
+      await audit({
+        summary: "Connected the Google account Google Meetings sends invites from.",
+        ...label,
+        status: 200,
+        outcome: "succeeded",
+        detail: { replaced: saved.replaced },
+      });
       return { result: "connected" };
     },
   },
@@ -147,13 +174,24 @@ const PURPOSES: Record<OAuthPurpose, Purpose> = {
       } catch (err) {
         // The token works but the app was not given a scope it needs: Zoom answers 400 and names the scopes.
         const missingScope = err instanceof ZoomError && err.status === 400 && /does not contain scopes/i.test(err.message);
-        await audit({ summary: "Tried to connect the Zoom user for Google Meetings.", status: 400, outcome: "failed", detail: { error: (err as Error).message } });
+        await audit({
+          summary: "Tried to connect the Zoom user for Google Meetings.",
+          status: 400,
+          outcome: "failed",
+          detail: { error: (err as Error).message },
+        });
         return { result: missingScope ? "scope" : "failed" };
       }
       const label = { target: email, targetLabel: email };
 
       if (!grantedScopes(tokens.scope)) {
-        await audit({ summary: "Connected a Zoom user without meeting access.", ...label, status: 400, outcome: "failed", detail: { scope: tokens.scope } });
+        await audit({
+          summary: "Connected a Zoom user without meeting access.",
+          ...label,
+          status: 400,
+          outcome: "failed",
+          detail: { scope: tokens.scope },
+        });
         return { result: "scope" };
       }
 

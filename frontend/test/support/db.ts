@@ -13,8 +13,7 @@ import pg from "pg";
 
 export const SCRATCH_DATABASES = ["workshops_agent", "workshops_test"];
 
-export const DEFAULT_TEST_DATABASE_URL =
-  "postgresql://postgres:postgres@localhost:5432/workshops_agent";
+export const DEFAULT_TEST_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/workshops_agent";
 
 /** Prefix on the id of every user a suite creates; cleanup is scoped to it. */
 export const TEST_PREFIX = "wo_test_";
@@ -40,9 +39,7 @@ export async function assertScratchDatabase(url = testDatabaseUrl()): Promise<vo
     const { rows } = await client.query<{ db: string }>("select current_database() as db");
     const name = rows[0]!.db;
     if (!SCRATCH_DATABASES.includes(name)) {
-      throw new Error(
-        `refusing to run against database "${name}": tests only write to ${SCRATCH_DATABASES.join(" or ")}`,
-      );
+      throw new Error(`refusing to run against database "${name}": tests only write to ${SCRATCH_DATABASES.join(" or ")}`);
     }
   } finally {
     await client.end();
@@ -60,17 +57,11 @@ export async function assertScratchDatabase(url = testDatabaseUrl()): Promise<vo
  * from the user; question reviews they made are deleted by reviewer. Mimir
  * items are found by id, which carries the same prefix.
  */
-export async function deleteTestRows(
-  query: (sql: string, params: unknown[]) => Promise<unknown>,
-  scope: string,
-) {
+export async function deleteTestRows(query: (sql: string, params: unknown[]) => Promise<unknown>, scope: string) {
   if (!/^[a-z0-9]+_$/.test(scope)) throw new Error(`bad test scope "${scope}"`);
   const like = `${TEST_PREFIX}${scope}%`;
   await query("delete from audit_events where actor_id like $1", [like]);
-  await query(
-    "delete from workshop_runs where user_id in (select id from users where id like $1)",
-    [like],
-  );
+  await query("delete from workshop_runs where user_id in (select id from users where id like $1)", [like]);
   await query("delete from evals_transcripts where recorded_by_id like $1", [like]);
   const made = "select id from bootcamps where created_by like $1";
   await query(`delete from evals_submissions where bootcamp_id in (${made})`, [like]);
@@ -81,7 +72,10 @@ export async function deleteTestRows(
   await query(`delete from evals_assessments where id in (${assessed})`, [like]);
   await query(`delete from bootcamps where id in (${made})`, [like]);
   await query("delete from bootcamp_judges where email like $1", [`${scope}%@${TEST_EMAIL_DOMAIN}`]);
-  await query("delete from iris_participants where email like $1 or email like $2", [`${scope}%@${TEST_EMAIL_DOMAIN}`, `${like}@${TEST_EMAIL_DOMAIN}`]);
+  await query("delete from iris_participants where email like $1 or email like $2", [
+    `${scope}%@${TEST_EMAIL_DOMAIN}`,
+    `${like}@${TEST_EMAIL_DOMAIN}`,
+  ]);
   await query("delete from iris_item_reviews where reviewer_id like $1", [like]);
   await query("delete from google_meetings where created_by like $1", [like]);
   await query("delete from meeting_selections where created_by like $1", [like]);

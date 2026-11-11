@@ -1,13 +1,5 @@
 import { harnessCfg } from "./config.js";
-import {
-  loadCatalog,
-  loadOrgSecrets,
-  loadTemplateSources,
-  log,
-  recordResource,
-  type RunRow,
-  type TemplateSource,
-} from "./db.js";
+import { loadCatalog, loadOrgSecrets, loadTemplateSources, log, recordResource, type RunRow, type TemplateSource } from "./db.js";
 import { createProject, isDuplicate, isRetryable } from "./harness.js";
 import { openSecret, secretsConfigured } from "./secret-box.js";
 
@@ -96,22 +88,18 @@ const scopeQuery = (scope: Scope): Query => ({
   projectIdentifier: scope.project ?? undefined,
 });
 
-const scopeLabel = (scope: Scope) =>
-  scope.project ? `${scope.org} / ${scope.project}` : scope.org;
+const scopeLabel = (scope: Scope) => (scope.project ? `${scope.org} / ${scope.project}` : scope.org);
 
 const sourceLabel = (source: TemplateSource) =>
   source.projectIdentifier === null
     ? (source.orgName ?? source.orgIdentifier)
-    : `${source.orgName ?? source.orgIdentifier} / ${
-        source.projectName ?? source.projectIdentifier
-      }`;
+    : `${source.orgName ?? source.orgIdentifier} / ${source.projectName ?? source.projectIdentifier}`;
 
 const TAGS = { managed_by: "workshop-orchestrator" };
 const DESCRIPTION = "Copied from the site's template sources.";
 
 /** Said on a project made to hold one project-scoped source's content. */
-const PROJECT_DESCRIPTION =
-  "Holds the content copied from one of the site's template sources.";
+const PROJECT_DESCRIPTION = "Holds the content copied from one of the site's template sources.";
 
 const MAX_ATTEMPTS = 3;
 const TIMEOUT_MS = 30_000;
@@ -126,9 +114,7 @@ function messageOf(body: string): string {
       correlationId?: string;
     };
     const message = parsed.message ?? body;
-    return parsed.correlationId
-      ? `${message} [correlationId ${parsed.correlationId}]`
-      : message;
+    return parsed.correlationId ? `${message} [correlationId ${parsed.correlationId}]` : message;
   } catch {
     return body.slice(0, 400);
   }
@@ -165,19 +151,12 @@ async function request(
         method,
         headers: {
           "x-api-key": token,
-          ...(body === undefined || body instanceof FormData
-            ? {}
-            : { "Content-Type": "application/json" }),
+          ...(body === undefined || body instanceof FormData ? {} : { "Content-Type": "application/json" }),
         },
         // A string body is sent verbatim — the template endpoint takes raw YAML
         // under a JSON content type, which is what Harness accepts (see
         // `createTemplate` in harness.ts).
-        body:
-          body === undefined
-            ? undefined
-            : body instanceof FormData || typeof body === "string"
-              ? body
-              : JSON.stringify(body),
+        body: body === undefined ? undefined : body instanceof FormData || typeof body === "string" ? body : JSON.stringify(body),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
       last = { status: res.status, text: await res.text() };
@@ -206,10 +185,7 @@ function dataOf<T>(reply: Reply): T | null {
   }
 }
 
-const detailOf = (reply: Reply) =>
-  reply.status === 0
-    ? reply.text
-    : `${messageOf(reply.text)} (HTTP ${reply.status})`;
+const detailOf = (reply: Reply) => (reply.status === 0 ? reply.text : `${messageOf(reply.text)} (HTTP ${reply.status})`);
 
 const PAGE_SIZE = 100;
 
@@ -232,13 +208,7 @@ async function listPages<T>(
   const items: T[] = [];
 
   for (let page = 0; page < MAX_PAGES; page++) {
-    const reply = await request(
-      token,
-      method,
-      path,
-      { ...query, [names.page]: String(page), [names.size]: String(PAGE_SIZE) },
-      body,
-    );
+    const reply = await request(token, method, path, { ...query, [names.page]: String(page), [names.size]: String(PAGE_SIZE) }, body);
     if (!ok(reply)) return { ok: false, detail: detailOf(reply) };
 
     const content = dataOf<{ content?: T[] }>(reply)?.content ?? [];
@@ -253,8 +223,7 @@ async function listPages<T>(
  * Rescoping — the same YAML, addressed to the workshop's org
  * ------------------------------------------------------------------ */
 
-const yamlScalar = (value: string) =>
-  `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+const yamlScalar = (value: string) => `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
 /**
  * The entity's own YAML with the keys that say *where it lives* replaced.
@@ -273,18 +242,11 @@ const yamlScalar = (value: string) =>
  * result as unparseable rather than as a bad field. The test fixture is the body
  * shape that produced that.
  */
-export function rescopeYaml(
-  yaml: string,
-  rootKey: string,
-  keys: Record<string, string | null>,
-): string {
+export function rescopeYaml(yaml: string, rootKey: string, keys: Record<string, string | null>): string {
   const lines = yaml.replace(/\r\n/g, "\n").split("\n");
   const root = lines.findIndex((line) => line.trimEnd() === `${rootKey}:`);
   if (root === -1) {
-    throw new Error(
-      `expected this ${rootKey} to start with "${rootKey}:" — Harness returned ` +
-        `something else`,
-    );
+    throw new Error(`expected this ${rootKey} to start with "${rootKey}:" — Harness returned ` + `something else`);
   }
 
   const body = lines.slice(root + 1);
@@ -292,14 +254,9 @@ export function rescopeYaml(
   // The first thing under the root key is one of the root mapping's own keys, so
   // its indent is the one this owns. Comments and blank lines are skipped — they
   // may be indented anything at all, or nothing.
-  const indent = body
-    .find((line) => line.trim() !== "" && !line.trimStart().startsWith("#"))
-    ?.match(/^ +/)?.[0];
+  const indent = body.find((line) => line.trim() !== "" && !line.trimStart().startsWith("#"))?.match(/^ +/)?.[0];
   if (indent === undefined) {
-    throw new Error(
-      `expected this ${rootKey} to have indented keys under "${rootKey}:" — ` +
-        `Harness returned something else`,
-    );
+    throw new Error(`expected this ${rootKey} to have indented keys under "${rootKey}:" — ` + `Harness returned something else`);
   }
 
   const owned = new RegExp(`^${indent}(${Object.keys(keys).join("|")}):`);
@@ -307,11 +264,7 @@ export function rescopeYaml(
     .filter(([, value]) => value !== null)
     .map(([key, value]) => `${indent}${key}: ${yamlScalar(value!)}`);
 
-  return [
-    ...lines.slice(0, root + 1),
-    ...replacements,
-    ...body.filter((line) => !owned.test(line)),
-  ].join("\n");
+  return [...lines.slice(0, root + 1), ...replacements, ...body.filter((line) => !owned.test(line))].join("\n");
 }
 
 /* ------------------------------------------------------------------ *
@@ -331,11 +284,7 @@ type Result = { outcome: Outcome; detail?: string };
 type Tally = Record<Outcome, number>;
 
 /** Recording one entity's fate: a log line now, a count for the summary row. */
-type Record_ = (
-  kind: string,
-  identifier: string,
-  result: Result,
-) => Promise<void>;
+type Record_ = (kind: string, identifier: string, result: Result) => Promise<void>;
 
 const outcomeOf = (reply: Reply): Result =>
   ok(reply)
@@ -358,8 +307,7 @@ const PLACEHOLDER_DESCRIPTION =
 /** How many missing secrets one entity may drag in before we stop trying. */
 const MAX_PLACEHOLDERS = 5;
 
-const MISSING_SECRET =
-  /No secret exists with the id\s+([\w.$-]+)(?:\s+in organization\s+([\w.$-]+))?(?:\s+in project\s+([\w.$-]+))?/;
+const MISSING_SECRET = /No secret exists with the id\s+([\w.$-]+)(?:\s+in organization\s+([\w.$-]+))?(?:\s+in project\s+([\w.$-]+))?/;
 
 type MissingSecret = {
   identifier: string;
@@ -400,10 +348,7 @@ export type SecretType = "SecretText" | "SecretFile";
  * there either, a token without the standing to read it. The caller falls back
  * to text, which is what the majority are.
  */
-async function secretTypeOf(
-  from: Scope,
-  missing: MissingSecret,
-): Promise<SecretType | null> {
+async function secretTypeOf(from: Scope, missing: MissingSecret): Promise<SecretType | null> {
   const scope =
     missing.project !== null
       ? { orgIdentifier: from.org, projectIdentifier: from.project ?? undefined }
@@ -411,12 +356,10 @@ async function secretTypeOf(
         ? { orgIdentifier: from.org }
         : {};
 
-  const reply = await request(
-    from.token,
-    "GET",
-    `/ng/api/v2/secrets/${encodeURIComponent(missing.identifier)}`,
-    { accountIdentifier: from.accountId, ...scope },
-  );
+  const reply = await request(from.token, "GET", `/ng/api/v2/secrets/${encodeURIComponent(missing.identifier)}`, {
+    accountIdentifier: from.accountId,
+    ...scope,
+  });
   if (!ok(reply)) return null;
 
   const type = dataOf<{ secret?: { type?: string } }>(reply)?.secret?.type;
@@ -439,8 +382,7 @@ async function secretTypeOf(
  * use; the bare name is the account's, and is right only for a reference that
  * named no org at all.
  */
-const secretManagerFor = (missing: MissingSecret) =>
-  missing.org === null ? "harnessSecretManager" : "org.harnessSecretManager";
+const secretManagerFor = (missing: MissingSecret) => (missing.org === null ? "harnessSecretManager" : "org.harnessSecretManager");
 
 /** The JSON half of a placeholder, shared by both kinds. */
 const placeholderSecret = (missing: MissingSecret, type: SecretType) => ({
@@ -474,11 +416,7 @@ const placeholderSecret = (missing: MissingSecret, type: SecretType) => ({
  * A file secret goes to its own endpoint as multipart, which is the only reason
  * the two kinds are not one call — the JSON body is identical but for the spec.
  */
-async function createPlaceholder(
-  to: Scope,
-  missing: MissingSecret,
-  type: SecretType,
-): Promise<Reply> {
+async function createPlaceholder(to: Scope, missing: MissingSecret, type: SecretType): Promise<Reply> {
   const secret = placeholderSecret(missing, type);
   const query = {
     accountIdentifier: to.accountId,
@@ -492,11 +430,7 @@ async function createPlaceholder(
 
   const form = new FormData();
   form.append("spec", JSON.stringify({ secret }));
-  form.append(
-    "file",
-    new Blob([PLACEHOLDER_VALUE], { type: "text/plain" }),
-    `${missing.identifier}.txt`,
-  );
+  form.append("file", new Blob([PLACEHOLDER_VALUE], { type: "text/plain" }), `${missing.identifier}.txt`);
   return request(to.token, "POST", "/ng/api/v2/secrets/files", query, form);
 }
 
@@ -533,10 +467,7 @@ type Copying = {
  * ever attempted once, so a create that keeps failing for the same secret ends
  * rather than looping.
  */
-async function createFillingGaps(
-  ctx: Copying,
-  make: () => Promise<Reply>,
-): Promise<Result> {
+async function createFillingGaps(ctx: Copying, make: () => Promise<Reply>): Promise<Result> {
   let reply = await make();
   const made: string[] = [];
   const attempted = new Set<string>();
@@ -575,9 +506,7 @@ async function createFillingGaps(
             detail:
               `${type} holding ${PLACEHOLDER_VALUE} — the copied content ` +
               `references it and the site has no value for it` +
-              (owned !== undefined
-                ? `; this workshop's own value replaces it once it is minted`
-                : ""),
+              (owned !== undefined ? `; this workshop's own value replaces it once it is minted` : ""),
           },
     );
 
@@ -622,11 +551,7 @@ const listingFailed = (ctx: Copying, kind: string, detail: string) =>
  * carries 68 `builtin-example-policy-*` entries at the account level, and an
  * inheriting listing would have cloned all of them into every workshop org.
  */
-async function listPolicy<T>(
-  token: string,
-  path: string,
-  query: Query,
-): Promise<{ ok: true; items: T[] } | { ok: false; detail: string }> {
+async function listPolicy<T>(token: string, path: string, query: Query): Promise<{ ok: true; items: T[] } | { ok: false; detail: string }> {
   const items: T[] = [];
 
   for (let page = 0; page < MAX_PAGES; page++) {
@@ -667,10 +592,7 @@ async function listPolicy<T>(
  * errors. The two strings are the fixtures in `org-content.test.ts`.
  */
 export function isPolicyDuplicate(status: number, body: string): boolean {
-  return (
-    isDuplicate(status, body) ||
-    (status === 400 && /identifier must be unique/i.test(messageOf(body)))
-  );
+  return isDuplicate(status, body) || (status === 400 && /identifier must be unique/i.test(messageOf(body)));
 }
 
 const policyOutcomeOf = (reply: Reply): Result =>
@@ -700,10 +622,7 @@ type PolicyScope = { org_id?: string; project_id?: string };
  * dropped and said out loud — see `copyPolicySets`.
  */
 export function policyIsInScope(policy: PolicyScope, from: Scope): boolean {
-  return (
-    (policy.org_id ?? "") === from.org &&
-    (policy.project_id ?? "") === (from.project ?? "")
-  );
+  return (policy.org_id ?? "") === from.org && (policy.project_id ?? "") === (from.project ?? "");
 }
 
 async function copyPolicies(ctx: Copying): Promise<void> {
@@ -725,13 +644,11 @@ async function copyPolicies(ctx: Copying): Promise<void> {
     // No tags and no description of ours, the way `copyVariables` has none: a
     // policy is an identifier, a name and a rego body, and the API takes
     // nothing else to hang provenance on.
-    const reply = await request(
-      to.token,
-      "POST",
-      "/pm/api/v1/policies",
-      scopeQuery(to),
-      { identifier, name: policy.name ?? identifier, rego },
-    );
+    const reply = await request(to.token, "POST", "/pm/api/v1/policies", scopeQuery(to), {
+      identifier,
+      name: policy.name ?? identifier,
+      rego,
+    });
 
     await ctx.record("policy", identifier, policyOutcomeOf(reply));
   }
@@ -753,11 +670,7 @@ async function copyPolicies(ctx: Copying): Promise<void> {
  */
 async function copyPolicySets(ctx: Copying): Promise<void> {
   const { from, to } = ctx;
-  const listed = await listPolicy<{ identifier?: string }>(
-    from.token,
-    "/pm/api/v1/policysets",
-    scopeQuery(from),
-  );
+  const listed = await listPolicy<{ identifier?: string }>(from.token, "/pm/api/v1/policysets", scopeQuery(from));
   if (!listed.ok) {
     await listingFailed(ctx, "policy set", listed.detail);
     return;
@@ -769,12 +682,7 @@ async function copyPolicySets(ctx: Copying): Promise<void> {
 
     // The listing does not promise the policies, so each set is read whole —
     // the same list-then-get shape `copyTemplates` uses.
-    const fetched = await request(
-      from.token,
-      "GET",
-      `/pm/api/v1/policysets/${encodeURIComponent(identifier)}`,
-      scopeQuery(from),
-    );
+    const fetched = await request(from.token, "GET", `/pm/api/v1/policysets/${encodeURIComponent(identifier)}`, scopeQuery(from));
     if (!ok(fetched)) {
       await ctx.record("policy set", identifier, {
         outcome: "failed",
@@ -824,13 +732,7 @@ async function copyPolicySets(ctx: Copying): Promise<void> {
       enabled: set.enabled ?? false,
     };
 
-    const created = await request(
-      to.token,
-      "POST",
-      "/pm/api/v1/policysets",
-      scopeQuery(to),
-      body,
-    );
+    const created = await request(to.token, "POST", "/pm/api/v1/policysets", scopeQuery(to), body);
     const result = policyOutcomeOf(created);
     if (result.outcome === "failed") {
       await ctx.record("policy set", identifier, result);
@@ -841,13 +743,10 @@ async function copyPolicySets(ctx: Copying): Promise<void> {
     // second pass repairs a set whose policies did not land the first time.
     let detail: string | undefined;
     if (kept.length > 0) {
-      const attached = await request(
-        to.token,
-        "PATCH",
-        `/pm/api/v1/policysets/${encodeURIComponent(identifier)}`,
-        scopeQuery(to),
-        { ...body, policies: kept },
-      );
+      const attached = await request(to.token, "PATCH", `/pm/api/v1/policysets/${encodeURIComponent(identifier)}`, scopeQuery(to), {
+        ...body,
+        policies: kept,
+      });
       if (!ok(attached)) {
         await ctx.record("policy set", identifier, {
           outcome: "failed",
@@ -905,13 +804,7 @@ async function copyFilters(ctx: Copying): Promise<void> {
 
   for (const [path, types] of Object.entries(FILTER_SERVICES)) {
     for (const type of types) {
-      const listed = await listPages<Json>(
-        from.token,
-        "GET",
-        path,
-        { ...scopeQuery(from), type },
-        { page: "pageIndex", size: "pageSize" },
-      );
+      const listed = await listPages<Json>(from.token, "GET", path, { ...scopeQuery(from), type }, { page: "pageIndex", size: "pageSize" });
       if (!listed.ok) {
         await listingFailed(ctx, "filter", `${type}: ${listed.detail}`);
         continue;
@@ -924,24 +817,29 @@ async function copyFilters(ctx: Copying): Promise<void> {
         const label = `${type} / ${identifier}`;
         const properties = (filter.filterProperties as Json | undefined) ?? {};
 
-        const reply = await request(to.token, "POST", path, {
-          accountIdentifier: to.accountId,
-        },
-        {
-          name: typeof filter.name === "string" ? filter.name : identifier,
-          identifier,
-          orgIdentifier: to.org,
-          projectIdentifier: to.project ?? undefined,
-          filterVisibility: "EveryOne",
-          filterProperties: {
-            ...properties,
-            filterType: type,
-            tags: {
-              ...((properties.tags as Json | undefined) ?? {}),
-              ...TAGS,
+        const reply = await request(
+          to.token,
+          "POST",
+          path,
+          {
+            accountIdentifier: to.accountId,
+          },
+          {
+            name: typeof filter.name === "string" ? filter.name : identifier,
+            identifier,
+            orgIdentifier: to.org,
+            projectIdentifier: to.project ?? undefined,
+            filterVisibility: "EveryOne",
+            filterProperties: {
+              ...properties,
+              filterType: type,
+              tags: {
+                ...((properties.tags as Json | undefined) ?? {}),
+                ...TAGS,
+              },
             },
           },
-        });
+        );
 
         await ctx.record("filter", label, outcomeOf(reply));
       }
@@ -1019,19 +917,15 @@ async function copyTemplates(ctx: Copying): Promise<void> {
     // version is copied — lab content pins the one it was written against.
     const label = `${identifier}:${versionLabel}`;
 
-    const fetched = await request(
-      from.token,
-      "GET",
-      `/template/api/templates/${encodeURIComponent(identifier)}`,
-      { ...scopeQuery(from), versionLabel },
-    );
+    const fetched = await request(from.token, "GET", `/template/api/templates/${encodeURIComponent(identifier)}`, {
+      ...scopeQuery(from),
+      versionLabel,
+    });
     const yaml = dataOf<{ yaml?: string }>(fetched)?.yaml;
     if (!ok(fetched) || typeof yaml !== "string") {
       await ctx.record("template", label, {
         outcome: "failed",
-        detail: `could not read it from ${scopeLabel(from)}: ${
-          ok(fetched) ? "Harness returned no YAML" : detailOf(fetched)
-        }`,
+        detail: `could not read it from ${scopeLabel(from)}: ${ok(fetched) ? "Harness returned no YAML" : detailOf(fetched)}`,
       });
       continue;
     }
@@ -1054,13 +948,7 @@ async function copyTemplates(ctx: Copying): Promise<void> {
     }
 
     const result = await createFillingGaps(ctx, () =>
-      request(
-        to.token,
-        "POST",
-        "/template/api/templates",
-        { ...scopeQuery(to), storeType: "INLINE" },
-        body,
-      ),
+      request(to.token, "POST", "/template/api/templates", { ...scopeQuery(to), storeType: "INLINE" }, body),
     );
 
     await ctx.record("template", label, result);
@@ -1069,13 +957,10 @@ async function copyTemplates(ctx: Copying): Promise<void> {
 
 async function copyEnvironments(ctx: Copying): Promise<void> {
   const { from, to } = ctx;
-  const listed = await listPages<{ environment?: Json }>(
-    from.token,
-    "GET",
-    "/ng/api/environmentsV2",
-    scopeQuery(from),
-    { page: "page", size: "size" },
-  );
+  const listed = await listPages<{ environment?: Json }>(from.token, "GET", "/ng/api/environmentsV2", scopeQuery(from), {
+    page: "page",
+    size: "size",
+  });
   if (!listed.ok) {
     await listingFailed(ctx, "environment", listed.detail);
     return;
@@ -1086,8 +971,7 @@ async function copyEnvironments(ctx: Copying): Promise<void> {
     const identifier = environment?.identifier;
     if (!environment || typeof identifier !== "string") continue;
 
-    const name =
-      typeof environment.name === "string" ? environment.name : identifier;
+    const name = typeof environment.name === "string" ? environment.name : identifier;
     const yaml = typeof environment.yaml === "string" ? environment.yaml : null;
 
     // An environment is described by its own columns *and* a YAML body that
@@ -1119,10 +1003,7 @@ async function copyEnvironments(ctx: Copying): Promise<void> {
           projectIdentifier: to.project ?? undefined,
           description: DESCRIPTION,
           tags: { ...((environment.tags as Json | undefined) ?? {}), ...TAGS },
-          type:
-            typeof environment.type === "string"
-              ? environment.type
-              : "PreProduction",
+          type: typeof environment.type === "string" ? environment.type : "PreProduction",
           ...(body === null ? {} : { yaml: body }),
         },
       ),
@@ -1133,9 +1014,7 @@ async function copyEnvironments(ctx: Copying): Promise<void> {
     await copyInfrastructures(
       ctx,
       identifier,
-      result.outcome === "created" || result.outcome === "existed"
-        ? null
-        : (result.detail ?? "it was not created"),
+      result.outcome === "created" || result.outcome === "existed" ? null : (result.detail ?? "it was not created"),
     );
   }
 }
@@ -1148,11 +1027,7 @@ async function copyEnvironments(ctx: Copying): Promise<void> {
  * environment to belong to is refused, and one refusal per definition would say
  * the same thing several times over.
  */
-async function copyInfrastructures(
-  ctx: Copying,
-  environment: string,
-  blocked: string | null,
-): Promise<void> {
+async function copyInfrastructures(ctx: Copying, environment: string, blocked: string | null): Promise<void> {
   const { from, to } = ctx;
   const listed = await listPages<{ infrastructure?: Json }>(
     from.token,
@@ -1181,10 +1056,8 @@ async function copyInfrastructures(
       continue;
     }
 
-    const name =
-      typeof infrastructure.name === "string" ? infrastructure.name : identifier;
-    const yaml =
-      typeof infrastructure.yaml === "string" ? infrastructure.yaml : null;
+    const name = typeof infrastructure.name === "string" ? infrastructure.name : identifier;
+    const yaml = typeof infrastructure.yaml === "string" ? infrastructure.yaml : null;
     if (yaml === null) {
       await ctx.record("infrastructure", label, {
         outcome: "failed",
@@ -1246,13 +1119,10 @@ async function copyInfrastructures(
  */
 async function copyVariables(ctx: Copying): Promise<void> {
   const { from, to } = ctx;
-  const listed = await listPages<{ variable?: Json }>(
-    from.token,
-    "GET",
-    "/ng/api/variables",
-    scopeQuery(from),
-    { page: "pageIndex", size: "pageSize" },
-  );
+  const listed = await listPages<{ variable?: Json }>(from.token, "GET", "/ng/api/variables", scopeQuery(from), {
+    page: "pageIndex",
+    size: "pageSize",
+  });
   if (!listed.ok) {
     await listingFailed(ctx, "variable", listed.detail);
     return;
@@ -1338,11 +1208,7 @@ const nothing = (): ContentResult => ({
  * projects the attendees need access to. Never throws: see the module comment on
  * why this is best-effort.
  */
-export async function copyOrgContent(
-  run: RunRow,
-  orgId: string,
-  pass: "first" | "again" = "first",
-): Promise<ContentResult> {
+export async function copyOrgContent(run: RunRow, orgId: string, pass: "first" | "again" = "first"): Promise<ContentResult> {
   const tally: Tally = { created: 0, existed: 0, failed: 0, waiting: 0 };
   const sources = await loadTemplateSources();
   if (sources.length === 0) return nothing();
@@ -1376,42 +1242,20 @@ export async function copyOrgContent(
   // the next provision, when a secret added to settings in between goes to
   // overwrite it.
   const ownedHere = new Map<string, SecretType>([
-    ...(await loadOrgSecrets()).map(
-      (s): [string, SecretType] => [
-        s.identifier,
-        s.kind === "file" ? "SecretFile" : "SecretText",
-      ],
-    ),
+    ...(await loadOrgSecrets()).map((s): [string, SecretType] => [s.identifier, s.kind === "file" ? "SecretFile" : "SecretText"]),
     ...(await loadCatalog(run.component_set_id ?? undefined))
       .filter((c) => c.kind === "secret_text" || c.kind === "secret_file")
-      .map((c): [string, SecretType] => [
-        c.identifier,
-        c.kind === "secret_file" ? "SecretFile" : "SecretText",
-      ]),
+      .map((c): [string, SecretType] => [c.identifier, c.kind === "secret_file" ? "SecretFile" : "SecretText"]),
   ]);
 
   const record: Record_ = async (kind, identifier, result) => {
     tally[result.outcome] += 1;
     if (result.outcome === "failed") {
-      await log(
-        run.id,
-        "stderr",
-        `${kind} ${identifier} not copied — ${result.detail ?? "Harness refused it"}`,
-      );
+      await log(run.id, "stderr", `${kind} ${identifier} not copied — ${result.detail ?? "Harness refused it"}`);
       return;
     }
-    const said =
-      result.outcome === "created"
-        ? "copied"
-        : result.outcome === "existed"
-          ? "already there"
-          : "not copied yet";
-    await log(
-      run.id,
-      "stdout",
-      `${kind} ${identifier} ${said}` +
-        (result.detail ? ` — ${result.detail}` : ""),
-    );
+    const said = result.outcome === "created" ? "copied" : result.outcome === "existed" ? "already there" : "not copied yet";
+    await log(run.id, "stdout", `${kind} ${identifier} ${said}` + (result.detail ? ` — ${result.detail}` : ""));
   };
 
   await log(
@@ -1426,10 +1270,7 @@ export async function copyOrgContent(
   // reference a connector or template at the org's level, and Harness refuses a
   // reference to something that is not there yet — the same ordering, for the
   // same reason, as `deployContent`'s.
-  const ordered = [
-    ...sources.filter((s) => s.projectIdentifier === null),
-    ...sources.filter((s) => s.projectIdentifier !== null),
-  ];
+  const ordered = [...sources.filter((s) => s.projectIdentifier === null), ...sources.filter((s) => s.projectIdentifier !== null)];
 
   // By identifier, since two rows in different source orgs may name the same
   // project: the second create is a duplicate, their content merges, and the
@@ -1464,12 +1305,7 @@ export async function copyOrgContent(
     if (source.projectIdentifier !== null) {
       const projectId = source.projectIdentifier;
       try {
-        const existed = await createProject(
-          orgId,
-          projectId,
-          source.projectName ?? projectId,
-          PROJECT_DESCRIPTION,
-        );
+        const existed = await createProject(orgId, projectId, source.projectName ?? projectId, PROJECT_DESCRIPTION);
         await record("project", projectId, {
           outcome: existed ? "existed" : "created",
         });
@@ -1494,11 +1330,7 @@ export async function copyOrgContent(
       // this is for the unexpected kind — and one source's surprise must not
       // strand the ones after it.
       const message = err instanceof Error ? err.message : String(err);
-      await log(
-        run.id,
-        "stderr",
-        `template source ${sourceLabel(source)} stopped early — ${message}`,
-      );
+      await log(run.id, "stderr", `template source ${sourceLabel(source)} stopped early — ${message}`);
       tally.failed += 1;
     }
   }
@@ -1517,9 +1349,7 @@ export async function copyOrgContent(
         ? `all copied from ${sources.length} template source(s)`
         : [
             tally.failed > 0 ? `${tally.failed} could not be copied` : null,
-            tally.waiting > 0
-              ? `${tally.waiting} waiting on a workshop credential`
-              : null,
+            tally.waiting > 0 ? `${tally.waiting} waiting on a workshop credential` : null,
           ]
             .filter(Boolean)
             .join(", "),

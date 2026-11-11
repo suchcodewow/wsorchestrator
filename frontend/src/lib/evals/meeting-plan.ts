@@ -385,7 +385,8 @@ export function planMeeting(input: {
       invite.push(...adding.map((o) => ({ email, occurrenceId: o.id, afterMiss })));
       const kept = future.find(({ invite }) => wanted.has(invite.occurrenceId));
       if (attended) outcomes.set(email, { kind: "attended" });
-      else if (kept && (adding.length === 0 || kept.at.startsAt < adding[0]!.startsAt)) outcomes.set(email, { kind: "invited", occurrenceId: kept.invite.occurrenceId });
+      else if (kept && (adding.length === 0 || kept.at.startsAt < adding[0]!.startsAt))
+        outcomes.set(email, { kind: "invited", occurrenceId: kept.invite.occurrenceId });
       else if (adding.length > 0) outcomes.set(email, { kind: "invite", occurrenceId: adding[0]!.id, afterMiss });
       else outcomes.set(email, { kind: "finished" });
       continue;
@@ -408,7 +409,9 @@ export function planMeeting(input: {
     // An administrator's "missed" stands for every occurrence that has begun, whatever Zoom said or has yet to say.
     const begun = mine.filter(({ at }) => at.startsAt <= input.now);
     const pending =
-      mark === false ? [] : begun.filter(({ invite, at }) => invite.attendance === null && !at.attendanceRead && invite.responseStatus !== "declined");
+      mark === false
+        ? []
+        : begun.filter(({ invite, at }) => invite.attendance === null && !at.attendanceRead && invite.responseStatus !== "declined");
     if (pending.length > 0) {
       outcomes.set(email, { kind: "waiting", occurrenceId: pending[0]!.invite.occurrenceId });
       continue;
@@ -459,6 +462,57 @@ export function zoomMeetingIdIn(...texts: (string | null | undefined)[]): string
   return null;
 }
 
+const ZOOM_URL = /https?:\/\/[^\s"'<>]*zoom\.us\/[^\s"'<>]+/i;
+const allZoomUrls = () => new RegExp(ZOOM_URL.source, "gi");
+/** The invite block Zoom's Google Calendar add-on writes, between two rules, with the `<p>` it sits in. */
+const ZOOM_INVITE_BLOCK = /(?:<p>(?:<br\s*\/?>)*)?─{5,}[\s\S]*?─{5,}(?:<\/p>)?/;
+
+export type ZoomLinkRewrite = {
+  /** The event's new location, or undefined to leave it. */
+  location?: string;
+  /** The event's new description. */
+  description: string;
+  /** The event's Zoom add-on conference must be cleared too, or its "Join with Zoom" button keeps the old meeting. */
+  clearConference: boolean;
+};
+
+/**
+ * Moves an event from the Zoom meeting in its link to the one at `join`. The
+ * old link and its invite block (dial-in numbers, meeting id, passcode) go and
+ * the new meeting's take their place; the rest of the description stays. A
+ * location that holds a Zoom link gets the new one, and any other location is
+ * left alone.
+ */
+export function rewriteZoomLink(
+  event: { location?: string | null; description?: string | null; conferenceData?: { entryPoints?: { uri?: string }[] } },
+  join: { url: string; id: string | number; passcode?: string | null },
+): ZoomLinkRewrite {
+  const description = event.description ?? "";
+  const html = /<[a-z][^>]*>/i.test(description);
+  const passcode = join.passcode ? `Passcode: ${join.passcode}` : "";
+  const block = html
+    ? `<p>Join Zoom: <a href="${join.url}">${join.url}</a><br>Meeting ID: ${join.id}${passcode ? `<br>${passcode}` : ""}</p>`
+    : `Join Zoom: ${join.url}\nMeeting ID: ${join.id}${passcode ? `\n${passcode}` : ""}`;
+
+  let next: string;
+  const invite = ZOOM_INVITE_BLOCK.exec(description);
+  if (invite && /zoom\.us/i.test(invite[0])) {
+    next = description.replace(ZOOM_INVITE_BLOCK, () => block);
+  } else if (ZOOM_URL.test(description)) {
+    // The link is in the text without the add-on's block around it: swap the link, and add the details after it.
+    next = `${description.replace(allZoomUrls(), "").trim()}${html ? "" : "\n\n"}${block}`;
+  } else {
+    next = `${description}${description && !html ? "\n\n" : ""}${block}`;
+  }
+
+  const location = event.location ?? "";
+  return {
+    ...(location && ZOOM_URL.test(location) ? { location: location.replace(allZoomUrls(), join.url) } : {}),
+    description: next,
+    clearConference: (event.conferenceData?.entryPoints ?? []).some((p) => /zoom\.us/i.test(p.uri ?? "")),
+  };
+}
+
 /** A participant as Zoom's past-meeting participants report lists one. */
 export type ZoomParticipant = { name?: string; user_email?: string };
 
@@ -467,10 +521,7 @@ export type ZoomParticipant = { name?: string; user_email?: string };
  * name that matches someone's full name. Names are compared lowercased with
  * their spaces collapsed.
  */
-export function joinedFrom(
-  participants: readonly ZoomParticipant[],
-  invited: readonly { email: string; fullName: string }[],
-): Set<string> {
+export function joinedFrom(participants: readonly ZoomParticipant[], invited: readonly { email: string; fullName: string }[]): Set<string> {
   const name = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
   const emails = new Set(participants.map((p) => normal(p.user_email ?? "")).filter(Boolean));
   const names = new Set(participants.map((p) => name(p.name ?? "")).filter(Boolean));

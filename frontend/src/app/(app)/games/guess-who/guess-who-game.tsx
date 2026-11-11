@@ -19,20 +19,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Check, Maximize, Minimize, Minus, Plus, RotateCcw, Search, Trophy, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { confirmDialog } from "@/components/ui/confirm";
-import {
-  boardOrder,
-  TEAMS,
-  type GuessWhoConfig,
-  type GuessWhoTool,
-  type Team,
-} from "@/lib/games/guess-who";
+import { boardOrder, TEAMS, type GuessWhoConfig, type GuessWhoTool, type Team } from "@/lib/games/guess-who";
 import { SPRING_SNAPPY } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { ToolLogo } from "./tool-logo";
 
-type Log =
-  | { kind: "question"; down: string[]; up: string[] }
-  | { kind: "guess"; tool: string; correct: boolean };
+type Log = { kind: "question"; down: string[]; up: string[] } | { kind: "guess"; tool: string; correct: boolean };
 
 type Side = {
   down: string[];
@@ -94,7 +86,8 @@ const FLUID = {
   total: "text-[clamp(1.125rem,1.5vw,2.25rem)]",
   icon: "size-[clamp(1rem,1.1vw,1.625rem)]",
   /** A control-bar button: taller, wider and larger-lettered on a big screen. */
-  button: "h-[clamp(2.25rem,2.6vw,3.5rem)] px-[clamp(1rem,1.1vw,1.75rem)] text-[clamp(0.875rem,0.95vw,1.375rem)] [&_svg]:size-[clamp(1rem,1.1vw,1.625rem)]",
+  button:
+    "h-[clamp(2.25rem,2.6vw,3.5rem)] px-[clamp(1rem,1.1vw,1.75rem)] text-[clamp(0.875rem,0.95vw,1.375rem)] [&_svg]:size-[clamp(1rem,1.1vw,1.625rem)]",
   iconButton: "size-[clamp(2.25rem,2.6vw,3.5rem)] [&_svg]:size-[clamp(1rem,1.1vw,1.625rem)]",
 } as const;
 
@@ -253,10 +246,7 @@ export function GuessWhoGame({ config, version }: { config: GuessWhoConfig; vers
   // A guess on show is applied once the room has seen it land.
   useEffect(() => {
     if (!state.pending) return;
-    const timer = window.setTimeout(
-      () => dispatch({ type: "resolveGuess" }),
-      state.pending.correct ? VERDICT_MS.right : VERDICT_MS.wrong,
-    );
+    const timer = window.setTimeout(() => dispatch({ type: "resolveGuess" }), state.pending.correct ? VERDICT_MS.right : VERDICT_MS.wrong);
     return () => window.clearTimeout(timer);
   }, [state.pending]);
 
@@ -329,7 +319,14 @@ function Board({
   onFullScreen: () => void;
 }) {
   const fullScreenButton = (
-    <Button variant="ghost" size="icon" aria-label={full ? "Leave full screen" : "Full screen"} title={full ? "Leave full screen (Esc)" : "Full screen"} onClick={onFullScreen} className={FLUID.iconButton}>
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label={full ? "Leave full screen" : "Full screen"}
+      title={full ? "Leave full screen (Esc)" : "Full screen"}
+      onClick={onFullScreen}
+      className={FLUID.iconButton}
+    >
       {full ? <Minimize /> : <Maximize />}
     </Button>
   );
@@ -390,7 +387,12 @@ function Board({
                 {state.guessing ? <X /> : <Search />}
                 {state.guessing ? "Cancel guess" : "Make a guess"}
               </Button>
-              <Button variant="brand" onClick={() => dispatch({ type: "endTurn" })} disabled={state.guessing || !!state.pending} className={FLUID.button}>
+              <Button
+                variant="brand"
+                onClick={() => dispatch({ type: "endTurn" })}
+                disabled={state.guessing || !!state.pending}
+                className={FLUID.button}
+              >
                 End turn
                 <ArrowRight />
               </Button>
@@ -446,7 +448,12 @@ function verdictOf(state: State, team: Team, byId: Map<string, GuessWhoTool>): V
   const name = byId.get(p.id)?.name ?? p.id;
   const used = state.sides[team].questions + 1;
   if (p.correct) {
-    return { id: p.id, correct: true, headline: `${NAME[team]} got it!`, detail: `${name}, in ${used} ${used === 1 ? "question" : "questions"}` };
+    return {
+      id: p.id,
+      correct: true,
+      headline: `${NAME[team]} got it!`,
+      detail: `${name}, in ${used} ${used === 1 ? "question" : "questions"}`,
+    };
   }
   // The other team goes next unless it has finished its board.
   const next = state.sides[OTHER[team]].status === "playing" ? `${NAME[OTHER[team]]}'s turn` : `${NAME[team]} goes again`;
@@ -489,12 +496,7 @@ function TeamBoard({
         active && (red ? "ring-4 ring-red-500/60" : "ring-4 ring-blue-500/60"),
       )}
     >
-      <header
-        className={cn(
-          "flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 text-white",
-          red ? "bg-red-600" : "bg-blue-600",
-        )}
-      >
+      <header className={cn("flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 text-white", red ? "bg-red-600" : "bg-blue-600")}>
         <h2 className={cn(FLUID.title, "font-semibold tracking-tight")}>{NAME[team]} team</h2>
         <StatusChip side={side} />
         <div className="ml-auto flex items-center gap-4">
@@ -529,10 +531,7 @@ function TeamBoard({
         {standing} standing · {side.down.length} down
       </div>
       <div
-        className={cn(
-          "grid grid-cols-4 gap-2.5 px-4 pb-4 sm:grid-cols-6",
-          !active && !recap && side.status === "playing" && "opacity-60",
-        )}
+        className={cn("grid grid-cols-4 gap-2.5 px-4 pb-4 sm:grid-cols-6", !active && !recap && side.status === "playing" && "opacity-60")}
       >
         {config.tools.map((tool, i) => (
           <ToolCard
@@ -697,15 +696,7 @@ function ToolCard({
 }
 
 /** After the round: the team's mystery tool, and its turns. */
-function Reveal({
-  tool,
-  side,
-  byId,
-}: {
-  tool: GuessWhoTool;
-  side: Side;
-  byId: Map<string, GuessWhoTool>;
-}) {
+function Reveal({ tool, side, byId }: { tool: GuessWhoTool; side: Side; byId: Map<string, GuessWhoTool> }) {
   const name = (id: string) => byId.get(id)?.name ?? id;
   return (
     <div className="grid gap-4 px-5 py-4 md:grid-cols-[auto_1fr]">
@@ -739,15 +730,7 @@ function Reveal({
   );
 }
 
-function FinalScreen({
-  state,
-  totals,
-  onRestart,
-}: {
-  state: State;
-  totals: (team: Team) => number;
-  onRestart: () => void;
-}) {
+function FinalScreen({ state, totals, onRestart }: { state: State; totals: (team: Team) => number; onRestart: () => void }) {
   const red = totals("red");
   const blue = totals("blue");
   const winner: Team | null = red === blue ? null : red < blue ? "red" : "blue";
@@ -760,10 +743,7 @@ function FinalScreen({
       <p className={cn(FLUID.label, "text-muted-foreground")}>Fewest questions across {state.results.length} rounds</p>
       <div className="mx-auto grid w-full max-w-[clamp(36rem,50vw,64rem)] grid-cols-2 gap-[clamp(1rem,1.5vw,2rem)]">
         {TEAMS.map((team) => (
-          <div
-            key={team}
-            className={cn("rounded-2xl px-5 py-4 text-white", team === "red" ? "bg-red-600" : "bg-blue-600")}
-          >
+          <div key={team} className={cn("rounded-2xl px-5 py-4 text-white", team === "red" ? "bg-red-600" : "bg-blue-600")}>
             <p className={cn(FLUID.title, "font-medium")}>{NAME[team]}</p>
             <p className="text-[clamp(3rem,6vw,8rem)] leading-none font-bold tabular-nums">{totals(team)}</p>
             <p className={cn(FLUID.label, "mt-2 opacity-80")}>{state.results.map((r) => r[team]).join(" · ")}</p>

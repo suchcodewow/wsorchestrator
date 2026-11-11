@@ -106,11 +106,7 @@ export async function chunkSeqs(key: TrackKey): Promise<number[]> {
  * clean-up of what it was made from, for the caller to run once it has
  * answered: chunks the clean-up misses, the bucket's lifecycle removes.
  */
-export async function assemble(
-  key: TrackKey,
-  total: number,
-  mimeType: string,
-): Promise<{ bytes: number; cleanUp: () => Promise<void> }> {
+export async function assemble(key: TrackKey, total: number, mimeType: string): Promise<{ bytes: number; cleanUp: () => Promise<void> }> {
   const b = bucket();
   return b ? assembleInBucket(b, key, total, mimeType) : assembleOnDisk(key, total, mimeType);
 }
@@ -129,7 +125,10 @@ async function assembleInBucket(b: string, key: TrackKey, total: number, mimeTyp
   for (let round = 0; level.length > COMPOSE_LIMIT; round++) {
     const groups = chunkArray(level, COMPOSE_LIMIT);
     const next = groups.map((_, i) => `${composePrefix(key)}${round}-${String(i).padStart(4, "0")}`);
-    await inBatches(groups.map((group, i) => () => compose(b, group, next[i]!, contentType)), PARALLEL_COMPOSES);
+    await inBatches(
+      groups.map((group, i) => () => compose(b, group, next[i]!, contentType)),
+      PARALLEL_COMPOSES,
+    );
     intermediates.push(...next);
     level = next;
   }
@@ -138,7 +137,14 @@ async function assembleInBucket(b: string, key: TrackKey, total: number, mimeTyp
   if (bytes === null) throw new Error("The joined file is not in the bucket.");
 
   const made = [...Array.from({ length: total }, (_, seq) => chunkObject(key, seq)), ...intermediates];
-  return { bytes, cleanUp: () => inBatches(made.map((name) => () => deleteObject(b, name)), PARALLEL_DELETES) };
+  return {
+    bytes,
+    cleanUp: () =>
+      inBatches(
+        made.map((name) => () => deleteObject(b, name)),
+        PARALLEL_DELETES,
+      ),
+  };
 }
 
 async function assembleOnDisk(key: TrackKey, total: number, mimeType: string) {
@@ -237,7 +243,10 @@ export async function removeTakeFiles(takeId: string): Promise<void> {
   const objects = (
     await Promise.all(["chunks", "compose", "files"].map((top) => listObjects(b, `${RECORDINGS_PREFIX}${top}/${takeId}/`)))
   ).flat();
-  await inBatches(objects.map((o) => () => deleteObject(b, o.name)), PARALLEL_DELETES);
+  await inBatches(
+    objects.map((o) => () => deleteObject(b, o.name)),
+    PARALLEL_DELETES,
+  );
 }
 
 // ─── Names ──────────────────────────────────────────────────────────────────
@@ -253,7 +262,8 @@ const RECORDINGS_PREFIX = "recordings/";
 const chunkPrefix = (key: TrackKey) => `${RECORDINGS_PREFIX}chunks/${key.takeId}/${key.kind}/`;
 const chunkObject = (key: TrackKey, seq: number) => `${chunkPrefix(key)}${seqName(seq)}`;
 const composePrefix = (key: TrackKey) => `${RECORDINGS_PREFIX}compose/${key.takeId}/${key.kind}/`;
-const fileObject = (key: TrackKey, mimeType: string) => `${RECORDINGS_PREFIX}files/${key.takeId}/${key.kind}.${videoExtensionFor(mimeType)}`;
+const fileObject = (key: TrackKey, mimeType: string) =>
+  `${RECORDINGS_PREFIX}files/${key.takeId}/${key.kind}.${videoExtensionFor(mimeType)}`;
 
 const diskRoot = () => path.resolve(process.env.RECORDINGS_DIR || path.join(process.cwd(), ".recordings"));
 const trackDir = (key: TrackKey) => path.join(diskRoot(), key.takeId, key.kind);

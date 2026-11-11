@@ -59,7 +59,9 @@ async function call(path: string, init: RequestInit = {}): Promise<Response> {
     headers: { ...(await headers()), ...(init.headers as Record<string, string>) },
   });
   if (!res.ok && res.status !== 404) {
-    throw new Error(`Cloud Storage ${init.method ?? "GET"} ${path.split("?")[0]} answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    throw new Error(
+      `Cloud Storage ${init.method ?? "GET"} ${path.split("?")[0]} answered ${res.status}: ${(await res.text()).slice(0, 300)}`,
+    );
   }
   return res;
 }
@@ -97,7 +99,8 @@ export async function listObjects(bucket: string, prefix: string): Promise<{ nam
 
 /** Joins up to 32 objects, in order, into `destination`. */
 export async function compose(bucket: string, sources: string[], destination: string, contentType: string): Promise<void> {
-  if (sources.length === 0 || sources.length > COMPOSE_LIMIT) throw new Error(`compose takes 1 to ${COMPOSE_LIMIT} sources, not ${sources.length}`);
+  if (sources.length === 0 || sources.length > COMPOSE_LIMIT)
+    throw new Error(`compose takes 1 to ${COMPOSE_LIMIT} sources, not ${sources.length}`);
   await call(`${objectPath(bucket, destination)}/compose`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

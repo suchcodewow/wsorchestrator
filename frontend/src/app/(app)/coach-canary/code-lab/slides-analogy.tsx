@@ -7,17 +7,7 @@
  */
 
 import { cn } from "@/lib/utils";
-import {
-  Eye,
-  Folder,
-  History,
-  MessageCircleQuestion,
-  Pencil,
-  Presentation,
-  SpellCheck,
-  UserRound,
-  type LucideIcon,
-} from "lucide-react";
+import { Eye, Folder, History, MessageCircleQuestion, Pencil, Presentation, SpellCheck, UserRound, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 const DECK_W = 44;
@@ -51,14 +41,7 @@ function Deck({ x, mine = false, changed = false }: { x: number; mine?: boolean;
         className="fill-amber-400"
       />
       <path d={`M${x + DECK_W - FOLD},${DECK_Y} v${FOLD} h${FOLD} z`} className="fill-amber-600" />
-      <rect
-        x={x + 9}
-        y={DECK_Y + 24}
-        width={DECK_W - 18}
-        height={18}
-        rx={1.5}
-        className={changed ? "fill-brand" : "fill-white"}
-      />
+      <rect x={x + 9} y={DECK_Y + 24} width={DECK_W - 18} height={18} rx={1.5} className={changed ? "fill-brand" : "fill-white"} />
       <Label x={x} mine={mine}>
         {mine ? "your copy" : "team deck"}
       </Label>
@@ -70,14 +53,7 @@ function Deck({ x, mine = false, changed = false }: { x: number; mine?: boolean;
 function Place({ Icon, label, className }: { Icon: LucideIcon; label: string; className: string }) {
   return (
     <>
-      <Icon
-        x={RIGHT_X}
-        y={DECK_Y + (DECK_H - DECK_W) / 2}
-        width={DECK_W}
-        height={DECK_W}
-        strokeWidth={1.5}
-        className={className}
-      />
+      <Icon x={RIGHT_X} y={DECK_Y + (DECK_H - DECK_W) / 2} width={DECK_W} height={DECK_W} strokeWidth={1.5} className={className} />
       <Label x={RIGHT_X} mine>
         {label}
       </Label>
@@ -173,8 +149,7 @@ const ANALOGIES = {
   },
   review: {
     alt: "The deck owner reading your copy of the deck",
-    caption:
-      "In the slides example, your job as deck owner is to make sure the slides fit the theme and goals of the slide deck.",
+    caption: "In the slides example, your job as deck owner is to make sure the slides fit the theme and goals of the slide deck.",
     art: (
       <>
         <Deck x={LEFT_X} mine changed />

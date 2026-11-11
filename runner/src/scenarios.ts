@@ -74,10 +74,7 @@ function parseManifest(dir: string, raw: string): Scenario {
     throw new Error(`scenario ${dir}: manifest needs a label`);
   }
   if (!m.cloud || !CLOUDS.includes(m.cloud)) {
-    throw new Error(
-      `scenario ${dir}: manifest cloud is ${JSON.stringify(m.cloud)}, ` +
-        `expected one of ${CLOUDS.join(", ")}`,
-    );
+    throw new Error(`scenario ${dir}: manifest cloud is ${JSON.stringify(m.cloud)}, ` + `expected one of ${CLOUDS.join(", ")}`);
   }
 
   return {
@@ -111,10 +108,7 @@ export function allScenarios(): Map<string, Scenario> {
       if (!entry.isDirectory()) continue;
       const manifest = path.join(root, entry.name, "scenario.json");
       if (!fs.existsSync(manifest)) continue;
-      found.set(
-        entry.name,
-        parseManifest(entry.name, fs.readFileSync(manifest, "utf8")),
-      );
+      found.set(entry.name, parseManifest(entry.name, fs.readFileSync(manifest, "utf8")));
     }
   }
 
@@ -134,9 +128,7 @@ export function scenarioById(id: string): Scenario | undefined {
 
 /** The scenarios offered for a cloud, in a stable order. */
 export function scenariosFor(cloud: Cloud): Scenario[] {
-  return [...allScenarios().values()]
-    .filter((s) => s.cloud === cloud)
-    .sort((a, b) => a.id.localeCompare(b.id));
+  return [...allScenarios().values()].filter((s) => s.cloud === cloud).sort((a, b) => a.id.localeCompare(b.id));
 }
 
 /**
@@ -187,10 +179,7 @@ export function hasScenarioRoot(scenario: Scenario): boolean {
  * the selected scenarios need. A challenge with no scenarios gets exactly the
  * baseline, so its projects are unchanged from before scenarios existed.
  */
-export function activateApisFor(
-  baseline: readonly string[],
-  scenarios: readonly Scenario[],
-): string[] {
+export function activateApisFor(baseline: readonly string[], scenarios: readonly Scenario[]): string[] {
   return [...new Set([...baseline, ...scenarios.flatMap((s) => s.activateApis)])];
 }
 
@@ -201,11 +190,7 @@ export function activateApisFor(
  * applies never share state — which is what lets them run at the same time, and
  * what lets one competitor's environment be rebuilt without touching another's.
  */
-export function scenarioStatePrefix(
-  base: string,
-  id: string,
-  slug?: string,
-): string {
+export function scenarioStatePrefix(base: string, id: string, slug?: string): string {
   const root = `${base}/scenarios/${id}`;
   return slug ? `${root}/${slug}` : root;
 }
@@ -224,11 +209,7 @@ export function competitorSlug(email: string): string {
 }
 
 /** The working-directory name for one competitor's copy of a scenario root. */
-export function scenarioWorkName(
-  runId: string,
-  scenarioId: string,
-  slug: string,
-): string {
+export function scenarioWorkName(runId: string, scenarioId: string, slug: string): string {
   return `${runId.replace(/-/g, "").slice(0, 8)}-${scenarioId}-${slug}`;
 }
 
@@ -253,11 +234,7 @@ export function scenarioTfSource(id: string): string {
  * Absent on every run that predates scenarios and on every run that never had
  * one, which reads correctly as "none standing".
  */
-export function appliedScenarios(
-  outputs: Record<string, unknown> | null,
-): string[] {
+export function appliedScenarios(outputs: Record<string, unknown> | null): string[] {
   const v = outputs?.scenarios_applied;
-  return Array.isArray(v)
-    ? v.filter((x): x is string => typeof x === "string")
-    : [];
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }

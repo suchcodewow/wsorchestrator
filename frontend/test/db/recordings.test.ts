@@ -19,14 +19,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { recordingTracks } from "@/db/schema";
 import { RECORDING_LIST } from "@/lib/list-specs";
-import {
-  deleteTake,
-  findTrack,
-  getTake,
-  listTakes,
-  purgeExpiredTakes,
-  registerTrack,
-} from "@/lib/recording/recordings";
+import { deleteTake, findTrack, getTake, listTakes, purgeExpiredTakes, registerTrack } from "@/lib/recording/recordings";
 import { PERSONAS } from "../support/access";
 import { testScope } from "../support/seed";
 
@@ -61,7 +54,14 @@ describe("a take's owner", () => {
   test("files it again unchanged after a reload", async () => {
     const me = await recorder();
     const takeId = await take(me, `rec_${randomUUID()}`, new Date(), ["camera"]);
-    const again = await registerTrack(me, { takeId, kind: "camera", mimeType: "video/mp4", startedAt: new Date(), offsetMs: 0, contributor: "" });
+    const again = await registerTrack(me, {
+      takeId,
+      kind: "camera",
+      mimeType: "video/mp4",
+      startedAt: new Date(),
+      offsetMs: 0,
+      contributor: "",
+    });
     assert.equal(again?.takeId, takeId);
   });
 
@@ -70,7 +70,14 @@ describe("a take's owner", () => {
     const someoneElse = await recorder("other");
     const takeId = await take(me, `rec_${randomUUID()}`, new Date(), ["camera"]);
 
-    const theirs = await registerTrack(someoneElse, { takeId, kind: "screen", mimeType: "video/mp4", startedAt: new Date(), offsetMs: 0, contributor: "" });
+    const theirs = await registerTrack(someoneElse, {
+      takeId,
+      kind: "screen",
+      mimeType: "video/mp4",
+      startedAt: new Date(),
+      offsetMs: 0,
+      contributor: "",
+    });
     assert.equal(theirs, null, "a second account cannot file a stream on the take");
     assert.equal(await findTrack(someoneElse, takeId, "camera"), null, "nor reach its camera to upload to");
     assert.ok(await findTrack(me, takeId, "camera"));
@@ -121,7 +128,10 @@ describe("stalled", () => {
     const me = await recorder();
     const name = `rec_${randomUUID()}`;
     const takeId = await take(me, name, minutesAgo(5));
-    await db.update(recordingTracks).set({ lastChunkAt: minutesAgo(0.2) }).where(eq(recordingTracks.takeId, takeId));
+    await db
+      .update(recordingTracks)
+      .set({ lastChunkAt: minutesAgo(0.2) })
+      .where(eq(recordingTracks.takeId, takeId));
     assert.equal((await listed(name)).stalled, false);
   });
 
@@ -129,16 +139,25 @@ describe("stalled", () => {
     const me = await recorder();
     const name = `rec_${randomUUID()}`;
     const takeId = await take(me, name, minutesAgo(10));
-    await db.update(recordingTracks).set({ lastChunkAt: minutesAgo(3) }).where(eq(recordingTracks.takeId, takeId));
+    await db
+      .update(recordingTracks)
+      .set({ lastChunkAt: minutesAgo(3) })
+      .where(eq(recordingTracks.takeId, takeId));
     assert.equal((await listed(name)).stalled, true);
-    assert.deepEqual((await getTake(takeId))!.tracks.map((t) => t.stalled), [true, true]);
+    assert.deepEqual(
+      (await getTake(takeId))!.tracks.map((t) => t.stalled),
+      [true, true],
+    );
   });
 
   test("a finished stream is never stalled, however long ago it last uploaded", async () => {
     const me = await recorder();
     const name = `rec_${randomUUID()}`;
     const takeId = await take(me, name, minutesAgo(90));
-    await db.update(recordingTracks).set({ status: "ready", lastChunkAt: minutesAgo(80) }).where(eq(recordingTracks.takeId, takeId));
+    await db
+      .update(recordingTracks)
+      .set({ status: "ready", lastChunkAt: minutesAgo(80) })
+      .where(eq(recordingTracks.takeId, takeId));
     assert.equal((await listed(name)).stalled, false);
   });
 });
@@ -167,7 +186,11 @@ describe("retention", () => {
     const purged: { takeId: string; contributor: string }[] = [];
     // A purge takes a batch at a time; a database left over from other runs may hold more.
     for (let batch = await purgeExpiredTakes(); batch.length > 0; batch = await purgeExpiredTakes()) purged.push(...batch);
-    assert.deepEqual(purged.find((p) => p.takeId === takeId), { takeId, contributor: name }, "says what it removed, for the audit trail");
+    assert.deepEqual(
+      purged.find((p) => p.takeId === takeId),
+      { takeId, contributor: name },
+      "says what it removed, for the audit trail",
+    );
     const rows = await db.select().from(recordingTracks).where(eq(recordingTracks.takeId, takeId));
     assert.equal(rows.length, 0, "its rows are gone");
   });
@@ -180,4 +203,3 @@ describe("retention", () => {
     assert.ok(await listed(name));
   });
 });
-

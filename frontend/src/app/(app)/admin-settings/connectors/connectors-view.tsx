@@ -37,7 +37,10 @@ type Message = { tone: "ok" | "error"; text: string };
 
 function googleMessage(result: string, current: string | null): Message | null {
   const messages: Record<string, Message> = {
-    connected: { tone: "ok", text: "Google is connected. Sync Now adds the cohort to the Revenue Enablement calendar's meetings as this account." },
+    connected: {
+      tone: "ok",
+      text: "Google is connected. Sync Now adds the cohort to the Revenue Enablement calendar's meetings as this account.",
+    },
     denied: { tone: "error", text: "Google was not given access, so nothing changed." },
     expired: { tone: "error", text: "That sign-in took too long or started in another tab. Connect again." },
     failed: { tone: "error", text: "Google did not finish connecting. Connect again." },
@@ -52,13 +55,16 @@ function googleMessage(result: string, current: string | null): Message | null {
 
 function zoomMessage(result: string): Message | null {
   const messages: Record<string, Message> = {
-    connected: { tone: "ok", text: "Zoom is connected. Sync Now reads who joined the meetings this user hosts." },
+    connected: {
+      tone: "ok",
+      text: "Zoom is connected. Sync Now holds meetings in Zoom meetings this user hosts, and reads who joined them.",
+    },
     denied: { tone: "error", text: "Zoom was not given access, so nothing changed." },
     expired: { tone: "error", text: "That sign-in took too long or started in another tab. Connect again." },
     failed: { tone: "error", text: "Zoom did not finish connecting. Connect again." },
     scope: {
       tone: "error",
-      text: "Zoom did not grant every scope the app needs (meeting:read:list_past_instances, meeting:read:list_past_participants, meeting:delete:meeting and user:read:user). Add the missing ones to the app in the Zoom Marketplace, then connect again.",
+      text: "Zoom did not grant every scope the app needs (meeting:read:list_past_instances, meeting:read:list_past_participants, meeting:read:meeting, meeting:write:meeting, meeting:update:meeting, meeting:delete:meeting and user:read:user). Add the missing ones to the app in the Zoom Marketplace, then connect again.",
     },
   };
   return messages[result] ?? null;
@@ -81,14 +87,14 @@ export function ConnectorsView({
   slack,
   returned,
 }: {
-  google: { configured: boolean; connection: Person | null; live: boolean };
+  google: { configured: boolean; connection: Person | null; live: boolean; emailInvites: boolean };
   zoom: { configured: boolean; connection: Person | null };
   slack: { appConfigured: boolean; envToken: boolean; installation: SlackInstall | null; live: boolean };
   returned: Returned;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [modeBusy, setModeBusy] = useState<"google" | "slack" | null>(null);
+  const [modeBusy, setModeBusy] = useState<"google" | "slack" | "invites" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const messages = [
@@ -109,7 +115,15 @@ export function ConnectorsView({
   const connected = [google.connection, zoom.connection, slack.installation?.readable].filter(Boolean).length;
 
   async function disconnectSlack() {
-    if (!(await confirmDialog({ title: "Disconnect Slack?", description: "Syncs stop until the app is added again. The app stays installed in Slack itself.", confirmLabel: "Disconnect", destructive: true }))) return;
+    if (
+      !(await confirmDialog({
+        title: "Disconnect Slack?",
+        description: "Syncs stop until the app is added again. The app stays installed in Slack itself.",
+        confirmLabel: "Disconnect",
+        destructive: true,
+      }))
+    )
+      return;
     setBusy(true);
     setError(null);
     try {
@@ -146,6 +160,36 @@ export function ConnectorsView({
     }
   }
 
+  /** Switches the Google Meetings sync between silent and having Google email every guest, after saying what email does. */
+  async function setEmailInvites(next: boolean) {
+    if (next === google.emailInvites) return;
+    if (
+      next &&
+      !(await confirmDialog({
+        title: "Email invites?",
+        description:
+          "From the next live Google Meetings sync, every invite change, such as adding or removing someone, is emailed by Google to everyone on that calendar event, like any edit to a meeting.",
+        confirmLabel: "Email invites",
+      }))
+    )
+      return;
+    setModeBusy("invites");
+    setError(null);
+    try {
+      const res = await fetch("/api/settings/google-meetings-invites", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: next }),
+      });
+      if (!res.ok) setError(`Could not change how Google Meetings invites are sent (${res.status}).`);
+      else router.refresh();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setModeBusy(null);
+    }
+  }
+
   const { installation } = slack;
 
   return (
@@ -153,7 +197,8 @@ export function ConnectorsView({
       <motion.div variants={riseChild} className="space-y-1.5">
         <h2 className="text-xl font-medium tracking-tight">External Connectors</h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          <span className="font-medium text-foreground">{connected} of 3 connected</span>. Sign in to each with its service account, svc_harnessevents@harness.io.
+          <span className="font-medium text-foreground">{connected} of 3 connected</span>. Sign in to each with its service account,
+          svc_harnessevents@harness.io.
         </p>
       </motion.div>
 
@@ -185,22 +230,40 @@ export function ConnectorsView({
                 : "Google OAuth is not set up here."
           }
           extra={
-            <ModeSwitch
-              name="Google Meetings"
-              live={google.live}
-              busy={modeBusy === "google"}
-              onChange={(next) => void setMode("google", next)}
-              detail={
-                google.live
-                  ? "The Google Meetings sync adds the cohort to calendar invites, takes off anyone it invited who no longer belongs, and cancels the old form's meetings and their Zoom meetings."
-                  : "The Google Meetings sync reads the calendar and Zoom and logs whom it would invite and take off, without changing any invite."
-              }
-            />
+            <>
+              <ModeSwitch
+                name="Google Meetings"
+                live={google.live}
+                busy={modeBusy === "google"}
+                onChange={(next) => void setMode("google", next)}
+                detail={
+                  google.live
+                    ? "The Google Meetings sync adds the cohort to calendar invites, takes off anyone it invited who no longer belongs, and cancels the old form's meetings and their Zoom meetings."
+                    : "The Google Meetings sync reads the calendar and Zoom and logs whom it would invite and take off, without changing any invite."
+                }
+              />
+              <ModeSwitch
+                name="Google Meetings invites"
+                live={google.emailInvites}
+                labels={["Silent", "Email Invites"]}
+                busy={modeBusy === "invites"}
+                onChange={(next) => void setEmailInvites(next)}
+                detail={
+                  google.emailInvites
+                    ? "Google emails everyone on a calendar event about each change the sync makes to its invite."
+                    : "Guests find an invite on their calendar without an email."
+                }
+              />
+            </>
           }
           action={
             google.configured && (
               // A full page load, not a client navigation: the route sends the browser on to Google.
-              <Button variant={google.connection ? "outline" : "brand"} size="sm" onClick={() => window.location.assign("/api/evals/google-meetings/connect")}>
+              <Button
+                variant={google.connection ? "outline" : "brand"}
+                size="sm"
+                onClick={() => window.location.assign("/api/evals/google-meetings/connect")}
+              >
                 <Plug />
                 {google.connection ? "Reconnect" : "Connect Google account"}
               </Button>
@@ -212,14 +275,18 @@ export function ConnectorsView({
           connected={Boolean(zoom.connection)}
           detail={
             zoom.connection
-              ? `${zoom.connection.email}, connected ${formatWhen(zoom.connection.connectedAt)}${zoom.connection.connectedBy ? ` by ${zoom.connection.connectedBy}` : ""}. Google Meetings reads who joined the meetings this user hosts.`
+              ? `${zoom.connection.email}, connected ${formatWhen(zoom.connection.connectedAt)}${zoom.connection.connectedBy ? ` by ${zoom.connection.connectedBy}` : ""}. Google Meetings holds each meeting in a Zoom meeting this user hosts, with the meeting facilitators as its hosts, and reads who joined it.`
               : zoom.configured
                 ? "None yet, so attendance is only what an administrator marks. Sign in as the user who hosts the meetings."
                 : "Zoom is not set up here, so attendance is only what an administrator marks."
           }
           action={
             zoom.configured && (
-              <Button variant={zoom.connection ? "outline" : "brand"} size="sm" onClick={() => window.location.assign("/api/evals/google-meetings/zoom/connect")}>
+              <Button
+                variant={zoom.connection ? "outline" : "brand"}
+                size="sm"
+                onClick={() => window.location.assign("/api/evals/google-meetings/zoom/connect")}
+              >
                 <Plug />
                 {zoom.connection ? "Reconnect" : "Connect Zoom user"}
               </Button>
@@ -306,27 +373,36 @@ const MODES = {
   },
 } as const;
 
-/** A connector's Dry run / Live switch, with what the mode it is in does. */
+/** A connector's Dry run / Live switch, or another two-way one by `labels`, with what the mode it is in does. */
 function ModeSwitch({
   name,
   live,
   busy,
   onChange,
   detail,
+  labels = ["Dry run", "Live"],
 }: {
   name: string;
   live: boolean;
+  /** The off and on labels. */
+  labels?: readonly [string, string];
   busy: boolean;
   onChange: (live: boolean) => void;
   detail: string;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-3 pt-2">
-      <div role="radiogroup" aria-label={`${name} mode`} className="inline-flex shrink-0 items-center rounded-lg border bg-card p-0.5 shadow-xs">
-        {([
-          [false, "Dry run"],
-          [true, "Live"],
-        ] as const).map(([value, label]) => (
+      <div
+        role="radiogroup"
+        aria-label={`${name} mode`}
+        className="inline-flex shrink-0 items-center rounded-lg border bg-card p-0.5 shadow-xs"
+      >
+        {(
+          [
+            [false, labels[0]],
+            [true, labels[1]],
+          ] as const
+        ).map(([value, label]) => (
           <button
             key={label}
             type="button"

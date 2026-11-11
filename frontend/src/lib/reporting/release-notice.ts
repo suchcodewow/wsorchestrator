@@ -292,7 +292,9 @@ export async function listReleaseNoticeMessages(
 ): Promise<Page<ReleaseNoticeMessageRow>> {
   const { limit, offset } = pageWindow(query.page);
   // Qualified by hand, as in listSlackSyncChanges: a bare "email" inside the subquery would mean e.email.
-  const fullName = sql<string | null>`(select e.full_name from employees e where lower(e.email) = "release_notice_messages"."email" limit 1)`;
+  const fullName = sql<
+    string | null
+  >`(select e.full_name from employees e where lower(e.email) = "release_notice_messages"."email" limit 1)`;
   const rows = await db
     .select({ id: m.id, action: m.action, email: m.email, fullName, detail: m.detail, at: m.at })
     .from(m)

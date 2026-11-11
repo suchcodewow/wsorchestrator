@@ -8,15 +8,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ClipboardPlus } from "lucide-react";
-import {
-  HEADER_ROW,
-  LINK_ROW,
-  Pager,
-  PlainHeader,
-  SortHeader,
-  TableSearch,
-  useRowLink,
-} from "@/components/data-table";
+import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AUDIENCE_LABELS, STAGE_LABELS } from "@/lib/evals/assessment-values";

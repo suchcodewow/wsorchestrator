@@ -19,22 +19,13 @@ import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import type { Access } from "@/lib/roles";
-import {
-  deleteRun,
-  endRunNow,
-  extendRun,
-  getRunForViewer,
-  listCalendarRuns,
-  retryTeardown,
-  updateRunConfig,
-} from "@/lib/runs";
+import { deleteRun, endRunNow, extendRun, getRunForViewer, listCalendarRuns, retryTeardown, updateRunConfig } from "@/lib/runs";
 import { PERSONAS, PERSONA_NAMES, describeAccess, type Persona } from "../support/access";
 import { createRun, testScope, type TestUser } from "../support/seed";
 
 const scope = testScope("runs");
 
-const seesEveryonesEvents = (a: Access) =>
-  a.platform || a.event === "manager" || a.event === "administrator";
+const seesEveryonesEvents = (a: Access) => a.platform || a.event === "manager" || a.event === "administrator";
 const seesOwnEvents = (a: Access) => a.platform || a.event !== "none";
 
 let alice: TestUser;
@@ -73,8 +64,7 @@ describe("getRunForViewer", () => {
 });
 
 describe("listCalendarRuns", () => {
-  const ids = async (u: TestUser, s: "own" | "all") =>
-    new Set((await listCalendarRuns(u, s)).map((r) => r.id));
+  const ids = async (u: TestUser, s: "own" | "all") => new Set((await listCalendarRuns(u, s)).map((r) => r.id));
 
   for (const p of PERSONA_NAMES) {
     test(`${p} (${describeAccess(PERSONAS[p])})`, async () => {

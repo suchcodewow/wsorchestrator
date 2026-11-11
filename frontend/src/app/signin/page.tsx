@@ -30,11 +30,7 @@ function errorMessage(error: string | undefined): string | null {
   }
 }
 
-export default async function SignInPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ callbackUrl?: string; error?: string }>;
-}) {
+export default async function SignInPage({ searchParams }: { searchParams: Promise<{ callbackUrl?: string; error?: string }> }) {
   const params = await searchParams;
   const target = returnPath(params.callbackUrl) ?? "/events";
   const problem = errorMessage(params.error);
@@ -47,25 +43,18 @@ export default async function SignInPage({
       <AmbientBackdrop className="absolute inset-0" />
 
       <SignInHero>
-        <div
-          data-anim-card
-          className="relative w-full max-w-sm rounded-2xl border bg-card/90 p-8 shadow-xl backdrop-blur-xl"
-        >
+        <div data-anim-card className="relative w-full max-w-sm rounded-2xl border bg-card/90 p-8 shadow-xl backdrop-blur-xl">
           <div data-anim className="flex items-center gap-2.5">
             <BrandMark />
             <span className="font-medium tracking-tight">Harness Events</span>
           </div>
 
-          <h1
-            data-anim
-            className="mt-7 text-3xl font-medium tracking-tight text-balance"
-          >
+          <h1 data-anim className="mt-7 text-3xl font-medium tracking-tight text-balance">
             Event Planning, Management, and Scoring.
           </h1>
 
           <p data-anim className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            Workshops and challenges arrive with their labs and clouds ready,
-            and bootcamps run on schedule across your facilities.
+            Workshops and challenges arrive with their labs and clouds ready, and bootcamps run on schedule across your facilities.
           </p>
 
           <ul data-anim className="mt-7 space-y-3">
@@ -97,11 +86,7 @@ export default async function SignInPage({
               action={async () => {
                 "use server";
                 const hd = await googleHostedDomain();
-                await signIn(
-                  "google",
-                  { redirectTo: target },
-                  hd ? { hd } : undefined,
-                );
+                await signIn("google", { redirectTo: target }, hd ? { hd } : undefined);
               }}
             >
               <Button type="submit" variant="brand" size="lg" className="group w-full">

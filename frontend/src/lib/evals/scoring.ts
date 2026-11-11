@@ -117,11 +117,7 @@ const SORT_COLUMNS = {
 } as const;
 
 function submissionJoin(assessmentId: string, bootcampId: string | null) {
-  return and(
-    eq(s.attendeeEmail, e.email),
-    eq(s.assessmentId, assessmentId),
-    bootcampId ? eq(s.bootcampId, bootcampId) : sql`false`,
-  );
+  return and(eq(s.attendeeEmail, e.email), eq(s.assessmentId, assessmentId), bootcampId ? eq(s.bootcampId, bootcampId) : sql`false`);
 }
 
 /**
@@ -227,9 +223,7 @@ export async function attendeeCounts(
     .select({
       attendees: sql<number>`count(*)::int`,
       scored: sql<number>`count(${s.id})::int`,
-      mine: viewerEmail
-        ? sql<number>`(count(*) filter (where ${assignedTo(assessment, bootcampId, viewerEmail)}))::int`
-        : sql<number>`0`,
+      mine: viewerEmail ? sql<number>`(count(*) filter (where ${assignedTo(assessment, bootcampId, viewerEmail)}))::int` : sql<number>`0`,
     })
     .from(e)
     .leftJoin(s, submissionJoin(assessment.id, bootcampId))
@@ -260,14 +254,8 @@ export async function scoringProgress(): Promise<Record<ScheduleTrack, ScoringTa
           scored: sql<number>`count(${s.id})::int`,
         })
         .from(e)
-        .innerJoin(
-          a,
-          and(eq(a.active, true), eq(a.stage, stage), sql`${a.audience} in ('both', ${assessedTrack})`),
-        )
-        .leftJoin(
-          s,
-          and(eq(s.attendeeEmail, e.email), eq(s.assessmentId, a.id), bootcamp ? eq(s.bootcampId, bootcamp.id) : sql`false`),
-        )
+        .innerJoin(a, and(eq(a.active, true), eq(a.stage, stage), sql`${a.audience} in ('both', ${assessedTrack})`))
+        .leftJoin(s, and(eq(s.attendeeEmail, e.email), eq(s.assessmentId, a.id), bootcamp ? eq(s.bootcampId, bootcamp.id) : sql`false`))
         .where(and(isCandidate(cutoffs), IN_STAGE[stage], assessedOn(["sales", "engineer"])))
         .groupBy(assessedTrack);
       const tally = (track: "sales" | "engineer"): ScoringTally => {
@@ -317,11 +305,7 @@ async function eligibleAttendee(assessment: ScoringAssessment, employeeId: strin
 }
 
 /** What the scoring form opens with; null if the assessment or the attendee is not one that can be scored. */
-export async function getScoringForm(
-  assessmentId: string,
-  employeeId: string,
-  bootcampId: string | null,
-): Promise<ScoringForm | null> {
+export async function getScoringForm(assessmentId: string, employeeId: string, bootcampId: string | null): Promise<ScoringForm | null> {
   const assessment = await scoringAssessment(assessmentId);
   if (!assessment) return null;
   const [criteria, attendee, people] = await Promise.all([
@@ -330,9 +314,7 @@ export async function getScoringForm(
     bootcampId ? scorerPool(bootcampId) : Promise.resolve([]),
   ]);
   if (!attendee) return null;
-  const transcripts = bootcampId
-    ? await listTranscripts({ bootcampId, assessmentId, attendeeEmail: attendee.email })
-    : [];
+  const transcripts = bootcampId ? await listTranscripts({ bootcampId, assessmentId, attendeeEmail: attendee.email }) : [];
 
   const [submission] = bootcampId
     ? await db
@@ -354,7 +336,11 @@ export async function getScoringForm(
 
   const [scores, tags] = await Promise.all([
     db
-      .select({ criterionId: evalsSubmissionScores.criterionId, score: evalsSubmissionScores.score, comment: evalsSubmissionScores.comment })
+      .select({
+        criterionId: evalsSubmissionScores.criterionId,
+        score: evalsSubmissionScores.score,
+        comment: evalsSubmissionScores.comment,
+      })
       .from(evalsSubmissionScores)
       .where(eq(evalsSubmissionScores.submissionId, submission.id))
       .limit(EVALS_ASSESSMENT_LIMITS.criteria * 2),
@@ -430,13 +416,7 @@ export const submissionSchema = z.object({
 
 export type SubmissionInput = z.infer<typeof submissionSchema>;
 
-export type SubmissionError =
-  | "invalid"
-  | "not_found"
-  | "no_bootcamp"
-  | "feedback_required"
-  | "not_scorer"
-  | "conflict";
+export type SubmissionError = "invalid" | "not_found" | "no_bootcamp" | "feedback_required" | "not_scorer" | "conflict";
 
 export const SUBMISSION_STATUS_FOR: Record<SubmissionError, number> = {
   invalid: 400,

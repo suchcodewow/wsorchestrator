@@ -87,9 +87,7 @@ export function QuestionsView({
             aria-current={k === subject ? "page" : undefined}
             className={cn(
               "rounded-full border px-3 py-1 text-sm transition-colors",
-              k === subject
-                ? "border-brand bg-brand-subtle text-brand"
-                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              k === subject ? "border-brand bg-brand-subtle text-brand" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
             {SUBJECTS[k].short}
@@ -102,8 +100,13 @@ export function QuestionsView({
           <h2 className="text-xl font-medium tracking-tight">{SUBJECTS[subject].name}</h2>
           <p className="text-sm text-muted-foreground tnum">
             {counts.approved} of {total} approved
-            {counts.rejected > 0 && <> · {counts.rejected} {counts.rejected === 1 ? "needs" : "need"} work</>} ·{" "}
-            {live ? "open to takers" : `needs ${ENGINE.MIN} approved to open`}
+            {counts.rejected > 0 && (
+              <>
+                {" "}
+                · {counts.rejected} {counts.rejected === 1 ? "needs" : "need"} work
+              </>
+            )}{" "}
+            · {live ? "open to takers" : `needs ${ENGINE.MIN} approved to open`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -224,8 +227,7 @@ function CalibrationNote({ calibration }: { calibration: Calibration }) {
     case "dead_distractors":
       return (
         <p className="text-rose-700 dark:text-rose-400">
-          Nobody picks {calibration.options.map((i) => LETTERS[i]).join(", ")}: rewrite{" "}
-          {calibration.options.length === 1 ? "it" : "them"}
+          Nobody picks {calibration.options.map((i) => LETTERS[i]).join(", ")}: rewrite {calibration.options.length === 1 ? "it" : "them"}
         </p>
       );
   }
@@ -294,10 +296,7 @@ function ReviewDialog({ row, onClose }: { row: Row | null; onClose: () => void }
 
               <div className="divide-y overflow-hidden rounded-lg border text-sm">
                 {row.options.map((o, i) => (
-                  <div
-                    key={i}
-                    className={cn("flex items-start gap-3 px-4 py-3", i === row.answer && "bg-emerald-500/10")}
-                  >
+                  <div key={i} className={cn("flex items-start gap-3 px-4 py-3", i === row.answer && "bg-emerald-500/10")}>
                     <span
                       className={cn(
                         "flex size-5 shrink-0 items-center justify-center rounded font-mono text-xs",
@@ -316,9 +315,7 @@ function ReviewDialog({ row, onClose }: { row: Row | null; onClose: () => void }
 
               <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm">
                 <p className="text-xs font-medium text-muted-foreground">Why it is the answer</p>
-                <p className={cn("mt-1", !row.rationale && "text-muted-foreground")}>
-                  {row.rationale || "No explanation yet."}
-                </p>
+                <p className={cn("mt-1", !row.rationale && "text-muted-foreground")}>{row.rationale || "No explanation yet."}</p>
               </div>
 
               <label className="grid gap-1.5 text-sm">
@@ -336,11 +333,7 @@ function ReviewDialog({ row, onClose }: { row: Row | null; onClose: () => void }
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <DialogFooter className="gap-2 sm:justify-between">
-              <Button
-                variant="ghost"
-                onClick={() => void save("draft")}
-                disabled={saving !== null || row.review.status === "draft"}
-              >
+              <Button variant="ghost" onClick={() => void save("draft")} disabled={saving !== null || row.review.status === "draft"}>
                 {saving === "draft" ? <Loader2 className="animate-spin" /> : <RotateCcw />}
                 Back to draft
               </Button>

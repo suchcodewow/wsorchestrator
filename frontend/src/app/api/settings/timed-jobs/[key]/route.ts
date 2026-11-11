@@ -21,10 +21,7 @@ function readSchedule(value: unknown): Schedule | undefined {
   return { cron, timeZone };
 }
 
-export const PATCH = audited(async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ key: string }> },
-) {
+export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ key: string }> }) {
   const { error, user } = await requireCaller(req, canManageTimedJobs);
   if (error) return error;
 
@@ -36,7 +33,10 @@ export const PATCH = audited(async function PATCH(
   }
   const schedule = hasSchedule ? readSchedule(body.schedule) : undefined;
   if (hasSchedule && schedule === undefined) {
-    return NextResponse.json({ error: "invalid_schedule", detail: "A schedule is { cron, timeZone }, or null for the default" }, { status: 400 });
+    return NextResponse.json(
+      { error: "invalid_schedule", detail: "A schedule is { cron, timeZone }, or null for the default" },
+      { status: 400 },
+    );
   }
 
   const { key } = await params;
@@ -47,7 +47,10 @@ export const PATCH = audited(async function PATCH(
     const result = await setTimedJobSchedule(user.id, key, schedule);
     if (!result.ok) {
       const status = result.error === "not_found" ? 404 : result.error === "fixed_schedule" ? 409 : 400;
-      return NextResponse.json(result.error === "invalid_schedule" ? { error: result.error, detail: result.detail } : { error: result.error }, { status });
+      return NextResponse.json(
+        result.error === "invalid_schedule" ? { error: result.error, detail: result.detail } : { error: result.error },
+        { status },
+      );
     }
   }
   if (hasEnabled) await setTimedJobEnabled(user.id, key, body.enabled as boolean);

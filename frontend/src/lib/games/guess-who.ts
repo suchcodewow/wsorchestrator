@@ -177,7 +177,16 @@ const DEFAULT_NAMES = [
 export const DEFAULT_GUESS_WHO: GuessWhoConfig = {
   questionCap: 12,
   tools: DEFAULT_NAMES.reduce<GuessWhoTool[]>(
-    (list, name) => [...list, { id: toolId(name, list.map((t) => t.id)), name }],
+    (list, name) => [
+      ...list,
+      {
+        id: toolId(
+          name,
+          list.map((t) => t.id),
+        ),
+        name,
+      },
+    ],
     [],
   ),
   rounds: [

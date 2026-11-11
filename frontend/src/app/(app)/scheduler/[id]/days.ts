@@ -57,7 +57,14 @@ export function moveTo(days: Days, id: string, to: string, start: number): Days 
   if (from.key !== to && target.length >= SCHEDULE_LIMITS.sessionsPerDay) return days;
   const { track, day } = parseKey(to);
   const moved = { ...source[from.index]!, track, day };
-  const next = from.key === to ? days : withDay(days, from.key, source.filter((_, i) => i !== from.index));
+  const next =
+    from.key === to
+      ? days
+      : withDay(
+          days,
+          from.key,
+          source.filter((_, i) => i !== from.index),
+        );
   return withDay(next, to, dropAt(target, moved, start));
 }
 
@@ -67,5 +74,12 @@ export function resize(days: Days, id: string, minutes: number): Days {
   if (!at) return days;
   const list = dayOf(days, at.key);
   if (list[at.index]!.minutes === minutes) return days;
-  return withDay(days, at.key, settle(list.map((s, i) => (i === at.index ? { ...s, minutes } : s)), id));
+  return withDay(
+    days,
+    at.key,
+    settle(
+      list.map((s, i) => (i === at.index ? { ...s, minutes } : s)),
+      id,
+    ),
+  );
 }

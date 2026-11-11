@@ -106,10 +106,7 @@ export function AutomationView({
   const [notice, setNotice] = useState<string | null>(null);
 
   const q = query.trim().toLowerCase();
-  const shownSuggestions = useMemo(
-    () => suggestions.filter((s) => s.title.toLowerCase().includes(q)),
-    [suggestions, q],
-  );
+  const shownSuggestions = useMemo(() => suggestions.filter((s) => s.title.toLowerCase().includes(q)), [suggestions, q]);
   const suggestionsRef = useAnchoredToParent<HTMLDivElement>(searchOpen && q.length > 0 && shownSuggestions.length > 0);
 
   async function send(key: string, url: string, init: RequestInit) {
@@ -223,9 +220,7 @@ export function AutomationView({
             aria-label="Search titles"
             className="pl-9 pr-9"
           />
-          {searching && (
-            <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-          )}
+          {searching && <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />}
           {searchOpen && q.length > 0 && shownSuggestions.length > 0 && (
             <div ref={suggestionsRef} className="absolute top-0 left-0 z-20 overflow-y-auto rounded-md border bg-popover shadow-md">
               {shownSuggestions.slice(0, 8).map((s) => (
@@ -322,9 +317,7 @@ export function AutomationView({
                       ) : (
                         <tr key={row.id} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
                           <td className="px-5 py-2.5 font-medium">{row.title}</td>
-                          <td className="px-5 py-2.5 tabular-nums text-muted-foreground">
-                            {imported ? row.holders : "—"}
-                          </td>
+                          <td className="px-5 py-2.5 tabular-nums text-muted-foreground">{imported ? row.holders : "—"}</td>
                           <td className="px-5 py-2.5 text-muted-foreground">{row.addedBy ?? "—"}</td>
                           <td className="px-5 py-2">
                             <div className="flex justify-end gap-1">
@@ -348,11 +341,7 @@ export function AutomationView({
                                 className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                                 onClick={() => send(row.id, `/api/evals/titles/${row.id}`, { method: "DELETE" })}
                               >
-                                {busy === row.id ? (
-                                  <Loader2 className="size-3.5 animate-spin" />
-                                ) : (
-                                  <Trash2 className="size-3.5" />
-                                )}
+                                {busy === row.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
                               </Button>
                             </div>
                           </td>
@@ -429,11 +418,7 @@ function OrgLeaderField({
           />
           {open && searching && <EmployeeMatches matches={matches} onChoose={choose} />}
         </div>
-        <Button
-          variant="brand"
-          disabled={!dirty || selected === "" || busy}
-          onClick={() => onSave(selected)}
-        >
+        <Button variant="brand" disabled={!dirty || selected === "" || busy} onClick={() => onSave(selected)}>
           {busy ? <Loader2 className="animate-spin" /> : <Check />}
           Save
         </Button>
@@ -489,11 +474,7 @@ function DeferralField({
 }) {
   const [value, setValue] = useState(String(days));
   const parsed = Number(value);
-  const valid =
-    value.trim() !== "" &&
-    Number.isInteger(parsed) &&
-    parsed >= DEFERRAL_DAYS_LIMITS.min &&
-    parsed <= DEFERRAL_DAYS_LIMITS.max;
+  const valid = value.trim() !== "" && Number.isInteger(parsed) && parsed >= DEFERRAL_DAYS_LIMITS.min && parsed <= DEFERRAL_DAYS_LIMITS.max;
   const dirty = valid && parsed !== days;
 
   return (

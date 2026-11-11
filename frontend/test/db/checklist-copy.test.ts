@@ -38,7 +38,13 @@ async function bootcamp(startDate: string, btcDays: number, intDays: number | nu
   return row!.id;
 }
 
-async function add(bootcampId: string, track: "btc" | "int" | "btc_se", day: number, name: string, extra: { ownerEmail?: string; mentions?: string[] } = {}) {
+async function add(
+  bootcampId: string,
+  track: "btc" | "int" | "btc_se",
+  day: number,
+  name: string,
+  extra: { ownerEmail?: string; mentions?: string[] } = {},
+) {
   const saved = await addChecklistItem(admin.id, bootcampId, track, day, { name, ...extra });
   assert.ok(saved.ok, `adding ${name}`);
   return saved.value;
@@ -61,7 +67,10 @@ describe("the Prep Day checklist", () => {
     const id = await bootcamp("2027-05-03", 3, 2);
     const prep = await add(id, "btc", 0, "Ship the laptops");
     assert.equal(prep.day, 0);
-    assert.deepEqual((await listDayItems(id, "btc", 0)).map((i) => i.id), [prep.id]);
+    assert.deepEqual(
+      (await listDayItems(id, "btc", 0)).map((i) => i.id),
+      [prep.id],
+    );
     assert.deepEqual(await addChecklistItem(admin.id, id, "int", 0, { name: "Nope" }), { ok: false, error: "no_day" });
     assert.deepEqual(await addChecklistItem(admin.id, id, "btc_se", 0, { name: "Nope" }), { ok: false, error: "no_day" });
     assert.equal(checklistDayLabel("btc", 0), "Prep Day");
@@ -125,10 +134,14 @@ describe("copying a schedule", () => {
     assert.equal(day1[1]!.createdByEmail, admin.email);
 
     const day2 = await listDayItems(target, "btc", 2);
-    assert.deepEqual(day2.map((i) => ({ name: i.name, ownerEmail: i.ownerEmail, ownerName: i.ownerName })), [
-      { name: "Collect the feedback", ownerEmail: null, ownerName: "" },
-    ]);
-    assert.deepEqual((await listDayItems(target, "btc_se", 2)).map((i) => i.name), ["Set up the SE lab"]);
+    assert.deepEqual(
+      day2.map((i) => ({ name: i.name, ownerEmail: i.ownerEmail, ownerName: i.ownerName })),
+      [{ name: "Collect the feedback", ownerEmail: null, ownerName: "" }],
+    );
+    assert.deepEqual(
+      (await listDayItems(target, "btc_se", 2)).map((i) => i.name),
+      ["Set up the SE lab"],
+    );
     assert.deepEqual(await listDayItems(target, "btc", 3), [], "a day the target does not run is left out");
     assert.deepEqual(await listDayItems(target, "int", 1), [], "a track the target does not hold is left out");
 

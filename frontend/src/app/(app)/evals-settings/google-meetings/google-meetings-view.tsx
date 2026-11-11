@@ -92,7 +92,8 @@ const SYNC_ERRORS: Record<string, string> = {
   not_connected: "Connect a Google account first, under Admin Settings → External Connectors.",
   not_configured: "The app's Google OAuth client is not set up here.",
   already_running: "A sync is already running — its result will appear in the sync log.",
-  revoked: "Google no longer accepts the connected account's token. A platform administrator connects it again under Admin Settings → External Connectors.",
+  revoked:
+    "Google no longer accepts the connected account's token. A platform administrator connects it again under Admin Settings → External Connectors.",
   google_error: "Google refused the sync.",
   forbidden: "Your own role changed — reload the page.",
 };
@@ -121,8 +122,8 @@ export function meetingRunCounts(
   const parts = [
     run.invited && `${run.invited.toLocaleString()} ${run.dryRun ? "to invite" : "invited"}`,
     run.removed && `${run.removed.toLocaleString()} ${run.dryRun ? "to take off" : "taken off"}`,
-    run.attended && `${run.attended.toLocaleString()} attended`,
-    run.missed && `${run.missed.toLocaleString()} missed`,
+    run.attended && `${run.attended.toLocaleString()} ${run.dryRun ? "to mark attended" : "attended"}`,
+    run.missed && `${run.missed.toLocaleString()} ${run.dryRun ? "to mark missed" : "missed"}`,
     run.noneLeft && `${run.noneLeft.toLocaleString()} with none left`,
     run.failures && plural(run.failures, "failure"),
   ].filter(Boolean);
@@ -194,7 +195,12 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
     if (
       !preview &&
       live &&
-      !(await confirmDialog({ title: "Sync now?", description: "Everyone each meeting is for is added to its next occurrence before the bootcamp, where it shows up on their calendar without an email. Preview shows what it would do without doing it.", confirmLabel: "Sync" }))
+      !(await confirmDialog({
+        title: "Sync now?",
+        description:
+          "Everyone each meeting is for is added to its next occurrence before the bootcamp, where it shows up on their calendar without an email. Preview shows what it would do without doing it.",
+        confirmLabel: "Sync",
+      }))
     ) {
       return;
     }
@@ -308,9 +314,9 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
         >
           <FlaskConical className="mt-0.5 size-4 shrink-0" />
           <span>
-            The test group is on, so each sync invites its {plural(testGroup.members, "person", "people")}{" "}
-            (<span className="font-mono">-{testGroup.suffix}</span>) instead of the cohort, and no facilitators. Turn it off on
-            the Cohorts page&apos;s Current tab, which takes its invites back.
+            The test group is on, so each sync invites its {plural(testGroup.members, "person", "people")} (
+            <span className="font-mono">-{testGroup.suffix}</span>) instead of the cohort, and no facilitators. Turn it off on the Cohorts
+            page&apos;s Current tab, which takes its invites back.
           </span>
         </motion.div>
       )}
@@ -322,7 +328,9 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
               Google account
               <Badge variant="secondary">Not connected</Badge>
             </p>
-            <p className="text-muted-foreground">None yet. A platform administrator connects it under Admin Settings → External Connectors.</p>
+            <p className="text-muted-foreground">
+              None yet. A platform administrator connects it under Admin Settings → External Connectors.
+            </p>
           </div>
         )}
         {!zoom.connection && (
@@ -399,7 +407,12 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
             </Button>
           </>
         ) : (
-          <TableSearch value={list.query.q} placeholder="Search by who, status or error" label="Search the sync log" className="min-w-56 flex-1" />
+          <TableSearch
+            value={list.query.q}
+            placeholder="Search by who, status or error"
+            label="Search the sync log"
+            className="min-w-56 flex-1"
+          />
         )}
       </motion.div>
 
@@ -575,11 +588,7 @@ function RunsTable({ list: { query, page } }: { list: Extract<List, { view: "run
           </thead>
           <tbody>
             {page.rows.map((run) => (
-              <tr
-                key={run.id}
-                className={`${LINK_ROW} align-top`}
-                onClick={rowLink(`/evals-settings/google-meetings/runs/${run.id}`)}
-              >
+              <tr key={run.id} className={`${LINK_ROW} align-top`} onClick={rowLink(`/evals-settings/google-meetings/runs/${run.id}`)}>
                 <td className="whitespace-nowrap px-5 py-2.5 tabular-nums">
                   <Link href={`/evals-settings/google-meetings/runs/${run.id}`} className="group-hover:underline">
                     {formatWhen(run.startedAt)}

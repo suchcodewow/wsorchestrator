@@ -16,6 +16,11 @@ export const POST = audited(async function POST(req: Request) {
   const { error } = await requireCanaryWireRefresh(req);
   if (error) return error;
   const pull = await advancePull();
-  if (pull) noteAudit({ target: pull.id, targetLabel: "Canary Wire pull from Mindtickle", detail: { status: pull.status, done: pull.done, total: pull.total } });
+  if (pull)
+    noteAudit({
+      target: pull.id,
+      targetLabel: "Canary Wire pull from Mindtickle",
+      detail: { status: pull.status, done: pull.done, total: pull.total },
+    });
   return NextResponse.json({ pull });
 });

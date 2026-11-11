@@ -21,11 +21,7 @@ async function viewerCanEdit(): Promise<boolean> {
   return session?.user ? canManageLabGuides(session.user.access) : false;
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ workshopSlug: string }>;
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ workshopSlug: string }> }): Promise<Metadata> {
   const { workshopSlug } = await params;
   const workshop = await getLabWorkshopBySlug(workshopSlug, await viewerCanEdit());
   if (!workshop) return { title: "Workshop" };
@@ -37,11 +33,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function WorkshopPage({
-  params,
-}: {
-  params: Promise<{ workshopSlug: string }>;
-}) {
+export default async function WorkshopPage({ params }: { params: Promise<{ workshopSlug: string }> }) {
   const { workshopSlug } = await params;
   const canEdit = await viewerCanEdit();
 
@@ -63,9 +55,7 @@ export default async function WorkshopPage({
       <div className="mt-6 flex items-start justify-between gap-6">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-3xl font-medium tracking-tight text-balance">
-              {workshop.title}
-            </h1>
+            <h1 className="text-3xl font-medium tracking-tight text-balance">{workshop.title}</h1>
             {!workshop.published && (
               <Badge variant="outline" className="border-dashed">
                 Draft
@@ -74,15 +64,11 @@ export default async function WorkshopPage({
           </div>
 
           {workshop.summary && (
-            <p className="mt-3 max-w-2xl text-base leading-relaxed text-pretty text-muted-foreground">
-              {workshop.summary}
-            </p>
+            <p className="mt-3 max-w-2xl text-base leading-relaxed text-pretty text-muted-foreground">{workshop.summary}</p>
           )}
 
           <p className="mt-4 text-xs text-muted-foreground">
-            {workshop.guides.length === 1
-              ? "1 guide"
-              : `${workshop.guides.length} guides`}
+            {workshop.guides.length === 1 ? "1 guide" : `${workshop.guides.length} guides`}
             {" · Updated "}
             {updated.format(workshop.updatedAt)}
             {workshop.authorName ? ` · ${workshop.authorName}` : ""}
@@ -112,9 +98,7 @@ export default async function WorkshopPage({
 
       {workshop.guides.length === 0 ? (
         <p className="mt-3 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-          {canEdit
-            ? "Nothing in this workshop yet — add some guides to it."
-            : "This workshop has no guides in it yet."}
+          {canEdit ? "Nothing in this workshop yet — add some guides to it." : "This workshop has no guides in it yet."}
         </p>
       ) : (
         <ol className="mt-3 grid gap-2">
@@ -124,18 +108,10 @@ export default async function WorkshopPage({
                 href={`/labs/${workshop.slug}/${guide.slug}`}
                 className="group flex items-baseline gap-3 rounded-xl border bg-card/60 dark:bg-card p-4 transition-colors outline-none hover:border-brand-border/70 hover:bg-accent/40 dark:hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
-                <span className="tnum text-sm text-muted-foreground">
-                  {i + 1}
-                </span>
+                <span className="tnum text-sm text-muted-foreground">{i + 1}</span>
                 <span className="min-w-0">
-                  <span className="block text-sm font-medium group-hover:text-brand">
-                    {guide.title}
-                  </span>
-                  {guide.summary && (
-                    <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">
-                      {guide.summary}
-                    </span>
-                  )}
+                  <span className="block text-sm font-medium group-hover:text-brand">{guide.title}</span>
+                  {guide.summary && <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{guide.summary}</span>}
                 </span>
               </Link>
             </li>

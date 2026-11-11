@@ -13,10 +13,7 @@ export function containsPattern(text: string): string {
  * True when any of `columns` contains `q`, ignoring case; undefined (no
  * condition) when `q` is empty.
  */
-export function searchAny(
-  q: string,
-  columns: (AnyColumn | SQL)[],
-): SQL | undefined {
+export function searchAny(q: string, columns: (AnyColumn | SQL)[]): SQL | undefined {
   if (!q) return undefined;
   const pattern = containsPattern(q);
   return or(...columns.map((c) => ilike(c as AnyColumn, pattern)));
@@ -27,19 +24,9 @@ export function searchAny(
  * blanks last either way, then `tiebreak` — a column, ascending, or an
  * ordering already written — so that paging is stable.
  */
-export function orderFor(
-  column: AnyColumn | SQL,
-  dir: SortDir,
-  ...tiebreak: (AnyColumn | SQL)[]
-): SQL[] {
-  const primary =
-    dir === "asc"
-      ? sql`${column} asc nulls last`
-      : sql`${column} desc nulls last`;
-  return [
-    primary,
-    ...tiebreak.map((c) => (is(c, SQL) ? c : asc(c))),
-  ];
+export function orderFor(column: AnyColumn | SQL, dir: SortDir, ...tiebreak: (AnyColumn | SQL)[]): SQL[] {
+  const primary = dir === "asc" ? sql`${column} asc nulls last` : sql`${column} desc nulls last`;
+  return [primary, ...tiebreak.map((c) => (is(c, SQL) ? c : asc(c)))];
 }
 
 /** A text column with '' read as null, so `orderFor` sinks blanks too. */

@@ -53,7 +53,14 @@ export function findIssues(
   hasRooms: boolean,
   instructors: Instructor[],
 ) {
-  const spotOf = (s: Placed<SessionRow>): Spot => ({ sessionId: s.id, name: s.name, track: s.track, day: s.day, start: s.start, end: s.end });
+  const spotOf = (s: Placed<SessionRow>): Spot => ({
+    sessionId: s.id,
+    name: s.name,
+    track: s.track,
+    day: s.day,
+    start: s.start,
+    end: s.end,
+  });
   const nameOf = (what: Clash["what"]) =>
     what.kind === "person" ? what.fullName : what.kind === "room" ? (roomNames.get(what.roomId) ?? "A room") : GROUP_NAMES[what.group];
   const verb = (what: Clash["what"]) => (what.kind === "audience" ? "are" : "is");
@@ -68,7 +75,12 @@ export function findIssues(
       flag(s.id, `${nameOf(c.what)} ${verb(c.what)} also in ${c.name}`);
       if (s.id > c.sessionId) continue;
       const whatKey = c.what.kind === "person" ? c.what.email : c.what.kind === "room" ? c.what.roomId : c.what.group;
-      issues.push({ kind: "clash", key: `clash:${s.id}:${c.sessionId}:${whatKey}`, lead: `${nameOf(c.what)} ${verb(c.what)} in both`, spots: [spotOf(s), c] });
+      issues.push({
+        kind: "clash",
+        key: `clash:${s.id}:${c.sessionId}:${whatKey}`,
+        lead: `${nameOf(c.what)} ${verb(c.what)} in both`,
+        spots: [spotOf(s), c],
+      });
     }
     if (s.kind !== "unstructured" && s.staff.length === 0) {
       flag(s.id, "Nobody leads it");
@@ -93,7 +105,8 @@ export function findIssues(
       ].filter((g): g is string => Boolean(g));
       const upper = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
       for (const g of gaps) flag(s.id, upper(g));
-      if (gaps.length > 0) issues.push({ kind: "breakout", key: `breakout:${s.id}`, lead: `${upper(gaps.join(" and "))}:`, spots: [spotOf(s)] });
+      if (gaps.length > 0)
+        issues.push({ kind: "breakout", key: `breakout:${s.id}`, lead: `${upper(gaps.join(" and "))}:`, spots: [spotOf(s)] });
     }
   }
   const bySpot = (x: Spot, y: Spot) => x.day - y.day || x.start - y.start;

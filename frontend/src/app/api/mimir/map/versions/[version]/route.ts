@@ -11,5 +11,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ version:
   const raw = (await params).version;
   const found = /^[1-9][0-9]{0,8}$/.test(raw) ? await getMapVersion(Number(raw)) : null;
   if (!found) return NextResponse.json({ error: "not_found" }, { status: 404 });
-  return NextResponse.json({ version: Number(raw), source: found.source, createdAt: found.createdAt.toISOString(), content: found.content });
+  return NextResponse.json({
+    version: Number(raw),
+    source: found.source,
+    createdAt: found.createdAt.toISOString(),
+    content: found.content,
+  });
 }

@@ -7,11 +7,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { auditBackupAction } from "@/lib/backups";
-import {
-  productionImportAvailable,
-  startProductionImport,
-  type ImportError,
-} from "@/lib/production-import";
+import { productionImportAvailable, startProductionImport, type ImportError } from "@/lib/production-import";
 import { canManageBackups } from "@/lib/roles";
 import { audited } from "@/lib/audit";
 
@@ -29,10 +25,7 @@ const STATUS_FOR: Record<ImportError, number> = {
   runs_hold_resources: 409,
 };
 
-export const POST = audited(async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const POST = audited(async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -56,10 +49,7 @@ export const POST = audited(async function POST(
     actorEmail: session.user.email ?? session.user.id,
   });
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, holding: result.holding },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error, holding: result.holding }, { status: STATUS_FOR[result.error] });
   }
 
   auditBackupAction({

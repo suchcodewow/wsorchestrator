@@ -63,8 +63,7 @@ const SKEW_MS = 5 * 60_000;
 const TIMEOUT_MS = 20_000;
 
 /** Which Harness cluster, the same way `harnessCfg` reads it. */
-const baseUrl = () =>
-  (process.env.HARNESS_BASE_URL ?? "https://app.harness.io").replace(/\/+$/, "");
+const baseUrl = () => (process.env.HARNESS_BASE_URL ?? "https://app.harness.io").replace(/\/+$/, "");
 
 /* ------------------------------------------------------------------ *
  * The sweep
@@ -110,12 +109,10 @@ async function sweep(): Promise<void> {
     // `scrubOne` turns every expected failure into a verdict, so this is for the
     // unexpected kind — and one row's surprise must not strand the rest of the
     // sweep, or a single unscrubbable secret keeps every later one real forever.
-    const verdict = await scrubOne(row).catch(
-      (err: unknown): Verdict => ({
-        status: "failed",
-        note: `Scrubbing it failed unexpectedly: ${err instanceof Error ? err.message : String(err)}`,
-      }),
-    );
+    const verdict = await scrubOne(row).catch((err: unknown): Verdict => ({
+      status: "failed",
+      note: `Scrubbing it failed unexpectedly: ${err instanceof Error ? err.message : String(err)}`,
+    }));
     tally[verdict.status] += 1;
     try {
       await recordScrub(row.id, verdict.status, verdict.note);
@@ -125,16 +122,10 @@ async function sweep(): Promise<void> {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`scrub: could not record ${row.secret_identifier}: ${message}`);
     }
-    console.log(
-      `scrub: ${row.org_identifier}/${row.secret_identifier} -> ${verdict.status}` +
-        (verdict.note ? ` (${verdict.note})` : ""),
-    );
+    console.log(`scrub: ${row.org_identifier}/${row.secret_identifier} -> ${verdict.status}` + (verdict.note ? ` (${verdict.note})` : ""));
   }
 
-  console.log(
-    `scrub: ${tally.scrubbed} scrubbed, ${tally.skipped} left alone, ` +
-      `${tally.failed} failed`,
-  );
+  console.log(`scrub: ${tally.scrubbed} scrubbed, ${tally.skipped} left alone, ` + `${tally.failed} failed`);
 }
 
 type Verdict = { status: "scrubbed" | "skipped" | "failed"; note: string | null };
@@ -188,9 +179,7 @@ async function scrubOne(row: DueScrub): Promise<Verdict> {
     if (current.status === 401 || current.status === 403) {
       return {
         status: "failed",
-        note:
-          "The token that deployed this can no longer read it in Harness — " +
-          `remove the value by hand. Harness said: ${message}`,
+        note: "The token that deployed this can no longer read it in Harness — " + `remove the value by hand. Harness said: ${message}`,
       };
     }
     return {
@@ -236,18 +225,8 @@ async function scrubOne(row: DueScrub): Promise<Verdict> {
         },
       }),
     );
-    form.append(
-      "file",
-      new Blob([SCRUB_VALUE], { type: "text/plain" }),
-      `${row.secret_identifier}.txt`,
-    );
-    reply = await request(
-      token,
-      "PUT",
-      `/ng/api/v2/secrets/files/${id}`,
-      query,
-      form,
-    );
+    form.append("file", new Blob([SCRUB_VALUE], { type: "text/plain" }), `${row.secret_identifier}.txt`);
+    reply = await request(token, "PUT", `/ng/api/v2/secrets/files/${id}`, query, form);
   } else {
     reply = await request(token, "PUT", `/ng/api/v2/secrets/${id}`, query, {
       secret: {
@@ -278,9 +257,7 @@ async function scrubOne(row: DueScrub): Promise<Verdict> {
   return {
     status: "failed",
     note:
-      reply.status === 0
-        ? `Could not reach Harness: ${reply.text}`
-        : `Harness refused the overwrite: ${message} (HTTP ${reply.status})`,
+      reply.status === 0 ? `Could not reach Harness: ${reply.text}` : `Harness refused the overwrite: ${message} (HTTP ${reply.status})`,
   };
 }
 
@@ -318,13 +295,7 @@ function modifiedSince(row: DueScrub, live: Date | null): boolean {
 
 type Reply = { status: number; text: string };
 
-async function request(
-  token: string,
-  method: "GET" | "PUT",
-  path: string,
-  query: Record<string, string>,
-  body?: unknown,
-): Promise<Reply> {
+async function request(token: string, method: "GET" | "PUT", path: string, query: Record<string, string>, body?: unknown): Promise<Reply> {
   const url = `${baseUrl()}${path}?${new URLSearchParams(query)}`;
   const multipart = body instanceof FormData;
   try {
@@ -333,12 +304,9 @@ async function request(
       headers: {
         "x-api-key": token,
         // Left to fetch for a FormData body, so the multipart boundary is right.
-        ...(body !== undefined && !multipart
-          ? { "Content-Type": "application/json" }
-          : {}),
+        ...(body !== undefined && !multipart ? { "Content-Type": "application/json" } : {}),
       },
-      body:
-        body === undefined ? undefined : multipart ? body : JSON.stringify(body),
+      body: body === undefined ? undefined : multipart ? body : JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     return { status: res.status, text: await res.text() };
@@ -355,9 +323,7 @@ const ok = (reply: Reply) => reply.status >= 200 && reply.status < 300;
 
 function messageOf(text: string): string {
   try {
-    return (
-      (JSON.parse(text) as { message?: string }).message ?? text.slice(0, 300)
-    );
+    return (JSON.parse(text) as { message?: string }).message ?? text.slice(0, 300);
   } catch {
     return text.slice(0, 300);
   }
@@ -377,9 +343,7 @@ const GONE = /identifier \[[^\]]*\] (?:is )?not found/i;
 
 /** Harness's `updatedAt`, which is epoch milliseconds, as a date. */
 const harnessTimestamp = (value: unknown): Date | null =>
-  typeof value === "number" && Number.isFinite(value) && value > 0
-    ? new Date(value)
-    : null;
+  typeof value === "number" && Number.isFinite(value) && value > 0 ? new Date(value) : null;
 
 /** A secret's metadata, narrowed to what a scrub needs to send back. */
 type Metadata = {
@@ -406,8 +370,7 @@ function metadataOf(text: string): Metadata {
     return {
       updatedAt: harnessTimestamp(data?.updatedAt),
       name: typeof name === "string" && name.length > 0 ? name : null,
-      secretManager:
-        typeof manager === "string" && manager.length > 0 ? manager : null,
+      secretManager: typeof manager === "string" && manager.length > 0 ? manager : null,
     };
   } catch {
     return { updatedAt: null, name: null, secretManager: null };

@@ -54,12 +54,7 @@ const STYLES: Record<RunStatus, { chip: string; dot: string }> = {
   },
 };
 
-const ACTIVE: RunStatus[] = [
-  "requested",
-  "provisioning",
-  "applying",
-  "destroying",
-];
+const ACTIVE: RunStatus[] = ["requested", "provisioning", "applying", "destroying"];
 
 export function statusDot(status: RunStatus): string {
   return STYLES[status].dot;
@@ -78,20 +73,10 @@ export function StatusBadge({ status }: { status: RunStatus }) {
 
   return (
     <span
-      className={cn(
-        "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap",
-        chip,
-      )}
+      className={cn("inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap", chip)}
     >
       <span className="relative flex size-1.5">
-        {isActiveStatus(status) && (
-          <span
-            className={cn(
-              "absolute inline-flex size-full animate-ping rounded-full opacity-75",
-              dot,
-            )}
-          />
-        )}
+        {isActiveStatus(status) && <span className={cn("absolute inline-flex size-full animate-ping rounded-full opacity-75", dot)} />}
         <span className={cn("relative inline-flex size-1.5 rounded-full", dot)} />
       </span>
       {LABELS[status]}

@@ -60,8 +60,7 @@ export function calibrationOf(stats: ItemStats, answer: number): Calibration {
           : ({ kind: "healthy" } as const);
   // A wrong option nobody picks is a hint, not a distractor: the question can
   // be answered by elimination.
-  const dead =
-    stats.responses >= DISTRACTOR_MIN ? [0, 1, 2, 3].filter((i) => i !== answer && stats.picks[i] === 0) : [];
+  const dead = stats.responses >= DISTRACTOR_MIN ? [0, 1, 2, 3].filter((i) => i !== answer && stats.picks[i] === 0) : [];
   if (dead.length) return { kind: "dead_distractors", options: dead, also: base.kind === "healthy" ? null : base.kind };
   return base;
 }
@@ -115,7 +114,15 @@ async function statsOf(items: { id: string; version: string }[]): Promise<Map<st
     })
     .from(irisResponses)
     .innerJoin(irisAttempts, eq(irisAttempts.id, irisResponses.attemptId))
-    .where(and(eq(irisAttempts.mode, "live"), inArray(irisResponses.itemId, items.map((i) => i.id))))
+    .where(
+      and(
+        eq(irisAttempts.mode, "live"),
+        inArray(
+          irisResponses.itemId,
+          items.map((i) => i.id),
+        ),
+      ),
+    )
     .groupBy(irisResponses.itemId, irisResponses.itemVersion);
 
   const versions = new Map(items.map((i) => [i.id, i.version]));

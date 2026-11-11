@@ -11,46 +11,25 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  AWS_ACCOUNT_WARMUP_SIGNATURES,
-  awsRetryKind,
-  isGkeCapacityError,
-  isSelfClearingDestroyFailure,
-} from "../src/classify.js";
-import {
-  PRODUCTION_FAILURES,
-  expecting,
-  failure,
-} from "./fixtures/production-failures.js";
+import { AWS_ACCOUNT_WARMUP_SIGNATURES, awsRetryKind, isGkeCapacityError, isSelfClearingDestroyFailure } from "../src/classify.js";
+import { PRODUCTION_FAILURES, expecting, failure } from "./fixtures/production-failures.js";
 
 describe("awsRetryKind", () => {
   for (const f of expecting("retry-warmup")) {
     test(`waits out ${f.id} (${f.run}, ${f.date})`, () => {
-      assert.equal(
-        awsRetryKind(f.message),
-        "warmup",
-        `should be treated as a warm-up wait — ${f.because}`,
-      );
+      assert.equal(awsRetryKind(f.message), "warmup", `should be treated as a warm-up wait — ${f.because}`);
     });
   }
 
   for (const f of expecting("retry-contention")) {
     test(`waits out ${f.id} (${f.run}, ${f.date})`, () => {
-      assert.equal(
-        awsRetryKind(f.message),
-        "contention",
-        `should be treated as contention on the management account — ${f.because}`,
-      );
+      assert.equal(awsRetryKind(f.message), "contention", `should be treated as contention on the management account — ${f.because}`);
     });
   }
 
   for (const f of expecting("fail")) {
     test(`does not retry ${f.id} (${f.run}, ${f.date})`, () => {
-      assert.equal(
-        awsRetryKind(f.message),
-        null,
-        `must stay a real failure — ${f.because}`,
-      );
+      assert.equal(awsRetryKind(f.message), null, `must stay a real failure — ${f.because}`);
     });
   }
 
@@ -75,14 +54,8 @@ describe("awsRetryKind", () => {
     // exactly like the InvalidClientTokenId failures beside it in the corpus,
     // and adding it would turn a missing IAM policy into an eleven-minute wait
     // followed by a timeout that names the wrong cause.
-    assert.ok(
-      !AWS_ACCOUNT_WARMUP_SIGNATURES.some((s) => s.includes("accessdenied")),
-      "see fixture aws-iam-access-denied-orchestrator",
-    );
-    assert.equal(
-      awsRetryKind(failure("aws-iam-access-denied-orchestrator").message),
-      null,
-    );
+    assert.ok(!AWS_ACCOUNT_WARMUP_SIGNATURES.some((s) => s.includes("accessdenied")), "see fixture aws-iam-access-denied-orchestrator");
+    assert.equal(awsRetryKind(failure("aws-iam-access-denied-orchestrator").message), null);
   });
 });
 
@@ -99,11 +72,7 @@ describe("isGkeCapacityError", () => {
     // identically, doubling the wait before the run reports anything useful.
     for (const f of PRODUCTION_FAILURES) {
       if (f.expect === "retry-other-zone") continue;
-      assert.equal(
-        isGkeCapacityError(f.message),
-        false,
-        `${f.id} must not be read as a GKE stockout — ${f.because}`,
-      );
+      assert.equal(isGkeCapacityError(f.message), false, `${f.id} must not be read as a GKE stockout — ${f.because}`);
     }
   });
 
@@ -128,11 +97,7 @@ describe("isSelfClearingDestroyFailure", () => {
     // self-clearing must read as final.
     for (const f of PRODUCTION_FAILURES) {
       if (f.selfClearingDestroy) continue;
-      assert.equal(
-        isSelfClearingDestroyFailure(f.message),
-        false,
-        `${f.id} must not earn a teardown retry — ${f.because}`,
-      );
+      assert.equal(isSelfClearingDestroyFailure(f.message), false, `${f.id} must not earn a teardown retry — ${f.because}`);
     }
   });
 

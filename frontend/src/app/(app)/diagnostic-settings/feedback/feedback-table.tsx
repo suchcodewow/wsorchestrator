@@ -104,11 +104,7 @@ export function FeedbackTable({
               {page.rows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">
-                    {query.q
-                      ? "Nothing matches that search."
-                      : showClosed
-                        ? "No one has rated a question yet."
-                        : "No open feedback."}
+                    {query.q ? "Nothing matches that search." : showClosed ? "No one has rated a question yet." : "No open feedback."}
                   </td>
                 </tr>
               )}
@@ -118,12 +114,7 @@ export function FeedbackTable({
                 return (
                   <Fragment key={f.id}>
                     <tr
-                      className={cn(
-                        LINK_ROW,
-                        "align-top",
-                        open && "border-b-0 bg-muted/20",
-                        f.closedAt && "text-muted-foreground",
-                      )}
+                      className={cn(LINK_ROW, "align-top", open && "border-b-0 bg-muted/20", f.closedAt && "text-muted-foreground")}
                       onClick={rowLink(toggle)}
                     >
                       <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">

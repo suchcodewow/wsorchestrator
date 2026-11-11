@@ -3,26 +3,10 @@
 import "server-only";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  harnessTokens,
-  MAX_HARNESS_TOKENS_PER_USER,
-  type HarnessPermissionCheck,
-  type HarnessToken,
-} from "@/db/schema";
+import { harnessTokens, MAX_HARNESS_TOKENS_PER_USER, type HarnessPermissionCheck, type HarnessToken } from "@/db/schema";
 import type { DeployedContent } from "@/lib/harness-deploy-selection";
-import {
-  checkHarnessToken,
-  fingerprint,
-  harnessOrgUrl,
-  type CheckError,
-} from "@/lib/harness-platform";
-import {
-  EMPTY_SCRUB,
-  scrubSummaries,
-  scrubWithToken,
-  type ScrubRun,
-  type ScrubSummary,
-} from "@/lib/harness-scrub";
+import { checkHarnessToken, fingerprint, harnessOrgUrl, type CheckError } from "@/lib/harness-platform";
+import { EMPTY_SCRUB, scrubSummaries, scrubWithToken, type ScrubRun, type ScrubSummary } from "@/lib/harness-scrub";
 import { openSecret, sealSecret } from "@/lib/secret-box";
 
 export type HarnessDeploy = {
@@ -51,9 +35,7 @@ export type HarnessTokenSummary = {
 };
 
 const lastDeployOf = (row: HarnessToken): HarnessDeploy | null =>
-  row.deployedOrgName !== null &&
-  row.deployedOrgIdentifier !== null &&
-  row.deployedAt !== null
+  row.deployedOrgName !== null && row.deployedOrgIdentifier !== null && row.deployedAt !== null
     ? {
         orgName: row.deployedOrgName,
         orgIdentifier: row.deployedOrgIdentifier,
@@ -63,10 +45,7 @@ const lastDeployOf = (row: HarnessToken): HarnessDeploy | null =>
       }
     : null;
 
-const summarize = (
-  row: HarnessToken,
-  scrub: ScrubSummary = EMPTY_SCRUB,
-): HarnessTokenSummary => ({
+const summarize = (row: HarnessToken, scrub: ScrubSummary = EMPTY_SCRUB): HarnessTokenSummary => ({
   id: row.id,
   kind: row.kind,
   accountId: row.accountId,
@@ -82,33 +61,18 @@ const summarize = (
   scrub,
 });
 
-export async function listHarnessTokens(
-  userId: string,
-): Promise<HarnessTokenSummary[]> {
-  const rows = await db
-    .select()
-    .from(harnessTokens)
-    .where(eq(harnessTokens.userId, userId))
-    .orderBy(asc(harnessTokens.createdAt));
+export async function listHarnessTokens(userId: string): Promise<HarnessTokenSummary[]> {
+  const rows = await db.select().from(harnessTokens).where(eq(harnessTokens.userId, userId)).orderBy(asc(harnessTokens.createdAt));
 
   const scrub = await scrubSummaries(rows.map((row) => row.id));
   return rows.map((row) => summarize(row, scrub.get(row.id)));
 }
 
-export type SaveError =
-  | CheckError
-  | "too_many"
-  | "duplicate"
-  | "no_key";
+export type SaveError = CheckError | "too_many" | "duplicate" | "no_key";
 
-export type SaveResult =
-  | { ok: true; token: HarnessTokenSummary }
-  | { ok: false; error: SaveError; detail?: string };
+export type SaveResult = { ok: true; token: HarnessTokenSummary } | { ok: false; error: SaveError; detail?: string };
 
-export async function saveHarnessToken(
-  userId: string,
-  token: string,
-): Promise<SaveResult> {
+export async function saveHarnessToken(userId: string, token: string): Promise<SaveResult> {
   const raw = token.trim();
   if (raw.length === 0) return { ok: false, error: "malformed" };
 
@@ -156,13 +120,9 @@ export async function saveHarnessToken(
 }
 
 export type RecheckResult =
-  | { ok: true; token: HarnessTokenSummary }
-  | { ok: false; error: SaveError | "not_found" | "unreadable"; detail?: string };
+  { ok: true; token: HarnessTokenSummary } | { ok: false; error: SaveError | "not_found" | "unreadable"; detail?: string };
 
-export async function recheckHarnessToken(
-  userId: string,
-  id: string,
-): Promise<RecheckResult> {
+export async function recheckHarnessToken(userId: string, id: string): Promise<RecheckResult> {
   const [row] = await db
     .select()
     .from(harnessTokens)
@@ -174,10 +134,7 @@ export async function recheckHarnessToken(
 
   const check = await checkHarnessToken(raw);
   if (!check.ok) {
-    await db
-      .update(harnessTokens)
-      .set({ verifiedAt: null })
-      .where(eq(harnessTokens.id, row.id));
+    await db.update(harnessTokens).set({ verifiedAt: null }).where(eq(harnessTokens.id, row.id));
     return { ok: false, error: check.error, detail: check.detail };
   }
 
@@ -201,10 +158,7 @@ export type DeleteResult = {
   scrub: ScrubRun | null;
 };
 
-export async function deleteHarnessToken(
-  userId: string,
-  id: string,
-): Promise<DeleteResult> {
+export async function deleteHarnessToken(userId: string, id: string): Promise<DeleteResult> {
   const [row] = await db
     .select({ id: harnessTokens.id, secret: harnessTokens.secret })
     .from(harnessTokens)
@@ -241,10 +195,7 @@ export async function recordHarnessDeploy(
     .where(and(eq(harnessTokens.id, id), eq(harnessTokens.userId, userId)));
 }
 
-export async function harnessTokenSecret(
-  userId: string,
-  id: string,
-): Promise<string | null> {
+export async function harnessTokenSecret(userId: string, id: string): Promise<string | null> {
   const [row] = await db
     .select({ secret: harnessTokens.secret })
     .from(harnessTokens)

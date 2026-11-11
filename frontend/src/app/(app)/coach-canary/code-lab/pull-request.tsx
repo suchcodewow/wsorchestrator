@@ -73,8 +73,8 @@ export function PullRequestPage({
             Open
           </span>
           <span>
-            <span className="font-medium text-foreground">{author}</span> wants to merge {commits.length} commit{commits.length === 1 ? "" : "s"} into{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">main</code> from{" "}
+            <span className="font-medium text-foreground">{author}</span> wants to merge {commits.length} commit
+            {commits.length === 1 ? "" : "s"} into <code className="rounded bg-muted px-1.5 py-0.5 text-xs">main</code> from{" "}
             <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{branch}</code>
           </span>
         </div>
@@ -111,7 +111,9 @@ export function PullRequestPage({
             <div className="border-b px-5 py-2.5 text-sm">
               <span className="font-medium">{author}</span> <span className="text-muted-foreground">opened this pull request</span>
             </div>
-            <p className="whitespace-pre-wrap px-5 py-4 text-sm">{body || <span className="text-muted-foreground">No description.</span>}</p>
+            <p className="whitespace-pre-wrap px-5 py-4 text-sm">
+              {body || <span className="text-muted-foreground">No description.</span>}
+            </p>
           </div>
 
           <div className="divide-y rounded-xl border bg-card text-sm">
@@ -153,9 +155,9 @@ export function PullRequestPage({
                 <div className="max-w-3xl space-y-1">
                   <h3 className="font-medium">Great job on your first change!</h3>
                   <p>
-                    In modern companies, automatic checks make sure your changes are safe. In our example, you only saw the code for the spring sale, but a
-                    developer could have reached anything in the application and done something dangerous by accident. With your change confirmed safe, your
-                    job is done! On to the next ticket.
+                    In modern companies, automatic checks make sure your changes are safe. In our example, you only saw the code for the
+                    spring sale, but a developer could have reached anything in the application and done something dangerous by accident.
+                    With your change confirmed safe, your job is done! On to the next ticket.
                   </p>
                 </div>
               </div>
@@ -170,9 +172,10 @@ export function PullRequestPage({
                 <div className="max-w-3xl space-y-1">
                   <h3 className="font-medium text-orange-800 dark:text-orange-300">Persona: Team Lead</h3>
                   <p>
-                    You’ve just become a different person: the team lead. You can tell by the snappy new box colour. As team lead, you might be responsible
-                    for double-checking code your team wrote, a peer review. You’d confirm all the automatic checks worked, then compare the change against
-                    Jordan’s ticket. In this case it was solid, so you write a note like the one below. Go ahead and click “Merge pull request”.
+                    You’ve just become a different person: the team lead. You can tell by the snappy new box colour. As team lead, you might
+                    be responsible for double-checking code your team wrote, a peer review. You’d confirm all the automatic checks worked,
+                    then compare the change against Jordan’s ticket. In this case it was solid, so you write a note like the one below. Go
+                    ahead and click “Merge pull request”.
                   </p>
                 </div>
               </div>

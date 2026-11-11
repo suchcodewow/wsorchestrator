@@ -66,27 +66,23 @@ export async function listFoodOrders(query: ListQuery<FoodOrderSort>): Promise<P
 export async function foodOrdersById(ids: string[]): Promise<FoodOrderRow[]> {
   const valid = ids.filter(isUuid).slice(0, 100);
   if (valid.length === 0) return [];
-  const rows = await db
-    .select(COLUMNS)
-    .from(foodOrders)
-    .where(inArray(foodOrders.id, valid))
-    .orderBy(foodOrders.arrivesAt, foodOrders.id);
+  const rows = await db.select(COLUMNS).from(foodOrders).where(inArray(foodOrders.id, valid)).orderBy(foodOrders.arrivesAt, foodOrders.id);
   return rows.map(toRow);
 }
 
 /** One order's PDF, or null if there is no such order or it has none. */
 export async function getFoodOrderFile(id: string): Promise<{ name: string; data: Buffer } | null> {
   if (!isUuid(id)) return null;
-  const [row] = await db
-    .select({ name: foodOrders.fileName, data: foodOrders.fileData })
-    .from(foodOrders)
-    .where(eq(foodOrders.id, id));
+  const [row] = await db.select({ name: foodOrders.fileName, data: foodOrders.fileData }).from(foodOrders).where(eq(foodOrders.id, id));
   return row?.data ? { name: row.name ?? "order.pdf", data: row.data } : null;
 }
 
 export const foodOrderFieldsSchema = z.object({
   vendor: z.string().trim().min(1).max(FOOD_ORDER_LIMITS.vendor),
-  arrivesAt: z.string().datetime({ offset: true }).transform((s) => new Date(s)),
+  arrivesAt: z
+    .string()
+    .datetime({ offset: true })
+    .transform((s) => new Date(s)),
   needs: z.string().max(FOOD_ORDER_LIMITS.needs).default(""),
 });
 

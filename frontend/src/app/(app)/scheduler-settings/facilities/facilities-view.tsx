@@ -10,15 +10,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowDown, ArrowUp, Building2, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
-import {
-  HEADER_ROW,
-  LINK_ROW,
-  Pager,
-  PlainHeader,
-  SortHeader,
-  TableSearch,
-  useRowLink,
-} from "@/components/data-table";
+import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -62,8 +54,12 @@ export function FacilitiesView({ query, page }: { query: ListQuery<FacilitySort>
   const sortProps = { sort: query.sort, dir: query.dir };
 
   async function remove(f: FacilityListing) {
-    const held = f.bootcamps > 0 ? `${f.bootcamps} ${f.bootcamps === 1 ? "bootcamp is" : "bootcamps are"} held there and will lose their rooms.` : undefined;
-    if (!(await confirmDialog({ title: `Remove ${f.name} and its rooms?`, description: held, confirmLabel: "Remove", destructive: true }))) return;
+    const held =
+      f.bootcamps > 0
+        ? `${f.bootcamps} ${f.bootcamps === 1 ? "bootcamp is" : "bootcamps are"} held there and will lose their rooms.`
+        : undefined;
+    if (!(await confirmDialog({ title: `Remove ${f.name} and its rooms?`, description: held, confirmLabel: "Remove", destructive: true })))
+      return;
     setBusy(f.id);
     setError(null);
     try {
@@ -140,7 +136,13 @@ export function FacilitiesView({ query, page }: { query: ListQuery<FacilitySort>
                   <td className="px-5 py-3 text-muted-foreground">{formatWhen(f.updatedAt)}</td>
                   <td className="px-5 py-2">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" aria-label={`Edit ${f.name}`} disabled={busy === f.id} onClick={() => setEditing(f)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Edit ${f.name}`}
+                        disabled={busy === f.id}
+                        onClick={() => setEditing(f)}
+                      >
                         <Pencil className="size-3.5" />
                       </Button>
                       <Button
@@ -340,7 +342,15 @@ function FacilityDialog({ editing, onClose }: { editing: FacilityListing | "new"
                       className="tnum"
                     />
                     <div className="flex">
-                      <Button type="button" variant="ghost" size="icon" className="size-7" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        aria-label="Move up"
+                        disabled={i === 0}
+                        onClick={() => move(i, -1)}
+                      >
                         <ArrowUp className="size-3.5" />
                       </Button>
                       <Button

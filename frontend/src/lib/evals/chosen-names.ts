@@ -37,10 +37,7 @@ import {
 } from "@/db/schema";
 import type { Tx } from "@/lib/evals/hibob";
 import { nameFromEmail, toEmployeeRow } from "@/lib/evals/hibob-record";
-import {
-  firstNameOf,
-  preferredFullName,
-} from "@/lib/logistics/intake-values";
+import { firstNameOf, preferredFullName } from "@/lib/logistics/intake-values";
 
 /** The name the app has for `email` now, chosen or not; null for an email no employee has. */
 export async function nameOnRecord(email: string): Promise<string | null> {
@@ -54,9 +51,7 @@ export async function nameOnRecord(email: string): Promise<string | null> {
 }
 
 /** The preferred first name `email` has chosen, listed on their record; null if they have not chosen one. */
-export async function chosenNameOnRecord(
-  email: string,
-): Promise<string | null> {
+export async function chosenNameOnRecord(email: string): Promise<string | null> {
   const [row] = await db
     .select({ chosenName: employees.chosenName })
     .from(employees)
@@ -70,12 +65,7 @@ export async function chosenNameOnRecord(
  * someone it never sent, the one their email gives, or the name on their row
  * while they have chosen no other.
  */
-function officialName(employee: {
-  email: string;
-  fullName: string;
-  chosenName: string | null;
-  raw: unknown;
-}): string {
+function officialName(employee: { email: string; fullName: string; chosenName: string | null; raw: unknown }): string {
   const fromRecord = toEmployeeRow(employee.raw)?.fullName;
   if (fromRecord) return fromRecord;
   if (!employee.chosenName) return employee.fullName;
@@ -86,13 +76,8 @@ function officialName(employee: {
  * The name the app shows for someone with official name `official` and
  * preferred first name `chosenName`: their first name replaced, their last kept.
  */
-export function displayName(
-  official: string,
-  chosenName: string | null,
-): string {
-  return chosenName
-    ? preferredFullName(official, firstNameOf(chosenName))
-    : official;
+export function displayName(official: string, chosenName: string | null): string {
+  return chosenName ? preferredFullName(official, firstNameOf(chosenName)) : official;
 }
 
 /**
@@ -101,17 +86,12 @@ export function displayName(
  * and choosing the first name it already has clears `chosen_name`. Returns
  * whether they are an employee; nothing is kept for an email no employee has.
  */
-export async function setChosenName(
-  email: string,
-  preferred: string,
-): Promise<boolean> {
+export async function setChosenName(email: string, preferred: string): Promise<boolean> {
   const address = email.toLowerCase();
   const first = firstNameOf(preferred);
   return db.transaction(async (tx) => {
     // The HiBob sync's lock: it updates `employees`, and reads chosen names, under it.
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtext('hibob_employees'))`,
-    );
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('hibob_employees'))`);
     const [employee] = await tx
       .select({
         email: employees.email,
@@ -125,28 +105,20 @@ export async function setChosenName(
     if (!employee) return false;
 
     const official = officialName(employee);
-    const chosenName =
-      !first || first === firstNameOf(official) ? null : first;
+    const chosenName = !first || first === firstNameOf(official) ? null : first;
     const fullName = displayName(official, chosenName);
     await tx
       .update(employees)
       .set({ fullName, chosenName })
       .where(sql`lower(${employees.email}) = ${address}`);
-    await tx
-      .update(employees)
-      .set({ reportsToName: fullName })
-      .where(eq(employees.reportsToEmail, address));
+    await tx.update(employees).set({ reportsToName: fullName }).where(eq(employees.reportsToEmail, address));
     await renameEverywhereElse(tx, address, fullName);
     return true;
   });
 }
 
 /** Their account and the names kept with what they wrote, own or did, by `address`, lowercased. */
-async function renameEverywhereElse(
-  tx: Tx,
-  address: string,
-  fullName: string,
-): Promise<void> {
+async function renameEverywhereElse(tx: Tx, address: string, fullName: string): Promise<void> {
   const theirAccounts = sql`(select ${users.id} from ${users} where lower(${users.email}) = ${address})`;
   await tx
     .update(users)
@@ -157,9 +129,7 @@ async function renameEverywhereElse(
   await tx
     .update(c)
     .set({ authorName: fullName })
-    .where(
-      sql`lower(${c.authorEmail}) = ${address} or ${c.authorId} in ${theirAccounts}`,
-    );
+    .where(sql`lower(${c.authorEmail}) = ${address} or ${c.authorId} in ${theirAccounts}`);
 
   const k = scheduleChecklistItems;
   await tx
@@ -173,9 +143,7 @@ async function renameEverywhereElse(
   await tx
     .update(k)
     .set({ createdByName: fullName })
-    .where(
-      sql`lower(${k.createdByEmail}) = ${address} or ${k.createdBy} in ${theirAccounts}`,
-    );
+    .where(sql`lower(${k.createdByEmail}) = ${address} or ${k.createdBy} in ${theirAccounts}`);
 
   const t = evalsTranscripts;
   await tx
@@ -188,9 +156,7 @@ async function renameEverywhereElse(
   await tx
     .update(m)
     .set({ taggedByName: fullName })
-    .where(
-      sql`lower(${m.taggedByEmail}) = ${address} or ${m.taggedBy} in ${theirAccounts}`,
-    );
+    .where(sql`lower(${m.taggedByEmail}) = ${address} or ${m.taggedBy} in ${theirAccounts}`);
 
   // One entry per cohort, program, session, role and name: an entry already under the new name stays as it is.
   // Aliased by hand: Drizzle writes bare column names, which inside the subquery would mean its own.

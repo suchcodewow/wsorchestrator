@@ -22,7 +22,8 @@ export default async function AllowedDomainsPage({
   const query = parseListQuery(params, DOMAIN_LIST);
   const frameQuery = parseListQuery(params, FRAME_DOMAIN_LIST, FRAME_DOMAIN_PREFIX);
   const [page, framePage] = await Promise.all([listAllowedDomains(query), listFrameDomains(frameQuery)]);
-  const serialize = <T extends { createdAt: Date }>(p: { rows: T[] }) => p.rows.map((d) => ({ ...d, createdAt: d.createdAt.toISOString() }));
+  const serialize = <T extends { createdAt: Date }>(p: { rows: T[] }) =>
+    p.rows.map((d) => ({ ...d, createdAt: d.createdAt.toISOString() }));
 
   return (
     <DomainsView

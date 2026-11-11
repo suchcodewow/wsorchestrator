@@ -60,12 +60,7 @@ export function RecordingPanel({
             </Button>
           </>
         ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void recorder.start()}
-            disabled={recorder.state === "starting"}
-          >
+          <Button variant="outline" size="sm" onClick={() => void recorder.start()} disabled={recorder.state === "starting"}>
             {recorder.state === "starting" ? <Loader2 className="animate-spin" /> : <Mic />}
             Record
           </Button>

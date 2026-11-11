@@ -24,11 +24,7 @@ import { BootcampView } from "./bootcamp-view";
 
 export const metadata: Metadata = { title: "Live Sessions" };
 
-export default async function BootcampPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function BootcampPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   const { access } = session.user;

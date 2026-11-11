@@ -186,12 +186,7 @@ function Counters({
             <h3 className={cn("text-xs font-medium", className)}>{label}</h3>
             <ul>
               {rows.map((row) => (
-                <Counter
-                  key={row.id}
-                  row={row}
-                  disabled={disabled}
-                  onAdjust={onAdjust && ((delta) => onAdjust(row.id, delta))}
-                />
+                <Counter key={row.id} row={row} disabled={disabled} onAdjust={onAdjust && ((delta) => onAdjust(row.id, delta))} />
               ))}
             </ul>
           </section>
@@ -261,15 +256,7 @@ function useAiComments(employeeId: string, onDone: (sheet: ParticipationSheet) =
   return { pending, error, run };
 }
 
-function SheetPanel({
-  employeeId,
-  canRegenerate,
-  canMark,
-}: {
-  employeeId: string;
-  canRegenerate: boolean;
-  canMark: boolean;
-}) {
+function SheetPanel({ employeeId, canRegenerate, canMark }: { employeeId: string; canRegenerate: boolean; canMark: boolean }) {
   const router = useRouter();
   // An administrator's marks carry through to the saved score, as they do in the Administration View.
   const { sheet, setSheet, saving, error, adjust } = useParticipationSheet(employeeId, () => router.refresh());
@@ -292,16 +279,13 @@ function SheetPanel({
         <section className="space-y-1.5 border-t pt-2">
           <div className="flex min-h-8 items-center gap-2">
             <p className="text-sm" aria-live="polite">
-              <span className="text-muted-foreground">Score</span>{" "}
-              <span className="font-medium tabular-nums">{score}</span>
+              <span className="text-muted-foreground">Score</span> <span className="font-medium tabular-nums">{score}</span>
             </p>
             {canRegenerate && <AiCommentsButton pending={comments.pending} onClick={comments.run} />}
           </div>
           {comments.error && <ErrorLine error={comments.error} />}
           {sheet.saved?.positiveFeedback && <p className="text-sm whitespace-pre-line">{sheet.saved.positiveFeedback}</p>}
-          {sheet.saved?.constructiveFeedback && (
-            <p className="text-sm whitespace-pre-line">{sheet.saved.constructiveFeedback}</p>
-          )}
+          {sheet.saved?.constructiveFeedback && <p className="text-sm whitespace-pre-line">{sheet.saved.constructiveFeedback}</p>}
         </section>
       )}
     </div>
@@ -459,14 +443,7 @@ export function ParticipationGroupButton({
         Participation
       </Button>
       {open && (
-        <ParticipationDialog
-          open
-          onOpenChange={setOpen}
-          people={people}
-          initialId={employeeId}
-          loading={loading}
-          canMark={canMark}
-        />
+        <ParticipationDialog open onOpenChange={setOpen} people={people} initialId={employeeId} loading={loading} canMark={canMark} />
       )}
     </>
   );

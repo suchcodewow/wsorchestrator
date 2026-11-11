@@ -12,13 +12,7 @@ import { inArray } from "drizzle-orm";
 
 import { db } from "@/db";
 import { allowedFrameDomains } from "@/db/schema";
-import {
-  addFrameDomain,
-  deleteFrameDomain,
-  frameAncestorsPolicy,
-  listFrameDomains,
-  updateFrameDomain,
-} from "@/lib/frame-domains";
+import { addFrameDomain, deleteFrameDomain, frameAncestorsPolicy, listFrameDomains, updateFrameDomain } from "@/lib/frame-domains";
 import { FRAME_DOMAIN_LIST } from "@/lib/list-specs";
 import { PERSONAS } from "../support/access";
 import { testScope } from "../support/seed";

@@ -3,21 +3,11 @@
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import {
-  LAB_GUIDE_LIMITS,
-  labGuides,
-  labWorkshopGuides,
-  labWorkshops,
-  users,
-  type LabGuide,
-} from "@/db/schema";
+import { LAB_GUIDE_LIMITS, labGuides, labWorkshopGuides, labWorkshops, users, type LabGuide } from "@/db/schema";
 import { slugify } from "@/lib/runs";
 import { isUuid } from "@/lib/utils";
 
-export type LabGuideSummary = Pick<
-  LabGuide,
-  "id" | "slug" | "title" | "summary" | "updatedAt"
-> & { authorName: string | null };
+export type LabGuideSummary = Pick<LabGuide, "id" | "slug" | "title" | "summary" | "updatedAt"> & { authorName: string | null };
 
 export type LabGuideWithAuthor = LabGuide & { authorName: string | null };
 
@@ -50,9 +40,7 @@ export async function listLabGuides(): Promise<LabGuideSummary[]> {
   return rows;
 }
 
-export async function getLabGuideBySlug(
-  slug: string,
-): Promise<LabGuideWithAuthor | null> {
+export async function getLabGuideBySlug(slug: string): Promise<LabGuideWithAuthor | null> {
   const [row] = await db
     .select(withAuthor)
     .from(labGuides)
@@ -63,9 +51,7 @@ export async function getLabGuideBySlug(
   return row ?? null;
 }
 
-export async function listGuidesForPicker(): Promise<
-  Pick<LabGuide, "id" | "slug" | "title" | "summary">[]
-> {
+export async function listGuidesForPicker(): Promise<Pick<LabGuide, "id" | "slug" | "title" | "summary">[]> {
   return db
     .select({
       id: labGuides.id,
@@ -77,9 +63,7 @@ export async function listGuidesForPicker(): Promise<
     .orderBy(labGuides.title);
 }
 
-export async function workshopsUsingGuide(
-  guideId: string,
-): Promise<{ slug: string; title: string }[]> {
+export async function workshopsUsingGuide(guideId: string): Promise<{ slug: string; title: string }[]> {
   if (!isUuid(guideId)) return [];
 
   return db
@@ -90,9 +74,7 @@ export async function workshopsUsingGuide(
     .orderBy(labWorkshops.title);
 }
 
-export async function getLabGuideById(
-  id: string,
-): Promise<LabGuideWithAuthor | null> {
+export async function getLabGuideById(id: string): Promise<LabGuideWithAuthor | null> {
   if (!isUuid(id)) return null;
 
   const [row] = await db
@@ -116,10 +98,7 @@ async function availableSlug(title: string, excludeId?: string): Promise<string>
     .from(labGuides)
     .where(
       excludeId
-        ? and(
-            ne(labGuides.id, excludeId),
-            sql`${labGuides.slug} = ${base} or ${labGuides.slug} like ${`${base}-%`}`,
-          )
+        ? and(ne(labGuides.id, excludeId), sql`${labGuides.slug} = ${base} or ${labGuides.slug} like ${`${base}-%`}`)
         : sql`${labGuides.slug} = ${base} or ${labGuides.slug} like ${`${base}-%`}`,
     );
 
@@ -140,10 +119,7 @@ export const labGuideSchema = z.object({
 
 export type LabGuideInput = z.infer<typeof labGuideSchema>;
 
-export async function createLabGuide(
-  input: LabGuideInput,
-  authorId: string,
-): Promise<LabGuide> {
+export async function createLabGuide(input: LabGuideInput, authorId: string): Promise<LabGuide> {
   const [guide] = await db
     .insert(labGuides)
     .values({ ...input, slug: await availableSlug(input.title), authorId })
@@ -157,9 +133,7 @@ export type UpdateLabGuideError = "not_found";
 export async function updateLabGuide(
   id: string,
   input: LabGuideInput,
-): Promise<
-  { ok: true; guide: LabGuide } | { ok: false; error: UpdateLabGuideError }
-> {
+): Promise<{ ok: true; guide: LabGuide } | { ok: false; error: UpdateLabGuideError }> {
   if (!isUuid(id)) return { ok: false, error: "not_found" };
 
   const existing = await db.query.labGuides.findFirst({
@@ -185,10 +159,7 @@ export async function updateLabGuide(
 export async function deleteLabGuide(id: string): Promise<boolean> {
   if (!isUuid(id)) return false;
 
-  const deleted = await db
-    .delete(labGuides)
-    .where(eq(labGuides.id, id))
-    .returning({ id: labGuides.id });
+  const deleted = await db.delete(labGuides).where(eq(labGuides.id, id)).returning({ id: labGuides.id });
 
   return deleted.length > 0;
 }

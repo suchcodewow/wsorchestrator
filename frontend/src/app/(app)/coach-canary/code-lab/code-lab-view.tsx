@@ -227,9 +227,9 @@ function TicketCard() {
           👋
         </span>
         <p className="max-w-3xl">
-          <span className="font-medium">Hey there!</span> Welcome to your first day as a software developer at the Greenleaf Shop.
-          We’re super busy here working on our Spring Sale. Jump right in and help Jordan. He submitted the ticket below asking
-          for updates to our website.
+          <span className="font-medium">Hey there!</span> Welcome to your first day as a software developer at the Greenleaf Shop. We’re
+          super busy here working on our Spring Sale. Jump right in and help Jordan. He submitted the ticket below asking for updates to our
+          website.
         </p>
       </div>
       <div className="space-y-3 px-5 py-4">
@@ -313,23 +313,15 @@ function StepCard({
   );
 }
 
-function BranchStep({
-  value,
-  onChange,
-  onCreate,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onCreate: (name: string) => void;
-}) {
+function BranchStep({ value, onChange, onCreate }: { value: string; onChange: (v: string) => void; onCreate: (name: string) => void }) {
   const name = cleanBranchName(value);
   return (
     <StepCard
       title="Create a branch"
       why={
         <>
-          It’s important to make changes in your own safe space. When developing, this is usually called “creating a branch”: sort
-          of like a “branch” sprouting off the main tree “trunk”.
+          It’s important to make changes in your own safe space. When developing, this is usually called “creating a branch”: sort of like a
+          “branch” sprouting off the main tree “trunk”.
         </>
       }
       info={
@@ -628,26 +620,16 @@ function CommitStep({
   );
 }
 
-function PushStep({
-  branch,
-  commits,
-  pushed,
-  onPushed,
-}: {
-  branch: string;
-  commits: Commit[];
-  pushed: number;
-  onPushed: () => void;
-}) {
+function PushStep({ branch, commits, pushed, onPushed }: { branch: string; commits: Commit[]; pushed: number; onPushed: () => void }) {
   const [pushing, setPushing] = useState(false);
   return (
     <StepCard
       title="Push your branch"
       why={
         <>
-          Your commit is saved, but only the copy on your computer. Pushing the branch copies your change up to the code
-          repository. Once it is there, teammates can also review the change (often called a peer review), and pipelines can
-          access the code to build and deploy. Click the “Push {branch}” button.
+          Your commit is saved, but only the copy on your computer. Pushing the branch copies your change up to the code repository. Once it
+          is there, teammates can also review the change (often called a peer review), and pipelines can access the code to build and
+          deploy. Click the “Push {branch}” button.
         </>
       }
       aside={<SlidesAnalogy step="push" />}
@@ -658,9 +640,7 @@ function PushStep({
             <GitCommitHorizontal className="size-4 shrink-0 text-brand" />
             <span className="min-w-0 grow truncate">{c.message}</span>
             <code className="shrink-0 text-xs text-muted-foreground">{c.hash}</code>
-            <span
-              className={cn("w-24 shrink-0 text-right text-xs", k < pushed ? "text-muted-foreground" : "font-medium text-brand")}
-            >
+            <span className={cn("w-24 shrink-0 text-right text-xs", k < pushed ? "text-muted-foreground" : "font-medium text-brand")}>
               {k < pushed ? "on Harness Code" : "only on laptop"}
             </span>
           </div>
@@ -702,10 +682,10 @@ function PrFormStep({
       title="Open a pull request"
       why={
         <>
-          A pull request is when you ask for your branch to get pulled back into the main branch. (If you’re thinking “gosh,
-          that’s not how tree branches work”, that’s valid. Apparently developers don’t get outside much.) But{" "}
-          <code className="text-foreground">main</code> is the branch in most companies that eventually deploys into the real
-          customer environment. So click “Open pull request” to say your changes are ready to get pulled into main.
+          A pull request is when you ask for your branch to get pulled back into the main branch. (If you’re thinking “gosh, that’s not how
+          tree branches work”, that’s valid. Apparently developers don’t get outside much.) But{" "}
+          <code className="text-foreground">main</code> is the branch in most companies that eventually deploys into the real customer
+          environment. So click “Open pull request” to say your changes are ready to get pulled into main.
         </>
       }
       info={
@@ -756,9 +736,9 @@ function MergedStep({ code, onRestart }: { code: string; onRestart: () => void }
         title={live ? "Merged! Deployed" : "Merged! Deploying…"}
         why={
           <>
-            Your branch is now part of <code className="text-foreground">main</code>. Merging started the pipeline, which tested
-            the code again and {live ? "deployed it to the live site." : "is deploying it to the live site."} From ticket to
-            customers, nobody copied a file by hand.
+            Your branch is now part of <code className="text-foreground">main</code>. Merging started the pipeline, which tested the code
+            again and {live ? "deployed it to the live site." : "is deploying it to the live site."} From ticket to customers, nobody copied
+            a file by hand.
           </>
         }
         aside={<SlidesAnalogy step="merged" />}

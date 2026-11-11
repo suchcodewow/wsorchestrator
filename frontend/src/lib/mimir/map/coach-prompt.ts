@@ -20,7 +20,16 @@
 
 import { createHash } from "node:crypto";
 import { MIMIR_COACH_NAMES, type MimirCoachPersonality, type MimirCoachStyle, type MimirRepRole } from "@/db/schema";
-import { POINTS_MAX, POINTS_MIN, POINT_CHARS, checklistOf, conceptsInOrder, type ConceptPoint, type MapConcept, type MapContent } from "./schema";
+import {
+  POINTS_MAX,
+  POINTS_MIN,
+  POINT_CHARS,
+  checklistOf,
+  conceptsInOrder,
+  type ConceptPoint,
+  type MapConcept,
+  type MapContent,
+} from "./schema";
 
 /** Where a video opens on the map. The coach links to it by concept id. */
 export const playLink = (conceptId: string) => `/coach-canary/map?play=${encodeURIComponent(conceptId)}`;
@@ -88,7 +97,9 @@ const PERSONALITIES: Record<MimirCoachPersonality, { intro: string; voice: strin
 
 /** What fills `REP_SLOT`: who the rep is, how they like to be coached, and whose voice to use. */
 export function repContext(rep: Rep): string {
-  const who = rep.name ? `\n\nRep context: ${rep.name}${rep.role ? ` (${rep.role})` : ""}. Tailor your coaching to their role and experience.` : "";
+  const who = rep.name
+    ? `\n\nRep context: ${rep.name}${rep.role ? ` (${rep.role})` : ""}. Tailor your coaching to their role and experience.`
+    : "";
   const style =
     rep.coachStyle === "direct"
       ? "\n\nCOACHING STYLE: Be concise and direct. Skip lengthy Socratic sequences: give your feedback in 2 to 3 sentences, then ask at most one focused question."
@@ -189,7 +200,12 @@ export function progressSnapshot(content: MapContent, states: Record<string, Sna
       const s = states[c.id]!;
       const list = s.mastered ? null : checklistOf(c, s.points);
       const covered = list ? `${list.filter((p) => p.covered).length} of ${list.length} points covered` : null;
-      const flags = [s.mastered ? "mastered" : null, s.recommended ? "recommended (asked to watch the video)" : null, covered, videoStatus(c, s)].filter(Boolean);
+      const flags = [
+        s.mastered ? "mastered" : null,
+        s.recommended ? "recommended (asked to watch the video)" : null,
+        covered,
+        videoStatus(c, s),
+      ].filter(Boolean);
       return `- [${c.id}] ${c.name}: ${flags.join("; ")}`;
     });
   // The checklists still being worked through: the next concept's, and any other they have started on.
@@ -199,7 +215,9 @@ export function progressSnapshot(content: MapContent, states: Record<string, Sna
   const text = [
     "PROGRESS SNAPSHOT",
     `Mastered: ${mastered} of ${concepts.length}.`,
-    next ? `Next concept to cover: [${next.id}] ${next.name} (study #${next.study}; ${videoStatus(next, states[next.id])}).` : "Every concept is mastered.",
+    next
+      ? `Next concept to cover: [${next.id}] ${next.name} (study #${next.study}; ${videoStatus(next, states[next.id])}).`
+      : "Every concept is mastered.",
     lines.length ? `Concepts with any progress:\n${lines.join("\n")}` : "No concept has any progress yet.",
     ...open,
   ].join("\n");
@@ -313,6 +331,9 @@ export function readCoachReply(raw: string, conceptIds: ReadonlySet<string>): Co
     }
   }
 
-  const text = raw.replace(ANYWHERE, "").replace(/\n{3,}/g, "\n\n").trim();
+  const text = raw
+    .replace(ANYWHERE, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   return { text, mastered, recommended, checklists, covered };
 }

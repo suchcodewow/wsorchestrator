@@ -31,19 +31,11 @@ import { importRepo } from "./harness.js";
  */
 
 /** Import the org-scoped repositories once, into the event's organization. */
-export async function importOrgRepos(
-  run: RunRow,
-  orgId: string,
-): Promise<void> {
+export async function importOrgRepos(run: RunRow, orgId: string): Promise<void> {
   const repos = (await loadRepos()).filter((r) => r.scope === "org");
   if (repos.length === 0) return;
 
-  await log(
-    run.id,
-    "system",
-    `Importing ${repos.length} repositor${repos.length === 1 ? "y" : "ies"} ` +
-      `into org ${orgId}`,
-  );
+  await log(run.id, "system", `Importing ${repos.length} repositor${repos.length === 1 ? "y" : "ies"} ` + `into org ${orgId}`);
 
   let imported = 0;
   for (const repo of repos) {
@@ -69,11 +61,7 @@ export async function importOrgRepos(
  * every import the roster will ask for, so the row reads 0/40 before the first
  * project is made instead of climbing towards an unknown end.
  */
-export async function projectRepoImporter(
-  run: RunRow,
-  orgId: string,
-  attendees: number,
-): Promise<(projectId: string) => Promise<void>> {
+export async function projectRepoImporter(run: RunRow, orgId: string, attendees: number): Promise<(projectId: string) => Promise<void>> {
   const repos = (await loadRepos()).filter((r) => r.scope === "project");
   if (repos.length === 0 || attendees === 0) return async () => {};
 
@@ -81,8 +69,7 @@ export async function projectRepoImporter(
   await log(
     run.id,
     "system",
-    `Importing ${repos.length} repositor${repos.length === 1 ? "y" : "ies"} ` +
-      `into each of the ${attendees} attendee project(s)`,
+    `Importing ${repos.length} repositor${repos.length === 1 ? "y" : "ies"} ` + `into each of the ${attendees} attendee project(s)`,
   );
 
   let imported = 0;
@@ -106,46 +93,23 @@ export async function projectRepoImporter(
  * GitHub by way of Harness — `Couldn't find owner/name at github: Not Found` —
  * and what an organizer does about that is go look at the row in settings.
  */
-async function tryImport(
-  run: RunRow,
-  repo: Repo,
-  orgId: string,
-  projectId: string | undefined,
-  where: string,
-): Promise<boolean> {
+async function tryImport(run: RunRow, repo: Repo, orgId: string, projectId: string | undefined, where: string): Promise<boolean> {
   try {
-    const duplicate = await importRepo(
-      orgId,
-      projectId,
-      repo.identifier,
-      repo.providerRepo,
-    );
-    await log(
-      run.id,
-      "stdout",
-      `${repo.providerRepo} -> ${repo.identifier} in ${where}` +
-        (duplicate ? " (already there)" : ""),
-    );
+    const duplicate = await importRepo(orgId, projectId, repo.identifier, repo.providerRepo);
+    await log(run.id, "stdout", `${repo.providerRepo} -> ${repo.identifier} in ${where}` + (duplicate ? " (already there)" : ""));
     return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await log(
       run.id,
       "stderr",
-      `${repo.identifier} not imported into ${where} — ${message}; check ` +
-        `${repo.url} in Settings → GitHub Repos`,
+      `${repo.identifier} not imported into ${where} — ${message}; check ` + `${repo.url} in Settings → GitHub Repos`,
     );
     return false;
   }
 }
 
-const record = (
-  run: RunRow,
-  key: "org" | "project",
-  detail: string,
-  done: number,
-  total: number,
-) =>
+const record = (run: RunRow, key: "org" | "project", detail: string, done: number, total: number) =>
   recordResource(run.id, {
     kind: "harness_repos",
     key,

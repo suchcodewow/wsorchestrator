@@ -8,11 +8,7 @@ import { ORGANIZATION_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { OrganizationTable } from "./organization-table";
 
-export default async function OrganizationPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function OrganizationPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const query = parseListQuery(await searchParams, ORGANIZATION_LIST);
   const [page, summary] = await Promise.all([listOrganizationMembers(query), organizationSummary()]);
   const details = await organizationDetails(page.rows.map((m) => m.email));

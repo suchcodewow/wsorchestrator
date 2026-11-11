@@ -61,7 +61,8 @@ function parseField(text: string, { name, min, max }: (typeof FIELDS)[number]): 
 
 export function parseCron(expr: string): { ok: true; cron: Cron } | { ok: false; error: string } {
   const parts = expr.trim().split(/\s+/);
-  if (parts.length !== 5) return { ok: false, error: "A schedule has five fields: minute, hour, day of the month, month and day of the week" };
+  if (parts.length !== 5)
+    return { ok: false, error: "A schedule has five fields: minute, hour, day of the month, month and day of the week" };
   const sets: Set<number>[] = [];
   for (const [i, field] of FIELDS.entries()) {
     const set = parseField(parts[i]!, field);
@@ -187,7 +188,8 @@ export function scheduleProblem(expr: string, zone: string, now = new Date()): s
   const parsed = parseCron(expr);
   if (!parsed.ok) return parsed.error;
   const off = [...parsed.cron.minutes].filter((m) => m % TICK_MINUTES !== 0);
-  if (off.length > 0) return `Jobs are started every ${TICK_MINUTES} minutes, so each minute must be a multiple of ${TICK_MINUTES}; ${off[0]} is not`;
+  if (off.length > 0)
+    return `Jobs are started every ${TICK_MINUTES} minutes, so each minute must be a multiple of ${TICK_MINUTES}; ${off[0]} is not`;
   if (nextDue(parsed.cron, zone, now).length === 0) return "That schedule never falls due in the coming year";
   return null;
 }

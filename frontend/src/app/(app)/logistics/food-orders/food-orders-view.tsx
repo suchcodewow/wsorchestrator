@@ -12,15 +12,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { FileText, Loader2, Pencil, Plus, Printer, Trash2 } from "lucide-react";
-import {
-  HEADER_ROW,
-  LINK_ROW,
-  Pager,
-  PlainHeader,
-  SortHeader,
-  TableSearch,
-  useRowLink,
-} from "@/components/data-table";
+import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -42,15 +34,7 @@ const ERRORS: Record<string, string> = {
   forbidden: "Your own role changed — reload the page.",
 };
 
-export function FoodOrdersView({
-  query,
-  page,
-  canEdit,
-}: {
-  query: ListQuery<FoodOrderSort>;
-  page: Page<FoodOrderRow>;
-  canEdit: boolean;
-}) {
+export function FoodOrdersView({ query, page, canEdit }: { query: ListQuery<FoodOrderSort>; page: Page<FoodOrderRow>; canEdit: boolean }) {
   const router = useRouter();
   const listParams = useSearchParams().toString();
   const rowLink = useRowLink();
@@ -60,7 +44,15 @@ export function FoodOrdersView({
   const sortProps = { sort: query.sort, dir: query.dir };
 
   async function remove(o: FoodOrderRow) {
-    if (!(await confirmDialog({ title: `Remove the order from ${o.vendor}?`, description: "Its PDF goes with it.", confirmLabel: "Remove", destructive: true }))) return;
+    if (
+      !(await confirmDialog({
+        title: `Remove the order from ${o.vendor}?`,
+        description: "Its PDF goes with it.",
+        confirmLabel: "Remove",
+        destructive: true,
+      }))
+    )
+      return;
     setBusy(o.id);
     setError(null);
     try {
@@ -168,7 +160,13 @@ export function FoodOrdersView({
                         </Button>
                         {canEdit && (
                           <>
-                            <Button variant="ghost" size="icon" aria-label={`Edit the order from ${o.vendor}`} disabled={busy === o.id} onClick={() => setEditing(o)}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Edit the order from ${o.vendor}`}
+                              disabled={busy === o.id}
+                              onClick={() => setEditing(o)}
+                            >
                               <Pencil className="size-3.5" />
                             </Button>
                             <Button
@@ -331,12 +329,7 @@ function FoodOrderDialog({ editing, onClose }: { editing: FoodOrderRow | "new" |
                 </label>
               </div>
             )}
-            <Input
-              id="order-file"
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            />
+            <Input id="order-file" type="file" accept="application/pdf,.pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             {existing?.fileName && <p className="text-xs text-muted-foreground">Choosing a file replaces the one it has.</p>}
           </div>
           {error && (

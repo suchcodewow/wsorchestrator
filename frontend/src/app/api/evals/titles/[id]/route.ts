@@ -3,20 +3,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireEvalsAdministrator } from "@/lib/api-auth";
-import {
-  deleteTitle,
-  STATUS_FOR,
-  updateTitle,
-  updateTitleSchema,
-} from "@/lib/evals/titles";
+import { deleteTitle, STATUS_FOR, updateTitle, updateTitleSchema } from "@/lib/evals/titles";
 import { audited } from "@/lib/audit";
 
 const idSchema = z.string().uuid();
 
-export const PATCH = audited(async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireEvalsAdministrator(req);
   if (error) return error;
 
@@ -32,18 +24,12 @@ export const PATCH = audited(async function PATCH(
 
   const result = await updateTitle(id.data, parsed.data);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, list: result.list },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error, list: result.list }, { status: STATUS_FOR[result.error] });
   }
   return NextResponse.json({ ok: true });
 });
 
-export const DELETE = audited(async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireEvalsAdministrator(req);
   if (error) return error;
 
@@ -54,10 +40,7 @@ export const DELETE = audited(async function DELETE(
 
   const result = await deleteTitle(id.data);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
   return NextResponse.json({ ok: true });
 });

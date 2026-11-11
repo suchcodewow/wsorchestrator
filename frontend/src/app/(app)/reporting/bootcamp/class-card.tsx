@@ -137,9 +137,7 @@ export function ClassCard({
                       <ScoreBar score={shown(exercise.score)} thin />
                     </div>
                     {exercise.feedback && (
-                      <p className="pt-0.5 text-sm whitespace-pre-line text-muted-foreground wrap-break-word">
-                        {exercise.feedback}
-                      </p>
+                      <p className="pt-0.5 text-sm whitespace-pre-line text-muted-foreground wrap-break-word">{exercise.feedback}</p>
                     )}
                   </li>
                 ))}

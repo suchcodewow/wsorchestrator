@@ -4,14 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sessionOrToken } from "@/lib/api-auth";
 import { CLOUDS, MAX_USERS, SCENARIOS, type ScenarioId } from "@/db/schema";
-import {
-  deleteRun,
-  getRunForViewer,
-  updateRunConfig,
-  type DeleteRunError,
-  type UpdateRunError,
-  type Viewer,
-} from "@/lib/runs";
+import { deleteRun, getRunForViewer, updateRunConfig, type DeleteRunError, type UpdateRunError, type Viewer } from "@/lib/runs";
 import { reprovisionRun } from "@/lib/trigger";
 import { audited } from "@/lib/audit";
 
@@ -21,15 +14,9 @@ async function viewer(req: Request): Promise<Viewer | null> {
   return { id: caller.id, access: caller.access };
 }
 
-const UNAUTHORIZED = NextResponse.json(
-  { error: "unauthorized" },
-  { status: 401 },
-);
+const UNAUTHORIZED = NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const who = await viewer(req);
   if (!who) return UNAUTHORIZED;
 
@@ -60,10 +47,7 @@ const STATUS_FOR: Record<UpdateRunError, number> = {
   exceeds_mode_limits: 400,
 };
 
-export const PATCH = audited(async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const who = await viewer(req);
   if (!who) return UNAUTHORIZED;
 
@@ -75,10 +59,7 @@ export const PATCH = audited(async function PATCH(
   const { id } = await params;
   const result = await updateRunConfig(id, who, parsed.data);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   }
 
   const applying = result.needsReprovision ? await reprovisionRun(id) : false;
@@ -90,20 +71,14 @@ const DELETE_STATUS_FOR: Record<DeleteRunError, number> = {
   in_flight: 409,
 };
 
-export const DELETE = audited(async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = audited(async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const who = await viewer(req);
   if (!who) return UNAUTHORIZED;
 
   const { id } = await params;
   const result = await deleteRun(id, who);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error },
-      { status: DELETE_STATUS_FOR[result.error] },
-    );
+    return NextResponse.json({ error: result.error }, { status: DELETE_STATUS_FOR[result.error] });
   }
   return NextResponse.json({ outcome: result.outcome });
 });
