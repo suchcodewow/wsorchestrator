@@ -55,7 +55,8 @@ describe("breakoutGrid", () => {
       [1, 5, 6, 8].map((n) => breakoutGrid(Array.from({ length: n }, (_, i) => column(i, 3))).rows),
       [1, 1, 2, 2],
     );
-    assert.ok(breakoutGrid([column(0, 20)]).fontPt < breakoutGrid([column(0, 3)]).fontPt);
+    assert.ok(breakoutGrid([column(0, 20)]).leaderPt < breakoutGrid([column(0, 3)]).leaderPt);
+    assert.equal(breakoutGrid([column(0, 3)]).leaderPt, 18);
   });
 });
 

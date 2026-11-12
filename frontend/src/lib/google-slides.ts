@@ -87,55 +87,131 @@ export type BreakoutColumn = { leader: string; room: string | null; people: stri
 
 /** At most this many instructors share a row of the breakout slide; more wrap onto a second. */
 const BREAKOUT_PER_ROW = 5;
-const BREAKOUT_MAX_FONT = 24;
+const BREAKOUT = {
+  margin: 0.5,
+  titleH: 0.95,
+  gap: 0.15,
+  /** The leader's size when everything fits, as the Mimir slides set a card's heading; the room and names follow in proportion. */
+  maxLeaderPt: 18,
+  roomRatio: 0.75,
+  nameRatio: 0.62,
+  /** Slides' fixed inset inside a shape, and the width one character takes as a fraction of its point size. */
+  inset: 0.1,
+  charW: 0.56,
+  background: { red: 0.969, green: 0.969, blue: 0.969 },
+  ink: { red: 0.1, green: 0.1, blue: 0.12 },
+  muted: { red: 0.33, green: 0.33, blue: 0.36 },
+  border: { red: 0.82, green: 0.82, blue: 0.84 },
+};
 
-/** The grid and font that fit `columns` on the breakout slide: every name on one line, every column the same height. */
-export function breakoutGrid(columns: BreakoutColumn[]): { cols: number; rows: number; cellW: number; cellH: number; fontPt: number } {
+/**
+ * The grid and sizes that fit `columns` on the breakout slide: the largest leader size, up to the Mimir slides', at which
+ * every name stays on one line and the tallest group fits its card, with the room and names smaller in proportion.
+ * `cardH` is as tall as the fullest group needs, so a short list is not a tall empty box.
+ */
+export function breakoutGrid(columns: BreakoutColumn[]): {
+  cols: number;
+  rows: number;
+  cellW: number;
+  cardW: number;
+  cardH: number;
+  leaderPt: number;
+  roomPt: number;
+  namePt: number;
+} {
   const count = Math.max(1, columns.length);
   const cols = count <= BREAKOUT_PER_ROW ? count : Math.ceil(count / 2);
   const rows = Math.ceil(count / cols);
-  const cellW = (PAGE.w - 2 * MARGIN) / cols;
-  const cellH = (PAGE.h - TITLE_H - MARGIN) / rows;
-  const lines = 2 + Math.max(0, ...columns.map((c) => c.people.length));
-  const wide = (texts: string[]) => Math.max(8, ...texts.map((t) => t.length));
-  const room = (cellW - 0.2) * 72;
-  // The leader's name is set two points larger and bold, so it needs the more generous width per character.
-  const byHeight = Math.floor(((cellH - 0.15) * 72) / (lines * 1.25));
-  const byWidth = Math.min(
-    Math.floor(room / (wide(columns.flatMap((c) => [c.room ?? "", ...c.people])) * 0.55)),
-    Math.floor(room / (wide(columns.map((c) => c.leader)) * 0.64)) - 2,
-  );
-  return { cols, rows, cellW, cellH, fontPt: Math.max(MIN_FONT, Math.min(BREAKOUT_MAX_FONT, byHeight, byWidth)) };
+  const { margin, gap, inset, charW } = BREAKOUT;
+  const cellW = (PAGE.w - 2 * margin + gap) / cols;
+  const cellH = (PAGE.h - BREAKOUT.titleH - margin + gap) / rows;
+  const cardW = cellW - gap;
+  const longest = (texts: string[]) => Math.max(1, ...texts.map((t) => t.length));
+  const leaders = longest(columns.map((c) => c.leader));
+  const rooms = longest(columns.map((c) => c.room ?? "No room"));
+  const names = longest(columns.flatMap((c) => c.people));
+  const fullest = Math.max(0, ...columns.map((c) => c.people.length));
+
+  for (let leaderPt = BREAKOUT.maxLeaderPt; leaderPt >= MIN_FONT; leaderPt--) {
+    const roomPt = Math.round(leaderPt * BREAKOUT.roomRatio * 2) / 2;
+    const namePt = Math.round(leaderPt * BREAKOUT.nameRatio * 2) / 2;
+    const textW = (cardW - 2 * inset) * 72;
+    const wide = Math.max(leaders * leaderPt, rooms * roomPt, names * namePt) * charW;
+    const textH = (leaderPt * 1.2 + roomPt * 1.2 + 8 + fullest * (namePt * 1.2 + 2)) / 72 + 2 * inset;
+    if (wide <= textW && textH <= cellH - gap) return { cols, rows, cellW, cardW, cardH: textH, leaderPt, roomPt, namePt };
+  }
+  return { cols, rows, cellW, cardW, cardH: cellH - gap, leaderPt: MIN_FONT, roomPt: MIN_FONT, namePt: MIN_FONT };
 }
 
-/** Requests that replace the new deck's starter slide with a breakout's slide: its name over a card for each instructor. */
+const rgb = (color: { red: number; green: number; blue: number }) => ({ opaqueColor: { rgbColor: color } });
+
+/**
+ * Requests that replace the new deck's starter slide with a breakout's slide, on the light page the Mimir slides use: the
+ * session's name in Georgia, then a white card for each instructor in Geist, their name, their room, and their group beneath.
+ */
 export function breakoutRequests(starterSlideId: string, title: string, columns: BreakoutColumn[]): unknown[] {
   const slideId = "breakout";
+  const { margin, gap, background, ink, muted, border } = BREAKOUT;
   const requests: unknown[] = [
     { createSlide: { objectId: slideId, slideLayoutReference: { predefinedLayout: "BLANK" } } },
     { deleteObject: { objectId: starterSlideId } },
-    textBox("title", slideId, MARGIN, 0.1, PAGE.w - 2 * MARGIN, TITLE_H - 0.1, title, title.length > 40 ? 24 : 32, true),
+    {
+      updatePageProperties: {
+        objectId: slideId,
+        pageProperties: { pageBackgroundFill: { solidFill: { color: { rgbColor: background } } } },
+        fields: "pageBackgroundFill",
+      },
+    },
+    // Slides insets a box's text by 0.1in, so the box starts that much left of the cards for the words to line up with them.
+    textBox(
+      "title",
+      slideId,
+      margin - BREAKOUT.inset,
+      0.2,
+      PAGE.w - 2 * margin,
+      BREAKOUT.titleH - 0.2,
+      title,
+      title.length > 36 ? 24 : 30,
+      false,
+    ),
+    {
+      updateTextStyle: {
+        objectId: "title",
+        style: { fontFamily: "Georgia", foregroundColor: rgb(ink) },
+        fields: "fontFamily,foregroundColor",
+      },
+    },
+    { updateParagraphStyle: { objectId: "title", style: { alignment: "START" }, fields: "alignment" } },
   ];
-  const { cols, cellW, cellH, fontPt } = breakoutGrid(columns);
-  const pad = 0.06;
+  const { cols, cellW, cardW, cardH, leaderPt, roomPt, namePt } = breakoutGrid(columns);
   columns.forEach((c, i) => {
     const id = `card_${i}`;
-    const head = c.leader;
-    const sub = c.room ?? "No room";
-    const text = [head, sub, ...c.people].join("\n");
+    const room = c.room ?? "No room";
+    const text = [c.leader, room, ...c.people].join("\n");
+    const roomStart = c.leader.length + 1;
+    const peopleStart = roomStart + room.length + 1;
+    const range = (startIndex: number, endIndex: number) => ({ type: "FIXED_RANGE", startIndex, endIndex });
+    const style = (startIndex: number, endIndex: number, pt: number, color: typeof ink) => ({
+      updateTextStyle: {
+        objectId: id,
+        textRange: range(startIndex, endIndex),
+        style: { fontFamily: "Geist", fontSize: { magnitude: pt, unit: "PT" }, foregroundColor: rgb(color) },
+        fields: "fontFamily,fontSize,foregroundColor",
+      },
+    });
     requests.push(
       {
         createShape: {
           objectId: id,
-          shapeType: "TEXT_BOX",
+          shapeType: "ROUND_RECTANGLE",
           elementProperties: {
             pageObjectId: slideId,
-            size: { width: { magnitude: inch(cellW - 2 * pad), unit: "EMU" }, height: { magnitude: inch(cellH - 2 * pad), unit: "EMU" } },
+            size: { width: { magnitude: inch(cardW), unit: "EMU" }, height: { magnitude: inch(cardH), unit: "EMU" } },
             transform: {
               scaleX: 1,
               scaleY: 1,
-              translateX: inch(MARGIN + (i % cols) * cellW + pad),
-              translateY: inch(TITLE_H + Math.floor(i / cols) * cellH + pad),
+              translateX: inch(margin + (i % cols) * cellW),
+              translateY: inch(BREAKOUT.titleH + Math.floor(i / cols) * (cardH + gap)),
               unit: "EMU",
             },
           },
@@ -145,34 +221,37 @@ export function breakoutRequests(starterSlideId: string, title: string, columns:
         updateShapeProperties: {
           objectId: id,
           shapeProperties: {
-            outline: {
-              outlineFill: { solidFill: { color: { rgbColor: { red: 0.8, green: 0.8, blue: 0.8 } } } },
-              weight: { magnitude: 0.75, unit: "PT" },
-            },
+            shapeBackgroundFill: { solidFill: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+            outline: { outlineFill: { solidFill: { color: { rgbColor: border } } }, weight: { magnitude: 1, unit: "PT" } },
+            contentAlignment: "TOP",
           },
-          fields: "outline",
+          fields: "shapeBackgroundFill,outline,contentAlignment",
         },
       },
       { insertText: { objectId: id, text } },
-      { updateTextStyle: { objectId: id, style: { fontSize: { magnitude: fontPt, unit: "PT" } }, fields: "fontSize" } },
-      {
-        updateTextStyle: {
-          objectId: id,
-          textRange: { type: "FIXED_RANGE", startIndex: 0, endIndex: head.length },
-          style: { bold: true, fontSize: { magnitude: fontPt + 2, unit: "PT" } },
-          fields: "bold,fontSize",
-        },
-      },
-      {
-        updateTextStyle: {
-          objectId: id,
-          textRange: { type: "FIXED_RANGE", startIndex: head.length + 1, endIndex: head.length + 1 + sub.length },
-          style: { italic: true, foregroundColor: { opaqueColor: { rgbColor: { red: 0.35, green: 0.35, blue: 0.35 } } } },
-          fields: "italic,foregroundColor",
-        },
-      },
       { updateParagraphStyle: { objectId: id, style: { alignment: "START" }, fields: "alignment" } },
+      style(0, c.leader.length, leaderPt, ink),
+      style(roomStart, roomStart + room.length, roomPt, ink),
+      {
+        updateParagraphStyle: {
+          objectId: id,
+          textRange: range(roomStart, roomStart + room.length),
+          style: { spaceBelow: { magnitude: 8, unit: "PT" } },
+          fields: "spaceBelow",
+        },
+      },
     );
+    // A card with nobody assigned has no names to style: an empty range is refused.
+    if (c.people.length > 0) {
+      requests.push(style(peopleStart, text.length, namePt, muted), {
+        updateParagraphStyle: {
+          objectId: id,
+          textRange: range(peopleStart, text.length),
+          style: { spaceBelow: { magnitude: 2, unit: "PT" } },
+          fields: "spaceBelow",
+        },
+      });
+    }
   });
   return requests;
 }
