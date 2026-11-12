@@ -85,8 +85,8 @@ export function thankYouRequests(starterSlideId: string, judges: SlideJudge[], b
 /** One breakout instructor's column: who leads it, where, and who goes with them. */
 export type BreakoutColumn = { leader: string; room: string | null; people: string[] };
 
-/** At most this many instructors share a row of the breakout slide; more wrap onto a second. */
-const BREAKOUT_PER_ROW = 5;
+/** At most this many instructors share a row of the breakout slide, and at most two rows: more than this many split evenly over two. */
+const BREAKOUT_PER_ROW = 4;
 const BREAKOUT = {
   margin: 0.5,
   titleH: 0.95,
@@ -117,6 +117,8 @@ export function breakoutGrid(columns: BreakoutColumn[]): {
   cellW: number;
   cardW: number;
   cardH: number;
+  /** Each card's left edge: a row of fewer than a full row's cards, the last one, is centred. */
+  xs: number[];
   /** Where the cards start down the page: the block of them centred on it, but never up into the title. */
   top: number;
   leaderPt: number;
@@ -127,9 +129,14 @@ export function breakoutGrid(columns: BreakoutColumn[]): {
   const cols = count <= BREAKOUT_PER_ROW ? count : Math.ceil(count / 2);
   const rows = Math.ceil(count / cols);
   const { margin, gap, inset, charW, bottomPad } = BREAKOUT;
-  const cellW = (PAGE.w - 2 * margin + gap) / cols;
+  // A card is as wide as one in a full row, so one or two instructors are not stretched across the page.
+  const cellW = (PAGE.w - 2 * margin + gap) / BREAKOUT_PER_ROW;
   const cellH = (PAGE.h - BREAKOUT.titleH - margin + gap) / rows;
   const cardW = cellW - gap;
+  const xs = Array.from({ length: count }, (_, i) => {
+    const inRow = Math.min(cols, count - Math.floor(i / cols) * cols);
+    return (PAGE.w - (inRow * cellW - gap)) / 2 + (i % cols) * cellW;
+  });
   const longest = (texts: string[]) => Math.max(1, ...texts.map((t) => t.length));
   const leaders = longest(columns.map((c) => c.leader));
   const rooms = longest(columns.map((c) => c.room ?? "No room"));
@@ -145,10 +152,10 @@ export function breakoutGrid(columns: BreakoutColumn[]): {
     const wide = Math.max(leaders * leaderPt, rooms * roomPt, names * namePt) * charW;
     const textH = (leaderPt * 1.2 + roomPt * 1.2 + 8 + fullest * (namePt * 1.2 + 2)) / 72 + 2 * inset + bottomPad;
     if (wide <= textW && textH <= cellH - gap)
-      return { cols, rows, cellW, cardW, cardH: textH, top: topFor(rows, textH), leaderPt, roomPt, namePt };
+      return { cols, rows, cellW, cardW, cardH: textH, xs, top: topFor(rows, textH), leaderPt, roomPt, namePt };
   }
   const cardH = cellH - gap;
-  return { cols, rows, cellW, cardW, cardH, top: topFor(rows, cardH), leaderPt: MIN_FONT, roomPt: MIN_FONT, namePt: MIN_FONT };
+  return { cols, rows, cellW, cardW, cardH, xs, top: topFor(rows, cardH), leaderPt: MIN_FONT, roomPt: MIN_FONT, namePt: MIN_FONT };
 }
 
 const rgb = (color: { red: number; green: number; blue: number }) => ({ opaqueColor: { rgbColor: color } });
@@ -191,7 +198,7 @@ export function breakoutRequests(starterSlideId: string, title: string, columns:
     },
     { updateParagraphStyle: { objectId: "title", style: { alignment: "START" }, fields: "alignment" } },
   ];
-  const { cols, cellW, cardW, cardH, top, leaderPt, roomPt, namePt } = breakoutGrid(columns);
+  const { cardW, cardH, xs, cols, top, leaderPt, roomPt, namePt } = breakoutGrid(columns);
   columns.forEach((c, i) => {
     const id = `card_${i}`;
     const room = c.room ?? "No room";
@@ -218,7 +225,7 @@ export function breakoutRequests(starterSlideId: string, title: string, columns:
             transform: {
               scaleX: 1,
               scaleY: 1,
-              translateX: inch(margin + (i % cols) * cellW),
+              translateX: inch(xs[i]),
               translateY: inch(top + Math.floor(i / cols) * (cardH + gap)),
               unit: "EMU",
             },
