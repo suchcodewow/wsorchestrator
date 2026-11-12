@@ -88,6 +88,7 @@ export async function generateThankYou(shareWith: string): Promise<ThankYouResul
       title: THANK_YOU_TITLE,
       folderId: THANK_YOU_FOLDER_ID,
       judges: people,
+      backgroundUrl: `${appOrigin()}/thank-you-bg.jpg`,
       shareWith,
     });
     return { ok: true, url: deck.url, judges: people.length, withPhotos: people.length };

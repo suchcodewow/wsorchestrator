@@ -22,6 +22,7 @@ const MARGIN = 0.3;
 const TITLE_H = 0.8;
 const MIN_FONT = 6;
 const MAX_FONT = 11;
+const WHITE = { red: 1, green: 1, blue: 1 };
 
 /** The columns and rows that give the largest photo, a name of up to two lines under it included, to `count` judges. */
 export function gridFor(count: number): { cols: number; rows: number; cellW: number; cellH: number; photo: number; fontPt: number } {
@@ -41,13 +42,22 @@ export function gridFor(count: number): { cols: number; rows: number; cellW: num
 }
 
 /** Requests that replace the new deck's starter slide with the thank-you slide, `judges` in the order given. */
-export function thankYouRequests(starterSlideId: string, judges: SlideJudge[]): unknown[] {
+export function thankYouRequests(starterSlideId: string, judges: SlideJudge[], backgroundUrl?: string): unknown[] {
   const slideId = "thank_you";
   const requests: unknown[] = [
     { createSlide: { objectId: slideId, slideLayoutReference: { predefinedLayout: "BLANK" } } },
     { deleteObject: { objectId: starterSlideId } },
-    textBox("title", slideId, MARGIN, 0.1, PAGE.w - 2 * MARGIN, TITLE_H - 0.1, "Thank You!", 36, true),
   ];
+  if (backgroundUrl) {
+    requests.push({
+      updatePageProperties: {
+        objectId: slideId,
+        pageProperties: { pageBackgroundFill: { stretchedPictureFill: { contentUrl: backgroundUrl } } },
+        fields: "pageBackgroundFill",
+      },
+    });
+  }
+  requests.push(textBox("title", slideId, MARGIN, 0.1, PAGE.w - 2 * MARGIN, TITLE_H - 0.1, "Thank You!", 36, true, WHITE));
   const { cols, cellW, cellH, photo, fontPt } = gridFor(judges.length);
   judges.forEach((j, i) => {
     const col = i % cols;
@@ -66,8 +76,8 @@ export function thankYouRequests(starterSlideId: string, judges: SlideJudge[]): 
         },
       },
     });
-    requests.push(textBox(`name_${i}`, slideId, x, y + photo + 0.02, cellW, cellH - photo - 0.02, j.name, fontPt, false));
-    if (j.times >= 2) requests.push(...flame(`flame_${i}`, slideId, px + photo * 0.52, y + photo * 0.58, photo * 0.5, photo * 0.34));
+    requests.push(textBox(`name_${i}`, slideId, x, y + photo + 0.02, cellW, cellH - photo - 0.02, j.name, fontPt, false, WHITE));
+    if (j.times >= 2) requests.push(...flame(`flame_${i}`, slideId, px + photo, y + photo * 0.95, photo));
   });
   return requests;
 }
@@ -162,9 +172,16 @@ export function breakoutRequests(starterSlideId: string, title: string, columns:
   return requests;
 }
 
-/** A small flame-orange badge reading "🔥2X", its corner at the photo's lower right. */
-function flame(id: string, pageId: string, x: number, y: number, w: number, h: number) {
-  const pt = Math.max(5, Math.min(10, Math.floor(h * 50)));
+/**
+ * A small flame-orange pill reading "🔥2X", its lower right corner at (`right`, `bottom`). Slides gives a shape's own text
+ * a fixed inset the API cannot change, so the pill is sized to the text alone and the text sits in a wider box over it.
+ */
+function flame(id: string, pageId: string, right: number, bottom: number, photo: number) {
+  const pt = Math.max(5, Math.min(8, Math.floor(photo * 0.34 * 40)));
+  const w = (pt * 2.8) / 72 + 0.08;
+  const h = (pt * 1.25) / 72 + 0.05;
+  const x = right - w;
+  const y = bottom - h;
   return [
     {
       createShape: {
@@ -182,32 +199,28 @@ function flame(id: string, pageId: string, x: number, y: number, w: number, h: n
         objectId: id,
         shapeProperties: {
           shapeBackgroundFill: { solidFill: { color: { rgbColor: { red: 0.85, green: 0.2, blue: 0.05 } } } },
-          outline: {
-            outlineFill: { solidFill: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
-            weight: { magnitude: 0.75, unit: "PT" },
-          },
+          outline: { outlineFill: { solidFill: { color: { rgbColor: WHITE } } }, weight: { magnitude: 0.75, unit: "PT" } },
         },
         fields: "shapeBackgroundFill,outline",
       },
     },
-    { insertText: { objectId: id, text: "🔥2X" } },
-    {
-      updateTextStyle: {
-        objectId: id,
-        style: {
-          fontSize: { magnitude: pt, unit: "PT" },
-          bold: true,
-          foregroundColor: { opaqueColor: { rgbColor: { red: 1, green: 1, blue: 1 } } },
-        },
-        fields: "fontSize,bold,foregroundColor",
-      },
-    },
-    { updateParagraphStyle: { objectId: id, style: { alignment: "CENTER" }, fields: "alignment" } },
-    { updateShapeProperties: { objectId: id, shapeProperties: { contentAlignment: "MIDDLE" }, fields: "contentAlignment" } },
+    ...textBox(`flametext_${id.slice("flame_".length)}`, pageId, x - 0.3, y, w + 0.6, h, "🔥 2X", pt, true, WHITE, "MIDDLE"),
   ];
 }
 
-function textBox(id: string, pageId: string, x: number, y: number, w: number, h: number, text: string, pt: number, bold: boolean) {
+function textBox(
+  id: string,
+  pageId: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  text: string,
+  pt: number,
+  bold: boolean,
+  color?: { red: number; green: number; blue: number },
+  verticalAlign?: "MIDDLE",
+) {
   return [
     {
       createShape: {
@@ -224,11 +237,18 @@ function textBox(id: string, pageId: string, x: number, y: number, w: number, h:
     {
       updateTextStyle: {
         objectId: id,
-        style: { fontSize: { magnitude: pt, unit: "PT" }, bold },
-        fields: "fontSize,bold",
+        style: {
+          fontSize: { magnitude: pt, unit: "PT" },
+          bold,
+          ...(color ? { foregroundColor: { opaqueColor: { rgbColor: color } } } : {}),
+        },
+        fields: color ? "fontSize,bold,foregroundColor" : "fontSize,bold",
       },
     },
     { updateParagraphStyle: { objectId: id, style: { alignment: "CENTER" }, fields: "alignment" } },
+    ...(verticalAlign
+      ? [{ updateShapeProperties: { objectId: id, shapeProperties: { contentAlignment: verticalAlign }, fields: "contentAlignment" } }]
+      : []),
   ];
 }
 
@@ -272,12 +292,12 @@ export async function createSlideDeck(
 export async function createThankYouDeck(
   slides: CalendarClient,
   drive: CalendarClient,
-  input: { title: string; judges: SlideJudge[]; shareWith: string; folderId: string },
+  input: { title: string; judges: SlideJudge[]; shareWith: string; folderId: string; backgroundUrl?: string },
 ): Promise<{ id: string; url: string }> {
   return createSlideDeck(slides, drive, {
     title: input.title,
     shareWith: input.shareWith,
     folderId: input.folderId,
-    requests: (starter) => thankYouRequests(starter, input.judges),
+    requests: (starter) => thankYouRequests(starter, input.judges, input.backgroundUrl),
   });
 }

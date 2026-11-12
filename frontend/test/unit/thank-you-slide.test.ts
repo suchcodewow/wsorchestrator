@@ -39,7 +39,7 @@ describe("thankYouRequests", () => {
       flames.map((r) => r.createShape?.objectId),
       ["flame_1"],
     );
-    assert.ok(reqs.some((r) => r.insertText?.text === "🔥2X"));
+    assert.ok(reqs.some((r) => r.insertText?.text === "🔥 2X"));
   });
 });
 
