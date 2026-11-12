@@ -87,7 +87,7 @@ export type BreakoutColumn = { leader: string; room: string | null; people: stri
 
 /** At most this many instructors share a row of the breakout slide; more wrap onto a second. */
 const BREAKOUT_PER_ROW = 5;
-const BREAKOUT_MAX_FONT = 14;
+const BREAKOUT_MAX_FONT = 24;
 
 /** The grid and font that fit `columns` on the breakout slide: every name on one line, every column the same height. */
 export function breakoutGrid(columns: BreakoutColumn[]): { cols: number; rows: number; cellW: number; cellH: number; fontPt: number } {
@@ -97,9 +97,14 @@ export function breakoutGrid(columns: BreakoutColumn[]): { cols: number; rows: n
   const cellW = (PAGE.w - 2 * MARGIN) / cols;
   const cellH = (PAGE.h - TITLE_H - MARGIN) / rows;
   const lines = 2 + Math.max(0, ...columns.map((c) => c.people.length));
-  const chars = Math.max(8, ...columns.flatMap((c) => [c.leader, c.room ?? "", ...c.people].map((t) => t.length)));
+  const wide = (texts: string[]) => Math.max(8, ...texts.map((t) => t.length));
+  const room = (cellW - 0.2) * 72;
+  // The leader's name is set two points larger and bold, so it needs the more generous width per character.
   const byHeight = Math.floor(((cellH - 0.15) * 72) / (lines * 1.25));
-  const byWidth = Math.floor(((cellW - 0.2) * 72) / (chars * 0.55));
+  const byWidth = Math.min(
+    Math.floor(room / (wide(columns.flatMap((c) => [c.room ?? "", ...c.people])) * 0.55)),
+    Math.floor(room / (wide(columns.map((c) => c.leader)) * 0.64)) - 2,
+  );
   return { cols, rows, cellW, cellH, fontPt: Math.max(MIN_FONT, Math.min(BREAKOUT_MAX_FONT, byHeight, byWidth)) };
 }
 
@@ -154,7 +159,7 @@ export function breakoutRequests(starterSlideId: string, title: string, columns:
         updateTextStyle: {
           objectId: id,
           textRange: { type: "FIXED_RANGE", startIndex: 0, endIndex: head.length },
-          style: { bold: true, fontSize: { magnitude: Math.min(BREAKOUT_MAX_FONT + 2, fontPt + 2), unit: "PT" } },
+          style: { bold: true, fontSize: { magnitude: fontPt + 2, unit: "PT" } },
           fields: "bold,fontSize",
         },
       },
