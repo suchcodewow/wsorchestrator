@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 
 process.env.AUTH_SECRET ||= "test-secret";
 
-import { gridFor, thankYouRequests, type SlideJudge } from "@/lib/google-slides";
+import { breakoutGrid, breakoutRequests, gridFor, thankYouRequests, type BreakoutColumn, type SlideJudge } from "@/lib/google-slides";
 import { photoLink, verifyPhotoLink } from "@/lib/logistics/thank-you-photo";
 
 const judge = (i: number, times = 1): SlideJudge => ({ name: `Judge ${i}`, photoUrl: `https://x.test/${i}`, times });
@@ -40,6 +40,37 @@ describe("thankYouRequests", () => {
       ["flame_1"],
     );
     assert.ok(reqs.some((r) => r.insertText?.text === "🔥2X"));
+  });
+});
+
+const column = (i: number, people: number, room: string | null = `Room ${i}`): BreakoutColumn => ({
+  leader: `Leader ${i}`,
+  room,
+  people: Array.from({ length: people }, (_, p) => `Attendee ${i}.${p}`),
+});
+
+describe("breakoutGrid", () => {
+  test("puts up to five instructors in one row and wraps more onto two, with a font that shrinks as the groups grow", () => {
+    assert.deepEqual(
+      [1, 5, 6, 8].map((n) => breakoutGrid(Array.from({ length: n }, (_, i) => column(i, 3))).rows),
+      [1, 1, 2, 2],
+    );
+    assert.ok(breakoutGrid([column(0, 20)]).fontPt < breakoutGrid([column(0, 3)]).fontPt);
+  });
+});
+
+describe("breakoutRequests", () => {
+  type Req = Record<string, { objectId?: string; text?: string } | undefined>;
+
+  test("names the session, then gives each instructor a card with their room and group, in order, and no crown", () => {
+    const reqs = (breakoutRequests("starter", "Breakout 1", [column(0, 2), column(1, 1, null)]) as unknown[]).flat() as Req[];
+    const texts = reqs.filter((r) => r.insertText).map((r) => r.insertText!.text);
+    assert.deepEqual(texts, ["Breakout 1", "Leader 0\nRoom 0\nAttendee 0.0\nAttendee 0.1", "Leader 1\nNo room\nAttendee 1.0"]);
+    assert.ok(!JSON.stringify(reqs).includes("👑"));
+    assert.deepEqual(
+      reqs.filter((r) => r.createShape?.objectId?.startsWith("card_")).map((r) => r.createShape!.objectId),
+      ["card_0", "card_1"],
+    );
   });
 });
 

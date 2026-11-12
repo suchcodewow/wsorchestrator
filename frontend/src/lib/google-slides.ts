@@ -72,6 +72,96 @@ export function thankYouRequests(starterSlideId: string, judges: SlideJudge[]): 
   return requests;
 }
 
+/** One breakout instructor's column: who leads it, where, and who goes with them. */
+export type BreakoutColumn = { leader: string; room: string | null; people: string[] };
+
+/** At most this many instructors share a row of the breakout slide; more wrap onto a second. */
+const BREAKOUT_PER_ROW = 5;
+const BREAKOUT_MAX_FONT = 14;
+
+/** The grid and font that fit `columns` on the breakout slide: every name on one line, every column the same height. */
+export function breakoutGrid(columns: BreakoutColumn[]): { cols: number; rows: number; cellW: number; cellH: number; fontPt: number } {
+  const count = Math.max(1, columns.length);
+  const cols = count <= BREAKOUT_PER_ROW ? count : Math.ceil(count / 2);
+  const rows = Math.ceil(count / cols);
+  const cellW = (PAGE.w - 2 * MARGIN) / cols;
+  const cellH = (PAGE.h - TITLE_H - MARGIN) / rows;
+  const lines = 2 + Math.max(0, ...columns.map((c) => c.people.length));
+  const chars = Math.max(8, ...columns.flatMap((c) => [c.leader, c.room ?? "", ...c.people].map((t) => t.length)));
+  const byHeight = Math.floor(((cellH - 0.15) * 72) / (lines * 1.25));
+  const byWidth = Math.floor(((cellW - 0.2) * 72) / (chars * 0.55));
+  return { cols, rows, cellW, cellH, fontPt: Math.max(MIN_FONT, Math.min(BREAKOUT_MAX_FONT, byHeight, byWidth)) };
+}
+
+/** Requests that replace the new deck's starter slide with a breakout's slide: its name over a card for each instructor. */
+export function breakoutRequests(starterSlideId: string, title: string, columns: BreakoutColumn[]): unknown[] {
+  const slideId = "breakout";
+  const requests: unknown[] = [
+    { createSlide: { objectId: slideId, slideLayoutReference: { predefinedLayout: "BLANK" } } },
+    { deleteObject: { objectId: starterSlideId } },
+    textBox("title", slideId, MARGIN, 0.1, PAGE.w - 2 * MARGIN, TITLE_H - 0.1, title, title.length > 40 ? 24 : 32, true),
+  ];
+  const { cols, cellW, cellH, fontPt } = breakoutGrid(columns);
+  const pad = 0.06;
+  columns.forEach((c, i) => {
+    const id = `card_${i}`;
+    const head = c.leader;
+    const sub = c.room ?? "No room";
+    const text = [head, sub, ...c.people].join("\n");
+    requests.push(
+      {
+        createShape: {
+          objectId: id,
+          shapeType: "TEXT_BOX",
+          elementProperties: {
+            pageObjectId: slideId,
+            size: { width: { magnitude: inch(cellW - 2 * pad), unit: "EMU" }, height: { magnitude: inch(cellH - 2 * pad), unit: "EMU" } },
+            transform: {
+              scaleX: 1,
+              scaleY: 1,
+              translateX: inch(MARGIN + (i % cols) * cellW + pad),
+              translateY: inch(TITLE_H + Math.floor(i / cols) * cellH + pad),
+              unit: "EMU",
+            },
+          },
+        },
+      },
+      {
+        updateShapeProperties: {
+          objectId: id,
+          shapeProperties: {
+            outline: {
+              outlineFill: { solidFill: { color: { rgbColor: { red: 0.8, green: 0.8, blue: 0.8 } } } },
+              weight: { magnitude: 0.75, unit: "PT" },
+            },
+          },
+          fields: "outline",
+        },
+      },
+      { insertText: { objectId: id, text } },
+      { updateTextStyle: { objectId: id, style: { fontSize: { magnitude: fontPt, unit: "PT" } }, fields: "fontSize" } },
+      {
+        updateTextStyle: {
+          objectId: id,
+          textRange: { type: "FIXED_RANGE", startIndex: 0, endIndex: head.length },
+          style: { bold: true, fontSize: { magnitude: Math.min(BREAKOUT_MAX_FONT + 2, fontPt + 2), unit: "PT" } },
+          fields: "bold,fontSize",
+        },
+      },
+      {
+        updateTextStyle: {
+          objectId: id,
+          textRange: { type: "FIXED_RANGE", startIndex: head.length + 1, endIndex: head.length + 1 + sub.length },
+          style: { italic: true, foregroundColor: { opaqueColor: { rgbColor: { red: 0.35, green: 0.35, blue: 0.35 } } } },
+          fields: "italic,foregroundColor",
+        },
+      },
+      { updateParagraphStyle: { objectId: id, style: { alignment: "START" }, fields: "alignment" } },
+    );
+  });
+  return requests;
+}
+
 /** A small flame-orange badge reading "🔥2X", its corner at the photo's lower right. */
 function flame(id: string, pageId: string, x: number, y: number, w: number, h: number) {
   const pt = Math.max(5, Math.min(10, Math.floor(h * 50)));
@@ -142,11 +232,14 @@ function textBox(id: string, pageId: string, x: number, y: number, w: number, h:
   ];
 }
 
-/** Makes the deck in `folderId`, shares it with `shareWith`, and gives its link. A deck already there with the same title is trashed first. */
-export async function createThankYouDeck(
+/**
+ * Makes a one-slide deck in `folderId`, shares it with `shareWith`, and gives its link. `requests` turns the new deck's
+ * starter slide id into the Slides requests that make the slide. A deck already there with the same title is trashed first.
+ */
+export async function createSlideDeck(
   slides: CalendarClient,
   drive: CalendarClient,
-  input: { title: string; judges: SlideJudge[]; shareWith: string; folderId: string },
+  input: { title: string; shareWith: string; folderId: string; requests: (starterSlideId: string) => unknown[] },
 ): Promise<{ id: string; url: string }> {
   const old = await drive.call<{ files?: { id: string }[] }>("GET", "/files", {
     query: {
@@ -163,7 +256,7 @@ export async function createThankYouDeck(
     body: { title: input.title },
   });
   await slides.call("POST", `/presentations/${deck.presentationId}:batchUpdate`, {
-    body: { requests: thankYouRequests(deck.slides[0].objectId, input.judges).flat() },
+    body: { requests: input.requests(deck.slides[0].objectId).flat() },
   });
   await drive.call("PATCH", `/files/${deck.presentationId}`, {
     query: { addParents: input.folderId, removeParents: "root", supportsAllDrives: "true" },
@@ -173,4 +266,18 @@ export async function createThankYouDeck(
     body: { type: "user", role: "writer", emailAddress: input.shareWith },
   });
   return { id: deck.presentationId, url: `https://docs.google.com/presentation/d/${deck.presentationId}/edit` };
+}
+
+/** The thank-you deck: `createSlideDeck` with the judges' slide. */
+export async function createThankYouDeck(
+  slides: CalendarClient,
+  drive: CalendarClient,
+  input: { title: string; judges: SlideJudge[]; shareWith: string; folderId: string },
+): Promise<{ id: string; url: string }> {
+  return createSlideDeck(slides, drive, {
+    title: input.title,
+    shareWith: input.shareWith,
+    folderId: input.folderId,
+    requests: (starter) => thankYouRequests(starter, input.judges),
+  });
 }

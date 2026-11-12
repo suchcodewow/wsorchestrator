@@ -708,6 +708,12 @@ const ROUTES: RouteCase[] = [
     allowed: canManageTrainingSettings,
     body: () => ({ groups: [] }),
   },
+  {
+    method: "POST",
+    path: `/api/scheduler/bootcamps/${MISSING}/sessions/${MISSING}/slide`,
+    allowed: canManageTrainingSettings,
+    denyOnly: true,
+  },
   { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/sessions/${MISSING}/comments`, allowed: canUseTraining },
   {
     method: "POST",

@@ -12,7 +12,7 @@
  */
 
 import { useMemo, useState, type KeyboardEvent } from "react";
-import { AlertTriangle, ChevronDown, Crown, Loader2, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, Crown, Loader2, Presentation, Trash2 } from "lucide-react";
 import { SessionLookFields, type SessionLook } from "@/components/session-look-fields";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -146,6 +146,8 @@ export function SessionDialog({
   const [tab, setTab] = useState<Tab>("session");
   /** The breakout's groups as changed on their tab; null until they are. */
   const [groups, setGroups] = useState<GroupRow[] | null>(null);
+  /** The breakout's slide while it is being made, and its link once it is. */
+  const [slide, setSlide] = useState<{ making: boolean; url: string | null }>({ making: false, url: null });
 
   // Starts at null so a dialog opened on its first render, as a ?session= link
   // opens it, fills its fields too.
@@ -166,6 +168,7 @@ export function SessionDialog({
       setCommentDelta(0);
       setTab("session");
       setGroups(null);
+      setSlide({ making: false, url: null });
     }
   }
 
@@ -329,6 +332,23 @@ export function SessionDialog({
     }
     const out = await res.json().catch(() => null);
     return GROUP_ERRORS[out?.error ?? ""] ?? `the server said ${res.status}`;
+  }
+
+  /** Makes the breakout's slide in Google Slides from what is saved, after saving any rearranging still waiting. */
+  async function showSlide() {
+    if (!existing) return;
+    setSlide({ making: true, url: null });
+    setError(null);
+    try {
+      await flush();
+      const res = await fetch(`/api/scheduler/bootcamps/${bootcampId}/sessions/${existing.id}/slide`, { method: "POST" });
+      const body = (await res.json().catch(() => null)) as { url?: string; message?: string } | null;
+      if (res.ok && body?.url) return setSlide({ making: false, url: body.url });
+      setError(body?.message ?? `Could not make the slide (${res.status}).`);
+    } catch {
+      setError("Could not reach the server.");
+    }
+    setSlide({ making: false, url: null });
   }
 
   async function remove() {
@@ -572,6 +592,15 @@ export function SessionDialog({
 
         {editable && (
           <>
+            {slide.url && (
+              <p role="status" className="text-sm">
+                Made the slide and shared it with you.{" "}
+                <a href={slide.url} target="_blank" rel="noreferrer" className="font-medium underline">
+                  Open in Google Slides
+                </a>
+              </p>
+            )}
+
             {error && (
               <div role="alert" className="text-sm text-destructive">
                 <p>{error}</p>
@@ -593,7 +622,7 @@ export function SessionDialog({
             )}
 
             <DialogFooter className="sm:justify-between">
-              <div>
+              <div className="flex flex-wrap gap-2">
                 {existing && (
                   <Button
                     type="button"
@@ -604,6 +633,18 @@ export function SessionDialog({
                   >
                     <Trash2 />
                     Remove
+                  </Button>
+                )}
+                {existing && look.kind === "breakout" && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={pending || slide.making || groups !== null}
+                    title={groups !== null ? "Save the changed groups first" : undefined}
+                    onClick={showSlide}
+                  >
+                    {slide.making ? <Loader2 className="animate-spin" /> : <Presentation />}
+                    Show breakout slide
                   </Button>
                 )}
               </div>
