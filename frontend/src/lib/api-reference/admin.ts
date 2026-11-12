@@ -573,6 +573,28 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       },
       {
         method: "GET",
+        path: "/api/cohorts/current/emails",
+        summary:
+          "Lists the email address of everyone GET /api/cohorts/current would show for the same filters and search, across every page.",
+        access: "trainingViewer",
+        token: true,
+        notes:
+          "Takes stage, track, rsvp and q as GET /api/cohorts/current does, and draws the same people, so the list matches the table however many pages it has. emails is in the table's default name order, one address per person, with no names or other fields. The Current tab's copy button calls it.",
+        query: [
+          { name: "stage", type: `"bootcamp" | "intermediate"`, note: "only that stage; both if omitted" },
+          { name: "track", type: `"sales" | "engineer" | "undecided"`, note: "only that track; all three if omitted" },
+          { name: "rsvp", type: `"none"`, note: "only those who have not RSVP'd to their stage's registration form" },
+          { name: "q", type: "string", note: "only those whose name, email, title or track matches" },
+        ],
+        returns: `{ stage: string | null, track: string | null, rsvp: "none" | null, emails: string[] }`,
+        errors: [
+          { status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" },
+          { status: 400, error: "invalid_track", when: "track is not sales, engineer or undecided" },
+          { status: 400, error: "invalid_rsvp", when: "rsvp is given and is not none" },
+        ],
+      },
+      {
+        method: "GET",
         path: "/api/cohorts/deferred",
         summary: "Lists the bootcamp and intermediate candidates on the deferred track, narrowed to a stage, a page at a time.",
         access: "trainingViewer",
@@ -1705,6 +1727,28 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         params: [BOOTCAMP_ID, SESSION_ID],
         returns: `{ groups: ${GROUP_SHAPE}[] }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp or session" }],
+      },
+      {
+        method: "POST",
+        path: "/api/scheduler/bootcamps/{id}/sessions/{sessionId}/slide",
+        summary:
+          "Makes a one-slide Google Slides deck for a breakout: its name over a card for each instructor with their room and the attendees assigned to them. It is saved in the thank-you slide's shared Drive folder and shared with the caller.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "Takes no body, and draws the breakout as saved. The leader's card comes first, then the other instructors' in order, each giving the instructor's name, their room (No room when they have none), and their group as GET /api/scheduler/bootcamps/{id}/sessions/{sessionId}/groups lists it. It is made as POST /api/logistics/guest-judges/thank-you makes its slide, by the Google account connected for Google Meetings; a slide already in the folder with the title Breakout - plus the session's name is trashed first.",
+        params: [BOOTCAMP_ID, SESSION_ID],
+        returns: "201 { url: string, instructors: number, attendees: number }",
+        errors: [
+          { status: 404, error: "not_found", when: "no such bootcamp or session" },
+          { status: 409, error: "not_breakout", when: "the session is not a breakout" },
+          {
+            status: 409,
+            error: "google_not_configured | google_not_connected | google_reconnect | no_email",
+            when: "Google is not set up for it, or the Google account needs connecting again; message says which",
+          },
+          { status: 502, error: "failed", when: "Google refused or could not be reached; message has its answer" },
+        ],
       },
       {
         method: "PUT",

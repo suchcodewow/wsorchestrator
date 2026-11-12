@@ -22,6 +22,7 @@ const MARGIN = 0.3;
 const TITLE_H = 0.8;
 const MIN_FONT = 6;
 const MAX_FONT = 11;
+const WHITE = { red: 1, green: 1, blue: 1 };
 
 /** The columns and rows that give the largest photo, a name of up to two lines under it included, to `count` judges. */
 export function gridFor(count: number): { cols: number; rows: number; cellW: number; cellH: number; photo: number; fontPt: number } {
@@ -41,13 +42,22 @@ export function gridFor(count: number): { cols: number; rows: number; cellW: num
 }
 
 /** Requests that replace the new deck's starter slide with the thank-you slide, `judges` in the order given. */
-export function thankYouRequests(starterSlideId: string, judges: SlideJudge[]): unknown[] {
+export function thankYouRequests(starterSlideId: string, judges: SlideJudge[], backgroundUrl?: string): unknown[] {
   const slideId = "thank_you";
   const requests: unknown[] = [
     { createSlide: { objectId: slideId, slideLayoutReference: { predefinedLayout: "BLANK" } } },
     { deleteObject: { objectId: starterSlideId } },
-    textBox("title", slideId, MARGIN, 0.1, PAGE.w - 2 * MARGIN, TITLE_H - 0.1, "Thank You!", 36, true),
   ];
+  if (backgroundUrl) {
+    requests.push({
+      updatePageProperties: {
+        objectId: slideId,
+        pageProperties: { pageBackgroundFill: { stretchedPictureFill: { contentUrl: backgroundUrl } } },
+        fields: "pageBackgroundFill",
+      },
+    });
+  }
+  requests.push(textBox("title", slideId, MARGIN, 0.1, PAGE.w - 2 * MARGIN, TITLE_H - 0.1, "Thank You!", 36, true, WHITE));
   const { cols, cellW, cellH, photo, fontPt } = gridFor(judges.length);
   judges.forEach((j, i) => {
     const col = i % cols;
@@ -66,15 +76,211 @@ export function thankYouRequests(starterSlideId: string, judges: SlideJudge[]): 
         },
       },
     });
-    requests.push(textBox(`name_${i}`, slideId, x, y + photo + 0.02, cellW, cellH - photo - 0.02, j.name, fontPt, false));
-    if (j.times >= 2) requests.push(...flame(`flame_${i}`, slideId, px + photo * 0.52, y + photo * 0.58, photo * 0.5, photo * 0.34));
+    requests.push(textBox(`name_${i}`, slideId, x, y + photo + 0.02, cellW, cellH - photo - 0.02, j.name, fontPt, false, WHITE));
+    if (j.times >= 2) requests.push(...flame(`flame_${i}`, slideId, px + photo, y + photo * 0.95, photo));
   });
   return requests;
 }
 
-/** A small flame-orange badge reading "🔥2X", its corner at the photo's lower right. */
-function flame(id: string, pageId: string, x: number, y: number, w: number, h: number) {
-  const pt = Math.max(5, Math.min(10, Math.floor(h * 50)));
+/** One breakout instructor's column: who leads it, where, and who goes with them. */
+export type BreakoutColumn = { leader: string; room: string | null; people: string[] };
+
+/** At most this many instructors share a row of the breakout slide, and at most two rows: more than this many split evenly over two. */
+const BREAKOUT_PER_ROW = 4;
+const BREAKOUT = {
+  margin: 0.5,
+  titleH: 0.95,
+  gap: 0.15,
+  /** The leader's size when everything fits, as the Mimir slides set a card's heading; the room and names follow in proportion. */
+  maxLeaderPt: 18,
+  roomRatio: 0.75,
+  nameRatio: 0.72,
+  /** Slides' fixed inset inside a shape, and the width one character takes as a fraction of its point size. */
+  inset: 0.1,
+  /** Extra room under the last name, over the inset every side has. */
+  bottomPad: 0.2,
+  charW: 0.56,
+  background: { red: 0.969, green: 0.969, blue: 0.969 },
+  ink: { red: 0.1, green: 0.1, blue: 0.12 },
+  muted: { red: 0.33, green: 0.33, blue: 0.36 },
+  border: { red: 0.82, green: 0.82, blue: 0.84 },
+};
+
+/**
+ * The grid and sizes that fit `columns` on the breakout slide: the largest leader size, up to the Mimir slides', at which
+ * every name stays on one line and the tallest group fits its card, with the room and names smaller in proportion.
+ * `cardH` is as tall as the fullest group needs, so a short list is not a tall empty box.
+ */
+export function breakoutGrid(columns: BreakoutColumn[]): {
+  cols: number;
+  rows: number;
+  cellW: number;
+  cardW: number;
+  cardH: number;
+  /** Each card's left edge: a row of fewer than a full row's cards, the last one, is centred. */
+  xs: number[];
+  /** Where the cards start down the page: the block of them centred on it, but never up into the title. */
+  top: number;
+  leaderPt: number;
+  roomPt: number;
+  namePt: number;
+} {
+  const count = Math.max(1, columns.length);
+  const cols = count <= BREAKOUT_PER_ROW ? count : Math.ceil(count / 2);
+  const rows = Math.ceil(count / cols);
+  const { margin, gap, inset, charW, bottomPad } = BREAKOUT;
+  // A card is as wide as one in a full row, so one or two instructors are not stretched across the page.
+  const cellW = (PAGE.w - 2 * margin + gap) / BREAKOUT_PER_ROW;
+  const cellH = (PAGE.h - BREAKOUT.titleH - margin + gap) / rows;
+  const cardW = cellW - gap;
+  const xs = Array.from({ length: count }, (_, i) => {
+    const inRow = Math.min(cols, count - Math.floor(i / cols) * cols);
+    return (PAGE.w - (inRow * cellW - gap)) / 2 + (i % cols) * cellW;
+  });
+  const longest = (texts: string[]) => Math.max(1, ...texts.map((t) => t.length));
+  const leaders = longest(columns.map((c) => c.leader));
+  const rooms = longest(columns.map((c) => c.room ?? "No room"));
+  const names = longest(columns.flatMap((c) => c.people));
+  const fullest = Math.max(0, ...columns.map((c) => c.people.length));
+
+  const topFor = (n: number, h: number) => Math.max(BREAKOUT.titleH, (PAGE.h - (n * h + (n - 1) * gap)) / 2);
+
+  for (let leaderPt = BREAKOUT.maxLeaderPt; leaderPt >= MIN_FONT; leaderPt--) {
+    const roomPt = Math.round(leaderPt * BREAKOUT.roomRatio * 2) / 2;
+    const namePt = Math.round(leaderPt * BREAKOUT.nameRatio * 2) / 2;
+    const textW = (cardW - 2 * inset) * 72;
+    const wide = Math.max(leaders * leaderPt, rooms * roomPt, names * namePt) * charW;
+    const textH = (leaderPt * 1.2 + roomPt * 1.2 + 8 + fullest * (namePt * 1.2 + 2)) / 72 + 2 * inset + bottomPad;
+    if (wide <= textW && textH <= cellH - gap)
+      return { cols, rows, cellW, cardW, cardH: textH, xs, top: topFor(rows, textH), leaderPt, roomPt, namePt };
+  }
+  const cardH = cellH - gap;
+  return { cols, rows, cellW, cardW, cardH, xs, top: topFor(rows, cardH), leaderPt: MIN_FONT, roomPt: MIN_FONT, namePt: MIN_FONT };
+}
+
+const rgb = (color: { red: number; green: number; blue: number }) => ({ opaqueColor: { rgbColor: color } });
+
+/**
+ * Requests that replace the new deck's starter slide with a breakout's slide, on the light page the Mimir slides use: the
+ * session's name in Georgia, then a white card for each instructor in Geist, their name, their room, and their group beneath.
+ */
+export function breakoutRequests(starterSlideId: string, title: string, columns: BreakoutColumn[]): unknown[] {
+  const slideId = "breakout";
+  const { margin, gap, background, ink, muted, border } = BREAKOUT;
+  const requests: unknown[] = [
+    { createSlide: { objectId: slideId, slideLayoutReference: { predefinedLayout: "BLANK" } } },
+    { deleteObject: { objectId: starterSlideId } },
+    {
+      updatePageProperties: {
+        objectId: slideId,
+        pageProperties: { pageBackgroundFill: { solidFill: { color: { rgbColor: background } } } },
+        fields: "pageBackgroundFill",
+      },
+    },
+    // Slides insets a box's text by 0.1in, so the box starts that much left of the cards for the words to line up with them.
+    textBox(
+      "title",
+      slideId,
+      margin - BREAKOUT.inset,
+      0.2,
+      PAGE.w - 2 * margin,
+      BREAKOUT.titleH - 0.2,
+      title,
+      title.length > 36 ? 24 : 30,
+      false,
+    ),
+    {
+      updateTextStyle: {
+        objectId: "title",
+        style: { fontFamily: "Georgia", foregroundColor: rgb(ink) },
+        fields: "fontFamily,foregroundColor",
+      },
+    },
+    { updateParagraphStyle: { objectId: "title", style: { alignment: "START" }, fields: "alignment" } },
+  ];
+  const { cardW, cardH, xs, cols, top, leaderPt, roomPt, namePt } = breakoutGrid(columns);
+  columns.forEach((c, i) => {
+    const id = `card_${i}`;
+    const room = c.room ?? "No room";
+    const text = [c.leader, room, ...c.people].join("\n");
+    const roomStart = c.leader.length + 1;
+    const peopleStart = roomStart + room.length + 1;
+    const range = (startIndex: number, endIndex: number) => ({ type: "FIXED_RANGE", startIndex, endIndex });
+    const style = (startIndex: number, endIndex: number, pt: number, color: typeof ink) => ({
+      updateTextStyle: {
+        objectId: id,
+        textRange: range(startIndex, endIndex),
+        style: { fontFamily: "Geist", fontSize: { magnitude: pt, unit: "PT" }, foregroundColor: rgb(color) },
+        fields: "fontFamily,fontSize,foregroundColor",
+      },
+    });
+    requests.push(
+      {
+        createShape: {
+          objectId: id,
+          shapeType: "ROUND_RECTANGLE",
+          elementProperties: {
+            pageObjectId: slideId,
+            size: { width: { magnitude: inch(cardW), unit: "EMU" }, height: { magnitude: inch(cardH), unit: "EMU" } },
+            transform: {
+              scaleX: 1,
+              scaleY: 1,
+              translateX: inch(xs[i]),
+              translateY: inch(top + Math.floor(i / cols) * (cardH + gap)),
+              unit: "EMU",
+            },
+          },
+        },
+      },
+      {
+        updateShapeProperties: {
+          objectId: id,
+          shapeProperties: {
+            shapeBackgroundFill: { solidFill: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+            outline: { outlineFill: { solidFill: { color: { rgbColor: border } } }, weight: { magnitude: 1, unit: "PT" } },
+            contentAlignment: "TOP",
+          },
+          fields: "shapeBackgroundFill,outline,contentAlignment",
+        },
+      },
+      { insertText: { objectId: id, text } },
+      { updateParagraphStyle: { objectId: id, style: { alignment: "START" }, fields: "alignment" } },
+      style(0, c.leader.length, leaderPt, ink),
+      style(roomStart, roomStart + room.length, roomPt, ink),
+      {
+        updateParagraphStyle: {
+          objectId: id,
+          textRange: range(roomStart, roomStart + room.length),
+          style: { spaceBelow: { magnitude: 8, unit: "PT" } },
+          fields: "spaceBelow",
+        },
+      },
+    );
+    // A card with nobody assigned has no names to style: an empty range is refused.
+    if (c.people.length > 0) {
+      requests.push(style(peopleStart, text.length, namePt, muted), {
+        updateParagraphStyle: {
+          objectId: id,
+          textRange: range(peopleStart, text.length),
+          style: { spaceBelow: { magnitude: 2, unit: "PT" } },
+          fields: "spaceBelow",
+        },
+      });
+    }
+  });
+  return requests;
+}
+
+/**
+ * A small flame-orange pill reading "🔥2X", its lower right corner at (`right`, `bottom`). Slides gives a shape's own text
+ * a fixed inset the API cannot change, so the pill is sized to the text alone and the text sits in a wider box over it.
+ */
+function flame(id: string, pageId: string, right: number, bottom: number, photo: number) {
+  const pt = Math.max(5, Math.min(8, Math.floor(photo * 0.34 * 40)));
+  const w = (pt * 2.8) / 72 + 0.08;
+  const h = (pt * 1.25) / 72 + 0.05;
+  const x = right - w;
+  const y = bottom - h;
   return [
     {
       createShape: {
@@ -92,32 +298,28 @@ function flame(id: string, pageId: string, x: number, y: number, w: number, h: n
         objectId: id,
         shapeProperties: {
           shapeBackgroundFill: { solidFill: { color: { rgbColor: { red: 0.85, green: 0.2, blue: 0.05 } } } },
-          outline: {
-            outlineFill: { solidFill: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
-            weight: { magnitude: 0.75, unit: "PT" },
-          },
+          outline: { outlineFill: { solidFill: { color: { rgbColor: WHITE } } }, weight: { magnitude: 0.75, unit: "PT" } },
         },
         fields: "shapeBackgroundFill,outline",
       },
     },
-    { insertText: { objectId: id, text: "🔥2X" } },
-    {
-      updateTextStyle: {
-        objectId: id,
-        style: {
-          fontSize: { magnitude: pt, unit: "PT" },
-          bold: true,
-          foregroundColor: { opaqueColor: { rgbColor: { red: 1, green: 1, blue: 1 } } },
-        },
-        fields: "fontSize,bold,foregroundColor",
-      },
-    },
-    { updateParagraphStyle: { objectId: id, style: { alignment: "CENTER" }, fields: "alignment" } },
-    { updateShapeProperties: { objectId: id, shapeProperties: { contentAlignment: "MIDDLE" }, fields: "contentAlignment" } },
+    ...textBox(`flametext_${id.slice("flame_".length)}`, pageId, x - 0.3, y, w + 0.6, h, "🔥 2X", pt, true, WHITE, "MIDDLE"),
   ];
 }
 
-function textBox(id: string, pageId: string, x: number, y: number, w: number, h: number, text: string, pt: number, bold: boolean) {
+function textBox(
+  id: string,
+  pageId: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  text: string,
+  pt: number,
+  bold: boolean,
+  color?: { red: number; green: number; blue: number },
+  verticalAlign?: "MIDDLE",
+) {
   return [
     {
       createShape: {
@@ -134,19 +336,29 @@ function textBox(id: string, pageId: string, x: number, y: number, w: number, h:
     {
       updateTextStyle: {
         objectId: id,
-        style: { fontSize: { magnitude: pt, unit: "PT" }, bold },
-        fields: "fontSize,bold",
+        style: {
+          fontSize: { magnitude: pt, unit: "PT" },
+          bold,
+          ...(color ? { foregroundColor: { opaqueColor: { rgbColor: color } } } : {}),
+        },
+        fields: color ? "fontSize,bold,foregroundColor" : "fontSize,bold",
       },
     },
     { updateParagraphStyle: { objectId: id, style: { alignment: "CENTER" }, fields: "alignment" } },
+    ...(verticalAlign
+      ? [{ updateShapeProperties: { objectId: id, shapeProperties: { contentAlignment: verticalAlign }, fields: "contentAlignment" } }]
+      : []),
   ];
 }
 
-/** Makes the deck in `folderId`, shares it with `shareWith`, and gives its link. A deck already there with the same title is trashed first. */
-export async function createThankYouDeck(
+/**
+ * Makes a one-slide deck in `folderId`, shares it with `shareWith`, and gives its link. `requests` turns the new deck's
+ * starter slide id into the Slides requests that make the slide. A deck already there with the same title is trashed first.
+ */
+export async function createSlideDeck(
   slides: CalendarClient,
   drive: CalendarClient,
-  input: { title: string; judges: SlideJudge[]; shareWith: string; folderId: string },
+  input: { title: string; shareWith: string; folderId: string; requests: (starterSlideId: string) => unknown[] },
 ): Promise<{ id: string; url: string }> {
   const old = await drive.call<{ files?: { id: string }[] }>("GET", "/files", {
     query: {
@@ -163,7 +375,7 @@ export async function createThankYouDeck(
     body: { title: input.title },
   });
   await slides.call("POST", `/presentations/${deck.presentationId}:batchUpdate`, {
-    body: { requests: thankYouRequests(deck.slides[0].objectId, input.judges).flat() },
+    body: { requests: input.requests(deck.slides[0].objectId).flat() },
   });
   await drive.call("PATCH", `/files/${deck.presentationId}`, {
     query: { addParents: input.folderId, removeParents: "root", supportsAllDrives: "true" },
@@ -173,4 +385,18 @@ export async function createThankYouDeck(
     body: { type: "user", role: "writer", emailAddress: input.shareWith },
   });
   return { id: deck.presentationId, url: `https://docs.google.com/presentation/d/${deck.presentationId}/edit` };
+}
+
+/** The thank-you deck: `createSlideDeck` with the judges' slide. */
+export async function createThankYouDeck(
+  slides: CalendarClient,
+  drive: CalendarClient,
+  input: { title: string; judges: SlideJudge[]; shareWith: string; folderId: string; backgroundUrl?: string },
+): Promise<{ id: string; url: string }> {
+  return createSlideDeck(slides, drive, {
+    title: input.title,
+    shareWith: input.shareWith,
+    folderId: input.folderId,
+    requests: (starter) => thankYouRequests(starter, input.judges, input.backgroundUrl),
+  });
 }

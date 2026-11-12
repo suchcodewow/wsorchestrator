@@ -211,6 +211,32 @@ export function rsvpedForBootcamp(cutoffs: CandidateCutoffs): SQL {
   )!;
 }
 
+/** The rows the Current tab shows for a filter and a search, before paging; shared by the table and its email list. */
+function currentCohortWhere(filter: CurrentCohortFilter, q: string, cutoffs: CandidateCutoffs): SQL | undefined {
+  return and(
+    isCandidate(cutoffs),
+    filter.stage ? IN_STAGE[filter.stage] : undefined,
+    filter.track ? ON_TRACK[filter.track] : or(isNull(e.track), inArray(e.track, [...ATTENDING])),
+    filter.unanswered ? not(rsvped) : undefined,
+    searchAny(q, [e.fullName, e.email, e.title, candidateTrack]),
+  );
+}
+
+/**
+ * Every email address on the Current tab for a filter and a search, across all
+ * pages, in the table's name order: what its copy button puts on the clipboard.
+ * Only the address is read, so the 100-row limit on a table does not apply.
+ */
+export async function listCurrentCohortEmails(filter: CurrentCohortFilter, q: string): Promise<string[]> {
+  const cutoffs = await getCandidateCutoffs();
+  const rows = await db
+    .select({ email: e.email })
+    .from(e)
+    .where(currentCohortWhere(filter, q, cutoffs))
+    .orderBy(sql`lower(${e.fullName})`, e.id);
+  return rows.map((r) => r.email.trim()).filter(Boolean);
+}
+
 /**
  * One page of candidates, in one stage and on one track when the filter
  * names them; without a track, everyone not deferred. The search matches the name, email, title or track. No
@@ -242,15 +268,7 @@ export async function listCurrentCohort(
       btcDate,
     })
     .from(e)
-    .where(
-      and(
-        isCandidate(cutoffs),
-        filter.stage ? IN_STAGE[filter.stage] : undefined,
-        filter.track ? ON_TRACK[filter.track] : or(isNull(e.track), inArray(e.track, [...ATTENDING])),
-        filter.unanswered ? not(rsvped) : undefined,
-        searchAny(query.q, [e.fullName, e.email, e.title, candidateTrack]),
-      ),
-    )
+    .where(currentCohortWhere(filter, query.q, cutoffs))
     .orderBy(...orderFor(SORT_COLUMNS[query.sort], query.dir, sql`lower(${e.fullName})`, e.id))
     .limit(limit)
     .offset(offset);
