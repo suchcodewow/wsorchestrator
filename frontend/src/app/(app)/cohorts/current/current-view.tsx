@@ -390,7 +390,6 @@ export function CurrentCohortView({
                 Add attendee
               </Button>
             )}
-            <CopyEmailsButton filter={filter} q={query.q} />
             <Button variant="secondary" asChild>
               <a href="/cohorts/name-cards" target="_blank" rel="noopener">
                 <Printer />
@@ -443,7 +442,8 @@ export function CurrentCohortView({
         </motion.div>
       )}
 
-      <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <motion.div variants={riseChild} className="relative overflow-hidden rounded-2xl border bg-card shadow-sm">
+        {tab === "current" && <CopyEmailsButton filter={filter} q={query.q} />}
         <div className="overflow-x-auto">
           <table className="w-full min-w-120 text-sm">
             <thead>
@@ -1231,7 +1231,14 @@ function CopyEmailsButton({ filter, q }: { filter: CurrentCohortFilter; q: strin
     <TooltipProvider disableHoverableContent>
       <Tooltip open={state === "idle" ? undefined : true}>
         <TooltipTrigger asChild>
-          <Button variant="secondary" size="icon" aria-label={label} disabled={state === "busy"} onClick={copy}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={label}
+            disabled={state === "busy"}
+            onClick={copy}
+            className="absolute top-1 right-2 z-10 size-7 text-muted-foreground hover:text-foreground"
+          >
             {state === "busy" ? <Loader2 className="animate-spin" /> : state === "copied" ? <Check /> : <Copy />}
           </Button>
         </TooltipTrigger>
