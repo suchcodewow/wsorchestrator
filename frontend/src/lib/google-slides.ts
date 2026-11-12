@@ -94,9 +94,11 @@ const BREAKOUT = {
   /** The leader's size when everything fits, as the Mimir slides set a card's heading; the room and names follow in proportion. */
   maxLeaderPt: 18,
   roomRatio: 0.75,
-  nameRatio: 0.62,
+  nameRatio: 0.72,
   /** Slides' fixed inset inside a shape, and the width one character takes as a fraction of its point size. */
   inset: 0.1,
+  /** Extra room under the last name, over the inset every side has. */
+  bottomPad: 0.2,
   charW: 0.56,
   background: { red: 0.969, green: 0.969, blue: 0.969 },
   ink: { red: 0.1, green: 0.1, blue: 0.12 },
@@ -115,6 +117,8 @@ export function breakoutGrid(columns: BreakoutColumn[]): {
   cellW: number;
   cardW: number;
   cardH: number;
+  /** Where the cards start down the page: the block of them centred on it, but never up into the title. */
+  top: number;
   leaderPt: number;
   roomPt: number;
   namePt: number;
@@ -122,7 +126,7 @@ export function breakoutGrid(columns: BreakoutColumn[]): {
   const count = Math.max(1, columns.length);
   const cols = count <= BREAKOUT_PER_ROW ? count : Math.ceil(count / 2);
   const rows = Math.ceil(count / cols);
-  const { margin, gap, inset, charW } = BREAKOUT;
+  const { margin, gap, inset, charW, bottomPad } = BREAKOUT;
   const cellW = (PAGE.w - 2 * margin + gap) / cols;
   const cellH = (PAGE.h - BREAKOUT.titleH - margin + gap) / rows;
   const cardW = cellW - gap;
@@ -132,15 +136,19 @@ export function breakoutGrid(columns: BreakoutColumn[]): {
   const names = longest(columns.flatMap((c) => c.people));
   const fullest = Math.max(0, ...columns.map((c) => c.people.length));
 
+  const topFor = (n: number, h: number) => Math.max(BREAKOUT.titleH, (PAGE.h - (n * h + (n - 1) * gap)) / 2);
+
   for (let leaderPt = BREAKOUT.maxLeaderPt; leaderPt >= MIN_FONT; leaderPt--) {
     const roomPt = Math.round(leaderPt * BREAKOUT.roomRatio * 2) / 2;
     const namePt = Math.round(leaderPt * BREAKOUT.nameRatio * 2) / 2;
     const textW = (cardW - 2 * inset) * 72;
     const wide = Math.max(leaders * leaderPt, rooms * roomPt, names * namePt) * charW;
-    const textH = (leaderPt * 1.2 + roomPt * 1.2 + 8 + fullest * (namePt * 1.2 + 2)) / 72 + 2 * inset;
-    if (wide <= textW && textH <= cellH - gap) return { cols, rows, cellW, cardW, cardH: textH, leaderPt, roomPt, namePt };
+    const textH = (leaderPt * 1.2 + roomPt * 1.2 + 8 + fullest * (namePt * 1.2 + 2)) / 72 + 2 * inset + bottomPad;
+    if (wide <= textW && textH <= cellH - gap)
+      return { cols, rows, cellW, cardW, cardH: textH, top: topFor(rows, textH), leaderPt, roomPt, namePt };
   }
-  return { cols, rows, cellW, cardW, cardH: cellH - gap, leaderPt: MIN_FONT, roomPt: MIN_FONT, namePt: MIN_FONT };
+  const cardH = cellH - gap;
+  return { cols, rows, cellW, cardW, cardH, top: topFor(rows, cardH), leaderPt: MIN_FONT, roomPt: MIN_FONT, namePt: MIN_FONT };
 }
 
 const rgb = (color: { red: number; green: number; blue: number }) => ({ opaqueColor: { rgbColor: color } });
@@ -183,7 +191,7 @@ export function breakoutRequests(starterSlideId: string, title: string, columns:
     },
     { updateParagraphStyle: { objectId: "title", style: { alignment: "START" }, fields: "alignment" } },
   ];
-  const { cols, cellW, cardW, cardH, leaderPt, roomPt, namePt } = breakoutGrid(columns);
+  const { cols, cellW, cardW, cardH, top, leaderPt, roomPt, namePt } = breakoutGrid(columns);
   columns.forEach((c, i) => {
     const id = `card_${i}`;
     const room = c.room ?? "No room";
@@ -211,7 +219,7 @@ export function breakoutRequests(starterSlideId: string, title: string, columns:
               scaleX: 1,
               scaleY: 1,
               translateX: inch(margin + (i % cols) * cellW),
-              translateY: inch(BREAKOUT.titleH + Math.floor(i / cols) * (cardH + gap)),
+              translateY: inch(top + Math.floor(i / cols) * (cardH + gap)),
               unit: "EMU",
             },
           },
