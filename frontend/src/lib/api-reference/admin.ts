@@ -573,6 +573,28 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       },
       {
         method: "GET",
+        path: "/api/cohorts/current/emails",
+        summary:
+          "Lists the email address of everyone GET /api/cohorts/current would show for the same filters and search, across every page.",
+        access: "trainingViewer",
+        token: true,
+        notes:
+          "Takes stage, track, rsvp and q as GET /api/cohorts/current does, and draws the same people, so the list matches the table however many pages it has. emails is in the table's default name order, one address per person, with no names or other fields. The Current tab's copy button calls it.",
+        query: [
+          { name: "stage", type: `"bootcamp" | "intermediate"`, note: "only that stage; both if omitted" },
+          { name: "track", type: `"sales" | "engineer" | "undecided"`, note: "only that track; all three if omitted" },
+          { name: "rsvp", type: `"none"`, note: "only those who have not RSVP'd to their stage's registration form" },
+          { name: "q", type: "string", note: "only those whose name, email, title or track matches" },
+        ],
+        returns: `{ stage: string | null, track: string | null, rsvp: "none" | null, emails: string[] }`,
+        errors: [
+          { status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" },
+          { status: 400, error: "invalid_track", when: "track is not sales, engineer or undecided" },
+          { status: 400, error: "invalid_rsvp", when: "rsvp is given and is not none" },
+        ],
+      },
+      {
+        method: "GET",
         path: "/api/cohorts/deferred",
         summary: "Lists the bootcamp and intermediate candidates on the deferred track, narrowed to a stage, a page at a time.",
         access: "trainingViewer",

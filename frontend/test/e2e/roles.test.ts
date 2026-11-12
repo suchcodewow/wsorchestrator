@@ -641,6 +641,7 @@ const ROUTES: RouteCase[] = [
 
   // Cohorts
   { method: "GET", path: "/api/cohorts/current", allowed: canUseTraining },
+  { method: "GET", path: "/api/cohorts/current/emails", allowed: canUseTraining },
   { method: "GET", path: "/api/cohorts/deferred", allowed: canUseTraining },
   { method: "POST", path: "/api/cohorts/current/attendees", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "DELETE", path: "/api/cohorts/current/attendees?email=nobody%40example.test", allowed: canManageTrainingSettings },

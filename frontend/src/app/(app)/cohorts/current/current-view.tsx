@@ -63,6 +63,8 @@ import {
   CircleHelp,
   CircleMinus,
   CircleX,
+  Copy,
+  Check,
   Code,
   GraduationCap,
   Handshake,
@@ -388,6 +390,7 @@ export function CurrentCohortView({
                 Add attendee
               </Button>
             )}
+            <CopyEmailsButton filter={filter} q={query.q} />
             <Button variant="secondary" asChild>
               <a href="/cohorts/name-cards" target="_blank" rel="noopener">
                 <Printer />
@@ -1182,6 +1185,58 @@ function MeetingMarks({
           </DialogContent>
         </Dialog>
       </span>
+    </TooltipProvider>
+  );
+}
+
+/** Copies the email address of everyone the current filters and search match, across every page, not just the rows on screen. */
+function CopyEmailsButton({ filter, q }: { filter: CurrentCohortFilter; q: string }) {
+  const [state, setState] = useState<"idle" | "busy" | "copied" | "failed">("idle");
+  const [count, setCount] = useState(0);
+
+  async function copy() {
+    setState("busy");
+    const params = new URLSearchParams();
+    if (filter.stage) params.set("stage", filter.stage);
+    if (filter.track) params.set("track", filter.track);
+    if (filter.unanswered) params.set("rsvp", "none");
+    if (q) params.set("q", q);
+    // Handed to the clipboard as a promise, so Safari still counts the write as the click's after the fetch.
+    const text = fetch(`/api/cohorts/current/emails?${params}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+      .then((body: { emails: string[] }) => {
+        setCount(body.emails.length);
+        return body.emails.join(", ");
+      });
+    try {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ "text/plain": text.then((t) => new Blob([t], { type: "text/plain" })) })]);
+      } catch {
+        await navigator.clipboard.writeText(await text);
+      }
+      setState("copied");
+    } catch {
+      setState("failed");
+    }
+    setTimeout(() => setState("idle"), 2_500);
+  }
+
+  const label =
+    state === "copied"
+      ? `Copied ${count} email ${count === 1 ? "address" : "addresses"}`
+      : state === "failed"
+        ? "Could not copy the emails"
+        : "Copy the emails of everyone matching these filters";
+  return (
+    <TooltipProvider disableHoverableContent>
+      <Tooltip open={state === "idle" ? undefined : true}>
+        <TooltipTrigger asChild>
+          <Button variant="secondary" size="icon" aria-label={label} disabled={state === "busy"} onClick={copy}>
+            {state === "busy" ? <Loader2 className="animate-spin" /> : state === "copied" ? <Check /> : <Copy />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
     </TooltipProvider>
   );
 }
