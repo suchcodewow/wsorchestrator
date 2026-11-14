@@ -23,6 +23,7 @@ import {
   gapsOf,
   place,
   settle,
+  sideBySide,
   snapMinutes,
   snapStart,
   trackDays,
@@ -32,7 +33,7 @@ import {
 const john = { email: "john@example.com", fullName: "John Doe", roomId: null };
 const jane = { email: "jane@example.com", fullName: "Jane Roe", roomId: null };
 
-function session(id: string, over: Partial<ClashSession> = {}): ClashSession {
+function session(id: string, over: Partial<ClashSession & { lane: number }> = {}): ClashSession & { lane?: number } {
   return { id, track: "btc", day: 1, start: 480, minutes: 60, kind: "main", audience: "both", name: id, roomId: null, staff: [], ...over };
 }
 
@@ -170,6 +171,76 @@ describe("moving sessions", () => {
     assert.equal(fitsDay([a, session("y", { start: 510 })]), false);
     assert.equal(fitsDay([session("late", { start: 1410, minutes: 60 })]), false);
     assert.equal(fitsDay([session("odd", { start: 490 })]), false);
+  });
+});
+
+describe("sessions side by side", () => {
+  const a = session("a", { start: 540 });
+  const b = session("b", { start: 540, lane: 1 });
+  const c = session("c", { start: 600 });
+  /** A day as `id@start/lane`. */
+  const laid = (sessions: readonly { id: string; start: number; lane?: number }[]) =>
+    sessions.map((s) => `${s.id}@${s.start}/${s.lane ?? 0}`);
+
+  test("a day fits with sessions overlapping in different lanes, but not in the same one", () => {
+    assert.equal(fitsDay([a, b, c]), true);
+    assert.equal(fitsDay([a, session("x", { start: 570 })]), false);
+    assert.equal(fitsDay([a, session("x", { start: 540, lane: 3 })]), false);
+  });
+
+  test("a session put beside another stays there, and nothing in the main line moves", () => {
+    const day = dropAt([a, c], session("new", { start: 0 }), 540, 1);
+    assert.deepEqual(laid(day), ["a@540/0", "new@540/1", "c@600/0"]);
+  });
+
+  test("a push only moves the sessions of its own lane", () => {
+    const day = settle([{ ...a, minutes: 90 }, b, c], "a");
+    assert.deepEqual(laid(day), ["a@540/0", "b@540/1", "c@630/0"]);
+  });
+
+  test("a session that stops overlapping anything before it goes back to the main line", () => {
+    assert.deepEqual(laid(settle([b, c])), ["b@540/0", "c@600/0"]);
+    assert.deepEqual(laid(dropAt([a, b, c], a, 780)), ["b@540/0", "c@600/0", "a@780/0"]);
+  });
+
+  test("with the middle one gone, the third moves up beside the first", () => {
+    const third = session("third", { start: 540, lane: 2 });
+    assert.deepEqual(laid(settle([a, third])), ["a@540/0", "third@540/1"]);
+  });
+
+  test("a longer session beside a shorter one leaves the shorter one's column unscheduled to the group's end", () => {
+    const groups = sideBySide([a, { ...b, minutes: 90 }, session("later", { start: 720 })]);
+    assert.equal(groups.length, 2);
+    assert.deepEqual(
+      groups[0]!.columns.map((c) => ({ lane: c.lane, ids: c.sessions.map((s) => s.id), gaps: c.gaps })),
+      [
+        { lane: 0, ids: ["a"], gaps: [{ start: 600, minutes: 30 }] },
+        { lane: 1, ids: ["b"], gaps: [] },
+      ],
+    );
+    assert.deepEqual(
+      groups[1]!.columns.map((c) => c.gaps),
+      [[]],
+    );
+  });
+
+  test("time side by side counts once as scheduled", () => {
+    assert.equal(dayTotal([a, b]).left, 480);
+    assert.equal(dayTotal([session("late", { start: 1080 })]).left, 540);
+  });
+
+  test("sessions side by side on one track never clash over attendees, but do over a person", () => {
+    const clashes = findClashes(place([[a, { ...b, staff: [] }]]));
+    assert.equal(clashes.size, 0);
+    const both = findClashes(
+      place([
+        [
+          { ...a, staff: [john] },
+          { ...b, staff: [john] },
+        ],
+      ]),
+    );
+    assert.equal(both.get("a")?.[0]?.what.kind, "person");
   });
 });
 

@@ -46,10 +46,11 @@ export function withDay(days: Days, key: string, sessions: SessionRow[]): Days {
 }
 
 /**
- * Moves a session to track-day `to`, starting at `start` or as near it as
- * fits; see `dropAt`. Unchanged if `to` is another day and already full.
+ * Moves a session to track-day `to`, starting at `start` in `lane` (the main
+ * line unless it is put beside another), or as near it as fits; see `dropAt`.
+ * Unchanged if `to` is another day and already full.
  */
-export function moveTo(days: Days, id: string, to: string, start: number): Days {
+export function moveTo(days: Days, id: string, to: string, start: number, lane = 0): Days {
   const from = locate(days, id);
   if (!from) return days;
   const source = dayOf(days, from.key);
@@ -65,7 +66,7 @@ export function moveTo(days: Days, id: string, to: string, start: number): Days 
           from.key,
           source.filter((_, i) => i !== from.index),
         );
-  return withDay(next, to, dropAt(target, moved, start));
+  return withDay(next, to, dropAt(target, moved, start, lane));
 }
 
 /** `days` with one session's minutes changed; made longer, it pushes what it runs into later. */

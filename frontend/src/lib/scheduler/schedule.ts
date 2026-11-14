@@ -1,6 +1,6 @@
 /**
  * One bootcamp's schedule: four tracks of days, each day a list of sessions
- * in start order, none overlapping; see `timeline.ts`. Read a track-day
+ * in start order, none overlapping another in its lane; see `timeline.ts`. Read a track-day
  * at a time, so no query fetches more than `SCHEDULE_LIMITS.sessionsPerDay`.
  *
  * Who can run a session is the bootcamp's instructors: every Training
@@ -85,6 +85,8 @@ export type SessionRow = {
   /** Minutes after midnight. */
   start: number;
   minutes: number;
+  /** 0 for the day's main line; 1 or 2 beside it. */
+  lane: number;
   kind: SessionKind;
   /** Who it is taught to; an unstructured session teaches no one, whatever this says. */
   audience: SessionAudience;
@@ -173,6 +175,7 @@ const SESSION_COLUMNS = {
   day: scheduleSessions.day,
   start: scheduleSessions.start,
   minutes: scheduleSessions.minutes,
+  lane: scheduleSessions.lane,
   kind: scheduleSessions.kind,
   audience: scheduleSessions.audience,
   typeId: scheduleSessions.typeId,
@@ -198,7 +201,7 @@ async function loadDay(reader: Reader, bootcampId: string, track: ScheduleTrack,
     .select(SESSION_COLUMNS)
     .from(scheduleSessions)
     .where(and(eq(scheduleSessions.bootcampId, bootcampId), eq(scheduleSessions.track, track), eq(scheduleSessions.day, day)))
-    .orderBy(scheduleSessions.start, scheduleSessions.createdAt, scheduleSessions.id)
+    .orderBy(scheduleSessions.start, scheduleSessions.lane, scheduleSessions.createdAt, scheduleSessions.id)
     .limit(SCHEDULE_LIMITS.sessionsPerDay);
 }
 
@@ -407,6 +410,13 @@ export const sessionInputSchema = z.object({
     .min(SCHEDULE_LIMITS.dayStart)
     .max(SCHEDULE_LIMITS.latestEnd - SCHEDULE_LIMITS.slot)
     .optional(),
+  /** Left out, the main line; 1 or 2 puts it beside the sessions it overlaps. */
+  lane: z
+    .number()
+    .int()
+    .min(0)
+    .max(SCHEDULE_LIMITS.lanes - 1)
+    .optional(),
   ...sessionFields,
 });
 
@@ -581,8 +591,9 @@ const label = (bootcamp: ScheduleBootcamp, s: { name: string; track: ScheduleTra
 
 /**
  * Adds a session to a track-day at `start`, or straight after its last
- * session. Started inside another, it goes before or after that one as
- * `dropAt` does; any it then runs into are pushed later.
+ * session, in `lane`, or the main line. Started inside another in that lane,
+ * it goes before or after that one as `dropAt` does; any it then runs into
+ * are pushed later.
  */
 export async function createSession(
   actorId: string,
@@ -606,10 +617,10 @@ export async function createSession(
   const day = await loadDay(db, bootcampId, input.track, input.day);
   if (day.length >= SCHEDULE_LIMITS.sessionsPerDay) return { ok: false, error: "day_full" };
   const NEW = "new";
-  const timed = day.map(({ id, start, minutes }) => ({ id, start, minutes }));
-  const laid = dropAt(timed, { id: NEW, start: 0, minutes: input.minutes }, input.start ?? nextStart(day));
+  const timed = day.map(({ id, start, minutes, lane }) => ({ id, start, minutes, lane }));
+  const laid = dropAt(timed, { id: NEW, start: 0, minutes: input.minutes, lane: 0 }, input.start ?? nextStart(day), input.lane ?? 0);
   if (!fitsDay(laid)) return { ok: false, error: "past_midnight" };
-  const start = laid.find((s) => s.id === NEW)!.start;
+  const { start, lane } = laid.find((s) => s.id === NEW)!;
   const clash = await newClashes(bootcamp, { day: input.day, start, minutes: input.minutes }, next, null);
   if (clash) return clash;
 
@@ -630,6 +641,7 @@ export async function createSession(
           day: input.day,
           start,
           minutes: input.minutes,
+          lane,
           kind: next.kind,
           audience: input.audience ?? defaultAudience(input.track),
           typeId: input.typeId,
@@ -653,21 +665,21 @@ export async function createSession(
   return { ok: true, session: (await getSession(bootcampId, id))! };
 }
 
-/** Saves the start of each session in `laid` that differs from `before`. */
+/** Saves the start and lane of each session in `laid` whose start or lane differs from `before`. */
 async function writeStarts(
   tx: Tx,
   bootcampId: string,
-  laid: readonly { id: string; start: number }[],
+  laid: readonly { id: string; start: number; lane?: number }[],
   before: readonly SessionRow[],
 ): Promise<void> {
-  const was = new Map(before.map((s) => [s.id, s.start]));
-  const moved = laid.filter((s) => was.get(s.id) !== s.start);
+  const was = new Map(before.map((s) => [s.id, s]));
+  const moved = laid.filter((s) => was.get(s.id)?.start !== s.start || was.get(s.id)?.lane !== (s.lane ?? 0));
   if (moved.length === 0) return;
-  const rows = moved.map((s) => sql`(${s.id}::uuid, ${s.start}::int)`);
+  const rows = moved.map((s) => sql`(${s.id}::uuid, ${s.start}::int, ${s.lane ?? 0}::int)`);
   await tx.execute(sql`
     update ${scheduleSessions} s
-    set start_minute = v.start_minute, updated_at = now()
-    from (values ${sql.join(rows, sql`, `)}) as v(id, start_minute)
+    set start_minute = v.start_minute, lane = v.lane, updated_at = now()
+    from (values ${sql.join(rows, sql`, `)}) as v(id, start_minute, lane)
     where s.id = v.id and s.bootcamp_id = ${bootcampId}
   `);
 }
@@ -705,7 +717,7 @@ export async function updateSession(
     return { ok: false, error: "unknown_assessment" };
   }
 
-  // Made longer, it pushes whatever it now runs into later.
+  // Made longer, it pushes whatever it now runs into in its lane later.
   const minutes = patch.minutes ?? before.minutes;
   const day = await loadDay(db, bootcampId, before.track, before.day);
   const laid = settle(
@@ -766,6 +778,13 @@ export const layoutSchema = z.object({
               id: z.string().uuid(),
               start: z.number().int().min(0).max(SCHEDULE_LIMITS.latestEnd),
               minutes: sessionLookSchema.minutes,
+              /** Left out, the main line. */
+              lane: z
+                .number()
+                .int()
+                .min(0)
+                .max(SCHEDULE_LIMITS.lanes - 1)
+                .default(0),
             }),
           )
           .max(SCHEDULE_LIMITS.sessionsPerDay),
@@ -780,9 +799,9 @@ export type LayoutError = "invalid" | "not_found" | "no_day" | "overlap" | "stal
 export const LAYOUT_STATUS_FOR: Record<LayoutError, number> = { invalid: 400, not_found: 404, no_day: 400, overlap: 400, stale: 409 };
 
 /**
- * Saves the start and length of every session on the track-days named. A
- * session moved between days is listed in its new day, and the day it left
- * must be listed too. Refused as `overlap` if a day's sessions would run
+ * Saves the start, length and lane of every session on the track-days named.
+ * A session moved between days is listed in its new day, and the day it left
+ * must be listed too. Refused as `overlap` if a lane's sessions would run
  * into one another, start off the quarter hour or before `dayStart`, or end
  * after midnight, and as `stale` unless the sessions named are exactly the
  * ones those days hold now, so two people rearranging at once cannot lose or
@@ -820,12 +839,12 @@ export async function saveLayout(
       if (held.size !== ids.length || ids.some((id) => !held.has(id))) throw new Stale();
       if (ids.length === 0) return;
       const rows = input.days.flatMap((d) =>
-        d.sessions.map((s) => sql`(${s.id}::uuid, ${d.track}, ${d.day}::int, ${s.start}::int, ${s.minutes}::int)`),
+        d.sessions.map((s) => sql`(${s.id}::uuid, ${d.track}, ${d.day}::int, ${s.start}::int, ${s.minutes}::int, ${s.lane}::int)`),
       );
       await tx.execute(sql`
         update ${scheduleSessions} s
-        set track = v.track, day = v.day, start_minute = v.start_minute, minutes = v.minutes, updated_at = now()
-        from (values ${sql.join(rows, sql`, `)}) as v(id, track, day, start_minute, minutes)
+        set track = v.track, day = v.day, start_minute = v.start_minute, minutes = v.minutes, lane = v.lane, updated_at = now()
+        from (values ${sql.join(rows, sql`, `)}) as v(id, track, day, start_minute, minutes, lane)
         where s.id = v.id and s.bootcamp_id = ${bootcampId}
       `);
     });
@@ -846,6 +865,7 @@ type NewSession = {
   day: number;
   start: number;
   minutes: number;
+  lane: number;
   kind: SessionKind;
   audience: SessionAudience;
   typeId: string | null;
@@ -1063,6 +1083,7 @@ export async function copySchedule(
           day: s.day,
           start: s.start,
           minutes: s.minutes,
+          lane: s.lane,
           kind: s.kind,
           audience: s.audience,
           typeId: s.typeId,

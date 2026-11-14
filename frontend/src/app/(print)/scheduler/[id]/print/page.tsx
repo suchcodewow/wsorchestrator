@@ -15,7 +15,7 @@ import { canSeeScheduler } from "@/lib/roles";
 import { mayReadBootcamp } from "@/lib/scheduler/judging";
 import { loadSchedule, type SessionRow } from "@/lib/scheduler/schedule";
 import { PRINT_STRIPES } from "@/lib/scheduler/session-style";
-import { TRACK_LABELS, attendeeCount, dayDate, formatClock, trackDays } from "@/lib/scheduler/timeline";
+import { TRACK_LABELS, attendeeCount, dayDate, formatClock, sideBySide, trackDays } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 import { PrintButton } from "@/components/print-button";
 
@@ -128,16 +128,22 @@ export default async function PrintSchedulePage({
                 {hours.slice(1, -1).map((m) => (
                   <div key={m} className="absolute inset-x-0 border-t border-neutral-200" style={{ top: pct(m - from) }} />
                 ))}
-                {c.sessions.map((s) => (
-                  <PrintedSession
-                    key={s.id}
-                    session={s}
-                    roomNames={roomNames}
-                    top={pct(s.start - from)}
-                    height={pct(s.minutes)}
-                    lines={Math.floor(((s.minutes / span) * BODY_PX - 4) / LINE_PX)}
-                  />
-                ))}
+                {/* Sessions side by side share the width equally, the first on the left. */}
+                {sideBySide(c.sessions).flatMap((g) =>
+                  g.columns.flatMap((lane, i) =>
+                    lane.sessions.map((s) => (
+                      <PrintedSession
+                        key={s.id}
+                        session={s}
+                        roomNames={roomNames}
+                        top={pct(s.start - from)}
+                        height={pct(s.minutes)}
+                        across={{ left: (i * 100) / g.columns.length, width: 100 / g.columns.length }}
+                        lines={Math.floor(((s.minutes / span) * BODY_PX - 4) / LINE_PX)}
+                      />
+                    )),
+                  ),
+                )}
               </div>
             </div>
           ))}
@@ -152,12 +158,15 @@ function PrintedSession({
   roomNames,
   top,
   height,
+  across,
   lines,
 }: {
   session: SessionRow;
   roomNames: Map<string, string>;
   top: string;
   height: string;
+  /** Where it sits across its column, in percent. */
+  across: { left: number; width: number };
   /** How many lines of text the block has room for. */
   lines: number;
 }) {
@@ -176,7 +185,7 @@ function PrintedSession({
   const time = `${formatClock(s.start)}–${formatClock(s.start + s.minutes)}`;
 
   return (
-    <div className="absolute inset-x-0.5 py-px" style={{ top, height }}>
+    <div className="absolute px-0.5 py-px" style={{ top, height, left: `${across.left}%`, width: `${across.width}%` }}>
       <div
         className={cn(
           "h-full overflow-hidden rounded-[2px] border border-l-[3px] border-neutral-400 bg-neutral-50 px-1 print:bg-white break-inside-avoid",

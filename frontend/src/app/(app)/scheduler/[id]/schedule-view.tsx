@@ -42,7 +42,7 @@ import { type ScheduleViewMode, writeScheduleCondensedCookie, writeScheduleViewC
 import { cn } from "@/lib/utils";
 import { PillSwitch } from "@/components/pill-switch";
 import { BootcampDialog } from "../bootcamp-dialog";
-import { Board, COLUMN_ATTR, SCALE, SessionFace, type BoardColumn, type Density } from "./board";
+import { BESIDE_PREFIX, Board, COLUMN_ATTR, SCALE, SessionFace, type BoardColumn, type Density } from "./board";
 import { useChecklistButtons } from "./checklist";
 import { useSurveyButtons } from "./surveys";
 import { dayOf, everyDay, keyOf, locate, moveTo, resize, type Days } from "./days";
@@ -170,7 +170,7 @@ export function ScheduleView({
         return {
           track: t,
           day: Number(d),
-          sessions: dayOf(daysRef.current, key).map((s) => ({ id: s.id, start: s.start, minutes: s.minutes })),
+          sessions: dayOf(daysRef.current, key).map((s) => ({ id: s.id, start: s.start, minutes: s.minutes, lane: s.lane })),
         };
       }),
     };
@@ -291,38 +291,51 @@ export function ScheduleView({
     }),
   );
   /** Where the dragged session started, and the schedule before it moved: each preview is worked out from this. */
-  const origin = useRef<{ key: string; start: number; days: Days } | null>(null);
+  const origin = useRef<{ key: string; days: Days } | null>(null);
   const dropping = useRef<string | null>(null);
   const droppedAt = useRef(0);
 
-  /** The column under the dragged card and the time its top edge is at, on the quarter hour. */
-  const dropPoint = ({ active, over }: DragMoveEvent | DragEndEvent): { key: string; start: number } | null => {
+  /**
+   * The column under the dragged card and the time its top edge is at, on the
+   * quarter hour; or, over the + at a card's right edge, that card's time in
+   * the lane beside it.
+   */
+  const dropPoint = ({ active, over }: DragMoveEvent | DragEndEvent, from: Days): { key: string; start: number; lane: number } | null => {
     const rect = active.rect.current.translated;
+    if (over && String(over.id).startsWith(BESIDE_PREFIX)) {
+      const id = String(over.id).slice(BESIDE_PREFIX.length);
+      const at = locate(from, id);
+      const next = at && dayOf(from, at.key)[at.index];
+      return next && next.id !== active.id && next.lane + 1 < SCHEDULE_LIMITS.lanes
+        ? { key: at.key, start: next.start, lane: next.lane + 1 }
+        : null;
+    }
     if (!over || !rect || !String(over.id).startsWith("col:")) return null;
     const key = String(over.id).slice(4);
     const column = document.querySelector(`[${COLUMN_ATTR}="${key}"]`);
-    const session = origin.current && dayOf(origin.current.days, locate(origin.current.days, String(active.id))?.key ?? "");
-    const minutes = session?.find((s) => s.id === active.id)?.minutes ?? SCHEDULE_LIMITS.slot;
+    const session = dayOf(from, locate(from, String(active.id))?.key ?? "");
+    const minutes = session.find((s) => s.id === active.id)?.minutes ?? SCHEDULE_LIMITS.slot;
     if (!column) return null;
-    return { key, start: snapStart(SCHEDULE_LIMITS.dayStart + (rect.top - column.getBoundingClientRect().top) / scale, minutes) };
+    return { key, start: snapStart(SCHEDULE_LIMITS.dayStart + (rect.top - column.getBoundingClientRect().top) / scale, minutes), lane: 0 };
   };
 
   const onDragStart = ({ active }: DragStartEvent) => {
     const at = locate(days, String(active.id));
     if (!at) return;
-    origin.current = { key: at.key, start: dayOf(days, at.key)[at.index]!.start, days };
+    origin.current = { key: at.key, days };
     dropping.current = null;
     setActiveId(String(active.id));
   };
 
   const onDragMove = (event: DragMoveEvent) => {
     const from = origin.current;
-    const point = dropPoint(event);
+    const point = from && dropPoint(event, from.days);
     if (!from || !point) return;
-    const at = `${point.key}@${point.start}`;
+    const at = `${point.key}@${point.start}/${point.lane}`;
     if (at === dropping.current) return;
     dropping.current = at;
-    setDays(moveTo(from.days, String(event.active.id), point.key, point.start));
+    // Over a +, the board stays as it was, so the + stays under the pointer; the card goes beside on letting go.
+    setDays(point.lane > 0 ? from.days : moveTo(from.days, String(event.active.id), point.key, point.start));
   };
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -331,15 +344,19 @@ export function ScheduleView({
     const from = origin.current;
     origin.current = null;
     if (!from) return;
-    const point = dropPoint(event);
+    const point = from && dropPoint(event, from.days);
     // Let go outside every column: it goes back where it was.
     if (!point) return setDays(from.days);
-    const next = moveTo(from.days, String(event.active.id), point.key, point.start);
+    const next = moveTo(from.days, String(event.active.id), point.key, point.start, point.lane);
     setDays(next);
     const end = locate(next, String(event.active.id));
     if (!end) return;
-    const moved = end.key !== from.key || dayOf(next, end.key)[end.index]!.start !== from.start;
-    if (moved) touch([from.key, end.key]);
+    // Anything else in the day may have changed lane with it.
+    const laidOut = (d: Days, key: string) =>
+      dayOf(d, key)
+        .map((s) => `${s.id}@${s.start}/${s.lane}`)
+        .join();
+    if ([from.key, end.key].some((k) => laidOut(next, k) !== laidOut(from.days, k))) touch([from.key, end.key]);
   };
 
   const onDragCancel = () => {
@@ -583,7 +600,7 @@ export function ScheduleView({
               canManage={canManage}
               resizingId={resizingId}
               onOpen={open}
-              onAdd={(c, start) => setTarget({ mode: "new", track: c.track, day: c.day, start })}
+              onAdd={(c, start, beside) => setTarget({ mode: "new", track: c.track, day: c.day, start, ...beside })}
               onResize={onResize}
               onResizeEnd={onResizeEnd}
               headerAction={checklistButtons.dayButton}
@@ -661,10 +678,15 @@ export function ScheduleView({
   );
 }
 
-/** The column under the pointer; for a card moved by keyboard, the one it overlaps most. */
+/** The + beside a card under the pointer, else the column under it; for a card moved by keyboard, the column it overlaps most. */
 const underPointer: CollisionDetection = (args) => {
   const hits = pointerWithin(args);
-  return hits.length > 0 ? hits : rectIntersection(args);
+  const beside = hits.filter((h) => String(h.id).startsWith(BESIDE_PREFIX));
+  if (beside.length > 0) return beside;
+  const columns = hits.filter((h) => !String(h.id).startsWith(BESIDE_PREFIX));
+  return columns.length > 0
+    ? columns
+    : rectIntersection({ ...args, droppableContainers: args.droppableContainers.filter((c) => !String(c.id).startsWith(BESIDE_PREFIX)) });
 };
 
 const ISSUES_IN_TOOLTIP = 8;

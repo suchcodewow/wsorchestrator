@@ -1,11 +1,17 @@
 /**
  * When a schedule's sessions happen, and what clashes. Each session has its
- * own start, on the quarter hour; the sessions of one track-day never
- * overlap, and the time between them is unscheduled. Day N of every track is
+ * own start, on the quarter hour, and a lane: 0 is the track-day's main line,
+ * and 1 and 2 run beside it. The sessions of one lane never overlap, and the
+ * time nothing is scheduled in is unscheduled. A session beside others is
+ * only ever beside something: one that overlaps nothing in a lane before its
+ * own moves into that lane, so the day returns to a single line as soon as
+ * sessions stop running side by side. Day N of every track is
  * the same calendar day, so two sessions clash when they share a day number,
  * overlap in time, and need the same person or the same room. A class and
  * its SE track are taught to the same people, so two sessions on them also
- * clash when both are taught to engineers, or both to sales.
+ * clash when both are taught to engineers, or both to sales. Sessions side by
+ * side on one track split its class between them, so they never clash over
+ * attendees, only over a person or a room.
  *
  * Pure, so the schedule page recomputes it as a session is dragged and the
  * server saves by the same rules.
@@ -152,11 +158,16 @@ export type DayTotal = {
 
 type Timed = { start: number; minutes: number };
 
+/** A session's lane; one saved before lanes, or made without one, is on the main line. */
+type Laned = Timed & { lane?: number };
+const laneOf = (s: { lane?: number }) => s.lane ?? 0;
+
 export function dayTotal(sessions: readonly Timed[]): DayTotal {
   const { dayStart, dayEnd } = SCHEDULE_LIMITS;
   const end = Math.max(dayStart, ...sessions.map((s) => s.start + s.minutes));
-  const covered = sessions.reduce((sum, s) => sum + Math.max(0, Math.min(dayEnd, s.start + s.minutes) - Math.max(dayStart, s.start)), 0);
-  return { end, left: dayEnd - dayStart - covered, over: Math.max(0, end - dayEnd) };
+  // Sessions side by side cover their time once.
+  const unscheduled = gapsOf(sessions).reduce((sum, g) => sum + Math.max(0, Math.min(dayEnd, g.start + g.minutes) - g.start), 0);
+  return { end, left: unscheduled, over: Math.max(0, end - dayEnd) };
 }
 
 /** The unscheduled stretches of a day: before, between and after its sessions, the last one only as far as `until`. */
@@ -182,45 +193,118 @@ export function snapStart(start: number, minutes: number): number {
   return Math.min(latestEnd - minutes, Math.max(dayStart, Math.round(start / slot) * slot));
 }
 
+const timeOverlaps = (a: Timed, b: Timed) => a.start < b.start + b.minutes && b.start < a.start + a.minutes;
+
 /**
- * The day in start order with nothing overlapping: each session keeps its
- * start unless the one before it runs into it, and is then pushed to that
- * one's end, so a push uses up the unscheduled time before it moves anything
- * further. Session `firstId` goes ahead of any that starts at the same time.
+ * The day in start order with nothing overlapping in a lane: each session
+ * keeps its start unless the one before it in its lane runs into it, and is
+ * then pushed to that one's end, so a push uses up the unscheduled time
+ * before it moves anything further. Session `firstId` goes ahead of any that
+ * starts at the same time. Then each session beside others that no longer
+ * overlaps anything in a lane before its own moves into the first such lane.
  */
-export function settle<S extends Timed & { id: string }>(sessions: readonly S[], firstId?: string): S[] {
+export function settle<S extends Laned & { id: string }>(sessions: readonly S[], firstId?: string): S[] {
   const ordered = [...sessions].sort((a, b) => a.start - b.start || Number(b.id === firstId) - Number(a.id === firstId));
-  let at = -Infinity;
-  return ordered.map((s) => {
-    const start = Math.max(s.start, at);
-    at = start + s.minutes;
+  const at = new Map<number, number>();
+  const pushed = ordered.map((s) => {
+    const lane = laneOf(s);
+    const start = Math.max(s.start, at.get(lane) ?? -Infinity);
+    at.set(lane, start + s.minutes);
     return start === s.start ? s : { ...s, start };
   });
+  return gather(pushed).sort((a, b) => a.start - b.start || laneOf(a) - laneOf(b));
+}
+
+/** Each session beside others that overlaps nothing in a lane before its own, moved into the first such lane. */
+function gather<S extends Laned & { id: string }>(sessions: S[]): S[] {
+  const out = [...sessions];
+  for (let changed = true; changed;) {
+    changed = false;
+    const order = out.map((s, i) => i).sort((i, j) => laneOf(out[i]!) - laneOf(out[j]!) || out[i]!.start - out[j]!.start);
+    for (const i of order) {
+      const s = out[i]!;
+      for (let lane = 0; lane < laneOf(s); lane++) {
+        if (out.some((o) => o.id !== s.id && laneOf(o) === lane && timeOverlaps(o, s))) continue;
+        out[i] = { ...s, lane };
+        changed = true;
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 /**
- * The day with `moved` put at `start`, or as near it as fits. Dropped on the
- * top half of another session, it takes that one's place and pushes it on;
- * on the bottom half, it goes straight after it. Whatever it then runs into
- * is pushed later.
+ * The day with `moved` put at `start` in `lane`, or as near it as fits.
+ * Dropped on the top half of another session in that lane, it takes that
+ * one's place and pushes it on; on the bottom half, it goes straight after
+ * it. Whatever it then runs into in its lane is pushed later.
  */
-export function dropAt<S extends Timed & { id: string }>(sessions: readonly S[], moved: S, start: number): S[] {
+export function dropAt<S extends Laned & { id: string }>(sessions: readonly S[], moved: S, start: number, lane = 0): S[] {
   const rest = sessions.filter((s) => s.id !== moved.id);
   let at = snapStart(start, moved.minutes);
-  const under = rest.find((s) => s.start < at && at < s.start + s.minutes);
+  const under = rest.find((s) => laneOf(s) === lane && s.start < at && at < s.start + s.minutes);
   if (under) at = at - under.start < under.minutes / 2 ? under.start : under.start + under.minutes;
-  return settle([...rest, { ...moved, start: at }], moved.id);
+  return settle([...rest, { ...moved, start: at, lane }], moved.id);
 }
 
-/** Whether a day's sessions are each on the quarter hour, inside the day, and clear of one another. */
-export function fitsDay(sessions: readonly Timed[]): boolean {
-  const { slot, dayStart, latestEnd } = SCHEDULE_LIMITS;
-  let at = dayStart;
+/** Whether a day's sessions are each on the quarter hour, inside the day, in a lane there is, and clear of the rest of their lane. */
+export function fitsDay(sessions: readonly Laned[]): boolean {
+  const { slot, dayStart, latestEnd, lanes } = SCHEDULE_LIMITS;
+  const at = new Map<number, number>();
   for (const s of [...sessions].sort((a, b) => a.start - b.start)) {
-    if (s.start % slot !== 0 || s.start < at || s.start + s.minutes > latestEnd) return false;
-    at = s.start + s.minutes;
+    const lane = laneOf(s);
+    if (!Number.isInteger(lane) || lane < 0 || lane >= lanes) return false;
+    if (s.start % slot !== 0 || s.start < (at.get(lane) ?? dayStart) || s.start + s.minutes > latestEnd) return false;
+    at.set(lane, s.start + s.minutes);
   }
   return true;
+}
+
+/** Sessions that run side by side, from the first one's start to the last one's end, a column for each lane they use. */
+export type SideBySide<S extends Laned> = {
+  start: number;
+  end: number;
+  /** Left to right; a session on its own has one. */
+  columns: {
+    lane: number;
+    sessions: S[];
+    /** The time in the group this column has nothing in; none when the group is one session. */
+    gaps: Timed[];
+  }[];
+};
+
+/**
+ * A day's sessions in the groups the board draws them in: each group is the
+ * sessions that overlap one another, directly or through others, split into
+ * a column per lane, and the shorter columns' leftover time is unscheduled.
+ */
+export function sideBySide<S extends Laned>(sessions: readonly S[]): SideBySide<S>[] {
+  const groups: { start: number; end: number; sessions: S[] }[] = [];
+  for (const s of [...sessions].sort((a, b) => a.start - b.start || laneOf(a) - laneOf(b))) {
+    const last = groups.at(-1);
+    if (last && s.start < last.end) {
+      last.sessions.push(s);
+      last.end = Math.max(last.end, s.start + s.minutes);
+    } else groups.push({ start: s.start, end: s.start + s.minutes, sessions: [s] });
+  }
+  return groups.map((g) => {
+    const lanes = [...new Set(g.sessions.map(laneOf))].sort((a, b) => a - b);
+    const columns = lanes.map((lane) => {
+      const mine = g.sessions.filter((s) => laneOf(s) === lane);
+      const gaps: Timed[] = [];
+      if (lanes.length > 1) {
+        let at = g.start;
+        for (const s of mine) {
+          if (s.start > at) gaps.push({ start: at, minutes: s.start - at });
+          at = Math.max(at, s.start + s.minutes);
+        }
+        if (at < g.end) gaps.push({ start: at, minutes: g.end - at });
+      }
+      return { lane, sessions: mine, gaps };
+    });
+    return { start: g.start, end: g.end, columns };
+  });
 }
 
 /** What a session needs to be checked for clashes. */
@@ -291,7 +375,8 @@ function clashOf(other: Placed, what: Clash["what"]): Clash {
 
 /**
  * The groups both sessions teach, when they are on a class and its SE track:
- * those attendees cannot be in both. Two on one track-day never overlap.
+ * those attendees cannot be in both. Two side by side on one track split its
+ * class between them, so share none.
  */
 function sharedGroups(
   a: Pick<ClashSession, "track" | "kind" | "audience">,

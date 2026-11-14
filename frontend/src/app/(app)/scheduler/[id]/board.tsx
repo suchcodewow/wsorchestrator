@@ -9,15 +9,22 @@
  * does, in either view. A manager drags a card to
  * any time in any column, drags its bottom edge to change its length a
  * quarter hour at a time, and clicks unscheduled time to add a session there.
+ *
+ * Sessions side by side share the column's width, the first on the left and
+ * the newest on the right, and a shorter one's leftover time is unscheduled.
+ * The one under the pointer widens so it can be read. The right edge of the
+ * rightmost card has a +, while there is room for another lane: clicking it
+ * adds a session beside that card, and dropping a dragged card on it puts
+ * that card there.
  */
 
-import { useRef, useSyncExternalStore, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { AlertTriangle, MessageSquare } from "lucide-react";
+import { useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
+import { AlertTriangle, MessageSquare, Plus } from "lucide-react";
 import { SCHEDULE_LIMITS, type ScheduleTrack } from "@/db/schema";
 import type { SessionRow } from "@/lib/scheduler/schedule";
 import { SESSION_STYLES } from "@/lib/scheduler/session-style";
-import { dayTotal, formatClock, formatLength, gapsOf, snapMinutes } from "@/lib/scheduler/timeline";
+import { dayTotal, formatClock, formatLength, gapsOf, sideBySide, snapMinutes } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 
 export type Density = "detailed" | "condensed";
@@ -60,8 +67,8 @@ export type BoardProps = {
   /** The session being resized, to label its new length as it changes. */
   resizingId: string | null;
   onOpen: (session: SessionRow) => void;
-  /** Adds a session to a column at `start`. */
-  onAdd: (column: BoardColumn, start: number) => void;
+  /** Adds a session to a column at `start`; in `lane` for `minutes` when put beside others. */
+  onAdd: (column: BoardColumn, start: number, beside?: { lane: number; minutes: number }) => void;
   onResize: (id: string, minutes: number) => void;
   onResizeEnd: (id: string) => void;
   /** Anything more to show at the top of a column, to the right of its title and level with `corner`. */
@@ -165,6 +172,32 @@ function useClock(): { date: string; minute: number } | null {
 /** The attribute naming the column a drop lands in, for measuring where in it. */
 export const COLUMN_ATTR = "data-board-column";
 
+/** How the + at a card's right edge is named as a drop target: this, then the card's session id. */
+export const BESIDE_PREFIX = "beside:";
+
+/** The share of a group's width the card under the pointer widens to, by how many are side by side. */
+const WIDENED: Record<number, number> = { 2: 90, 3: 80 };
+
+/** Where a card or unscheduled time sits across its column, in percent, and its padding either side. */
+type Box = { left: number; width: number; padLeft: string; padRight: string };
+
+const OUTER_PAD = "0.375rem";
+const INNER_PAD = "0.125rem";
+
+/** Each lane's box in a group of `count` side by side, the `wide`-th widened, or none. */
+function boxes(count: number, wide: number): Box[] {
+  const widths =
+    wide >= 0 && count > 1
+      ? Array.from({ length: count }, (_, i) => (i === wide ? WIDENED[count]! : (100 - WIDENED[count]!) / (count - 1)))
+      : Array.from({ length: count }, () => 100 / count);
+  let left = 0;
+  return widths.map((width, i) => {
+    const box = { left, width, padLeft: i === 0 ? OUTER_PAD : INNER_PAD, padRight: i === count - 1 ? OUTER_PAD : INNER_PAD };
+    left += width;
+    return box;
+  });
+}
+
 function Column({
   column,
   height,
@@ -185,6 +218,11 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${column.key}` });
   const gaps = gapsOf(column.sessions, bottom);
+  const groups = sideBySide(column.sessions);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const { active } = useDndContext();
+  const dragging = active !== null;
+  const roomForMore = column.sessions.length < SCHEDULE_LIMITS.sessionsPerDay;
 
   return (
     <div className="min-w-48 flex-1 border-r last:border-r-0">
@@ -235,14 +273,50 @@ function Column({
             start={g.start}
             minutes={g.minutes}
             scale={scale}
-            onAdd={
-              props.canManage && column.sessions.length < SCHEDULE_LIMITS.sessionsPerDay ? () => props.onAdd(column, g.start) : undefined
-            }
+            onAdd={props.canManage && roomForMore ? () => props.onAdd(column, g.start) : undefined}
           />
         ))}
-        {column.sessions.map((s) => (
-          <DraggableSession key={s.id} session={s} start={s.start} scale={scale} {...props} />
-        ))}
+        {groups.flatMap((g) => {
+          const wide = dragging ? -1 : g.columns.findIndex((c) => c.sessions.some((s) => s.id === hovered));
+          const laid = boxes(g.columns.length, wide);
+          return g.columns.flatMap((c, i) => {
+            const box = laid[i]!;
+            const rightmost = i === g.columns.length - 1;
+            return [
+              ...c.gaps.map((gap) => (
+                <Gap
+                  key={`gap:${c.lane}:${gap.start}`}
+                  start={gap.start}
+                  minutes={gap.minutes}
+                  scale={scale}
+                  box={box}
+                  onAdd={
+                    props.canManage && roomForMore
+                      ? () => props.onAdd(column, gap.start, { lane: c.lane, minutes: Math.min(gap.minutes, SCHEDULE_LIMITS.maxMinutes) })
+                      : undefined
+                  }
+                />
+              )),
+              ...c.sessions.map((s) => (
+                <DraggableSession
+                  key={s.id}
+                  session={s}
+                  start={s.start}
+                  scale={scale}
+                  box={box}
+                  onHover={(on) => setHovered((now) => (on ? s.id : now === s.id ? null : now))}
+                  onBeside={
+                    props.canManage && roomForMore && rightmost && s.lane + 1 < SCHEDULE_LIMITS.lanes
+                      ? () => props.onAdd(column, s.start, { lane: s.lane + 1, minutes: s.minutes })
+                      : undefined
+                  }
+                  dragging={dragging}
+                  {...props}
+                />
+              )),
+            ];
+          });
+        })}
         {props.marks?.(column, (minute) => (Math.min(bottom, Math.max(dayStart, minute)) - dayStart) * scale)}
         {now !== null && (
           <div
@@ -261,15 +335,20 @@ function Column({
   );
 }
 
-/** Time nothing is scheduled in; a manager clicks it to add a session there. */
-function Gap({ start, minutes, scale, onAdd }: { start: number; minutes: number; scale: number; onAdd?: () => void }) {
+/** Time nothing is scheduled in, across the column or in one lane of sessions side by side; a manager clicks it to add a session there. */
+function Gap({ start, minutes, scale, box, onAdd }: { start: number; minutes: number; scale: number; box?: Box; onAdd?: () => void }) {
   const label = `Unscheduled · ${formatLength(minutes)}`;
   const className = cn(
-    "absolute inset-x-1.5 flex items-center justify-center overflow-hidden rounded-md border border-dashed border-border text-[11px] text-muted-foreground tabular-nums",
+    "absolute flex items-center justify-center overflow-hidden rounded-md border border-dashed border-border text-[11px] text-muted-foreground tabular-nums",
+    box ? "transition-[left,width,color,background-color,border-color] duration-200 ease-out" : "inset-x-1.5 transition-colors",
     onAdd &&
-      "transition-colors hover:border-brand-border hover:bg-brand/5 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+      "hover:border-brand-border hover:bg-brand/5 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
   );
-  const style = { top: (start - dayStart) * scale, height: minutes * scale - 2 };
+  const style = {
+    top: (start - dayStart) * scale,
+    height: minutes * scale - 2,
+    ...(box && { left: `calc(${box.left}% + ${box.padLeft})`, width: `calc(${box.width}% - ${box.padLeft} - ${box.padRight})` }),
+  };
   if (!onAdd) {
     return (
       <div className={className} style={style}>
@@ -300,18 +379,40 @@ type CardProps = Pick<
   scale: number;
 };
 
-function DraggableSession(props: CardProps) {
+function DraggableSession({
+  box,
+  onHover,
+  onBeside,
+  dragging,
+  ...props
+}: CardProps & {
+  box: Box;
+  onHover: (on: boolean) => void;
+  /** Adds a session beside this one; left out where none can go. */
+  onBeside?: () => void;
+  /** Whether any card is being dragged, so the + shows on every card it could be dropped beside. */
+  dragging: boolean;
+}) {
   const { session, scale, canManage } = props;
   // The card stays put while a copy follows the pointer; where it would land is shown by moving the card itself.
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: session.id, disabled: !canManage });
   return (
     <div
       ref={setNodeRef}
+      onPointerEnter={() => onHover(true)}
+      onPointerLeave={() => onHover(false)}
       className={cn(
-        "absolute inset-x-0 z-10 px-1.5 py-px transition-opacity",
+        "group/card absolute z-10 py-px transition-[left,width,opacity] duration-200 ease-out",
         isDragging ? "opacity-30" : props.dimmed?.has(session.id) && "opacity-30 hover:opacity-100",
       )}
-      style={{ top: (session.start - dayStart) * scale, height: session.minutes * scale }}
+      style={{
+        top: (session.start - dayStart) * scale,
+        height: session.minutes * scale,
+        left: `${box.left}%`,
+        width: `${box.width}%`,
+        paddingLeft: box.padLeft,
+        paddingRight: box.padRight,
+      }}
     >
       <SessionFace
         {...props}
@@ -324,7 +425,53 @@ function DraggableSession(props: CardProps) {
           },
         }}
       />
+      {onBeside && !isDragging && <BesideButton session={session} padRight={box.padRight} dragging={dragging} onClick={onBeside} />}
     </div>
+  );
+}
+
+/**
+ * The + along a card's right edge: shown on hover, and on every card a
+ * dragged one could be dropped beside while one is dragged. Clicking it adds
+ * a session beside the card; dropping a card on it puts that card there.
+ */
+function BesideButton({
+  session,
+  padRight,
+  dragging,
+  onClick,
+}: {
+  session: SessionRow;
+  padRight: string;
+  dragging: boolean;
+  onClick: () => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `${BESIDE_PREFIX}${session.id}` });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      aria-label={`Add a session beside ${session.name}`}
+      title={dragging ? `Drop to put it beside ${session.name}` : `Add a session beside ${session.name}`}
+      // Kept from the card, which would otherwise start dragging it.
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={cn(
+        "absolute top-px bottom-2.5 z-20 flex w-[10%] min-w-4 items-center justify-center rounded-r-md border-l text-brand transition-[opacity,background-color]",
+        "focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+        isOver
+          ? "border-brand bg-brand/25 opacity-100"
+          : dragging
+            ? "border-dashed border-brand-border bg-brand/8 opacity-100"
+            : "border-brand-border bg-card/90 opacity-0 group-hover/card:opacity-100 hover:bg-brand/15",
+      )}
+      style={{ right: padRight }}
+    >
+      <Plus className="size-3.5 shrink-0" />
+    </button>
   );
 }
 
