@@ -1,42 +1,49 @@
 "use client";
 
 /**
- * Presenting a deck full screen: one slide at a time on black, moved with the
- * arrow keys, a clicker, or a click; B blacks the screen out; Escape leaves.
- * `usePresenter` opens it from a click, which the browser needs before it will
- * go full screen. The pointer hides while it is still.
+ * Presenting full screen: the deck's slides with the presentation's own pages
+ * among them, one at a time on black. The arrow keys, a clicker or a click move
+ * on, uncovering a page's reveals in turn first; on a page whose elements are
+ * clicked to reveal others, only those clicks act, so a stray click never
+ * leaves the page. B blacks the screen out; Escape leaves. `usePresenter`
+ * opens it from a click, which the browser needs before it will go full
+ * screen. The pointer hides while it is still.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import { keyAction, slideImageUrl, type LiveSlide } from "@/lib/presentations/live";
+import { keyAction, showItems, slideImageUrl, type LivePage, type LiveSlide, type ShowItem } from "@/lib/presentations/live";
+import { triggers } from "@/lib/presentations/page";
 import { cn } from "@/lib/utils";
+import { ItemView } from "./item-view";
 import { useLiveDeck } from "./use-live-deck";
 
 const IDLE_MS = 2_000;
 
-type Opened = { slides: LiveSlide[] | null; startSlideId?: string; error?: string };
+export type Showable = { slides: LiveSlide[]; pages: LivePage[] };
 
-/** `present()` from a click goes full screen and shows the deck; `player` is what to render for it. */
-export function usePresenter(presentationId: string, slides?: LiveSlide[]) {
+type Opened = { show: Showable | null; startItemId?: string; error?: string };
+
+/** `present()` from a click goes full screen and shows the presentation; `player` is what to render for it. */
+export function usePresenter(presentationId: string, show?: Showable) {
   const [opened, setOpened] = useState<Opened | null>(null);
 
   const present = useCallback(
-    (startSlideId?: string) => {
+    (startItemId?: string) => {
       // Asked for first, inside the click: after an await the browser would refuse.
       void document.documentElement.requestFullscreen?.().catch(() => undefined);
-      setOpened({ slides: slides ?? null, startSlideId });
-      if (slides) return;
+      setOpened({ show: show ?? null, startItemId });
+      if (show) return;
       fetch(`/api/presentations/${presentationId}`)
         .then(async (res) => {
           if (!res.ok) throw new Error(`The presentation could not be loaded (${res.status}).`);
-          const body = (await res.json()) as { slides: LiveSlide[] };
-          setOpened((o) => o && { ...o, slides: body.slides });
+          const body = (await res.json()) as Showable;
+          setOpened((o) => o && { ...o, show: { slides: body.slides, pages: body.pages } });
         })
         .catch((err: Error) => setOpened((o) => o && { ...o, error: err.message }));
     },
-    [presentationId, slides],
+    [presentationId, show],
   );
 
   const close = useCallback(() => {
@@ -46,8 +53,8 @@ export function usePresenter(presentationId: string, slides?: LiveSlide[]) {
 
   const player = opened
     ? createPortal(
-        opened.slides ? (
-          <Player presentationId={presentationId} slides={opened.slides} startSlideId={opened.startSlideId} onClose={close} />
+        opened.show ? (
+          <Player presentationId={presentationId} show={opened.show} startItemId={opened.startItemId} onClose={close} />
         ) : (
           <Backdrop onClose={close}>
             <p className="text-sm text-white/70">{opened.error ?? "Loading…"}</p>
@@ -71,17 +78,17 @@ function Backdrop({ onClose, children }: { onClose: () => void; children: React.
 
 function Player({
   presentationId,
-  slides,
-  startSlideId,
+  show,
+  startItemId,
   onClose,
 }: {
   presentationId: string;
-  slides: LiveSlide[];
-  startSlideId?: string;
+  show: Showable;
+  startItemId?: string;
   onClose: () => void;
 }) {
-  const deck = useLiveDeck(presentationId, slides, startSlideId);
-  const { shown, index, slide, black, step, go, toggleBlack } = deck;
+  const items = useMemo(() => showItems(show.slides, show.pages), [show]);
+  const { index, item, reveal, black, forward, back, go, trigger, toggleBlack } = useLiveDeck(presentationId, items, startItemId);
   const [idle, setIdle] = useState(false);
   const idleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const wasFullscreen = useRef(false);
@@ -106,15 +113,15 @@ function Player({
       const action = keyAction(e);
       if (!action) return;
       e.preventDefault();
-      if (action === "next") step(1);
-      if (action === "previous") step(-1);
+      if (action === "next") forward();
+      if (action === "previous") back();
       if (action === "first") go(0);
-      if (action === "last") go(shown.length - 1);
+      if (action === "last") go(items.length - 1);
       if (action === "black") toggleBlack();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, onClose, shown.length, step, toggleBlack]);
+  }, [back, forward, go, items.length, onClose, toggleBlack]);
 
   const wake = useCallback(() => {
     setIdle(false);
@@ -128,30 +135,35 @@ function Player({
     return () => clearTimeout(idleTimer.current);
   }, []);
 
+  // A page answered by clicks keeps its clicks for its own elements.
+  const clicksAdvance = !(item?.kind === "page" && triggers(item.page.document).size > 0);
   // The slides either side are fetched ahead, so moving to one shows it at once.
-  const ahead = [shown[index + 1], shown[index + 2], shown[index - 1]].filter((s): s is LiveSlide => Boolean(s));
+  const ahead = [items[index + 1], items[index + 2], items[index - 1]].filter(
+    (i): i is Extract<ShowItem, { kind: "slide" }> => i?.kind === "slide",
+  );
 
   return (
     <div
       role="dialog"
       aria-label="Presentation"
-      className={cn("fixed inset-0 z-200 select-none bg-black", idle && "cursor-none")}
+      className={cn("fixed inset-0 z-200 grid place-items-center bg-black select-none", idle && "cursor-none")}
       onMouseMove={wake}
-      onClick={() => step(1)}
+      onClick={() => clicksAdvance && forward()}
       onContextMenu={(e) => {
         e.preventDefault();
-        step(-1);
+        back();
       }}
     >
-      {slide && !black && (
-        // eslint-disable-next-line @next/next/no-img-element -- a full-screen slide, served by the app's own route
-        <img key={slide.id} src={slideImageUrl(presentationId, slide)} alt={`Slide ${slide.number}`} className="size-full object-contain" />
+      {item && !black && (
+        <div className="w-[min(100vw,calc(100dvh*16/9))]" data-item={item.id}>
+          <ItemView presentationId={presentationId} item={item} reveal={reveal} onTrigger={trigger} />
+        </div>
       )}
-      {shown.length === 0 && <p className="grid size-full place-items-center text-sm text-white/70">This deck has no slides to present.</p>}
+      {items.length === 0 && <p className="text-sm text-white/70">There is nothing to present yet.</p>}
       <div className="hidden">
         {ahead.map((s) => (
           // eslint-disable-next-line @next/next/no-img-element -- fetched ahead, never shown
-          <img key={s.id} src={slideImageUrl(presentationId, s)} alt="" />
+          <img key={s.id} src={slideImageUrl(presentationId, s.slide)} alt="" />
         ))}
       </div>
       <div
@@ -160,7 +172,7 @@ function Player({
           idle ? "opacity-0" : "opacity-100",
         )}
       >
-        <span className="rounded-md bg-black/60 px-2.5 py-1 tabular-nums">{shown.length ? `${index + 1} / ${shown.length}` : ""}</span>
+        <span className="rounded-md bg-black/60 px-2.5 py-1 tabular-nums">{items.length ? `${index + 1} / ${items.length}` : ""}</span>
         <button
           type="button"
           aria-label="Stop presenting"

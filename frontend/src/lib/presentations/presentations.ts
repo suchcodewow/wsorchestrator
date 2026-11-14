@@ -9,7 +9,7 @@ import "server-only";
 
 import { and, eq, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { PRESENTATION_LIMITS, presentationSlides, presentations, users } from "@/db/schema";
+import { PRESENTATION_LIMITS, presentationPages, presentationSlides, presentations, users } from "@/db/schema";
 import type { PresentationSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -17,6 +17,7 @@ import { isUuid } from "@/lib/utils";
 import type { Deck } from "./deck";
 import { readDeck, slidePicture, type DeckFailure } from "./google";
 import { slidesEditUrl } from "./link";
+import { EMPTY_PAGE, type PageDocument } from "./page";
 
 export type PresentationRow = {
   id: string;
@@ -50,10 +51,39 @@ export type Presentation = {
   createdAt: string;
   createdBy: string | null;
   slides: PresentationSlide[];
+  pages: PresentationPage[];
+};
+
+/** One of the presentation's own pages; see `presentationPages`. */
+export type PresentationPage = {
+  id: string;
+  /** The Google page id of the slide it comes just before; null for last. */
+  before: string | null;
+  position: number;
+  document: PageDocument;
+  notes: string;
+  updatedAt: string;
 };
 
 const p = presentations;
 const s = presentationSlides;
+const pg = presentationPages;
+
+const PAGE_COLUMNS = {
+  id: pg.id,
+  before: pg.before,
+  position: pg.position,
+  document: pg.document,
+  notes: pg.notes,
+  updatedAt: pg.updatedAt,
+};
+
+const asPage = (row: { id: string; before: string | null; position: number; document: unknown; notes: string; updatedAt: Date }) => ({
+  ...row,
+  // Stored only after `pageDocumentSchema` passed it.
+  document: row.document as PageDocument,
+  updatedAt: row.updatedAt.toISOString(),
+});
 
 // Spelled out: in a one-table query Drizzle leaves columns unqualified, and inside the subquery "id" would be the slide's own.
 const presentedCount = sql<number>`(select count(*)::int from presentation_slides ps where ps.presentation_id = presentations.id and not ps.skipped)`;
@@ -112,13 +142,108 @@ export async function getPresentation(id: string): Promise<Presentation | null> 
     .where(eq(s.presentationId, id))
     .orderBy(s.position)
     .limit(PRESENTATION_LIMITS.slides);
+  const pages = await db
+    .select(PAGE_COLUMNS)
+    .from(pg)
+    .where(eq(pg.presentationId, id))
+    .orderBy(pg.position)
+    .limit(PRESENTATION_LIMITS.pages);
   return {
     ...row,
     googleUrl: slidesEditUrl(row.googleFileId),
     syncedAt: row.syncedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     slides: slides.map(({ position, fingerprint, ...slide }) => ({ ...slide, number: position + 1, version: fingerprint.slice(0, 16) })),
+    pages: pages.map(asPage),
   };
+}
+
+/** One of a presentation's own pages, with the presentation's name; null if there is none. */
+export async function getPage(
+  presentationId: string,
+  pageId: string,
+): Promise<{ page: PresentationPage; presentationName: string } | null> {
+  if (!isUuid(presentationId) || !isUuid(pageId)) return null;
+  const [row] = await db
+    .select({ page: PAGE_COLUMNS, presentationName: p.name })
+    .from(pg)
+    .innerJoin(p, eq(p.id, pg.presentationId))
+    .where(and(eq(pg.id, pageId), eq(pg.presentationId, presentationId)));
+  return row ? { page: asPage(row.page), presentationName: row.presentationName } : null;
+}
+
+export type CreatePageResult = { ok: true; id: string; name: string } | { ok: false; error: "not_found" | "too_many_pages" };
+
+/** A new blank page before the slide `before` (null: last), after any already there. */
+export async function createPage(presentationId: string, before: string | null, userId: string): Promise<CreatePageResult> {
+  if (!isUuid(presentationId)) return { ok: false, error: "not_found" };
+  const [row] = await db
+    .select({
+      name: p.name,
+      pages: sql<number>`(select count(*)::int from presentation_pages pp where pp.presentation_id = presentations.id)`,
+    })
+    .from(p)
+    .where(eq(p.id, presentationId));
+  if (!row) return { ok: false, error: "not_found" };
+  if (row.pages >= PRESENTATION_LIMITS.pages) return { ok: false, error: "too_many_pages" };
+  const [page] = await db
+    .insert(pg)
+    .values({
+      presentationId,
+      before,
+      position: sql`(select coalesce(max(position), -1) + 1 from presentation_pages where presentation_id = ${presentationId})`,
+      document: EMPTY_PAGE,
+      updatedBy: userId,
+    })
+    .returning({ id: pg.id });
+  return { ok: true, id: page!.id, name: row.name };
+}
+
+/**
+ * Saves a page: its drawing, its notes, and the slide it comes before. A page
+ * moved to another slide goes after the pages already there. Null if there is
+ * no such page.
+ */
+export async function savePage(
+  presentationId: string,
+  pageId: string,
+  input: { before: string | null; document: PageDocument; notes: string },
+  userId: string,
+): Promise<{ name: string } | null> {
+  if (!isUuid(presentationId) || !isUuid(pageId)) return null;
+  const [current] = await db
+    .select({ before: pg.before, name: p.name })
+    .from(pg)
+    .innerJoin(p, eq(p.id, pg.presentationId))
+    .where(and(eq(pg.id, pageId), eq(pg.presentationId, presentationId)));
+  if (!current) return null;
+  const moved = current.before !== input.before;
+  await db
+    .update(pg)
+    .set({
+      before: input.before,
+      document: input.document,
+      notes: input.notes,
+      updatedBy: userId,
+      updatedAt: new Date(),
+      ...(moved
+        ? { position: sql`(select coalesce(max(position), -1) + 1 from presentation_pages where presentation_id = ${presentationId})` }
+        : {}),
+    })
+    .where(eq(pg.id, pageId));
+  return { name: current.name };
+}
+
+/** The name of the presentation a page was removed from; null if there was no such page. */
+export async function deletePage(presentationId: string, pageId: string): Promise<string | null> {
+  if (!isUuid(presentationId) || !isUuid(pageId)) return null;
+  const [row] = await db
+    .delete(pg)
+    .where(and(eq(pg.id, pageId), eq(pg.presentationId, presentationId)))
+    .returning({ id: pg.id });
+  if (!row) return null;
+  const [presentation] = await db.select({ name: p.name }).from(p).where(eq(p.id, presentationId));
+  return presentation?.name ?? "";
 }
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];

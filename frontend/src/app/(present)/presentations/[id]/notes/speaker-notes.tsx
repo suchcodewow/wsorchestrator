@@ -1,24 +1,29 @@
 "use client";
 
 /**
- * The presenter's view: the slide the room sees, the one after it, and its
- * speaker notes, with a timer. It follows the full-screen player and moves it,
- * with the same keys.
+ * The presenter's view: what the room sees, what comes next, and its speaker
+ * notes, with a timer. It follows the full-screen player and moves it, with the
+ * same keys; on one of the presentation's own pages, clicking an element here
+ * reveals what it reveals on the screen too, so the presenter can answer from
+ * the laptop.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Minus, Pause, Play, Plus, RotateCcw } from "lucide-react";
+import { ItemView, itemLabel } from "@/components/presentations/item-view";
 import { useLiveDeck } from "@/components/presentations/use-live-deck";
 import { Button } from "@/components/ui/button";
-import { keyAction, slideImageUrl, type LiveSlide } from "@/lib/presentations/live";
+import { keyAction, showItems, type LivePage, type LiveSlide, type ShowItem } from "@/lib/presentations/live";
+import { START, type RevealState } from "@/lib/presentations/page";
 import { cn } from "@/lib/utils";
 
 const SIZES = [14, 16, 18, 21, 24, 28, 32, 38];
 const SIZE_KEY = "presentations.notesSize";
 const DEFAULT_SIZE = 3;
 
-export function SpeakerNotes({ id, name, slides }: { id: string; name: string; slides: LiveSlide[] }) {
-  const { shown, index, slide, next, black, step, go, toggleBlack } = useLiveDeck(id, slides);
+export function SpeakerNotes({ id, name, slides, pages }: { id: string; name: string; slides: LiveSlide[]; pages: LivePage[] }) {
+  const items = useMemo(() => showItems(slides, pages), [slides, pages]);
+  const { index, item, next, reveal, black, forward, back, go, trigger, toggleBlack } = useLiveDeck(id, items);
   const [size, setSize] = useState(DEFAULT_SIZE);
   const elapsed = useStopwatch();
 
@@ -47,22 +52,22 @@ export function SpeakerNotes({ id, name, slides }: { id: string; name: string; s
       const action = keyAction(e);
       if (!action) return;
       e.preventDefault();
-      if (action === "next") step(1);
-      if (action === "previous") step(-1);
+      if (action === "next") forward();
+      if (action === "previous") back();
       if (action === "first") go(0);
-      if (action === "last") go(shown.length - 1);
+      if (action === "last") go(items.length - 1);
       if (action === "black") toggleBlack();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, shown.length, step, toggleBlack]);
+  }, [back, forward, go, items.length, toggleBlack]);
 
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground lg:h-dvh">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-5 py-2.5">
         <h1 className="min-w-0 flex-1 truncate font-medium">{name}</h1>
         <span className="text-sm tabular-nums text-muted-foreground">
-          {shown.length ? `Slide ${index + 1} of ${shown.length}` : "No slides"}
+          {item ? `${index + 1} of ${items.length} · ${itemLabel(item)}` : "Nothing to present"}
           {black && " · Screen blacked out"}
         </span>
         <div className="flex items-center gap-1">
@@ -78,13 +83,13 @@ export function SpeakerNotes({ id, name, slides }: { id: string; name: string; s
 
       <main className="grid min-h-0 flex-1 gap-5 p-5 lg:grid-cols-[3fr_2fr]">
         <section className="flex min-h-0 flex-col gap-3">
-          <SlideFrame presentationId={id} slide={slide} dim={black} label="Current slide" />
+          <Frame presentationId={id} item={item} reveal={reveal} dim={black} onTrigger={trigger} />
           <div className="flex items-center justify-center gap-2">
-            <Button variant="outline" onClick={() => step(-1)} disabled={index === 0}>
+            <Button variant="outline" onClick={back} disabled={index === 0 && reveal.step === 0}>
               <ChevronLeft />
               Previous
             </Button>
-            <Button variant="outline" onClick={() => step(1)} disabled={index >= shown.length - 1}>
+            <Button variant="outline" onClick={forward}>
               Next
               <ChevronRight />
             </Button>
@@ -95,7 +100,7 @@ export function SpeakerNotes({ id, name, slides }: { id: string; name: string; s
           <div className="w-full max-w-sm">
             <p className="mb-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">Next</p>
             {next ? (
-              <SlideFrame presentationId={id} slide={next} label="Next slide" />
+              <Frame presentationId={id} item={next} reveal={START} />
             ) : (
               <div className="grid aspect-video place-items-center rounded-lg border bg-muted text-sm text-muted-foreground">
                 End of deck
@@ -117,7 +122,7 @@ export function SpeakerNotes({ id, name, slides }: { id: string; name: string; s
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 leading-relaxed whitespace-pre-wrap" style={{ fontSize: SIZES[size] }}>
-              {slide?.notes || <span className="text-muted-foreground">No notes for this slide.</span>}
+              {item?.notes || <span className="text-muted-foreground">No notes for this one.</span>}
             </div>
           </div>
         </section>
@@ -126,17 +131,25 @@ export function SpeakerNotes({ id, name, slides }: { id: string; name: string; s
   );
 }
 
-function SlideFrame({ presentationId, slide, dim, label }: { presentationId: string; slide?: LiveSlide; dim?: boolean; label: string }) {
+function Frame({
+  presentationId,
+  item,
+  reveal,
+  dim,
+  onTrigger,
+}: {
+  presentationId: string;
+  item?: ShowItem;
+  reveal: RevealState;
+  dim?: boolean;
+  onTrigger?: (elementId: string) => void;
+}) {
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-lg border bg-black">
-      {slide && (
-        // eslint-disable-next-line @next/next/no-img-element -- a slide picture, served by the app's own route
-        <img
-          key={slide.id}
-          src={slideImageUrl(presentationId, slide)}
-          alt={`${label}: slide ${slide.number}`}
-          className={cn("size-full object-contain transition-opacity", dim && "opacity-25")}
-        />
+    <div className={cn("overflow-hidden rounded-lg border bg-black transition-opacity", dim && "opacity-25")}>
+      {item ? (
+        <ItemView key={item.id} presentationId={presentationId} item={item} reveal={reveal} onTrigger={onTrigger} />
+      ) : (
+        <div className="aspect-video" />
       )}
     </div>
   );

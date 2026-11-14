@@ -1,22 +1,37 @@
 "use client";
 
 /**
- * A presentation's slides, in deck order: a click on one presents from it.
- * Slides whose pictures are not here yet are fetched from Google one at a time
- * while the page is open, so presenting later shows each at once.
+ * A presentation in the order it is shown: the deck's slides with the
+ * presentation's own pages among them. A click on one presents from it; an
+ * administrator inserts a page before any slide, or at the end. Slides whose
+ * pictures are not here yet are fetched from Google one at a time while the
+ * page is open, so presenting later shows each at once.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, ExternalLink, LoaderCircle, MoreHorizontal, NotebookText, Pencil, Play, RefreshCw, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ExternalLink,
+  LoaderCircle,
+  MoreHorizontal,
+  NotebookText,
+  Pencil,
+  Play,
+  Plus,
+  RefreshCw,
+  SquarePlus,
+  Trash2,
+} from "lucide-react";
+import { PageView } from "@/components/presentations/page-view";
 import { usePresenter } from "@/components/presentations/player";
 import { Button } from "@/components/ui/button";
 import { confirmDialog } from "@/components/ui/confirm";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { riseChild, staggerParent } from "@/lib/motion";
-import { presentedSlides, slideImageUrl } from "@/lib/presentations/live";
+import { presentedSlides, showItems, slideImageUrl, type LivePage } from "@/lib/presentations/live";
 import type { Presentation, PresentationSlide } from "@/lib/presentations/presentations";
 import { cn } from "@/lib/utils";
 import { formatSynced } from "../format";
@@ -24,13 +39,44 @@ import { RenameDialog } from "./rename-dialog";
 
 export function PresentationView({ presentation, canManage }: { presentation: Presentation; canManage: boolean }) {
   const router = useRouter();
-  const { id, name, slides } = presentation;
-  const { present, player } = usePresenter(id, slides);
+  const { id, name, slides, pages } = presentation;
+  const show = useMemo(() => ({ slides, pages }), [slides, pages]);
+  const order = useMemo(() => showItems(slides, pages, true), [slides, pages]);
+  const { present, player } = usePresenter(id, show);
   const shown = presentedSlides(slides);
   const preparing = usePrepare(id, slides);
   const [syncing, setSyncing] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
   const [renaming, setRenaming] = useState(false);
+
+  async function addPage(before: string | null) {
+    setAdding(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/presentations/${id}/pages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ before }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMessage({
+          text:
+            body?.error === "too_many_pages"
+              ? "This presentation has as many pages as it can hold."
+              : `Could not add a page (${res.status}).`,
+          error: true,
+        });
+        return;
+      }
+      router.push(`/presentations/${id}/pages/${body.id}`);
+    } catch {
+      setMessage({ text: "Could not reach the server.", error: true });
+    } finally {
+      setAdding(false);
+    }
+  }
 
   async function sync() {
     setSyncing(true);
@@ -80,12 +126,13 @@ export function PresentationView({ presentation, canManage }: { presentation: Pr
           <h1 className="text-3xl font-medium tracking-tight">{name}</h1>
           <p className="text-sm text-muted-foreground" suppressHydrationWarning>
             {shown.length} {shown.length === 1 ? "slide" : "slides"}
-            {shown.length !== slides.length && ` and ${slides.length - shown.length} skipped`} · read from Google{" "}
+            {shown.length !== slides.length && ` and ${slides.length - shown.length} skipped`}
+            {pages.length > 0 && ` · ${pages.length} ${pages.length === 1 ? "page" : "pages"} of its own`} · read from Google{" "}
             {formatSynced(presentation.syncedAt)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="brand" disabled={shown.length === 0} onClick={() => present()}>
+          <Button variant="brand" disabled={shown.length + pages.length === 0} onClick={() => present()}>
             <Play />
             Present
           </Button>
@@ -149,18 +196,41 @@ export function PresentationView({ presentation, canManage }: { presentation: Pr
       )}
 
       <motion.ul variants={riseChild} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {slides.map((slide) => (
-          <li key={slide.id}>
-            <SlideCard
-              presentationId={id}
-              slide={slide}
-              ready={slide.cached || preparing.ready.has(slide.id)}
-              onPresent={() => present(slide.id)}
-            />
+        {order.map((item) => (
+          <li key={item.id}>
+            {item.kind === "slide" ? (
+              <SlideCard
+                presentationId={id}
+                slide={item.slide}
+                ready={item.slide.cached || preparing.ready.has(item.slide.id)}
+                onPresent={() => present(item.id)}
+                onInsert={canManage && !adding ? () => void addPage(item.slide.googlePageId) : undefined}
+              />
+            ) : (
+              <PageCard
+                page={item.page}
+                editHref={canManage ? `/presentations/${id}/pages/${item.id}` : undefined}
+                onPresent={() => present(item.id)}
+              />
+            )}
           </li>
         ))}
+        {canManage && (
+          <li>
+            <button
+              type="button"
+              disabled={adding}
+              onClick={() => void addPage(null)}
+              className="grid aspect-video w-full place-items-center rounded-lg border border-dashed text-sm text-muted-foreground transition-colors hover:border-brand/60 hover:text-foreground"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <SquarePlus className="size-4" />
+                Add page
+              </span>
+            </button>
+          </li>
+        )}
       </motion.ul>
-      {slides.length === 0 && <p className="text-sm text-muted-foreground">The deck has no slides.</p>}
 
       {renaming && <RenameDialog id={id} name={name} onClose={() => setRenaming(false)} />}
       {player}
@@ -168,44 +238,83 @@ export function PresentationView({ presentation, canManage }: { presentation: Pr
   );
 }
 
+const THUMB = "relative aspect-video overflow-hidden rounded-lg border bg-muted transition-shadow";
+const THUMB_HOVER = "group-enabled:group-hover:ring-2 group-enabled:group-hover:ring-brand/60";
+
 function SlideCard({
   presentationId,
   slide,
   ready,
   onPresent,
+  onInsert,
 }: {
   presentationId: string;
   slide: PresentationSlide;
   ready: boolean;
   onPresent: () => void;
+  /** Puts a new page just before this slide; only for administrators. */
+  onInsert?: () => void;
 }) {
   return (
-    <button
-      type="button"
-      disabled={slide.skipped}
-      onClick={onPresent}
-      aria-label={slide.skipped ? `Slide ${slide.number}, skipped` : `Present from slide ${slide.number}`}
-      className="group block w-full text-left disabled:cursor-default"
-    >
-      <div
-        className={cn(
-          "relative aspect-video overflow-hidden rounded-lg border bg-muted transition-shadow group-enabled:group-hover:ring-2 group-enabled:group-hover:ring-brand/60",
-          slide.skipped && "opacity-40",
-        )}
+    <div>
+      <button
+        type="button"
+        disabled={slide.skipped}
+        onClick={onPresent}
+        aria-label={slide.skipped ? `Slide ${slide.number}, skipped` : `Present from slide ${slide.number}`}
+        className="group block w-full text-left disabled:cursor-default"
       >
-        {ready ? (
-          // eslint-disable-next-line @next/next/no-img-element -- a slide picture, served by the app's own route
-          <img src={slideImageUrl(presentationId, slide)} alt="" loading="lazy" className="size-full object-contain" />
-        ) : (
-          <LoaderCircle className="absolute inset-0 m-auto size-5 animate-spin text-muted-foreground" />
-        )}
-      </div>
-      <p className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+        <div className={cn(THUMB, THUMB_HOVER, slide.skipped && "opacity-40")}>
+          {ready ? (
+            // eslint-disable-next-line @next/next/no-img-element -- a slide picture, served by the app's own route
+            <img src={slideImageUrl(presentationId, slide)} alt="" loading="lazy" className="size-full object-contain" />
+          ) : (
+            <LoaderCircle className="absolute inset-0 m-auto size-5 animate-spin text-muted-foreground" />
+          )}
+        </div>
+      </button>
+      <div className="mt-1 flex h-7 items-center gap-2 text-xs text-muted-foreground">
         <span className="tabular-nums">{slide.number}</span>
         {slide.skipped && <span>Skipped</span>}
         {!slide.skipped && slide.notes && <NotebookText className="size-3.5" aria-label="Has speaker notes" />}
-      </p>
-    </button>
+        {onInsert && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-7 px-2 text-xs"
+            onClick={onInsert}
+            aria-label={`Insert a page before slide ${slide.number}`}
+          >
+            <Plus />
+            Insert page
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PageCard({ page, editHref, onPresent }: { page: LivePage; editHref?: string; onPresent: () => void }) {
+  return (
+    <div>
+      <button type="button" onClick={onPresent} aria-label="Present from this page" className="group block w-full text-left">
+        <div className={cn(THUMB, THUMB_HOVER, "border-brand/40")}>
+          <PageView document={page.document} state="all" />
+        </div>
+      </button>
+      <div className="mt-1 flex h-7 items-center gap-2 text-xs text-muted-foreground">
+        <span className="font-medium text-brand">Page</span>
+        {page.notes && <NotebookText className="size-3.5" aria-label="Has speaker notes" />}
+        {editHref && (
+          <Button variant="ghost" size="sm" className="ml-auto h-7 px-2 text-xs" asChild>
+            <Link href={editHref}>
+              <Pencil />
+              Edit
+            </Link>
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 

@@ -2956,10 +2956,36 @@ export const presentationSlides = pgTable(
   ],
 );
 
+/**
+ * A presentation's own page, shown among its deck's slides but not part of the
+ * deck: `before` is the Google page id of the slide it comes just before, so
+ * it follows that slide wherever the deck moves it; null, or a slide since
+ * removed, puts it last. Pages before the same slide go in `position` order.
+ * `document` is a `PageDocument` (`lib/presentations/page.ts`).
+ */
+export const presentationPages = pgTable(
+  "presentation_pages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    presentationId: uuid("presentation_id")
+      .notNull()
+      .references(() => presentations.id, { onDelete: "cascade" }),
+    before: text("before_page_id"),
+    position: integer("position").notNull(),
+    document: jsonb("document").$type<Record<string, unknown>>().notNull(),
+    notes: text("notes").notNull().default(""),
+    updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("presentation_pages_order_idx").on(t.presentationId, t.position)],
+);
+
 export const PRESENTATION_LIMITS = {
   name: 200,
   /** A deck larger than this is refused rather than read; Bootcamp's master deck has about 330. */
   slides: 600,
+  /** The presentation's own pages, beside its deck's slides. */
+  pages: 200,
 } as const;
 
 /** Mimir-wide settings, one row per key; a key with no row reads as its default. */

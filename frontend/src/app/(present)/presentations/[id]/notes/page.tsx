@@ -20,5 +20,5 @@ export default async function SpeakerNotesPage({ params }: { params: Promise<{ i
 
   const presentation = await getPresentation((await params).id);
   if (!presentation) notFound();
-  return <SpeakerNotes id={presentation.id} name={presentation.name} slides={presentation.slides} />;
+  return <SpeakerNotes id={presentation.id} name={presentation.name} slides={presentation.slides} pages={presentation.pages} />;
 }

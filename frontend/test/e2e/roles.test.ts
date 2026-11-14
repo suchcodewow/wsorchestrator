@@ -252,6 +252,7 @@ const PAGES: Record<string, PageCase> = {
   "/presentations": { path: () => "/presentations?q=x&sort=slides", expect: gated(canUseTraining) },
   "/presentations/<unknown>": { path: () => `/presentations/${MISSING}`, expect: () => 404 },
   "/presentations/<unknown>/notes": { path: () => `/presentations/${MISSING}/notes`, expect: () => 404 },
+  "/presentations/<unknown>/pages/<unknown>": { path: () => `/presentations/${MISSING}/pages/${MISSING}`, expect: () => 404 },
   "/logistics/food-orders/print": { path: () => "/logistics/food-orders/print", expect: gated(canUseTraining) },
   "/logistics/food-orders/print?<unknown>": { path: () => `/logistics/food-orders/print?id=${MISSING}`, expect: () => 404 },
   "/logistics-settings": {
@@ -803,6 +804,10 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/presentations/${MISSING}`, allowed: canManageTrainingSettings },
   { method: "POST", path: `/api/presentations/${MISSING}/sync`, allowed: canManageTrainingSettings },
   { method: "GET", path: `/api/presentations/${MISSING}/slides/${MISSING}/image`, allowed: canUseTraining },
+  { method: "POST", path: `/api/presentations/${MISSING}/pages`, allowed: canManageTrainingSettings },
+  { method: "GET", path: `/api/presentations/${MISSING}/pages/${MISSING}`, allowed: canUseTraining },
+  { method: "PUT", path: `/api/presentations/${MISSING}/pages/${MISSING}`, allowed: canManageTrainingSettings },
+  { method: "DELETE", path: `/api/presentations/${MISSING}/pages/${MISSING}`, allowed: canManageTrainingSettings },
   { method: "POST", path: "/api/record/tracks", allowed: true, body: () => ({}) },
   { method: "PUT", path: `/api/record/tracks/${MISSING}/camera/chunks/0`, allowed: true },
   { method: "POST", path: `/api/record/tracks/${MISSING}/camera/upload-urls`, allowed: true, body: () => ({}) },

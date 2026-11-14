@@ -2,12 +2,22 @@
 
 import { PRESENTATION_LIMITS } from "@/db/schema";
 import { PRESENTATION_LIST } from "@/lib/list-specs";
+import { ELEMENT_KINDS, FONTS, PAGE_LIMITS, REVEAL_EFFECTS, STAGE } from "@/lib/presentations/page";
 import { listQuery, PAGE_FIELDS } from "./paging";
 import type { Endpoint, EndpointGroup } from "./types";
 
 const ROW = "{ id, name, googleTitle, slides: number, syncedAt: ISO 8601 string }";
 const SLIDE = "{ id, number: number, googlePageId, skipped: boolean, notes: string, version: string, cached: boolean }";
+const PAGE = "{ id, before: string | null, position: number, document: PageDocument, notes: string, updatedAt: ISO 8601 string }";
+const DOCUMENT_NOTE = `PageDocument is { background: "#rrggbb", elements: Element[] } on a ${STAGE.width}×${STAGE.height} stage, at most ${PAGE_LIMITS.elements} elements, drawn in order so the last is on top. An Element is { id, kind: ${ELEMENT_KINDS.map((k) => `"${k}"`).join(" | ")}, x, y, w, h, rotation, fill: colour | null, stroke: colour | null, strokeWidth, radius, text, font: ${FONTS.map((f) => `"${f}"`).join(" | ")}, fontSize, bold, textColor, align: "left" | "center" | "right", valign: "top" | "middle" | "bottom", reveal }, sizes in stage pixels. reveal is null (always shown), { on: "next", order, effect } (shown by a press of next, lowest order first, those sharing an order together), or { on: "click", by, effect } (shown by a click on the element whose id is by, and hidden by a second); effect is ${REVEAL_EFFECTS.map((e) => `"${e}"`).join(", ")}.`;
 const idParam = [{ name: "id", type: "string", required: true, note: "the presentation's id" }];
+const pageParams = [...idParam, { name: "pageId", type: "string", required: true, note: "the page's id" }];
+const before = {
+  name: "before",
+  type: "string | null",
+  required: true,
+  note: "the googlePageId of the slide the page comes before; null for last",
+};
 
 const GOOGLE_ERRORS: NonNullable<Endpoint["errors"]> = [
   {
@@ -70,13 +80,13 @@ export const PRESENTATIONS_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/presentations/{id}",
-        summary: "Reads one presentation with every slide of its deck, in order, and their speaker notes.",
+        summary: "Reads one presentation with every slide of its deck, in order, its own pages, and their speaker notes.",
         access: "trainingViewer",
         token: true,
         notes:
-          "Skipped slides are included, so number matches Google's numbering, but are never presented. version changes whenever the slide does; cached says its picture is already here. googleUrl opens the deck in Google.",
+          "Skipped slides are included, so number matches Google's numbering, but are never presented. version changes whenever the slide does; cached says its picture is already here. googleUrl opens the deck in Google. Each page is shown just before the slide whose googlePageId its before names, pages before the same slide in position order; one whose before is null, or names a slide no longer in the deck, is shown last.",
         params: idParam,
-        returns: `{ id, name, googleFileId, googleTitle, googleUrl, syncedAt, createdAt, createdBy: string | null, slides: ${SLIDE}[] }`,
+        returns: `{ id, name, googleFileId, googleTitle, googleUrl, syncedAt, createdAt, createdBy: string | null, slides: ${SLIDE}[], pages: ${PAGE}[] }`,
         errors: [{ status: 404, error: "not_found", when: "no such presentation" }],
       },
       {
@@ -135,6 +145,69 @@ export const PRESENTATIONS_GROUPS: EndpointGroup[] = [
           { status: 404, error: "not_found", when: "no such presentation or slide" },
           ...GOOGLE_ERRORS.filter((e) => e.error !== "too_many_slides"),
         ],
+      },
+      {
+        method: "POST",
+        path: "/api/presentations/{id}/pages",
+        summary: "Adds one of the presentation's own pages, blank and white, before a slide of its deck.",
+        access: "trainingAdmin",
+        token: true,
+        notes: `A page added before a slide that already has some goes after them. A presentation holds at most ${PRESENTATION_LIMITS.pages} pages.`,
+        params: idParam,
+        body: { kind: "json", fields: [before] },
+        returns: "201 { id }",
+        errors: [
+          { status: 400, error: "invalid", when: "before is missing" },
+          { status: 404, error: "not_found", when: "no such presentation" },
+          { status: 422, error: "too_many_pages", when: `the presentation already has ${PRESENTATION_LIMITS.pages} pages` },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/presentations/{id}/pages/{pageId}",
+        summary: "Reads one of the presentation's own pages.",
+        access: "trainingViewer",
+        token: true,
+        notes: DOCUMENT_NOTE,
+        params: pageParams,
+        returns: PAGE,
+        errors: [{ status: 404, error: "not_found", when: "no such presentation or page" }],
+      },
+      {
+        method: "PUT",
+        path: "/api/presentations/{id}/pages/{pageId}",
+        summary: "Saves one of the presentation's own pages whole: its drawing, its speaker notes, and the slide it comes before.",
+        access: "trainingAdmin",
+        token: true,
+        notes: `${DOCUMENT_NOTE} A page moved to another slide goes after the pages already there.`,
+        params: pageParams,
+        body: {
+          kind: "json",
+          fields: [
+            before,
+            { name: "document", type: "PageDocument", required: true, note: "the whole drawing, replacing the one before" },
+            { name: "notes", type: "string", required: true, note: `the speaker notes; up to ${PAGE_LIMITS.notes} characters` },
+          ],
+        },
+        returns: "{ ok: true }",
+        errors: [
+          {
+            status: 400,
+            error: "invalid",
+            when: "the body does not parse: an element's id repeats, a reveal names no element on the page or the element itself, a colour is not #rrggbb; issues lists each problem's path",
+          },
+          { status: 404, error: "not_found", when: "no such presentation or page" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/presentations/{id}/pages/{pageId}",
+        summary: "Removes one of the presentation's own pages.",
+        access: "trainingAdmin",
+        token: true,
+        params: pageParams,
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "no such presentation or page" }],
       },
     ],
   },
