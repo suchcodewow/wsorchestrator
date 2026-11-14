@@ -7,17 +7,18 @@
 
 import "server-only";
 
-import { and, eq, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { PRESENTATION_LIMITS, presentationPages, presentationSlides, presentations, users } from "@/db/schema";
+import { PRESENTATION_LIMITS, presentationAssets, presentationPages, presentationSlides, presentations, users } from "@/db/schema";
 import type { PresentationSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
 import { isUuid } from "@/lib/utils";
+import { convertSlide, type Conversion } from "./convert";
 import type { Deck } from "./deck";
 import { readDeck, slidePicture, type DeckFailure } from "./google";
 import { slidesEditUrl } from "./link";
-import { EMPTY_PAGE, type PageDocument } from "./page";
+import { EMPTY_PAGE, pageAssets, type PageDocument } from "./page";
 
 export type PresentationRow = {
   id: string;
@@ -62,12 +63,17 @@ export type PresentationPage = {
   position: number;
   document: PageDocument;
   notes: string;
+  /** The Google page id of the slide it was converted from and stands in for; null for a page drawn here. */
+  replaces: string | null;
+  /** A converted page whose slide has changed in Google since. */
+  stale: boolean;
   updatedAt: string;
 };
 
 const p = presentations;
 const s = presentationSlides;
 const pg = presentationPages;
+const a = presentationAssets;
 
 const PAGE_COLUMNS = {
   id: pg.id,
@@ -75,13 +81,28 @@ const PAGE_COLUMNS = {
   position: pg.position,
   document: pg.document,
   notes: pg.notes,
+  replaces: pg.replaces,
+  sourceFingerprint: pg.sourceFingerprint,
   updatedAt: pg.updatedAt,
 };
 
-const asPage = (row: { id: string; before: string | null; position: number; document: unknown; notes: string; updatedAt: Date }) => ({
+type PageRow = {
+  id: string;
+  before: string | null;
+  position: number;
+  document: unknown;
+  notes: string;
+  replaces: string | null;
+  sourceFingerprint: string | null;
+  updatedAt: Date;
+};
+
+/** A stored page as the app reads it; `fingerprints` are the deck's slides', by Google page id, to tell a stale conversion. */
+const asPage = ({ sourceFingerprint, ...row }: PageRow, fingerprints?: Map<string, string>): PresentationPage => ({
   ...row,
   // Stored only after `pageDocumentSchema` passed it.
   document: row.document as PageDocument,
+  stale: Boolean(row.replaces && fingerprints && fingerprints.has(row.replaces) && fingerprints.get(row.replaces) !== sourceFingerprint),
   updatedAt: row.updatedAt.toISOString(),
 });
 
@@ -154,7 +175,7 @@ export async function getPresentation(id: string): Promise<Presentation | null> 
     syncedAt: row.syncedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     slides: slides.map(({ position, fingerprint, ...slide }) => ({ ...slide, number: position + 1, version: fingerprint.slice(0, 16) })),
-    pages: pages.map(asPage),
+    pages: pages.map((page) => asPage(page, new Map(slides.map((slide) => [slide.googlePageId, slide.fingerprint])))),
   };
 }
 
@@ -199,51 +220,172 @@ export async function createPage(presentationId: string, before: string | null, 
   return { ok: true, id: page!.id, name: row.name };
 }
 
+export type SavePageResult = { ok: true; name: string } | { ok: false; error: "not_found" | "unknown_asset" };
+
 /**
  * Saves a page: its drawing, its notes, and the slide it comes before. A page
- * moved to another slide goes after the pages already there. Null if there is
- * no such page.
+ * moved to another slide goes after the pages already there; a converted page
+ * stays where its slide is. Every picture it draws must be one of this
+ * presentation's.
  */
 export async function savePage(
   presentationId: string,
   pageId: string,
   input: { before: string | null; document: PageDocument; notes: string },
   userId: string,
-): Promise<{ name: string } | null> {
-  if (!isUuid(presentationId) || !isUuid(pageId)) return null;
+): Promise<SavePageResult> {
+  if (!isUuid(presentationId) || !isUuid(pageId)) return { ok: false, error: "not_found" };
   const [current] = await db
-    .select({ before: pg.before, name: p.name })
+    .select({ before: pg.before, replaces: pg.replaces, name: p.name })
     .from(pg)
     .innerJoin(p, eq(p.id, pg.presentationId))
     .where(and(eq(pg.id, pageId), eq(pg.presentationId, presentationId)));
-  if (!current) return null;
-  const moved = current.before !== input.before;
-  await db
-    .update(pg)
-    .set({
-      before: input.before,
-      document: input.document,
-      notes: input.notes,
-      updatedBy: userId,
-      updatedAt: new Date(),
-      ...(moved
-        ? { position: sql`(select coalesce(max(position), -1) + 1 from presentation_pages where presentation_id = ${presentationId})` }
-        : {}),
-    })
-    .where(eq(pg.id, pageId));
-  return { name: current.name };
+  if (!current) return { ok: false, error: "not_found" };
+  const wanted = pageAssets(input.document);
+  if (wanted.length) {
+    const found = await db
+      .select({ id: a.id })
+      .from(a)
+      .where(and(eq(a.presentationId, presentationId), inArray(a.id, wanted)));
+    if (found.length !== new Set(wanted).size) return { ok: false, error: "unknown_asset" };
+  }
+  const before = current.replaces ?? input.before;
+  const moved = current.before !== before;
+  await db.transaction(async (tx) => {
+    await tx
+      .update(pg)
+      .set({
+        before,
+        document: input.document,
+        notes: input.notes,
+        updatedBy: userId,
+        updatedAt: new Date(),
+        ...(moved
+          ? { position: sql`(select coalesce(max(position), -1) + 1 from presentation_pages where presentation_id = ${presentationId})` }
+          : {}),
+      })
+      .where(eq(pg.id, pageId));
+    await pruneAssets(tx, presentationId);
+  });
+  return { ok: true, name: current.name };
 }
 
-/** The name of the presentation a page was removed from; null if there was no such page. */
+/** The name of the presentation a page was removed from; null if there was no such page. A converted page's slide shows again. */
 export async function deletePage(presentationId: string, pageId: string): Promise<string | null> {
   if (!isUuid(presentationId) || !isUuid(pageId)) return null;
+  const name = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .delete(pg)
+      .where(and(eq(pg.id, pageId), eq(pg.presentationId, presentationId)))
+      .returning({ id: pg.id });
+    if (!row) return null;
+    await pruneAssets(tx, presentationId);
+    const [presentation] = await tx.select({ name: p.name }).from(p).where(eq(p.id, presentationId));
+    return presentation?.name ?? "";
+  });
+  return name;
+}
+
+/** Removes the presentation's pictures that no page draws any longer. */
+async function pruneAssets(tx: Tx, presentationId: string): Promise<void> {
+  await tx.execute(sql`
+    delete from presentation_assets pa
+     where pa.presentation_id = ${presentationId}
+       and not exists (
+         select 1 from presentation_pages pp
+          where pp.presentation_id = pa.presentation_id and pp.document::text like '%' || pa.id::text || '%'
+       )`);
+}
+
+/** One of the presentation's pictures; null if there is none. */
+export async function getAsset(presentationId: string, assetId: string): Promise<Buffer | null> {
+  if (!isUuid(presentationId) || !isUuid(assetId)) return null;
   const [row] = await db
-    .delete(pg)
-    .where(and(eq(pg.id, pageId), eq(pg.presentationId, presentationId)))
-    .returning({ id: pg.id });
-  if (!row) return null;
-  const [presentation] = await db.select({ name: p.name }).from(p).where(eq(p.id, presentationId));
-  return presentation?.name ?? "";
+    .select({ image: a.image })
+    .from(a)
+    .where(and(eq(a.id, assetId), eq(a.presentationId, presentationId)));
+  return row?.image ?? null;
+}
+
+export type ConvertResult =
+  | { ok: true; pageId: string; name: string; live: number; animated: number; animationsRead: boolean }
+  | { ok: false; error: "not_found" | "skipped" | "too_many_pages" }
+  | DeckFailure;
+
+/**
+ * Converts slide `slideId` into one of the presentation's own pages that
+ * stands in for it (see `convert.ts`), replacing any page converted from it
+ * before. The slide's speaker notes come with it.
+ */
+export async function saveConversion(presentationId: string, slideId: string, userId: string): Promise<ConvertResult> {
+  if (!isUuid(presentationId) || !isUuid(slideId)) return { ok: false, error: "not_found" };
+  const [slide] = await db
+    .select({
+      name: p.name,
+      fileId: p.googleFileId,
+      pageId: s.googlePageId,
+      skipped: s.skipped,
+      notes: s.notes,
+      fingerprint: s.fingerprint,
+      pages: sql<number>`(select count(*)::int from presentation_pages pp where pp.presentation_id = ${presentationId})`,
+    })
+    .from(s)
+    .innerJoin(p, eq(p.id, s.presentationId))
+    .where(and(eq(s.id, slideId), eq(s.presentationId, presentationId)));
+  if (!slide) return { ok: false, error: "not_found" };
+  if (slide.skipped) return { ok: false, error: "skipped" };
+  if (slide.pages >= PRESENTATION_LIMITS.pages) return { ok: false, error: "too_many_pages" };
+
+  const converted = await convertSlide(slide.fileId, slide.pageId);
+  if (!converted.ok) return converted;
+  const { conversion } = converted;
+
+  const pageId = await storeConversion(presentationId, slide, conversion, userId);
+  return {
+    ok: true,
+    pageId,
+    name: slide.name,
+    live: conversion.live,
+    animated: conversion.animated,
+    animationsRead: conversion.animationsRead,
+  };
+}
+
+/**
+ * Keeps a conversion of the slide `slide.pageId`: its pictures, and the page
+ * that stands in for the slide, in the place of any page converted from it
+ * before. Returns the new page's id.
+ */
+export async function storeConversion(
+  presentationId: string,
+  slide: { pageId: string; fingerprint: string; notes: string },
+  conversion: Conversion,
+  userId: string,
+): Promise<string> {
+  return db.transaction(async (tx) => {
+    const [earlier] = await tx
+      .delete(pg)
+      .where(and(eq(pg.presentationId, presentationId), eq(pg.replaces, slide.pageId)))
+      .returning({ position: pg.position });
+    await tx.insert(a).values(conversion.assets.map((asset) => ({ ...asset, presentationId })));
+    const [page] = await tx
+      .insert(pg)
+      .values({
+        presentationId,
+        before: slide.pageId,
+        replaces: slide.pageId,
+        sourceFingerprint: slide.fingerprint,
+        position:
+          earlier?.position ??
+          sql`(select coalesce(max(position), -1) + 1 from presentation_pages where presentation_id = ${presentationId})`,
+        document: conversion.document,
+        notes: slide.notes,
+        updatedBy: userId,
+      })
+      .returning({ id: pg.id });
+    await pruneAssets(tx, presentationId);
+    return page!.id;
+  });
 }
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];

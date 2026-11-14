@@ -33,11 +33,13 @@ const HANDLE_AT: Record<Handle, { x: number; y: number; cursor: string }> = {
 type Gesture = { id: string; handle: Handle | null; startX: number; startY: number; from: Box; scale: number };
 
 export function StageEditor({
+  presentationId,
   document: doc,
   selectedId,
   onSelect,
   onChange,
 }: {
+  presentationId: string;
   document: PageDocument;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
@@ -121,7 +123,7 @@ export function StageEditor({
 
   return (
     <div ref={stage} className="overflow-hidden rounded-lg border shadow-sm" onPointerDown={() => onSelect(null)}>
-      <PageView document={doc} state={{ step: 0, clicked: [] }} ghostHidden>
+      <PageView presentationId={presentationId} document={doc} state={{ step: 0, clicked: [] }} ghostHidden>
         <div className="absolute inset-0" onPointerMove={drag} onPointerUp={end} onPointerCancel={end}>
           {doc.elements.map((el) => (
             <div

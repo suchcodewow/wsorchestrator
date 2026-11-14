@@ -15,8 +15,21 @@ export const STAGE = { width: 1920, height: 1080 } as const;
 
 export const PAGE_LIMITS = { elements: 120, text: 4_000, notes: 20_000 } as const;
 
-export const ELEMENT_KINDS = ["rect", "ellipse", "text"] as const;
+/** `image` is a picture kept with the presentation, such as one element cut from a converted Google slide; it is not drawn from the shape fields. */
+export const ELEMENT_KINDS = ["rect", "ellipse", "text", "image"] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
+
+/** The kinds the editor's toolbar adds; pictures come from converting a slide. */
+export type DrawnKind = Exclude<ElementKind, "image">;
+
+/**
+ * An animated edge drawn round an element: a crackling electric outline, a
+ * pulsing glow, or a light tracing the border.
+ */
+export const BORDER_EFFECTS = ["electric", "glow", "trace"] as const;
+export type BorderEffect = (typeof BORDER_EFFECTS)[number];
+
+export const BORDER_EFFECT_LABELS: Record<BorderEffect, string> = { electric: "Electric", glow: "Glow", trace: "Tracing light" };
 
 export const REVEAL_EFFECTS = ["appear", "fade", "rise", "zoom", "wipe"] as const;
 export type RevealEffect = (typeof REVEAL_EFFECTS)[number];
@@ -36,6 +49,7 @@ export const FONT_LABELS: Record<Font, string> = { sans: "Sans", serif: "Serif",
 
 const color = z.string().regex(/^#[0-9a-f]{6}$/i, "a #rrggbb colour");
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,40}$/);
+const assetId = z.string().uuid();
 const coord = z
   .number()
   .finite()
@@ -74,12 +88,20 @@ export const elementSchema = z.object({
   align: z.enum(["left", "center", "right"]),
   valign: z.enum(["top", "middle", "bottom"]),
   reveal: revealSchema.nullable(),
+  /** The picture an `image` element shows: a `presentation_assets` id. */
+  src: assetId.nullable().default(null),
+  border: z
+    .object({ effect: z.enum(BORDER_EFFECTS), color })
+    .nullable()
+    .default(null),
 });
 export type PageElement = z.infer<typeof elementSchema>;
 
 export const pageDocumentSchema = z
   .object({
     background: color,
+    /** A picture filling the stage under every element: a converted slide's background. */
+    backgroundImage: assetId.nullable().default(null),
     elements: z.array(elementSchema).max(PAGE_LIMITS.elements),
   })
   .superRefine((doc, ctx) => {
@@ -98,7 +120,11 @@ export const pageDocumentSchema = z
   });
 export type PageDocument = z.infer<typeof pageDocumentSchema>;
 
-export const EMPTY_PAGE: PageDocument = { background: "#ffffff", elements: [] };
+export const EMPTY_PAGE: PageDocument = { background: "#ffffff", backgroundImage: null, elements: [] };
+
+/** The pictures a page draws, its background's and its elements', for the routes that check they are the presentation's. */
+export const pageAssets = (doc: PageDocument): string[] =>
+  [doc.backgroundImage, ...doc.elements.map((el) => (el.kind === "image" ? el.src : null))].filter((a): a is string => Boolean(a));
 
 /** A new element of `kind`, centred on the stage, with `id`. */
 export function newElement(kind: ElementKind, elementId: string): PageElement {
@@ -125,6 +151,8 @@ export function newElement(kind: ElementKind, elementId: string): PageElement {
     align: "center",
     valign: "middle",
     reveal: null,
+    src: null,
+    border: null,
   };
 }
 

@@ -11,12 +11,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  BORDER_EFFECT_LABELS,
+  BORDER_EFFECTS,
   FONT_LABELS,
   FONTS,
   REVEAL_EFFECT_LABELS,
   REVEAL_EFFECTS,
   revealSteps,
   triggers,
+  type BorderEffect,
   type PageDocument,
   type PageElement,
   type Reveal,
@@ -27,12 +30,12 @@ import { cn } from "@/lib/utils";
 const SELECT =
   "h-8 w-full rounded-md border border-input bg-field px-2 text-sm text-foreground shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
-const KIND_LABELS: Record<PageElement["kind"], string> = { rect: "Rectangle", ellipse: "Ellipse", text: "Text" };
+const KIND_LABELS: Record<PageElement["kind"], string> = { rect: "Rectangle", ellipse: "Ellipse", text: "Text", image: "Picture" };
 
-/** How an element is named in a list of them: its kind, and the start of its text. */
-export function elementLabel(el: PageElement): string {
+/** How an element is named in a list of them: its kind, and the start of its text, or its place in the stack when it has none. */
+export function elementLabel(el: PageElement, doc: PageDocument): string {
   const text = el.text.trim().split("\n")[0]!.slice(0, 28);
-  return text ? `${KIND_LABELS[el.kind]}: ${text}` : KIND_LABELS[el.kind];
+  return text ? `${KIND_LABELS[el.kind]}: ${text}` : `${KIND_LABELS[el.kind]} ${doc.elements.indexOf(el) + 1}`;
 }
 
 export type ElementChange = (patch: Partial<PageElement>, key: string) => void;
@@ -85,90 +88,94 @@ export function ElementPanel({
         </div>
       </div>
 
-      <div className="space-y-2 px-4 py-3">
-        <Textarea
-          aria-label="Text"
-          value={el.text}
-          rows={3}
-          placeholder={el.kind === "text" ? "Text" : "Text on the shape"}
-          onChange={(e) => set({ text: e.target.value }, "text")}
-        />
-        <div className="grid grid-cols-[1fr_4.5rem] gap-2">
-          <select
-            aria-label="Font"
-            className={SELECT}
-            value={el.font}
-            onChange={(e) => set({ font: e.target.value as PageElement["font"] }, "font")}
-          >
-            {FONTS.map((f) => (
-              <option key={f} value={f}>
-                {FONT_LABELS[f]}
-              </option>
-            ))}
-          </select>
-          <NumberInput label="Font size" value={el.fontSize} min={8} max={400} onChange={(fontSize) => set({ fontSize }, "fontSize")} />
-        </div>
-        <div className="flex items-center gap-1">
-          <ColorInput label="Text colour" value={el.textColor} onChange={(textColor) => set({ textColor }, "textColor")} />
-          <Toggle label="Bold" on={el.bold} onClick={() => set({ bold: !el.bold }, "bold")}>
-            <Bold />
-          </Toggle>
-          <span className="mx-1 h-5 w-px bg-border" />
-          {(["left", "center", "right"] as const).map((align) => (
-            <Toggle key={align} label={`Align ${align}`} on={el.align === align} onClick={() => set({ align }, "align")}>
-              {align === "left" ? <AlignLeft /> : align === "center" ? <AlignCenter /> : <AlignRight />}
-            </Toggle>
-          ))}
-          <select
-            aria-label="Vertical alignment"
-            className={cn(SELECT, "ml-1 w-24")}
-            value={el.valign}
-            onChange={(e) => set({ valign: e.target.value as PageElement["valign"] }, "valign")}
-          >
-            <option value="top">Top</option>
-            <option value="middle">Middle</option>
-            <option value="bottom">Bottom</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="space-y-2 px-4 py-3">
-        <Row label="Fill">
-          <ColorInput
-            label="Fill colour"
-            value={el.fill ?? "#ffffff"}
-            disabled={el.fill === null}
-            onChange={(fill) => set({ fill }, "fill")}
-          />
-          <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={el.fill === null}
-              onChange={(e) => set({ fill: e.target.checked ? null : "#1f6feb" }, "fill")}
+      {el.kind !== "image" && (
+        <>
+          <div className="space-y-2 px-4 py-3">
+            <Textarea
+              aria-label="Text"
+              value={el.text}
+              rows={3}
+              placeholder={el.kind === "text" ? "Text" : "Text on the shape"}
+              onChange={(e) => set({ text: e.target.value }, "text")}
             />
-            None
-          </label>
-        </Row>
-        <Row label="Outline">
-          <ColorInput
-            label="Outline colour"
-            value={el.stroke ?? "#111111"}
-            onChange={(stroke) => set({ stroke, strokeWidth: el.strokeWidth || 4 }, "stroke")}
-          />
-          <NumberInput
-            label="Outline width"
-            value={el.stroke ? el.strokeWidth : 0}
-            min={0}
-            max={80}
-            onChange={(strokeWidth) => set({ strokeWidth, stroke: strokeWidth > 0 ? (el.stroke ?? "#111111") : null }, "strokeWidth")}
-          />
-        </Row>
-        {el.kind === "rect" && (
-          <Row label="Corners">
-            <NumberInput label="Corner radius" value={el.radius} min={0} max={540} onChange={(radius) => set({ radius }, "radius")} />
-          </Row>
-        )}
-      </div>
+            <div className="grid grid-cols-[1fr_4.5rem] gap-2">
+              <select
+                aria-label="Font"
+                className={SELECT}
+                value={el.font}
+                onChange={(e) => set({ font: e.target.value as PageElement["font"] }, "font")}
+              >
+                {FONTS.map((f) => (
+                  <option key={f} value={f}>
+                    {FONT_LABELS[f]}
+                  </option>
+                ))}
+              </select>
+              <NumberInput label="Font size" value={el.fontSize} min={8} max={400} onChange={(fontSize) => set({ fontSize }, "fontSize")} />
+            </div>
+            <div className="flex items-center gap-1">
+              <ColorInput label="Text colour" value={el.textColor} onChange={(textColor) => set({ textColor }, "textColor")} />
+              <Toggle label="Bold" on={el.bold} onClick={() => set({ bold: !el.bold }, "bold")}>
+                <Bold />
+              </Toggle>
+              <span className="mx-1 h-5 w-px bg-border" />
+              {(["left", "center", "right"] as const).map((align) => (
+                <Toggle key={align} label={`Align ${align}`} on={el.align === align} onClick={() => set({ align }, "align")}>
+                  {align === "left" ? <AlignLeft /> : align === "center" ? <AlignCenter /> : <AlignRight />}
+                </Toggle>
+              ))}
+              <select
+                aria-label="Vertical alignment"
+                className={cn(SELECT, "ml-1 w-24")}
+                value={el.valign}
+                onChange={(e) => set({ valign: e.target.value as PageElement["valign"] }, "valign")}
+              >
+                <option value="top">Top</option>
+                <option value="middle">Middle</option>
+                <option value="bottom">Bottom</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-2 px-4 py-3">
+            <Row label="Fill">
+              <ColorInput
+                label="Fill colour"
+                value={el.fill ?? "#ffffff"}
+                disabled={el.fill === null}
+                onChange={(fill) => set({ fill }, "fill")}
+              />
+              <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={el.fill === null}
+                  onChange={(e) => set({ fill: e.target.checked ? null : "#1f6feb" }, "fill")}
+                />
+                None
+              </label>
+            </Row>
+            <Row label="Outline">
+              <ColorInput
+                label="Outline colour"
+                value={el.stroke ?? "#111111"}
+                onChange={(stroke) => set({ stroke, strokeWidth: el.strokeWidth || 4 }, "stroke")}
+              />
+              <NumberInput
+                label="Outline width"
+                value={el.stroke ? el.strokeWidth : 0}
+                min={0}
+                max={80}
+                onChange={(strokeWidth) => set({ strokeWidth, stroke: strokeWidth > 0 ? (el.stroke ?? "#111111") : null }, "strokeWidth")}
+              />
+            </Row>
+            {el.kind === "rect" && (
+              <Row label="Corners">
+                <NumberInput label="Corner radius" value={el.radius} min={0} max={540} onChange={(radius) => set({ radius }, "radius")} />
+              </Row>
+            )}
+          </div>
+        </>
+      )}
 
       <div className="grid grid-cols-4 gap-2 px-4 py-3">
         <NumberInput label="X" value={el.x} min={-1920} max={3840} onChange={(x) => set({ x }, "x")} showLabel />
@@ -183,6 +190,9 @@ export function ElementPanel({
           onChange={(rotation) => set({ rotation }, "rotation")}
           showLabel
         />
+        {el.kind === "image" && (
+          <NumberInput label="Corners" value={el.radius} min={0} max={540} onChange={(radius) => set({ radius }, "radius")} showLabel />
+        )}
       </div>
 
       <div className="space-y-2 px-4 py-3">
@@ -221,7 +231,7 @@ export function ElementPanel({
             >
               {others.map((o) => (
                 <option key={o.id} value={o.id}>
-                  {elementLabel(o)}
+                  {elementLabel(o, doc)}
                 </option>
               ))}
             </select>
@@ -244,6 +254,44 @@ export function ElementPanel({
           </Row>
         )}
       </div>
+
+      <BorderRow el={el} set={set} />
+    </div>
+  );
+}
+
+function BorderRow({ el, set }: { el: PageElement; set: (patch: Partial<PageElement>, field: string) => void }) {
+  return (
+    <div className="space-y-2 px-4 py-3">
+      <Row label="Border">
+        <select
+          aria-label="Border effect"
+          className={SELECT}
+          value={el.border?.effect ?? "none"}
+          onChange={(e) =>
+            set(
+              {
+                border: e.target.value === "none" ? null : { effect: e.target.value as BorderEffect, color: el.border?.color ?? "#5ad8ff" },
+              },
+              "border",
+            )
+          }
+        >
+          <option value="none">None</option>
+          {BORDER_EFFECTS.map((effect) => (
+            <option key={effect} value={effect}>
+              {BORDER_EFFECT_LABELS[effect]}
+            </option>
+          ))}
+        </select>
+        {el.border && (
+          <ColorInput
+            label="Border colour"
+            value={el.border.color}
+            onChange={(color) => set({ border: { ...el.border!, color } }, "borderColor")}
+          />
+        )}
+      </Row>
     </div>
   );
 }

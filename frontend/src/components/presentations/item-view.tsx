@@ -20,7 +20,10 @@ export function ItemView({
   onTrigger?: (elementId: string) => void;
   className?: string;
 }) {
-  if (item.kind === "page") return <PageView document={item.page.document} state={reveal} onTrigger={onTrigger} className={className} />;
+  if (item.kind === "page")
+    return (
+      <PageView presentationId={presentationId} document={item.page.document} state={reveal} onTrigger={onTrigger} className={className} />
+    );
   return (
     <div className={cn("relative aspect-video w-full bg-black", className)}>
       {/* eslint-disable-next-line @next/next/no-img-element -- a slide picture, served by the app's own route */}

@@ -24,10 +24,13 @@ const TOKEN_MS = 45 * 60_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-let clients: { key: string; until: number; slides: CalendarClient; email: string } | null = null;
+/** The connected account's Google clients: Slides and Drive, the token they use for a raw download, and whose they are. */
+export type GoogleClients = { slides: CalendarClient; drive: CalendarClient; token: string; email: string };
 
-/** `run` with the Slides client for the connected account, its failures as a `DeckFailure`. */
-async function withSlides<T>(run: (slides: CalendarClient, email: string) => Promise<T>): Promise<{ ok: true; value: T } | DeckFailure> {
+let clients: (GoogleClients & { key: string; until: number }) | null = null;
+
+/** `run` with the connected account's clients, its failures as a `DeckFailure`. */
+export async function withGoogle<T>(run: (google: GoogleClients) => Promise<T>): Promise<{ ok: true; value: T } | DeckFailure> {
   const google = await googleSlidesConnection();
   if (!google.ok) return google;
   const { client, connection } = google;
@@ -36,9 +39,16 @@ async function withSlides<T>(run: (slides: CalendarClient, email: string) => Pro
     if (!clients || clients.key !== key || clients.until < Date.now()) {
       const opened = await openSlidesClients(client, connection);
       if (!opened.ok) return opened;
-      clients = { key, until: Date.now() + TOKEN_MS, slides: opened.slides, email: connection.email };
+      clients = {
+        key,
+        until: Date.now() + TOKEN_MS,
+        slides: opened.slides,
+        drive: opened.drive,
+        token: opened.token,
+        email: connection.email,
+      };
     }
-    return { ok: true, value: await run(clients.slides, clients.email) };
+    return { ok: true, value: await run(clients) };
   } catch (err) {
     if (err instanceof GoogleError) {
       if (err.revoked) {
@@ -59,7 +69,7 @@ async function withSlides<T>(run: (slides: CalendarClient, email: string) => Pro
 
 /** The deck's title and every slide, in order. */
 export async function readDeck(fileId: string): Promise<{ ok: true; deck: Deck } | DeckFailure> {
-  const read = await withSlides((slides) =>
+  const read = await withGoogle(({ slides }) =>
     slides.call<ApiPresentation>("GET", `/presentations/${encodeURIComponent(fileId)}`, { query: { fields: DECK_FIELDS } }),
   );
   if (!read.ok) return read;
@@ -84,20 +94,28 @@ async function imageTurn(): Promise<void> {
   if (at > now) await sleep(at - now);
 }
 
+/**
+ * One slide as Google draws it, 2000px wide, as PNG: inside `withGoogle`, and
+ * waiting for this server's turn, so every picture asked for shares one pace.
+ */
+export async function slidePng(slides: CalendarClient, fileId: string, pageId: string): Promise<Buffer> {
+  await imageTurn();
+  const thumb = await slides.call<{ contentUrl: string }>(
+    "GET",
+    `/presentations/${encodeURIComponent(fileId)}/pages/${encodeURIComponent(pageId)}/thumbnail`,
+    { query: { "thumbnailProperties.thumbnailSize": IMAGE_SIZE, "thumbnailProperties.mimeType": "PNG" } },
+  );
+  const res = await fetch(thumb.contentUrl, { signal: AbortSignal.timeout(30_000), cache: "no-store" });
+  if (!res.ok) throw new Error(`Google's picture of the slide answered ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
 /** One slide as Google draws it, 2000px wide, as WebP. */
 export async function slidePicture(fileId: string, pageId: string): Promise<{ ok: true; image: Buffer } | DeckFailure> {
-  await imageTurn();
-  const read = await withSlides(async (slides) => {
-    const thumb = await slides.call<{ contentUrl: string }>(
-      "GET",
-      `/presentations/${encodeURIComponent(fileId)}/pages/${encodeURIComponent(pageId)}/thumbnail`,
-      { query: { "thumbnailProperties.thumbnailSize": IMAGE_SIZE, "thumbnailProperties.mimeType": "PNG" } },
-    );
-    const res = await fetch(thumb.contentUrl, { signal: AbortSignal.timeout(30_000), cache: "no-store" });
-    if (!res.ok) throw new Error(`Google's picture of the slide answered ${res.status}`);
-    return sharp(Buffer.from(await res.arrayBuffer()))
+  const read = await withGoogle(async ({ slides }) =>
+    sharp(await slidePng(slides, fileId, pageId))
       .webp({ quality: IMAGE_QUALITY })
-      .toBuffer();
-  });
+      .toBuffer(),
+  );
   return read.ok ? { ok: true, image: read.value } : read;
 }

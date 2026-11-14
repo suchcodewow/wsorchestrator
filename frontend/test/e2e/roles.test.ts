@@ -808,6 +808,8 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/presentations/${MISSING}/pages/${MISSING}`, allowed: canUseTraining },
   { method: "PUT", path: `/api/presentations/${MISSING}/pages/${MISSING}`, allowed: canManageTrainingSettings },
   { method: "DELETE", path: `/api/presentations/${MISSING}/pages/${MISSING}`, allowed: canManageTrainingSettings },
+  { method: "POST", path: `/api/presentations/${MISSING}/slides/${MISSING}/convert`, allowed: canManageTrainingSettings },
+  { method: "GET", path: `/api/presentations/${MISSING}/assets/${MISSING}`, allowed: canUseTraining },
   { method: "POST", path: "/api/record/tracks", allowed: true, body: () => ({}) },
   { method: "PUT", path: `/api/record/tracks/${MISSING}/camera/chunks/0`, allowed: true },
   { method: "POST", path: `/api/record/tracks/${MISSING}/camera/upload-urls`, allowed: true, body: () => ({}) },

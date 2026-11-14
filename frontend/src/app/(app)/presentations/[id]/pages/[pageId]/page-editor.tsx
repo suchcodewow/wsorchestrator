@@ -26,7 +26,7 @@ import {
   newElement,
   REVEAL_GRID_SIZES,
   revealGrid,
-  type ElementKind,
+  type DrawnKind,
   type PageDocument,
   type PageElement,
 } from "@/lib/presentations/page";
@@ -62,6 +62,8 @@ export function PageEditor({ presentation, page }: { presentation: Presentation;
   const dirty = JSON.stringify({ doc, notes, before }) !== saved;
   const selected = doc.elements.find((el) => el.id === selectedId) ?? null;
   const backHref = `/presentations/${presentation.id}`;
+  /** The slide this page was converted from and stands in for, if it was. */
+  const replaced = page.replaces ? presentation.slides.find((s) => s.googlePageId === page.replaces) : undefined;
 
   const pages = useMemo(
     () => presentation.pages.map((p) => (p.id === page.id ? { ...p, document: doc, notes, before } : p)),
@@ -217,19 +219,28 @@ export function PageEditor({ presentation, page }: { presentation: Presentation;
   }
 
   async function remove() {
-    const ok = await confirmDialog({
-      title: "Delete this page?",
-      description: "The deck in Google Slides is not touched.",
-      confirmLabel: "Delete",
-      destructive: true,
-    });
+    const ok = await confirmDialog(
+      replaced
+        ? {
+            title: "Use Google's slide again?",
+            description: `This dynamic version of slide ${replaced.number} is deleted, and the slide as it is in Google shows in its place.`,
+            confirmLabel: "Use Google's slide",
+            destructive: true,
+          }
+        : {
+            title: "Delete this page?",
+            description: "The deck in Google Slides is not touched.",
+            confirmLabel: "Delete",
+            destructive: true,
+          },
+    );
     if (!ok) return;
     const res = await fetch(`/api/presentations/${presentation.id}/pages/${page.id}`, { method: "DELETE" });
     if (res.ok) router.push(backHref);
     else setError(`Could not delete it (${res.status}).`);
   }
 
-  const addKind = (kind: ElementKind) => add([newElement(kind, newId())]);
+  const addKind = (kind: DrawnKind) => add([newElement(kind, newId())]);
 
   return (
     <div className="space-y-4">
@@ -247,30 +258,41 @@ export function PageEditor({ presentation, page }: { presentation: Presentation;
             <ArrowLeft className="size-4" />
             {presentation.name}
           </Link>
-          <h1 className="text-xl font-medium tracking-tight">Page</h1>
+          <h1 className="text-xl font-medium tracking-tight">{replaced ? `Dynamic slide ${replaced.number}` : "Page"}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            aria-label="Where the page goes"
-            className={SELECT}
-            value={before ?? ""}
-            onChange={(e) => setBefore(e.target.value || null)}
-          >
-            {presentation.slides.map((s) => (
-              <option key={s.googlePageId} value={s.googlePageId}>
-                Before slide {s.number}
-                {s.skipped ? " (skipped)" : ""}
-              </option>
-            ))}
-            <option value="">At the end</option>
-          </select>
+          {replaced ? (
+            <span className="text-sm text-muted-foreground">In place of slide {replaced.number}</span>
+          ) : (
+            <select
+              aria-label="Where the page goes"
+              className={SELECT}
+              value={before ?? ""}
+              onChange={(e) => setBefore(e.target.value || null)}
+            >
+              {presentation.slides.map((s) => (
+                <option key={s.googlePageId} value={s.googlePageId}>
+                  Before slide {s.number}
+                  {s.skipped ? " (skipped)" : ""}
+                </option>
+              ))}
+              <option value="">At the end</option>
+            </select>
+          )}
           <Button variant="outline" onClick={() => present(page.id)}>
             <Play />
             Present from here
           </Button>
-          <Button variant="ghost" size="icon" aria-label="Delete page" onClick={() => void remove()}>
-            <Trash2 />
-          </Button>
+          {replaced ? (
+            <Button variant="ghost" onClick={() => void remove()}>
+              <Undo2 />
+              Use Google&rsquo;s slide
+            </Button>
+          ) : (
+            <Button variant="ghost" size="icon" aria-label="Delete page" onClick={() => void remove()}>
+              <Trash2 />
+            </Button>
+          )}
           <Button variant="brand" disabled={!dirty || saving} onClick={() => void save()}>
             <Save />
             {saving ? "Saving…" : dirty ? "Save" : "Saved"}
@@ -324,6 +346,7 @@ export function PageEditor({ presentation, page }: { presentation: Presentation;
           </div>
 
           <StageEditor
+            presentationId={presentation.id}
             document={doc}
             selectedId={selectedId}
             onSelect={setSelectedId}

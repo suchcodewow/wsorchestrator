@@ -2962,6 +2962,10 @@ export const presentationSlides = pgTable(
  * it follows that slide wherever the deck moves it; null, or a slide since
  * removed, puts it last. Pages before the same slide go in `position` order.
  * `document` is a `PageDocument` (`lib/presentations/page.ts`).
+ *
+ * A page made by converting a slide `replaces` it: the slide is not shown, and
+ * the page stands in its place. `sourceFingerprint` is the slide's fingerprint
+ * when it was converted, so a page whose slide has changed since says so.
  */
 export const presentationPages = pgTable(
   "presentation_pages",
@@ -2974,10 +2978,31 @@ export const presentationPages = pgTable(
     position: integer("position").notNull(),
     document: jsonb("document").$type<Record<string, unknown>>().notNull(),
     notes: text("notes").notNull().default(""),
+    replaces: text("replaces_page_id"),
+    sourceFingerprint: text("source_fingerprint"),
     updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("presentation_pages_order_idx").on(t.presentationId, t.position)],
+);
+
+/**
+ * A picture a presentation's pages draw: a converted slide's background, or
+ * one element cut from Google's drawing of it. WebP; never changed once made.
+ */
+export const presentationAssets = pgTable(
+  "presentation_assets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    presentationId: uuid("presentation_id")
+      .notNull()
+      .references(() => presentations.id, { onDelete: "cascade" }),
+    image: bytea("image").notNull(),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("presentation_assets_presentation_idx").on(t.presentationId)],
 );
 
 export const PRESENTATION_LIMITS = {
@@ -2986,6 +3011,8 @@ export const PRESENTATION_LIMITS = {
   slides: 600,
   /** The presentation's own pages, beside its deck's slides. */
   pages: 200,
+  /** The elements a slide's conversion makes live, topmost first; the rest stay in its background. */
+  convertedElements: 40,
 } as const;
 
 /** Mimir-wide settings, one row per key; a key with no row reads as its default. */

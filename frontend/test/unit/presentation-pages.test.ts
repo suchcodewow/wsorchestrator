@@ -69,6 +69,7 @@ const el = (id: string, reveal: PageElement["reveal"] = null): PageElement => ({
 describe("reveals", () => {
   const doc: PageDocument = {
     background: "#ffffff",
+    backgroundImage: null,
     elements: [
       el("title"),
       el("third", { on: "next", order: 3, effect: "fade" }),

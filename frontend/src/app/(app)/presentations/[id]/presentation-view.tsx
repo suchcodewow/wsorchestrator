@@ -22,6 +22,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Sparkles,
   SquarePlus,
   Trash2,
 } from "lucide-react";
@@ -37,6 +38,12 @@ import { cn } from "@/lib/utils";
 import { formatSynced } from "../format";
 import { RenameDialog } from "./rename-dialog";
 
+const CONVERT_ERRORS: Record<string, string> = {
+  not_found: "That slide is no longer in the deck. Refresh from Google.",
+  skipped: "A skipped slide is not presented, so there is nothing to convert.",
+  too_many_pages: "This presentation has as many pages as it can hold.",
+};
+
 export function PresentationView({ presentation, canManage }: { presentation: Presentation; canManage: boolean }) {
   const router = useRouter();
   const { id, name, slides, pages } = presentation;
@@ -49,6 +56,27 @@ export function PresentationView({ presentation, canManage }: { presentation: Pr
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
   const [renaming, setRenaming] = useState(false);
+  const [converting, setConverting] = useState<string | null>(null);
+  const slideReplacedBy = (page: LivePage) => (page.replaces ? slides.find((s) => s.googlePageId === page.replaces) : undefined);
+
+  /** Converts a slide into a page that stands in for it, then opens that page to edit. */
+  async function convert(slideId: string) {
+    setConverting(slideId);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/presentations/${id}/slides/${slideId}/convert`, { method: "POST" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMessage({ text: body?.message ?? CONVERT_ERRORS[body?.error ?? ""] ?? `Could not convert it (${res.status}).`, error: true });
+        return;
+      }
+      router.push(`/presentations/${id}/pages/${body.pageId}`);
+    } catch {
+      setMessage({ text: "Could not reach the server.", error: true });
+    } finally {
+      setConverting(null);
+    }
+  }
 
   async function addPage(before: string | null) {
     setAdding(true);
@@ -203,14 +231,23 @@ export function PresentationView({ presentation, canManage }: { presentation: Pr
                 presentationId={id}
                 slide={item.slide}
                 ready={item.slide.cached || preparing.ready.has(item.slide.id)}
+                converting={converting === item.slide.id}
                 onPresent={() => present(item.id)}
                 onInsert={canManage && !adding ? () => void addPage(item.slide.googlePageId) : undefined}
+                onConvert={canManage && !converting && !item.slide.skipped ? () => void convert(item.slide.id) : undefined}
               />
             ) : (
               <PageCard
+                presentationId={id}
                 page={item.page}
+                converting={converting !== null && converting === slideReplacedBy(item.page)?.id}
                 editHref={canManage ? `/presentations/${id}/pages/${item.id}` : undefined}
                 onPresent={() => present(item.id)}
+                onConvertAgain={
+                  canManage && !converting && item.page.stale && slideReplacedBy(item.page)
+                    ? () => void convert(slideReplacedBy(item.page)!.id)
+                    : undefined
+                }
               />
             )}
           </li>
@@ -241,19 +278,36 @@ export function PresentationView({ presentation, canManage }: { presentation: Pr
 const THUMB = "relative aspect-video overflow-hidden rounded-lg border bg-muted transition-shadow";
 const THUMB_HOVER = "group-enabled:group-hover:ring-2 group-enabled:group-hover:ring-brand/60";
 
+/** Over a card while Google draws the pictures its conversion needs. */
+function Converting() {
+  return (
+    <div className="absolute inset-0 grid place-items-center bg-background/70 text-xs text-foreground backdrop-blur-[1px]">
+      <span className="inline-flex items-center gap-1.5">
+        <LoaderCircle className="size-4 animate-spin" />
+        Converting…
+      </span>
+    </div>
+  );
+}
+
 function SlideCard({
   presentationId,
   slide,
   ready,
+  converting,
   onPresent,
   onInsert,
+  onConvert,
 }: {
   presentationId: string;
   slide: PresentationSlide;
   ready: boolean;
+  converting: boolean;
   onPresent: () => void;
   /** Puts a new page just before this slide; only for administrators. */
   onInsert?: () => void;
+  /** Turns this slide into a page that stands in for it; only for administrators. */
+  onConvert?: () => void;
 }) {
   return (
     <div>
@@ -271,17 +325,31 @@ function SlideCard({
           ) : (
             <LoaderCircle className="absolute inset-0 m-auto size-5 animate-spin text-muted-foreground" />
           )}
+          {converting && <Converting />}
         </div>
       </button>
-      <div className="mt-1 flex h-7 items-center gap-2 text-xs text-muted-foreground">
-        <span className="tabular-nums">{slide.number}</span>
+      <div className="mt-1 flex h-7 items-center gap-1 text-xs text-muted-foreground">
+        <span className="mr-1 tabular-nums">{slide.number}</span>
         {slide.skipped && <span>Skipped</span>}
         {!slide.skipped && slide.notes && <NotebookText className="size-3.5" aria-label="Has speaker notes" />}
+        <span className="ml-auto" />
+        {onConvert && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={onConvert}
+            aria-label={`Make slide ${slide.number} dynamic`}
+          >
+            <Sparkles />
+            Make dynamic
+          </Button>
+        )}
         {onInsert && (
           <Button
             variant="ghost"
             size="sm"
-            className="ml-auto h-7 px-2 text-xs"
+            className="h-7 px-2 text-xs"
             onClick={onInsert}
             aria-label={`Insert a page before slide ${slide.number}`}
           >
@@ -294,19 +362,43 @@ function SlideCard({
   );
 }
 
-function PageCard({ page, editHref, onPresent }: { page: LivePage; editHref?: string; onPresent: () => void }) {
+function PageCard({
+  presentationId,
+  page,
+  converting,
+  editHref,
+  onPresent,
+  onConvertAgain,
+}: {
+  presentationId: string;
+  page: LivePage;
+  converting: boolean;
+  editHref?: string;
+  onPresent: () => void;
+  /** For a converted page whose slide changed in Google since: converts it afresh. */
+  onConvertAgain?: () => void;
+}) {
   return (
     <div>
       <button type="button" onClick={onPresent} aria-label="Present from this page" className="group block w-full text-left">
         <div className={cn(THUMB, THUMB_HOVER, "border-brand/40")}>
-          <PageView document={page.document} state="all" />
+          <PageView presentationId={presentationId} document={page.document} state="all" />
+          {converting && <Converting />}
         </div>
       </button>
-      <div className="mt-1 flex h-7 items-center gap-2 text-xs text-muted-foreground">
-        <span className="font-medium text-brand">Page</span>
+      <div className="mt-1 flex h-7 items-center gap-1 text-xs text-muted-foreground">
+        <span className="mr-1 font-medium text-brand">{page.replaces ? "Dynamic slide" : "Page"}</span>
         {page.notes && <NotebookText className="size-3.5" aria-label="Has speaker notes" />}
+        {page.stale && <span className="text-amber-600 dark:text-amber-400">Changed in Google</span>}
+        <span className="ml-auto" />
+        {onConvertAgain && (
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onConvertAgain}>
+            <RefreshCw />
+            Convert again
+          </Button>
+        )}
         {editHref && (
-          <Button variant="ghost" size="sm" className="ml-auto h-7 px-2 text-xs" asChild>
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" asChild>
             <Link href={editHref}>
               <Pencil />
               Edit

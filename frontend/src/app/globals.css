@@ -247,6 +247,36 @@
   }
 }
 
+/*
+ * Presentation pages' border effects (components/presentations/border-effect.tsx).
+ * Sizes are in cqw, so they scale with the stage they are drawn on.
+ */
+@keyframes presentation-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0.6cqw 0.1cqw var(--effect-color),
+      inset 0 0 0.4cqw var(--effect-color);
+  }
+  50% {
+    box-shadow:
+      0 0 2.4cqw 0.6cqw var(--effect-color),
+      inset 0 0 1cqw var(--effect-color);
+  }
+}
+
+@property --presentation-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes presentation-trace {
+  to {
+    --presentation-angle: 360deg;
+  }
+}
+
 @layer base {
   * {
     border-color: var(--border);

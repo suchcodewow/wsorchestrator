@@ -4,12 +4,14 @@
  * Draws one of a presentation's own pages at whatever size its box is: the
  * stage is 1920×1080 and everything on it, text and outlines included, is
  * sized in container-query units, so it scales the same in the full-screen
- * player, the speaker-notes tab, a thumbnail and the editor. Elements not yet
- * revealed are hidden, and arrive with their reveal's effect; an element whose
- * click reveals something is clickable when `onTrigger` is given.
+ * player, the speaker-notes tab, a thumbnail and the editor. A converted
+ * slide's background picture lies under everything. Elements not yet revealed
+ * are hidden, and arrive with their reveal's effect; an element whose click
+ * reveals something is clickable when `onTrigger` is given; an element with a
+ * border effect has it drawn round its edge.
  */
 
-import type { CSSProperties } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { motion, type TargetAndTransition } from "framer-motion";
 import {
   isShown,
@@ -22,6 +24,7 @@ import {
   type RevealState,
 } from "@/lib/presentations/page";
 import { cn } from "@/lib/utils";
+import { BorderEffect, ElectricFilter } from "./border-effect";
 
 /** `n` stage pixels, as a share of the stage's width. */
 export const cq = (n: number) => `${(n / STAGE.width) * 100}cqw`;
@@ -31,6 +34,8 @@ export const FONT_STACKS: Record<Font, string> = {
   serif: "Georgia, 'Times New Roman', serif",
   mono: "var(--font-mono), ui-monospace, monospace",
 };
+
+export const assetUrl = (presentationId: string, assetId: string) => `/api/presentations/${presentationId}/assets/${assetId}`;
 
 const HIDDEN: Record<RevealEffect, TargetAndTransition> = {
   appear: { opacity: 0 },
@@ -56,7 +61,25 @@ export function placement(el: Pick<PageElement, "x" | "y" | "w" | "h" | "rotatio
   };
 }
 
+/** The stage's drawn width over its full width, kept up to date; only the electric effect needs it. */
+function useStageScale(watch: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const el = ref.current;
+    if (!watch || !el) return;
+    const observer = new ResizeObserver(([entry]) => entry && setScale(entry.contentRect.width / STAGE.width));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [watch]);
+  return { ref, scale };
+}
+
+/** An element's corners; a picture has them too, so a cut-out card and the effect round it can follow the card's. */
+const radiusOf = (el: PageElement) => (el.kind === "ellipse" ? "50%" : cq(el.radius));
+
 export function PageView({
+  presentationId,
   document: doc,
   state,
   onTrigger,
@@ -64,6 +87,7 @@ export function PageView({
   className,
   children,
 }: {
+  presentationId: string;
   document: PageDocument;
   /** How far the page's reveals have gone; "all" shows everything, as a thumbnail does. */
   state: RevealState | "all";
@@ -75,11 +99,20 @@ export function PageView({
   children?: React.ReactNode;
 }) {
   const clickable = onTrigger ? triggers(doc) : new Set<string>();
+  const electric = doc.elements.some((el) => el.border?.effect === "electric");
+  const { ref, scale } = useStageScale(electric);
+  const filterId = `electric-${useId().replace(/:/g, "")}`;
   return (
     <div
+      ref={ref}
       className={cn("relative aspect-video w-full overflow-hidden select-none", className)}
       style={{ background: doc.background, containerType: "inline-size" }}
     >
+      {electric && <ElectricFilter id={filterId} scale={scale} />}
+      {doc.backgroundImage && (
+        // eslint-disable-next-line @next/next/no-img-element -- a converted slide's background, served by the app's own route
+        <img src={assetUrl(presentationId, doc.backgroundImage)} alt="" draggable={false} className="absolute inset-0 size-full" />
+      )}
       {doc.elements.map((el) => {
         const shown = state === "all" || isShown(doc, el, state);
         const effect = el.reveal?.effect ?? "appear";
@@ -97,7 +130,7 @@ export function PageView({
               initial={false}
               animate={shown ? SHOWN : ghostHidden ? { opacity: 0.3 } : HIDDEN[effect]}
               transition={{ duration: shown ? DURATION[effect] : 0.2, ease: "easeOut" }}
-              className={cn("size-full", trigger && "cursor-pointer transition-[filter] hover:brightness-110")}
+              className={cn("relative size-full", trigger && "cursor-pointer transition-[filter] hover:brightness-110")}
               onClick={
                 trigger
                   ? (e) => {
@@ -109,7 +142,21 @@ export function PageView({
               role={trigger ? "button" : undefined}
               aria-label={trigger ? el.text || "Reveal" : undefined}
             >
-              <ElementBody el={el} />
+              {el.kind === "image" ? (
+                el.src && (
+                  // eslint-disable-next-line @next/next/no-img-element -- an element cut from a converted slide, served by the app's own route
+                  <img
+                    src={assetUrl(presentationId, el.src)}
+                    alt=""
+                    draggable={false}
+                    className="size-full"
+                    style={{ borderRadius: radiusOf(el) }}
+                  />
+                )
+              ) : (
+                <ElementBody el={el} />
+              )}
+              {el.border && <BorderEffect effect={el.border.effect} color={el.border.color} radius={radiusOf(el)} filterId={filterId} />}
             </motion.div>
           </div>
         );
@@ -128,7 +175,7 @@ function ElementBody({ el }: { el: PageElement }) {
       style={{
         background: el.fill ?? "transparent",
         border: el.stroke && el.strokeWidth > 0 ? `${cq(el.strokeWidth)} solid ${el.stroke}` : undefined,
-        borderRadius: el.kind === "ellipse" ? "50%" : cq(el.radius),
+        borderRadius: radiusOf(el),
         justifyContent: justify,
         alignItems: items,
         padding: cq(el.kind === "text" ? 8 : 24),

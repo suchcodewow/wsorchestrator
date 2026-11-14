@@ -2,14 +2,15 @@
 
 import { PRESENTATION_LIMITS } from "@/db/schema";
 import { PRESENTATION_LIST } from "@/lib/list-specs";
-import { ELEMENT_KINDS, FONTS, PAGE_LIMITS, REVEAL_EFFECTS, STAGE } from "@/lib/presentations/page";
+import { BORDER_EFFECTS, ELEMENT_KINDS, FONTS, PAGE_LIMITS, REVEAL_EFFECTS, STAGE } from "@/lib/presentations/page";
 import { listQuery, PAGE_FIELDS } from "./paging";
 import type { Endpoint, EndpointGroup } from "./types";
 
 const ROW = "{ id, name, googleTitle, slides: number, syncedAt: ISO 8601 string }";
 const SLIDE = "{ id, number: number, googlePageId, skipped: boolean, notes: string, version: string, cached: boolean }";
-const PAGE = "{ id, before: string | null, position: number, document: PageDocument, notes: string, updatedAt: ISO 8601 string }";
-const DOCUMENT_NOTE = `PageDocument is { background: "#rrggbb", elements: Element[] } on a ${STAGE.width}×${STAGE.height} stage, at most ${PAGE_LIMITS.elements} elements, drawn in order so the last is on top. An Element is { id, kind: ${ELEMENT_KINDS.map((k) => `"${k}"`).join(" | ")}, x, y, w, h, rotation, fill: colour | null, stroke: colour | null, strokeWidth, radius, text, font: ${FONTS.map((f) => `"${f}"`).join(" | ")}, fontSize, bold, textColor, align: "left" | "center" | "right", valign: "top" | "middle" | "bottom", reveal }, sizes in stage pixels. reveal is null (always shown), { on: "next", order, effect } (shown by a press of next, lowest order first, those sharing an order together), or { on: "click", by, effect } (shown by a click on the element whose id is by, and hidden by a second); effect is ${REVEAL_EFFECTS.map((e) => `"${e}"`).join(", ")}.`;
+const PAGE =
+  "{ id, before: string | null, position: number, document: PageDocument, notes: string, replaces: string | null, stale: boolean, updatedAt: ISO 8601 string }";
+const DOCUMENT_NOTE = `PageDocument is { background: "#rrggbb", backgroundImage: assetId | null, elements: Element[] } on a ${STAGE.width}×${STAGE.height} stage, at most ${PAGE_LIMITS.elements} elements, drawn in order so the last is on top. An Element is { id, kind: ${ELEMENT_KINDS.map((k) => `"${k}"`).join(" | ")}, x, y, w, h, rotation, fill: colour | null, stroke: colour | null, strokeWidth, radius, text, font: ${FONTS.map((f) => `"${f}"`).join(" | ")}, fontSize, bold, textColor, align: "left" | "center" | "right", valign: "top" | "middle" | "bottom", reveal, src: assetId | null, border: { effect: ${BORDER_EFFECTS.map((e) => `"${e}"`).join(" | ")}, color } | null }, sizes in stage pixels. An "image" element draws the picture src names, not the shape fields; backgroundImage and src are ids of the presentation's own pictures, from GET /api/presentations/{id}/assets/{assetId}. reveal is null (always shown), { on: "next", order, effect } (shown by a press of next, lowest order first, those sharing an order together), or { on: "click", by, effect } (shown by a click on the element whose id is by, and hidden by a second); effect is ${REVEAL_EFFECTS.map((e) => `"${e}"`).join(", ")}.`;
 const idParam = [{ name: "id", type: "string", required: true, note: "the presentation's id" }];
 const pageParams = [...idParam, { name: "pageId", type: "string", required: true, note: "the page's id" }];
 const before = {
@@ -179,7 +180,7 @@ export const PRESENTATIONS_GROUPS: EndpointGroup[] = [
         summary: "Saves one of the presentation's own pages whole: its drawing, its speaker notes, and the slide it comes before.",
         access: "trainingAdmin",
         token: true,
-        notes: `${DOCUMENT_NOTE} A page moved to another slide goes after the pages already there.`,
+        notes: `${DOCUMENT_NOTE} A page moved to another slide goes after the pages already there; a converted page (replaces set) stays in its slide's place whatever before says. Pictures no page draws any longer are deleted.`,
         params: pageParams,
         body: {
           kind: "json",
@@ -196,6 +197,7 @@ export const PRESENTATIONS_GROUPS: EndpointGroup[] = [
             error: "invalid",
             when: "the body does not parse: an element's id repeats, a reveal names no element on the page or the element itself, a colour is not #rrggbb; issues lists each problem's path",
           },
+          { status: 400, error: "unknown_asset", when: "backgroundImage or an element's src is not one of this presentation's pictures" },
           { status: 404, error: "not_found", when: "no such presentation or page" },
         ],
       },
@@ -205,9 +207,37 @@ export const PRESENTATIONS_GROUPS: EndpointGroup[] = [
         summary: "Removes one of the presentation's own pages.",
         access: "trainingAdmin",
         token: true,
+        notes: "Removing a converted page shows the slide it stood in for again.",
         params: pageParams,
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "no such presentation or page" }],
+      },
+      {
+        method: "POST",
+        path: "/api/presentations/{id}/slides/{slideId}/convert",
+        summary: "Converts a slide of the deck into one of the presentation's own pages, which stands in for the slide.",
+        access: "trainingAdmin",
+        token: true,
+        notes: `The deck is not written to. The connected Google account copies it into its own Drive, cuts the copy down to the slide, exports it as PowerPoint to read the slide's animations, makes one copy of the slide per element, and trashes the copy when done. Up to ${PRESENTATION_LIMITS.convertedElements} elements become live (those Google animates first, then the topmost; one as big as the slide stays in the background), each a picture cut exactly as Google draws it, so their text is edited in Google and the slide converted again. Each element a click reveals in Google is revealed on next here, in the same order; elements that animate in with the slide are simply shown. The page goes in the slide's place with the slide's speaker notes, replacing any page converted from it before; deleting it shows the slide again. Google draws one picture per element at most one every 1.1 seconds, so a busy slide takes most of a minute. No body.`,
+        params: [...idParam, { name: "slideId", type: "string", required: true, note: "the slide's id" }],
+        returns: "201 { pageId, live: number, animated: number, animationsRead: boolean }",
+        errors: [
+          { status: 404, error: "not_found", when: "no such presentation or slide, or the slide is no longer in the deck" },
+          { status: 422, error: "skipped", when: "the slide is skipped in Google" },
+          { status: 422, error: "too_many_pages", when: `the presentation already has ${PRESENTATION_LIMITS.pages} pages` },
+          ...GOOGLE_ERRORS.filter((e) => e.error !== "too_many_slides"),
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/presentations/{id}/assets/{assetId}",
+        summary: "Serves one of the presentation's pictures, as WebP: a converted slide's background, or an element cut from it.",
+        access: "trainingViewer",
+        token: true,
+        notes: "Never changed once made, so cached for good; a picture no page draws any longer is deleted.",
+        params: [...idParam, { name: "assetId", type: "string", required: true, note: "the picture's id, as a page's document names it" }],
+        returns: "the image bytes",
+        errors: [{ status: 404, error: "not_found", when: "no such presentation or picture" }],
       },
     ],
   },

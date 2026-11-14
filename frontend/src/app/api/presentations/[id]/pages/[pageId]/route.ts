@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
-import { savePageSchema } from "@/lib/presentations/input";
+import { PRESENTATION_STATUS, savePageSchema } from "@/lib/presentations/input";
 import { deletePage, getPage, savePage } from "@/lib/presentations/presentations";
 import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
 
@@ -28,7 +28,7 @@ export const PUT = audited(async function PUT(req: Request, { params }: Params) 
 
   const { id, pageId } = await params;
   const saved = await savePage(id, pageId, parsed.data, user.id);
-  if (!saved) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: PRESENTATION_STATUS[saved.error] });
   noteAudit({ target: pageId, targetLabel: `page in ${saved.name}` });
   return NextResponse.json({ ok: true });
 });

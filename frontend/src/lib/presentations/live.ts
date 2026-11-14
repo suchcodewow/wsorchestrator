@@ -12,7 +12,8 @@ import type { PresentationPage, PresentationSlide } from "./presentations";
 
 export type LiveSlide = Pick<PresentationSlide, "id" | "number" | "googlePageId" | "skipped" | "notes" | "version" | "cached">;
 
-export type LivePage = Pick<PresentationPage, "id" | "before" | "position" | "notes"> & { document: PageDocument };
+export type LivePage = Pick<PresentationPage, "id" | "before" | "position" | "notes"> &
+  Partial<Pick<PresentationPage, "replaces" | "stale">> & { document: PageDocument };
 
 /** One thing shown in turn: a slide of the deck, or one of the presentation's own pages. */
 export type ShowItem =
@@ -26,12 +27,15 @@ export const presentedSlides = <T extends Pick<LiveSlide, "skipped">>(slides: T[
 /**
  * What is shown, in order: each page just before the slide it was put before
  * (in the order the pages were added there), then the slide unless it is
- * skipped. A page put before a slide since removed from the deck goes last.
- * `keepSkipped` lists skipped slides too, in their place, as the deck's page
- * does; they are never presented.
+ * skipped, or a page converted from it stands in for it (that page is put
+ * before it, after any others there, so it takes the slide's place). A page put
+ * before a slide since removed from the deck goes last. `keepSkipped` lists
+ * skipped slides too, in their place, as the deck's page does; they are never
+ * presented.
  */
 export function showItems(slides: LiveSlide[], pages: LivePage[], keepSkipped = false): ShowItem[] {
   const known = new Set(slides.map((s) => s.googlePageId));
+  const replaced = new Set(pages.flatMap((p) => (p.replaces ? [p.replaces] : [])));
   const before = new Map<string, LivePage[]>();
   const end: LivePage[] = [];
   for (const page of [...pages].sort((a, b) => a.position - b.position)) {
@@ -42,7 +46,9 @@ export function showItems(slides: LiveSlide[], pages: LivePage[], keepSkipped = 
   return [
     ...slides.flatMap((slide): ShowItem[] => [
       ...(before.get(slide.googlePageId) ?? []).map(asItem),
-      ...(slide.skipped && !keepSkipped ? [] : [{ kind: "slide" as const, id: slide.id, slide, notes: slide.notes }]),
+      ...((slide.skipped && !keepSkipped) || replaced.has(slide.googlePageId)
+        ? []
+        : [{ kind: "slide" as const, id: slide.id, slide, notes: slide.notes }]),
     ]),
     ...end.map(asItem),
   ];

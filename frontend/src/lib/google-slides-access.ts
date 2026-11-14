@@ -43,17 +43,21 @@ export async function googleSlidesConnection(): Promise<{ ok: true; client: OAut
   return { ok: true, client, connection };
 }
 
-/** The Slides and Drive clients for the connection; Google refusing its token is a `google_reconnect`, anything else throws. */
+/**
+ * The Slides and Drive clients for the connection, and the access token they
+ * use, for a download the JSON clients cannot make; Google refusing its token
+ * is a `google_reconnect`, anything else throws.
+ */
 export async function openSlidesClients(
   client: OAuthClient,
   connection: Connection,
-): Promise<{ ok: true; slides: CalendarClient; drive: CalendarClient } | GoogleSlidesFailure> {
+): Promise<{ ok: true; slides: CalendarClient; drive: CalendarClient; token: string } | GoogleSlidesFailure> {
   const refreshToken = openSecret(connection.refreshToken);
   if (!refreshToken)
     return { ok: false, error: "google_reconnect", message: "The stored Google token cannot be opened here. Connect the account again." };
   try {
     const access = await accessToken(client, refreshToken);
-    return { ok: true, slides: calendarClient(access, SLIDES_API), drive: calendarClient(access, DRIVE_API) };
+    return { ok: true, slides: calendarClient(access, SLIDES_API), drive: calendarClient(access, DRIVE_API), token: access };
   } catch (err) {
     if (err instanceof GoogleError && err.revoked) return revoked(connection);
     throw err;

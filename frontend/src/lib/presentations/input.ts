@@ -32,6 +32,8 @@ export const savePageSchema = z.object({
 export const PRESENTATION_STATUS = {
   not_found: 404,
   too_many_pages: 422,
+  unknown_asset: 400,
+  skipped: 422,
   google_not_configured: 503,
   google_not_connected: 503,
   google_reconnect: 503,
