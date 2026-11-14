@@ -2907,6 +2907,61 @@ export const trainingGames = pgTable("training_games", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Training → Presentations: a Google Slides deck, by its Drive file, to present
+ * full screen and read speaker notes from. The deck itself stays in Google;
+ * `syncedAt` is when its slides were last read from there.
+ */
+export const presentations = pgTable(
+  "presentations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    googleFileId: text("google_file_id").notNull(),
+    /** The deck's own title in Google when it was last read. */
+    googleTitle: text("google_title").notNull().default(""),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("presentations_name_idx").on(t.name)],
+);
+
+/**
+ * One slide of a presentation's Google deck, in deck order. `fingerprint` is
+ * a hash of everything that draws the slide (its elements, layout and master),
+ * so a sync knows which slides changed. `image` is a cache of Google's picture
+ * of the slide, fetched the first time it is asked for: it is current while
+ * `imageFingerprint` matches `fingerprint`.
+ */
+export const presentationSlides = pgTable(
+  "presentation_slides",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    presentationId: uuid("presentation_id")
+      .notNull()
+      .references(() => presentations.id, { onDelete: "cascade" }),
+    googlePageId: text("google_page_id").notNull(),
+    position: integer("position").notNull(),
+    /** Skipped in Google: kept so a deck's numbering matches, never presented. */
+    skipped: boolean("skipped").notNull().default(false),
+    notes: text("notes").notNull().default(""),
+    fingerprint: text("fingerprint").notNull(),
+    image: bytea("image"),
+    imageFingerprint: text("image_fingerprint"),
+  },
+  (t) => [
+    uniqueIndex("presentation_slides_page_idx").on(t.presentationId, t.googlePageId),
+    index("presentation_slides_order_idx").on(t.presentationId, t.position),
+  ],
+);
+
+export const PRESENTATION_LIMITS = {
+  name: 200,
+  /** A deck larger than this is refused rather than read; Bootcamp's master deck has about 330. */
+  slides: 600,
+} as const;
+
 /** Mimir-wide settings, one row per key; a key with no row reads as its default. */
 export const mimirSettings = pgTable("mimir_settings", {
   key: text("key").primaryKey(),

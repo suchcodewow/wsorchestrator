@@ -160,6 +160,10 @@ export type UnregisteredSort = (typeof UNREGISTERED_LIST.sorts)[number];
 export const FOOD_ORDER_LIST = spec(["arrivesAt", "vendor", "updatedAt"]);
 export type FoodOrderSort = (typeof FOOD_ORDER_LIST.sorts)[number];
 
+/** Training → Presentations, by name. */
+export const PRESENTATION_LIST = spec(["name", "slides", "syncedAt"]);
+export type PresentationSort = (typeof PRESENTATION_LIST.sorts)[number];
+
 /** Async recordings, a row per take, the newest first. */
 export const RECORDING_LIST = spec(["startedAt", "contributor"], "desc");
 export type RecordingSort = (typeof RECORDING_LIST.sorts)[number];
