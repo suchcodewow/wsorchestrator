@@ -12,6 +12,7 @@ import {
   builtState,
   EMPTY_PAGE,
   isShown,
+  MAX_ENTRY_DELAY_MS,
   newElement,
   pageDocumentSchema,
   revealGrid,
@@ -100,12 +101,31 @@ describe("reveals", () => {
   test("a built page shows everything", () => {
     assert.equal(shownAt(builtState(doc)).length, doc.elements.length);
   });
+
+  test("counts an on-entry element as shown from the start, and never as a press", () => {
+    const entering: PageDocument = { ...doc, elements: [...doc.elements, el("arrives", { on: "enter", delay: 300, effect: "zoom" })] };
+    assert.ok(isShown(entering, entering.elements.at(-1)!, START));
+    assert.equal(revealSteps(entering).length, revealSteps(doc).length);
+  });
 });
 
 describe("pageDocumentSchema", () => {
   test("takes a page with every kind of element and reveal", () => {
-    const doc = { background: "#102030", elements: [newElement("text", "t"), el("b"), el("c", { on: "click", by: "b", effect: "wipe" })] };
+    const doc = {
+      background: "#102030",
+      elements: [
+        newElement("text", "t"),
+        el("b"),
+        el("c", { on: "click", by: "b", effect: "wipe" }),
+        el("d", { on: "enter", delay: 0, effect: "fade" }),
+      ],
+    };
     assert.ok(pageDocumentSchema.safeParse(doc).success);
+  });
+
+  test("refuses an on-entry delay past the longest a page waits", () => {
+    const doc = { background: "#ffffff", elements: [el("late", { on: "enter", delay: MAX_ENTRY_DELAY_MS + 1, effect: "fade" })] };
+    assert.ok(!pageDocumentSchema.safeParse(doc).success);
   });
 
   test("refuses a repeated id, a reveal by an element not on the page, and one by the element itself", () => {

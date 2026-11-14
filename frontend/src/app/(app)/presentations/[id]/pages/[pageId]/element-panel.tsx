@@ -15,6 +15,7 @@ import {
   BORDER_EFFECTS,
   FONT_LABELS,
   FONTS,
+  MAX_ENTRY_DELAY_MS,
   REVEAL_EFFECT_LABELS,
   REVEAL_EFFECTS,
   revealSteps,
@@ -29,6 +30,9 @@ import { cn } from "@/lib/utils";
 
 const SELECT =
   "h-8 w-full rounded-md border border-input bg-field px-2 text-sm text-foreground shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
+
+/** How far apart on-entry reveals added one after another start. */
+const ENTRY_STAGGER_MS = 400;
 
 const KIND_LABELS: Record<PageElement["kind"], string> = { rect: "Rectangle", ellipse: "Ellipse", text: "Text", image: "Picture" };
 
@@ -58,9 +62,14 @@ export function ElementPanel({
   const set = (patch: Partial<PageElement>, field: string) => onChange(patch, `${field}:${el.id}`);
   const others = doc.elements.filter((o) => o.id !== el.id);
 
-  function setReveal(on: "none" | "next" | "click") {
+  function setReveal(on: Reveal["on"] | "none") {
     const effect: RevealEffect = el.reveal?.effect ?? "fade";
     if (on === "none") set({ reveal: null }, "reveal");
+    if (on === "enter") {
+      // After the last one already entering, so a few added in turn arrive in turn.
+      const latest = Math.max(-ENTRY_STAGGER_MS, ...doc.elements.flatMap((o) => (o.reveal?.on === "enter" ? [o.reveal.delay] : [])));
+      set({ reveal: { on: "enter", delay: Math.min(latest + ENTRY_STAGGER_MS, MAX_ENTRY_DELAY_MS), effect } }, "reveal");
+    }
     if (on === "next") {
       const highest = Math.max(0, ...doc.elements.flatMap((o) => (o.reveal?.on === "next" ? [o.reveal.order] : [])));
       set({ reveal: { on: "next", order: highest + 1, effect } }, "reveal");
@@ -201,15 +210,27 @@ export function ElementPanel({
             aria-label="Reveal"
             className={SELECT}
             value={el.reveal?.on ?? "none"}
-            onChange={(e) => setReveal(e.target.value as "none" | "next" | "click")}
+            onChange={(e) => setReveal(e.target.value as Reveal["on"] | "none")}
           >
             <option value="none">Always shown</option>
+            <option value="enter">On entry</option>
             <option value="next">On next</option>
             <option value="click" disabled={others.length === 0}>
               On click of…
             </option>
           </select>
         </Row>
+        {el.reveal?.on === "enter" && (
+          <Row label="After (ms)">
+            <NumberInput
+              label="Delay after the page appears, in milliseconds"
+              value={el.reveal.delay}
+              min={0}
+              max={MAX_ENTRY_DELAY_MS}
+              onChange={(delay) => set({ reveal: { ...(el.reveal as Extract<Reveal, { on: "enter" }>), delay } }, "delay")}
+            />
+          </Row>
+        )}
         {el.reveal?.on === "next" && (
           <Row label="Order">
             <NumberInput
@@ -300,6 +321,7 @@ function BorderRow({ el, set }: { el: PageElement; set: (patch: Partial<PageElem
 export function PagePanel({ document: doc, onBackground }: { document: PageDocument; onBackground: (color: string) => void }) {
   const steps = revealSteps(doc).length;
   const clickers = triggers(doc).size;
+  const entering = doc.elements.filter((el) => el.reveal?.on === "enter").length;
   return (
     <div className="divide-y rounded-lg border bg-card text-sm">
       <p className="px-4 py-2 font-medium">Page</p>
@@ -312,6 +334,7 @@ export function PagePanel({ document: doc, onBackground }: { document: PageDocum
       <p className="px-4 py-2.5 text-muted-foreground">
         {doc.elements.length} {doc.elements.length === 1 ? "element" : "elements"} · {steps} {steps === 1 ? "press" : "presses"} to reveal ·{" "}
         {clickers} {clickers === 1 ? "element" : "elements"} to click
+        {entering > 0 && ` · ${entering} on entry`}
       </p>
     </div>
   );

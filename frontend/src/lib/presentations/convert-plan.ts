@@ -1,14 +1,15 @@
 /**
  * The pure half of converting a Google slide into one of the presentation's
  * own pages (`convert.ts` does the Google half): which of the slide's elements
- * become live, the requests that make one copy of the slide per live element
- * in a scratch deck, the order Google's own animations reveal them in (read
- * from the deck's PowerPoint export), and where each element lies in Google's
- * picture of the slide, found by comparing it with the picture without it.
+ * become live, the requests that, in a scratch deck, strip them from the slide
+ * and give each a copy of the slide holding it alone on black and on white,
+ * the order Google's own animations reveal them in (read from the deck's
+ * PowerPoint export), and each element's own pixels, opacity and all, worked
+ * out from Google's two pictures of it alone.
  */
 
 import { PRESENTATION_LIMITS } from "@/db/schema";
-import type { RevealEffect } from "./page";
+import { MAX_ENTRY_DELAY_MS, type RevealEffect } from "./page";
 
 /** As much of a Slides API page element as conversion reads. */
 export type ApiElement = {
@@ -45,34 +46,69 @@ export function liftable(elements: ApiElement[], page: { width: number; height: 
   return candidates.filter(({ i }) => kept.has(i)).map(({ i }) => i);
 }
 
-/** The id an element gets in the copy of the slide made for the `k`th live element. */
-export const copyId = (objectId: string, k: number) => `${objectId}_c${k}`.slice(0, 50);
+/** The backdrop a live element is drawn alone on, to tell its own pixels from what lies behind them. */
+export type Backdrop = "black" | "white";
+
+/** The id an element gets in the copy of the slide that shows the `k`th live element alone on `backdrop`. */
+export const copyId = (objectId: string, k: number, backdrop: Backdrop) => `${objectId}_${backdrop[0]}${k}`.slice(0, 50);
+
+const SOLID: Record<Backdrop, { red: number; green: number; blue: number }> = {
+  black: { red: 0, green: 0, blue: 0 },
+  white: { red: 1, green: 1, blue: 1 },
+};
 
 /**
- * The batchUpdate requests that, in the scratch deck, make one copy of slide
- * `slideId` per live element holding only that one of the live elements, and
- * strip every live element from the slide itself, which becomes the background.
+ * The batchUpdate requests that, in the scratch deck, give each live element
+ * two copies of slide `slideId` holding it and nothing else, one on solid
+ * black and one on solid white, and strip every live element from the slide
+ * itself, which becomes the background.
  */
-export function separationRequests(slideId: string, elements: ApiElement[], lifted: number[]): unknown[] {
-  const live = lifted.map((i) => elements[i]!);
-  const copies = live.map((_, k) => ({
-    duplicateObject: {
-      objectId: slideId,
-      objectIds: Object.fromEntries([
-        [slideId, copyId(slideId, k)],
-        ...live.flatMap((el) => objectIds(el).map((id) => [id, copyId(id, k)])),
-      ]),
-    },
-  }));
-  const strip = live.flatMap((keep, k) =>
-    live.filter((el) => el !== keep).map((el) => ({ deleteObject: { objectId: copyId(el.objectId, k) } })),
+export function isolationRequests(slideId: string, elements: ApiElement[], lifted: number[]): unknown[] {
+  const copies = lifted.flatMap((keep, k) =>
+    (["black", "white"] as const).flatMap((backdrop) => {
+      const id = (objectId: string) => copyId(objectId, k, backdrop);
+      return [
+        {
+          duplicateObject: {
+            objectId: slideId,
+            objectIds: Object.fromEntries([[slideId, id(slideId)], ...elements.flatMap((el) => objectIds(el).map((o) => [o, id(o)]))]),
+          },
+        },
+        ...elements.filter((_, i) => i !== keep).map((el) => ({ deleteObject: { objectId: id(el.objectId) } })),
+        {
+          updatePageProperties: {
+            objectId: id(slideId),
+            pageProperties: { pageBackgroundFill: { solidFill: { color: { rgbColor: SOLID[backdrop] } } } },
+            fields: "pageBackgroundFill",
+          },
+        },
+      ];
+    }),
   );
-  const background = live.map((el) => ({ deleteObject: { objectId: el.objectId } }));
-  return [...copies, ...strip, ...background];
+  const background = lifted.map((i) => ({ deleteObject: { objectId: elements[i]!.objectId } }));
+  return [...copies, ...background];
+}
+
+/** As much of a layout or master as conversion reads: what it draws on every slide that uses it. */
+export type ApiBackdropPage = { pageElements?: { objectId: string; shape?: { placeholder?: unknown } }[] };
+
+/**
+ * Requests deleting what the slide's layout and master draw on it, so a copy
+ * shows its one element alone. Placeholders stay: they draw nothing on a
+ * slide, and the slide's own text takes its style from them.
+ */
+export function backdropRequests(pages: ApiBackdropPage[]): unknown[] {
+  return pages.flatMap((page) =>
+    (page.pageElements ?? []).filter((el) => !el.shape?.placeholder).map((el) => ({ deleteObject: { objectId: el.objectId } })),
+  );
 }
 
 /** What Google's PowerPoint export says a slide's animations do, by the element each reveals (its index in stacking order). */
-export type AnimationPlan = Map<number, { step: number; effect: RevealEffect }>;
+/** `step` 0 is an on-entry reveal, `delay` milliseconds after the slide appears; steps from 1 are the clicks. */
+export type AnimationPlan = Map<number, { step: number; effect: RevealEffect; delay?: number }>;
+
+/** How long an on-entry effect runs when the export does not say, so the one "after" it knows when to start. */
+const ENTRY_EFFECT_MS = 500;
 
 /** PowerPoint's entrance presets, as the reveals pages have. */
 const PRESET_EFFECT: Record<string, RevealEffect> = { "1": "appear", "10": "fade", "2": "rise", "22": "wipe", "23": "zoom", "53": "zoom" };
@@ -109,67 +145,106 @@ export function shapeIndexes(slideXml: string): Map<string, number> {
 }
 
 /**
- * The reveals a slide's own animations make: each click starts a step, and
- * an effect "with" or "after" the one before joins its step. Effects that
- * start with the slide, before any click, are left out, so those elements are
- * simply shown; so are exits and emphasis, which pages do not have.
+ * The reveals a slide's own animations make: each click starts a step, and an
+ * effect "with" or "after" the one before joins its step. Effects that play
+ * as the slide opens, before any click, are step 0, on-entry reveals: each
+ * starts with the one before it ("with") or as it ends ("after"), plus its own
+ * delay, and `delay` says when, in milliseconds. Exits and emphasis are left
+ * out, since pages do not have them.
  */
 export function animationPlan(slideXml: string): AnimationPlan {
   const indexes = shapeIndexes(slideXml);
   const plan: AnimationPlan = new Map();
   const timing = slideXml.slice(slideXml.indexOf("<p:timing"));
   if (!timing.startsWith("<p:timing")) return plan;
-  let step = 0;
-  // An effect is a <p:cTn> carrying a preset, then the <p:spTgt> naming its shape; attributes come in any order.
-  const node = /<p:cTn\b([^>]*)>|<p:spTgt\b([^>]*)>/g;
+
+  // Each effect whole first: a <p:cTn> with a preset; the first <p:cond> after it is its own delay, the first
+  // <p:spTgt> its shape, and the longest <p:cTn dur> inside it how long it runs. Attributes come in any order.
+  type Effect = { preset: string; className: string; node: string; delay: number | null; dur: number; spid: string | null };
+  const effects: Effect[] = [];
+  const tag = /<p:cTn\b([^>]*)>|<p:spTgt\b([^>]*)>|<p:cond\b([^>]*)>/g;
   const attr = (attrs: string, name: string) => attrs.match(new RegExp(`\\b${name}="([^"]*)"`))?.[1];
-  let current: { preset: string; className: string } | null = null;
-  for (let m = node.exec(timing); m; m = node.exec(timing)) {
-    if (m[2] !== undefined) {
-      const spid = attr(m[2], "spid");
-      const index = spid === undefined ? undefined : indexes.get(spid);
-      if (current?.className === "entr" && step > 0 && index !== undefined && !plan.has(index)) {
-        plan.set(index, { step, effect: PRESET_EFFECT[current.preset] ?? "fade" });
+  for (let m = tag.exec(timing); m; m = tag.exec(timing)) {
+    const current = effects.at(-1);
+    if (m[1] !== undefined) {
+      const preset = attr(m[1], "presetID");
+      if (preset !== undefined) {
+        effects.push({
+          preset,
+          className: attr(m[1], "presetClass") ?? "",
+          node: attr(m[1], "nodeType") ?? "",
+          delay: null,
+          dur: 0,
+          spid: null,
+        });
+      } else if (current) {
+        const dur = Number(attr(m[1], "dur"));
+        if (Number.isFinite(dur) && dur > 1) current.dur = Math.max(current.dur, dur);
       }
-      current = null;
-      continue;
+    } else if (m[2] !== undefined) {
+      if (current && current.spid === null) current.spid = attr(m[2], "spid") ?? null;
+    } else if (current && current.delay === null) {
+      const delay = Number(attr(m[3]!, "delay"));
+      if (Number.isFinite(delay)) current.delay = delay;
     }
-    const preset = attr(m[1]!, "presetID");
-    if (preset === undefined) continue;
-    if (attr(m[1]!, "nodeType") === "clickEffect") step++;
-    current = { preset, className: attr(m[1]!, "presetClass") ?? "" };
+  }
+
+  let step = 0;
+  // The on-entry timeline: when the effect before began, and when it ended.
+  let began = 0;
+  let ended = 0;
+  for (const e of effects) {
+    if (e.node === "clickEffect") step++;
+    let delay: number | undefined;
+    if (step === 0) {
+      const start = (e.node === "afterEffect" ? ended : began) + (e.delay ?? 0);
+      began = start;
+      ended = start + (e.dur || ENTRY_EFFECT_MS);
+      delay = Math.min(Math.round(start), MAX_ENTRY_DELAY_MS);
+    }
+    const index = e.spid === null ? undefined : indexes.get(e.spid);
+    if (e.className !== "entr" || index === undefined || plan.has(index)) continue;
+    plan.set(index, { step, effect: PRESET_EFFECT[e.preset] ?? "fade", ...(delay === undefined ? {} : { delay }) });
   }
   return plan;
 }
 
-/** Where two pictures of the same size differ, by a channel moving more than this, out of 255. */
-const DIFFERENT = 24;
-/** Room left round an element's cut-out, for its anti-aliased edge and any shadow. */
-export const CUT_PADDING = 6;
+/** Below this opacity, out of 1, a pixel counts as none of the element's: what is left of a render's own noise. */
+const VISIBLE = 0.03;
+/** Room left round an element's cut-out, for the faintest edge of its anti-aliasing or shadow. */
+export const CUT_PADDING = 2;
+
+export type Box = { left: number; top: number; width: number; height: number };
 
 /**
- * The box, in pixels, round everything that differs between two RGB pictures
- * of `width`×`height`, padded and kept inside them; null if they are the same.
+ * One element's own pixels, from Google's two pictures of it alone: `black`
+ * on a black backdrop and `white` on a white one, RGB, `width`×`height`. Where
+ * the element is opaque both pictures agree; where it lets the backdrop
+ * through they differ by exactly how much, so each pixel's opacity is
+ * 1 - (white - black) / 255, and its colour is what the black picture shows,
+ * over that opacity. Returns the RGBA pixels and the box round every visible
+ * one, padded and kept inside the picture; the box is null if nothing shows.
  */
-export function differenceBox(
-  a: Uint8Array,
-  b: Uint8Array,
-  width: number,
-  height: number,
-  channels = 3,
-): { left: number; top: number; width: number; height: number } | null {
+export function unmatte(black: Uint8Array, white: Uint8Array, width: number, height: number): { rgba: Uint8Array; box: Box | null } {
+  const rgba = new Uint8Array(width * height * 4);
   let minX = width;
   let minY = height;
   let maxX = -1;
   let maxY = -1;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      const i = (y * width + x) * channels;
-      if (
-        Math.abs(a[i]! - b[i]!) > DIFFERENT ||
-        Math.abs(a[i + 1]! - b[i + 1]!) > DIFFERENT ||
-        Math.abs(a[i + 2]! - b[i + 2]!) > DIFFERENT
-      ) {
+      const p = y * width + x;
+      const i = p * 3;
+      const through = (white[i]! - black[i]! + white[i + 1]! - black[i + 1]! + white[i + 2]! - black[i + 2]!) / (3 * 255);
+      const alpha = Math.min(1, Math.max(0, 1 - through));
+      const o = p * 4;
+      if (alpha > 0) {
+        rgba[o] = Math.min(255, Math.round(black[i]! / alpha));
+        rgba[o + 1] = Math.min(255, Math.round(black[i + 1]! / alpha));
+        rgba[o + 2] = Math.min(255, Math.round(black[i + 2]! / alpha));
+      }
+      rgba[o + 3] = Math.round(alpha * 255);
+      if (alpha > VISIBLE) {
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y < minY) minY = y;
@@ -177,13 +252,11 @@ export function differenceBox(
       }
     }
   }
-  if (maxX < 0) return null;
+  if (maxX < 0) return { rgba, box: null };
   const left = Math.max(0, minX - CUT_PADDING);
   const top = Math.max(0, minY - CUT_PADDING);
   return {
-    left,
-    top,
-    width: Math.min(width, maxX + 1 + CUT_PADDING) - left,
-    height: Math.min(height, maxY + 1 + CUT_PADDING) - top,
+    rgba,
+    box: { left, top, width: Math.min(width, maxX + 1 + CUT_PADDING) - left, height: Math.min(height, maxY + 1 + CUT_PADDING) - top },
   };
 }

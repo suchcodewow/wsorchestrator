@@ -2,13 +2,15 @@
  * Converting a Google slide into one of the presentation's own pages, which
  * then stands in for it. The deck itself is never written to: the work is done
  * in a copy of it, made in the connected account's Drive and trashed at the end
- * whatever happens. The copy is cut down to the slide, exported as PowerPoint
- * to read the order the slide's animations reveal things in, and then given
- * one copy of the slide per live element, holding that element alone, beside
- * the slide stripped of all of them. Google's picture of the stripped slide
- * becomes the page's background; each element is cut from Google's picture of
- * its own copy, where that picture differs from the background's, so it looks
- * exactly as Google draws it, and is placed where it stood.
+ * whatever happens. The copy is cut down to the slide and exported as
+ * PowerPoint, to read the order the slide's animations reveal things in. The
+ * slide stripped of its live elements is then drawn by Google as the page's
+ * background. Each live element gets two copies of the slide holding it alone,
+ * on solid black and on solid white, with nothing its layout or master draws;
+ * from Google's two pictures of it come its own pixels and how opaque each one
+ * is, so it is cut out exactly as Google draws it, edges, shadow and
+ * translucency included, with nothing of what lay behind it, and placed where
+ * it stood.
  */
 
 import "server-only";
@@ -17,12 +19,24 @@ import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { DRIVE_API } from "@/lib/google-slides";
 import { unzip } from "@/lib/spreadsheet-file";
-import { animationPlan, copyId, differenceBox, liftable, separationRequests, type AnimationPlan, type ApiElement } from "./convert-plan";
+import {
+  animationPlan,
+  backdropRequests,
+  copyId,
+  isolationRequests,
+  liftable,
+  unmatte,
+  type AnimationPlan,
+  type ApiBackdropPage,
+  type ApiElement,
+} from "./convert-plan";
 import { slidePng, withGoogle, type DeckFailure } from "./google";
 import { newElement, STAGE, type PageDocument, type PageElement } from "./page";
 
 const PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 const ASSET_QUALITY = 92;
+/** Requests sent to one batchUpdate at a time; a busy slide's isolation runs to thousands. */
+const BATCH_SIZE = 500;
 
 export type ConvertedAsset = { id: string; image: Buffer; width: number; height: number };
 
@@ -36,24 +50,35 @@ export type Conversion = {
   animationsRead: boolean;
 };
 
+/** Google's pictures of a slide: stripped of its live elements, and each live element alone on black and on white. */
 export type Rendered = {
   base: Buffer;
-  renders: Buffer[];
+  mattes: { black: Buffer; white: Buffer }[];
   elements: ApiElement[];
   lifted: number[];
   plan: AnimationPlan;
   animationsRead: boolean;
 };
 
-/** The renders Google makes of the slide and its live elements, from a scratch copy of the deck; null if the deck no longer has the slide. */
+type ApiLayout = ApiBackdropPage & { objectId: string; layoutProperties?: { masterObjectId?: string } };
+
+/** The pictures Google draws of the slide and its live elements, from a scratch copy of the deck; null if the deck no longer has the slide. */
 function renderInCopy(fileId: string, pageId: string) {
   return withGoogle(async ({ slides, drive, token }): Promise<Rendered | null> => {
     const id = encodeURIComponent(fileId);
     const deck = await slides.call<{
       pageSize: { width: { magnitude: number }; height: { magnitude: number } };
-      slides: { objectId: string; slideProperties?: { layoutObjectId?: string } }[];
-      layouts?: { objectId: string }[];
-    }>("GET", `/presentations/${id}`, { query: { fields: "pageSize,slides(objectId,slideProperties(layoutObjectId)),layouts(objectId)" } });
+      slides: { objectId: string; slideProperties?: { layoutObjectId?: string; masterObjectId?: string } }[];
+      layouts?: ApiLayout[];
+      masters?: (ApiBackdropPage & { objectId: string })[];
+    }>("GET", `/presentations/${id}`, {
+      query: {
+        fields:
+          "pageSize,slides(objectId,slideProperties(layoutObjectId,masterObjectId))," +
+          "layouts(objectId,layoutProperties(masterObjectId),pageElements(objectId,shape(placeholder)))," +
+          "masters(objectId,pageElements(objectId,shape(placeholder)))",
+      },
+    });
     const slide = deck.slides.find((s) => s.objectId === pageId);
     if (!slide) return null;
     const page = await slides.call<{ pageElements?: ApiElement[] }>("GET", `/presentations/${id}/pages/${encodeURIComponent(pageId)}`, {
@@ -61,23 +86,27 @@ function renderInCopy(fileId: string, pageId: string) {
     });
     const elements = page.pageElements ?? [];
     const size = { width: deck.pageSize.width.magnitude, height: deck.pageSize.height.magnitude };
+    const layout = deck.layouts?.find((l) => l.objectId === slide.slideProperties?.layoutObjectId);
+    const masterId = slide.slideProperties?.masterObjectId ?? layout?.layoutProperties?.masterObjectId;
+    const master = deck.masters?.find((m) => m.objectId === masterId);
 
     const copy = await drive.call<{ id: string }>("POST", `/files/${id}/copy`, {
       query: { supportsAllDrives: "true", fields: "id" },
       body: { name: `Presentation conversion (temporary, safe to delete) ${pageId}`, parents: ["root"] },
     });
     try {
-      const batch = (requests: unknown[]) =>
-        requests.length
-          ? slides.call("POST", `/presentations/${encodeURIComponent(copy.id)}:batchUpdate`, { body: { requests } })
-          : Promise.resolve(null);
+      const batch = async (requests: unknown[]) => {
+        for (let i = 0; i < requests.length; i += BATCH_SIZE) {
+          await slides.call("POST", `/presentations/${encodeURIComponent(copy.id)}:batchUpdate`, {
+            body: { requests: requests.slice(i, i + BATCH_SIZE) },
+          });
+        }
+      };
 
       // Down to the one slide, and its own layout: small enough for Drive's 10 MB export limit.
       await batch(deck.slides.filter((s) => s.objectId !== pageId).map((s) => ({ deleteObject: { objectId: s.objectId } })));
       await batch(
-        (deck.layouts ?? [])
-          .filter((l) => l.objectId !== slide.slideProperties?.layoutObjectId)
-          .map((l) => ({ deleteObject: { objectId: l.objectId } })),
+        (deck.layouts ?? []).filter((l) => l.objectId !== layout?.objectId).map((l) => ({ deleteObject: { objectId: l.objectId } })),
       ).catch(() => null);
 
       let plan: AnimationPlan = new Map();
@@ -102,11 +131,18 @@ function renderInCopy(fileId: string, pageId: string) {
       }
 
       const lifted = liftable(elements, size, new Set(plan.keys()));
-      await batch(separationRequests(pageId, elements, lifted));
+      await batch(isolationRequests(pageId, elements, lifted));
+      // The background keeps what the layout and master draw; the copies that follow must not.
       const base = await slidePng(slides, copy.id, pageId);
-      const renders: Buffer[] = [];
-      for (let k = 0; k < lifted.length; k++) renders.push(await slidePng(slides, copy.id, copyId(pageId, k)));
-      return { base, renders, elements, lifted, plan, animationsRead };
+      await batch(backdropRequests([layout, master].flatMap((p) => (p ? [p] : []))));
+      const mattes: Rendered["mattes"] = [];
+      for (let k = 0; k < lifted.length; k++) {
+        mattes.push({
+          black: await slidePng(slides, copy.id, copyId(pageId, k, "black")),
+          white: await slidePng(slides, copy.id, copyId(pageId, k, "white")),
+        });
+      }
+      return { base, mattes, elements, lifted, plan, animationsRead };
     } finally {
       await drive
         .call("PATCH", `/files/${encodeURIComponent(copy.id)}`, { query: { supportsAllDrives: "true" }, body: { trashed: true } })
@@ -126,20 +162,19 @@ export async function convertSlide(
   return cutOut(rendered.value);
 }
 
-/** Google's renders of a slide made into a page: its background picture, and each live element cut from its own render and put where it stood. */
+/** Google's pictures of a slide made into a page: its background, and each live element cut from its two pictures alone and put where it stood. */
 export async function cutOut({
   base,
-  renders,
+  mattes,
   elements,
   lifted,
   plan,
   animationsRead,
 }: Rendered): Promise<{ ok: true; conversion: Conversion } | { ok: false; error: "failed"; message: string }> {
-  const background = sharp(base).removeAlpha();
-  const { width, height } = await background.metadata();
+  const { width, height } = await sharp(base).metadata();
   if (!width || !height) return { ok: false, error: "failed", message: "Google's picture of the slide could not be read." };
-  const baseRaw = await background.raw().toBuffer();
   const scale = STAGE.width / width;
+  const rgb = (png: Buffer) => sharp(png).removeAlpha().resize(width, height, { fit: "fill" }).raw().toBuffer();
 
   const backgroundAsset: ConvertedAsset = {
     id: randomUUID(),
@@ -150,14 +185,15 @@ export async function cutOut({
   const assets = [backgroundAsset];
   const live: PageElement[] = [];
   for (const [k, index] of lifted.entries()) {
-    const render = sharp(renders[k]!).removeAlpha();
-    const raw = await render.clone().raw().toBuffer();
-    const box = differenceBox(baseRaw, raw, width, height);
-    // Nothing of it shows (an empty placeholder, or something hidden behind another): nothing to cut.
+    const { rgba, box } = unmatte(await rgb(mattes[k]!.black), await rgb(mattes[k]!.white), width, height);
+    // Nothing of it shows (an empty placeholder, say): nothing to cut.
     if (!box) continue;
     const asset: ConvertedAsset = {
       id: randomUUID(),
-      image: await render.extract(box).webp({ quality: ASSET_QUALITY }).toBuffer(),
+      image: await sharp(Buffer.from(rgba), { raw: { width, height, channels: 4 } })
+        .extract(box)
+        .webp({ quality: ASSET_QUALITY, alphaQuality: 100 })
+        .toBuffer(),
       width: box.width,
       height: box.height,
     };
@@ -172,7 +208,12 @@ export async function cutOut({
       fill: null,
       text: "",
       src: asset.id,
-      reveal: reveal ? { on: "next", order: reveal.step, effect: reveal.effect } : null,
+      // Step 0 plays as the slide opens; the rest wait for their clicks.
+      reveal: !reveal
+        ? null
+        : reveal.step === 0
+          ? { on: "enter", delay: reveal.delay ?? 0, effect: reveal.effect }
+          : { on: "next", order: reveal.step, effect: reveal.effect },
     });
   }
 

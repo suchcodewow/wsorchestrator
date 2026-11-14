@@ -61,6 +61,21 @@ export function placement(el: Pick<PageElement, "x" | "y" | "w" | "h" | "rotatio
   };
 }
 
+/**
+ * Whether the page has appeared: false for its first frame, so its on-entry
+ * elements start hidden and arrive, each after its own delay. A thumbnail,
+ * drawn with everything shown, needs no entrance.
+ */
+function useEntered(play: boolean) {
+  const [entered, setEntered] = useState(!play);
+  useEffect(() => {
+    if (!play) return;
+    const frame = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(frame);
+  }, [play]);
+  return entered;
+}
+
 /** The stage's drawn width over its full width, kept up to date; only the electric effect needs it. */
 function useStageScale(watch: boolean) {
   const ref = useRef<HTMLDivElement>(null);
@@ -101,6 +116,7 @@ export function PageView({
   const clickable = onTrigger ? triggers(doc) : new Set<string>();
   const electric = doc.elements.some((el) => el.border?.effect === "electric");
   const { ref, scale } = useStageScale(electric);
+  const entered = useEntered(state !== "all" && doc.elements.some((el) => el.reveal?.on === "enter"));
   const filterId = `electric-${useId().replace(/:/g, "")}`;
   return (
     <div
@@ -114,7 +130,8 @@ export function PageView({
         <img src={assetUrl(presentationId, doc.backgroundImage)} alt="" draggable={false} className="absolute inset-0 size-full" />
       )}
       {doc.elements.map((el) => {
-        const shown = state === "all" || isShown(doc, el, state);
+        const entering = el.reveal?.on === "enter" ? el.reveal : null;
+        const shown = state === "all" || (isShown(doc, el, state) && (!entering || entered));
         const effect = el.reveal?.effect ?? "appear";
         const trigger = clickable.has(el.id);
         return (
@@ -129,7 +146,11 @@ export function PageView({
             <motion.div
               initial={false}
               animate={shown ? SHOWN : ghostHidden ? { opacity: 0.3 } : HIDDEN[effect]}
-              transition={{ duration: shown ? DURATION[effect] : 0.2, ease: "easeOut" }}
+              transition={{
+                duration: shown ? DURATION[effect] : 0.2,
+                delay: shown && entering ? entering.delay / 1000 : 0,
+                ease: "easeOut",
+              }}
               className={cn("relative size-full", trigger && "cursor-pointer transition-[filter] hover:brightness-110")}
               onClick={
                 trigger

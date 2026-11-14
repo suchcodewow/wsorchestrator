@@ -22,7 +22,14 @@ export function ItemView({
 }) {
   if (item.kind === "page")
     return (
-      <PageView presentationId={presentationId} document={item.page.document} state={reveal} onTrigger={onTrigger} className={className} />
+      <PageView
+        key={item.id}
+        presentationId={presentationId}
+        document={item.page.document}
+        state={reveal}
+        onTrigger={onTrigger}
+        className={className}
+      />
     );
   return (
     <div className={cn("relative aspect-video w-full bg-black", className)}>

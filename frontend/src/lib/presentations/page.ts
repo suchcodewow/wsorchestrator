@@ -61,9 +61,14 @@ const length = z
   .min(1)
   .max(STAGE.width * 2);
 
+/** The longest an on-entry reveal waits after its page appears. */
+export const MAX_ENTRY_DELAY_MS = 10_000;
+
 const revealSchema = z.discriminatedUnion("on", [
   z.object({ on: z.literal("next"), order: z.number().int().min(1).max(999), effect: z.enum(REVEAL_EFFECTS) }),
   z.object({ on: z.literal("click"), by: id, effect: z.enum(REVEAL_EFFECTS) }),
+  /** Plays by itself as the page appears, `delay` milliseconds after it. */
+  z.object({ on: z.literal("enter"), delay: z.number().int().min(0).max(MAX_ENTRY_DELAY_MS), effect: z.enum(REVEAL_EFFECTS) }),
 ]);
 export type Reveal = z.infer<typeof revealSchema>;
 
@@ -248,10 +253,13 @@ export function triggers(doc: PageDocument): Set<string> {
   return new Set(doc.elements.flatMap((el) => (el.reveal?.on === "click" ? [el.reveal.by] : [])));
 }
 
-/** Whether `el` shows at `state`. */
+/**
+ * Whether `el` shows at `state`. An on-entry element counts as shown: it
+ * needs nothing done, and `PageView` plays its arrival as the page appears.
+ */
 export function isShown(doc: PageDocument, el: PageElement, state: RevealState): boolean {
   const reveal = el.reveal;
-  if (!reveal) return true;
+  if (!reveal || reveal.on === "enter") return true;
   if (reveal.on === "click") return state.clicked.includes(reveal.by);
   const index = doc.elements.indexOf(el);
   return revealSteps(doc)

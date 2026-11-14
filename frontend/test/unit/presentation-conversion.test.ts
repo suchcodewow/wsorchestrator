@@ -14,12 +14,13 @@ import { join } from "node:path";
 import {
   animationPlan,
   copyId,
+  backdropRequests,
   CUT_PADDING,
-  differenceBox,
   liftable,
   objectIds,
-  separationRequests,
+  isolationRequests,
   shapeIndexes,
+  unmatte,
   type ApiElement,
 } from "@/lib/presentations/convert-plan";
 import { showItems, type LivePage, type LiveSlide } from "@/lib/presentations/live";
@@ -67,11 +68,46 @@ describe("reading Google's animations from its PowerPoint export", () => {
     );
   });
 
-  test("leaves out what plays with the slide before any click, and exits and emphasis", () => {
+  test("makes what plays with the slide before any click an on-entry reveal, and leaves out exits and emphasis", () => {
     const plan = animationPlan(
       slideWith(effect("withEffect", "10", "10") + effect("clickEffect", "10", "21", "exit") + effect("clickEffect", "1", "30")),
     );
-    assert.deepEqual([...plan.entries()], [[2, { step: 2, effect: "appear" }]]);
+    assert.deepEqual(
+      [...plan.entries()],
+      [
+        [0, { step: 0, effect: "fade", delay: 0 }],
+        [2, { step: 2, effect: "appear" }],
+      ],
+    );
+  });
+
+  test("times on-entry effects as Google plays them: 'with' alongside the one before, 'after' once it ends, each plus its own delay", () => {
+    // As the export writes it: the effect's own delay first, its shape, then how long its animation runs.
+    const timed = (node: string, spid: string, delay: number, dur?: number) =>
+      `<p:cTn fill="hold" nodeType="${node}" presetClass="entr" presetID="10"><p:stCondLst><p:cond delay="${delay}"/></p:stCondLst>` +
+      `<p:childTnLst><p:set><p:cBhvr><p:cTn dur="1" fill="hold"/><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl></p:cBhvr></p:set>` +
+      (dur ? `<p:animEffect><p:cBhvr><p:cTn dur="${dur}"/><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl></p:cBhvr></p:animEffect>` : "") +
+      `</p:childTnLst></p:cTn>`;
+    const plan = animationPlan(
+      slideWith(timed("withEffect", "10", 0, 1000) + timed("afterEffect", "21", 200, 800) + timed("withEffect", "30", 100)),
+    );
+    assert.deepEqual(
+      [...plan.entries()].map(([index, p]) => [index, p.delay]),
+      [
+        [0, 0],
+        [1, 1200],
+        [2, 1300],
+      ],
+    );
+  });
+
+  test("reads a real slide whose shapes fade in together as it opens", () => {
+    const plan = animationPlan(readFileSync(join(import.meta.dirname, "fixtures/pptx-slide-entry-fades.xml"), "utf8"));
+    assert.equal(plan.size, 4);
+    assert.deepEqual(
+      [...plan.values()].map((p) => [p.step, p.effect, p.delay]),
+      Array.from({ length: 4 }, () => [0, "fade", 0]),
+    );
   });
 
   test("finds no plan in a slide without animations", () => {
@@ -102,56 +138,105 @@ describe("choosing the live elements", () => {
   });
 });
 
-describe("separating the live elements in the scratch copy", () => {
+describe("isolating the live elements in the scratch copy", () => {
   const elements = [box("bg", 9144000, 5143500), box("a", 10, 10), box("g", 10, 10, [box("g1", 5, 5), box("g2", 5, 5)])];
+  type Request = Record<string, { objectId: string; objectIds?: Record<string, string>; pageProperties?: unknown }>;
+  const requests = isolationRequests("slide", elements, [1, 2]) as Request[];
 
   test("names every grouped object as well as the group", () => {
     assert.deepEqual(objectIds(elements[2]!), ["g", "g1", "g2"]);
   });
 
-  test("makes a copy per live element holding it alone, and strips them all from the slide itself", () => {
-    const requests = separationRequests("slide", elements, [1, 2]) as Record<
-      string,
-      { objectId: string; objectIds?: Record<string, string> }
-    >[];
+  test("gives each live element a copy on black and one on white, every object in it named", () => {
     const copies = requests.filter((r) => r.duplicateObject).map((r) => r.duplicateObject!);
-    assert.equal(copies.length, 2);
-    assert.deepEqual(copies[0]!.objectIds, { slide: "slide_c0", a: "a_c0", g: "g_c0", g1: "g1_c0", g2: "g2_c0" });
+    assert.deepEqual(
+      copies.map((c) => c.objectIds!.slide),
+      ["slide_b0", "slide_w0", "slide_b1", "slide_w1"],
+    );
+    assert.deepEqual(copies[0]!.objectIds, { slide: "slide_b0", bg: "bg_b0", a: "a_b0", g: "g_b0", g1: "g1_b0", g2: "g2_b0" });
+    const backdrops = requests
+      .filter((r) => r.updatePageProperties)
+      .map((r) => [r.updatePageProperties!.objectId, JSON.stringify(r.updatePageProperties!.pageProperties)]);
+    assert.deepEqual(
+      backdrops.map(([id, fill]) => [id, fill!.includes('"red":1')]),
+      [
+        ["slide_b0", false],
+        ["slide_w0", true],
+        ["slide_b1", false],
+        ["slide_w1", true],
+      ],
+    );
+  });
+
+  test("leaves each copy its one element, background and all others gone, and strips the live ones from the slide", () => {
     const deleted = requests.filter((r) => r.deleteObject).map((r) => r.deleteObject!.objectId);
-    // Copy 0 keeps a and loses g; copy 1 keeps g and loses a; the slide loses both; the background is never touched.
-    assert.deepEqual(deleted, [copyId("g", 0), copyId("a", 1), "a", "g"]);
+    assert.deepEqual(deleted, [
+      copyId("bg", 0, "black"),
+      copyId("g", 0, "black"),
+      copyId("bg", 0, "white"),
+      copyId("g", 0, "white"),
+      copyId("bg", 1, "black"),
+      copyId("a", 1, "black"),
+      copyId("bg", 1, "white"),
+      copyId("a", 1, "white"),
+      "a",
+      "g",
+    ]);
+  });
+
+  test("clears what the layout and master draw, but keeps their placeholders, which the slide's text takes its style from", () => {
+    const pages = [
+      { pageElements: [{ objectId: "logo" }, { objectId: "title-style", shape: { placeholder: { type: "TITLE" } } }] },
+      { pageElements: [{ objectId: "stripe", shape: {} }] },
+    ];
+    assert.deepEqual(
+      (backdropRequests(pages) as { deleteObject: { objectId: string } }[]).map((r) => r.deleteObject.objectId),
+      ["logo", "stripe"],
+    );
   });
 });
 
-describe("differenceBox", () => {
-  const picture = (w: number, h: number, paint?: [number, number, number, number]) => {
-    const px = new Uint8Array(w * h * 3).fill(255);
-    if (paint) {
-      const [x0, y0, x1, y1] = paint;
-      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) px.fill(0, (y * w + x) * 3, (y * w + x) * 3 + 3);
-    }
-    return px;
-  };
+describe("unmatte", () => {
+  /** A 4×1 picture of an element alone, as Google draws it on `backdrop`: opaque red, half-clear black, nothing, opaque white. */
+  const drawn = (backdrop: 0 | 255) =>
+    new Uint8Array(
+      [255, 0, 0, 128 * (backdrop / 255), 128 * (backdrop / 255), 128 * (backdrop / 255), backdrop, backdrop, backdrop, 255, 255, 255].map(
+        Math.round,
+      ),
+    );
 
-  test("boxes what differs, padded, and kept inside the picture", () => {
-    assert.deepEqual(differenceBox(picture(100, 60), picture(100, 60, [40, 20, 50, 30]), 100, 60), {
+  test("recovers each pixel's colour and opacity from the element on black and on white", () => {
+    const { rgba } = unmatte(drawn(0), drawn(255), 4, 1);
+    const px = (i: number) => [...rgba.slice(i * 4, i * 4 + 4)];
+    assert.deepEqual(px(0), [255, 0, 0, 255]);
+    assert.deepEqual(px(1).slice(0, 3), [0, 0, 0]);
+    assert.ok(Math.abs(px(1)[3]! - 127) <= 1, `half clear, got ${px(1)[3]}`);
+    assert.equal(px(2)[3], 0);
+    // White on white is not mistaken for a hole: on black it is still white.
+    assert.deepEqual(px(3), [255, 255, 255, 255]);
+  });
+
+  test("boxes every visible pixel, padded and kept inside the picture", () => {
+    const w = 100;
+    const h = 60;
+    const black = new Uint8Array(w * h * 3);
+    const white = new Uint8Array(w * h * 3).fill(255);
+    for (let y = 20; y < 30; y++) {
+      for (let x = 40; x < 50; x++) {
+        black.fill(200, (y * w + x) * 3, (y * w + x) * 3 + 3);
+        white.fill(200, (y * w + x) * 3, (y * w + x) * 3 + 3);
+      }
+    }
+    assert.deepEqual(unmatte(black, white, w, h).box, {
       left: 40 - CUT_PADDING,
       top: 20 - CUT_PADDING,
       width: 10 + 2 * CUT_PADDING,
       height: 10 + 2 * CUT_PADDING,
     });
-    assert.deepEqual(differenceBox(picture(100, 60), picture(100, 60, [0, 0, 3, 3]), 100, 60), {
-      left: 0,
-      top: 0,
-      width: 3 + CUT_PADDING,
-      height: 3 + CUT_PADDING,
-    });
   });
 
-  test("is null for two pictures alike but for faint anti-aliasing", () => {
-    const faint = picture(20, 20);
-    faint[30] = 240;
-    assert.equal(differenceBox(picture(20, 20), faint, 20, 20), null);
+  test("finds nothing in a picture of nothing", () => {
+    assert.equal(unmatte(new Uint8Array(12), new Uint8Array(12).fill(255), 2, 2).box, null);
   });
 });
 
