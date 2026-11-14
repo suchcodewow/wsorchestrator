@@ -14,6 +14,7 @@ import { EVENT_GROUPS } from "./events";
 import { GAMES_GROUPS } from "./games";
 import { IRIS_GROUPS } from "./iris";
 import { MIMIR_GROUPS } from "./mimir";
+import { PRESENTATIONS_GROUPS } from "./presentations";
 import type { EndpointGroup } from "./types";
 
 export * from "./types";
@@ -24,7 +25,16 @@ const byId = (groups: EndpointGroup[], id: string): EndpointGroup => {
   return group;
 };
 
-const ALL = [...ACCOUNT_GROUPS, ...EVENT_GROUPS, ...CONTENT_GROUPS, ...ADMIN_GROUPS, ...IRIS_GROUPS, ...MIMIR_GROUPS, ...GAMES_GROUPS];
+const ALL = [
+  ...ACCOUNT_GROUPS,
+  ...EVENT_GROUPS,
+  ...CONTENT_GROUPS,
+  ...ADMIN_GROUPS,
+  ...IRIS_GROUPS,
+  ...MIMIR_GROUPS,
+  ...GAMES_GROUPS,
+  ...PRESENTATIONS_GROUPS,
+];
 
 /** In reading order: yourself, then events, then content, then administration. */
 export const GROUPS: EndpointGroup[] = [
@@ -48,6 +58,7 @@ export const GROUPS: EndpointGroup[] = [
   "logistics",
   "daily-surveys",
   "recordings",
+  "presentations",
   "training-games",
   "video-feedback",
   "evals-scoring",

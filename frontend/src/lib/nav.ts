@@ -21,6 +21,7 @@ import {
   Luggage,
   MessageSquareShare,
   MessageSquareText,
+  Presentation,
   ScrollText,
   Settings,
   Settings2,
@@ -187,6 +188,13 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Async Recordings",
         Icon: Video,
         description: "One link anyone in the org can use to record their camera, and their screen, as separate files.",
+        visible: canUseTraining,
+      },
+      {
+        href: "/presentations",
+        label: "Presentations",
+        Icon: Presentation,
+        description: "Google Slides decks to present full screen, with speaker notes in a tab of their own.",
         visible: canUseTraining,
       },
       {
