@@ -11,6 +11,7 @@
 // would then be running against a half-changed schema.
 //
 //   SKIP_DEV_MIGRATE=1 npm run dev     # start without it
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { applyMigrations, databaseName, databaseUrlFrom, frontend, isCloudSql, isLocalContainer, withClient } from "./local-db.mjs";
 
@@ -26,13 +27,28 @@ if (!isLocalContainer(url)) {
   process.exit(0);
 }
 
-let state;
-try {
-  state = await withClient(url, async (client) => {
+const probe = () =>
+  withClient(url, async (client) => {
     if (await isCloudSql(client)) return "cloud";
     const { rows } = await client.query("select count(*)::int as n from information_schema.tables where table_schema = 'public'");
     return rows[0].n > 0 ? "ready" : "empty";
   });
+
+let state;
+try {
+  try {
+    state = await probe();
+  } catch (err) {
+    // The container stops when Docker or Colima restarts. Start it and try once more;
+    // if docker is missing or the start fails, fall through to the note below.
+    if (err.code !== "ECONNREFUSED" && err.errors?.[0]?.code !== "ECONNREFUSED") throw err;
+    console.log("migrations: Postgres is not running, starting it (docker compose up -d --wait postgres)");
+    const up = spawnSync("docker", ["compose", "-f", path.join(frontend, "..", "docker-compose.yml"), "up", "-d", "--wait", "postgres"], {
+      stdio: "inherit",
+    });
+    if (up.status !== 0) throw err;
+    state = await probe();
+  }
 } catch (err) {
   // A refused connection is an AggregateError with an empty message; its code says it.
   const why = err.code ?? (err.message || "no answer");
