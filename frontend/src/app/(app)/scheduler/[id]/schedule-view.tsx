@@ -9,13 +9,15 @@
  * one, a track-day at a time; what clashes is worked out here as things move.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
+  MeasuringStrategy,
   PointerSensor,
   pointerWithin,
   rectIntersection,
@@ -334,8 +336,9 @@ export function ScheduleView({
     const at = `${point.key}@${point.start}/${point.lane}`;
     if (at === dropping.current) return;
     dropping.current = at;
-    // Over a +, the board stays as it was, so the + stays under the pointer; the card goes beside on letting go.
-    setDays(point.lane > 0 ? from.days : moveTo(from.days, String(event.active.id), point.key, point.start));
+    // Over a +, the preview holds still, so the + stays under the pointer; the card goes beside on letting go.
+    if (point.lane > 0) return;
+    setDays(moveTo(from.days, String(event.active.id), point.key, point.start));
   };
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -366,6 +369,9 @@ export function ScheduleView({
   };
 
   const active = activeId ? placed.find((s) => s.id === activeId) : undefined;
+  // The dragged card's copy is pinned to the window, so it is drawn on the body: inside the
+  // page, the wide view's centring would make it the box the copy is placed in, off to one side.
+  const overlayHost = useSyncExternalStore(noSubscription, bodyOf, noBody);
 
   // ── Resizing ────────────────────────────────────────────────────────────
   /** The schedule as the resize began: each step is worked out from it, so what was pushed comes back as it shrinks. */
@@ -586,6 +592,7 @@ export function ScheduleView({
             id={`schedule-${bootcamp.id}`}
             sensors={sensors}
             collisionDetection={underPointer}
+            measuring={MEASURING}
             onDragStart={onDragStart}
             onDragMove={onDragMove}
             onDragEnd={onDragEnd}
@@ -608,26 +615,30 @@ export function ScheduleView({
               marks={checklistButtons.marks}
               footerAction={surveyButtons.dayButton}
             />
-            <DragOverlay dropAnimation={null}>
-              {active && (
-                <div className="px-1.5" style={{ height: active.minutes * SCALE[boardDensity] }}>
-                  <SessionFace
-                    session={active}
-                    start={active.start}
-                    scale={SCALE[boardDensity]}
-                    density={boardDensity}
-                    issues={showIssues ? flagged : NO_ISSUES}
-                    roomNames={roomNames}
-                    canManage={false}
-                    resizingId={null}
-                    onOpen={() => {}}
-                    onResize={() => {}}
-                    onResizeEnd={() => {}}
-                    lifted
-                  />
-                </div>
+            {overlayHost &&
+              createPortal(
+                <DragOverlay dropAnimation={null}>
+                  {active && (
+                    <div className="px-1.5" style={{ height: active.minutes * SCALE[boardDensity] }}>
+                      <SessionFace
+                        session={active}
+                        start={active.start}
+                        scale={SCALE[boardDensity]}
+                        density={boardDensity}
+                        issues={showIssues ? flagged : NO_ISSUES}
+                        roomNames={roomNames}
+                        canManage={false}
+                        resizingId={null}
+                        onOpen={() => {}}
+                        onResize={() => {}}
+                        onResizeEnd={() => {}}
+                        lifted
+                      />
+                    </div>
+                  )}
+                </DragOverlay>,
+                overlayHost,
               )}
-            </DragOverlay>
           </DndContext>
         )}
       </motion.div>
@@ -688,6 +699,13 @@ const underPointer: CollisionDetection = (args) => {
     ? columns
     : rectIntersection({ ...args, droppableContainers: args.droppableContainers.filter((c) => !String(c.id).startsWith(BESIDE_PREFIX)) });
 };
+
+const noSubscription = () => () => {};
+const bodyOf = () => document.body;
+const noBody = () => null;
+
+/** Drop targets measured all through a drag, as the preview pushes cards and the + on each moves with it. */
+const MEASURING = { droppable: { strategy: MeasuringStrategy.Always } };
 
 const ISSUES_IN_TOOLTIP = 8;
 const NO_ISSUES = new Map<string, string[]>();
