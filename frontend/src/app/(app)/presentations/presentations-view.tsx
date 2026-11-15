@@ -5,7 +5,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { NotebookText, Play, Plus } from "lucide-react";
+import { FlaskConical, NotebookText, Play, Plus } from "lucide-react";
 import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { usePresenter } from "@/components/presentations/player";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,13 @@ export function PresentationsView({
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild} className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-medium tracking-tight">Presentations</h1>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <h1 className="text-3xl font-medium tracking-tight">Presentations</h1>
+          <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted/50 px-2.5 py-1 text-xs text-muted-foreground">
+            <FlaskConical className="size-3.5" />
+            experimental- not for use by children under 8
+          </span>
+        </div>
         {canManage && (
           <Button variant="brand" onClick={() => setAdding(true)}>
             <Plus />

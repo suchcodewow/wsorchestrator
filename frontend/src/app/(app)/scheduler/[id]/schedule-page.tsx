@@ -1,6 +1,7 @@
 /**
  * The page around one bootcamp's schedule, once it is loaded: shown at
  * /scheduler/{id}, and at /scheduler/active for whichever bootcamp is active.
+ * It spans the width beside the sidebar, so each track's column has room.
  */
 
 import { cookies } from "next/headers";
@@ -13,6 +14,7 @@ import { parseScheduleCondensed, parseScheduleView, SCHEDULE_CONDENSED_COOKIE, S
 import { copySources, type Schedule } from "@/lib/scheduler/schedule";
 import { allSessionTypes } from "@/lib/scheduler/session-types";
 import { surveyDays } from "@/lib/surveys/surveys";
+import { WideView } from "@/components/wide-view";
 import { ScheduleView } from "./schedule-view";
 
 const MONTH_YEAR = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
@@ -34,7 +36,7 @@ export async function SchedulePage({ schedule, viewer }: { schedule: Schedule; v
   const { bootcamp } = schedule;
 
   return (
-    <div className="space-y-6">
+    <WideView className="space-y-6">
       <div className="space-y-2">
         <BackToScheduler />
         <h1 className="text-3xl font-medium tracking-tight">{MONTH_YEAR.format(new Date(`${bootcamp.startDate}T00:00:00Z`))} Bootcamp</h1>
@@ -53,7 +55,7 @@ export async function SchedulePage({ schedule, viewer }: { schedule: Schedule; v
         initialView={initialView}
         initialCondensed={initialCondensed}
       />
-    </div>
+    </WideView>
   );
 }
 

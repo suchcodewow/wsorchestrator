@@ -107,7 +107,7 @@ const RECORDING_TRACK_SHAPE = `{ id, takeId, kind: "camera" | "screen", mimeType
 
 const MINUTES_NOTE = `a multiple of ${SCHEDULE_LIMITS.slot} from ${SCHEDULE_LIMITS.slot} to ${SCHEDULE_LIMITS.maxMinutes}`;
 
-const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, kind, audience: ${AUDIENCE_TYPE}, typeId: string | null, name, description, emoji, color, roomId: string | null, assessmentId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, largestGroup: number, assigned: string[], updatedAt }`;
+const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, lane: number, kind, audience: ${AUDIENCE_TYPE}, typeId: string | null, name, description, emoji, color, roomId: string | null, assessmentId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, largestGroup: number, assigned: string[], updatedAt }`;
 
 const CLASH_SHAPE = `{ sessionId, name, track, day, start: number, end: number, what: { kind: "person", email, fullName } | { kind: "room", roomId } | { kind: "audience", group: "sales" | "engineers" } }`;
 
@@ -1479,7 +1479,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           "Reads one bootcamp's whole schedule: every day of its four tracks, its rooms, who can run a session, and the assessments a breakout can be scored on.",
         access: "scheduleReader",
         token: true,
-        notes: `days.btc[0] is day 1 of Bootcamp; each day's sessions are in start order, at most ${SCHEDULE_LIMITS.sessionsPerDay}. start is minutes after midnight, on the quarter hour, from 480 (8:00 AM); a session ends by midnight, and no two on one track-day overlap. Time between them is unscheduled. The SE tracks run as many days as the class they break out of, and a track the bootcamp does not hold has no days. Day N of every track is the same calendar day. instructors is every Training administrator and every guest judge of the bootcamp. assessments is every active assessment, and any inactive one a session here still names, at most 100. classes lists, by email, who each class is now on each track (at most ${SCHEDULE_LIMITS.groupPeople} each), and a session's assigned is everyone in its breakout groups, so a breakout can be checked for anyone it leaves out.`,
+        notes: `days.btc[0] is day 1 of Bootcamp; each day's sessions are in start order, at most ${SCHEDULE_LIMITS.sessionsPerDay}. start is minutes after midnight, on the quarter hour, from 480 (8:00 AM); a session ends by midnight. lane is 0 for the track-day's main line, and 1 or 2 for a session run beside the ones it overlaps in the lanes before it; no two in one lane of a track-day overlap. Time nothing is scheduled in is unscheduled. The SE tracks run as many days as the class they break out of, and a track the bootcamp does not hold has no days. Day N of every track is the same calendar day. instructors is every Training administrator and every guest judge of the bootcamp. assessments is every active assessment, and any inactive one a session here still names, at most 100. classes lists, by email, who each class is now on each track (at most ${SCHEDULE_LIMITS.groupPeople} each), and a session's assigned is everyone in its breakout groups, so a breakout can be checked for anyone it leaves out.`,
         params: [BOOTCAMP_ID],
         returns: `{ bootcamp: { id, startDate, btcDays, intDays, status, facilityId, facilityName }, rooms: { id, name, capacity }[], instructors: { email, fullName, role: "administrator" | "judge" }[], assessments: { id, name, stage: "bootcamp" | "intermediate", active: boolean }[], days: { btc, int, btc_se, int_se: ${SESSION_SHAPE}[][] }, classes: { bootcamp, intermediate: { sales: string[], engineer: string[] } } }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
@@ -1498,9 +1498,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           fields: [
             {
               name: "days",
-              type: `{ track: ${TRACK_TYPE}, day: number, sessions: { id, start: number, minutes: number }[] }[]`,
+              type: `{ track: ${TRACK_TYPE}, day: number, sessions: { id, start: number, minutes: number, lane?: number }[] }[]`,
               required: true,
-              note: `start is minutes after midnight, on the quarter hour; minutes is ${MINUTES_NOTE}; at most ${SCHEDULE_LIMITS.sessionsPerDay} sessions a day`,
+              note: `start is minutes after midnight, on the quarter hour; minutes is ${MINUTES_NOTE}; lane is 0 to ${SCHEDULE_LIMITS.lanes - 1}, 0 when left out; at most ${SCHEDULE_LIMITS.sessionsPerDay} sessions a day`,
             },
           ],
         },
@@ -1511,7 +1511,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           {
             status: 400,
             error: "overlap",
-            when: "two sessions of a day overlap, or one starts before 8:00 AM, off the quarter hour, or runs past midnight",
+            when: "two sessions in one lane of a day overlap, or one starts before 8:00 AM, off the quarter hour, or runs past midnight",
           },
           { status: 404, error: "not_found", when: "no such bootcamp" },
           { status: 409, error: "stale", when: "the sessions named are not exactly the ones those days hold now; reload and try again" },
@@ -1597,7 +1597,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "If it runs into a session after it, that one and any it then runs into are pushed later; unscheduled time between them takes up the push first. An unstructured session keeps no staff or room; a main one keeps no rooms on its staff; a breakout keeps no room of its own.",
+          "If it runs into a session after it in its lane, that one and any it then runs into are pushed later; unscheduled time between them takes up the push first. Given a lane of 1 or 2, it runs beside the sessions it overlaps; one that overlaps nothing in a lane before it is put in the first such lane. Sessions side by side on one track split its class, so they never clash over attendees, only over a person or a room. An unstructured session keeps no staff or room; a main one keeps no rooms on its staff; a breakout keeps no room of its own.",
         params: [BOOTCAMP_ID],
         body: {
           kind: "json",
@@ -1607,8 +1607,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             {
               name: "start",
               type: "number",
-              note: "minutes after midnight, rounded to the quarter hour; left out, straight after the day's last session. In the top half of another session it takes that one's place; in the bottom half, it goes after it",
+              note: "minutes after midnight, rounded to the quarter hour; left out, straight after the day's last session. In the top half of another session in its lane it takes that one's place; in the bottom half, it goes after it",
             },
+            { name: "lane", type: "number", note: `0 to ${SCHEDULE_LIMITS.lanes - 1}; left out, 0, the main line` },
             ...SESSION_LOOK_FIELDS,
             ...SESSION_STAFF_FIELDS,
           ],

@@ -1961,6 +1961,8 @@ export const SCHEDULE_LIMITS = {
   slot: 15,
   maxMinutes: 600,
   sessionsPerDay: 40,
+  /** The sessions that can run side by side on one track-day: the main line and two beside it. */
+  lanes: 3,
   staff: 12,
   name: 200,
   description: 4000,
@@ -2003,8 +2005,9 @@ export type SessionType = typeof sessionTypes.$inferSelect;
 
 /**
  * One session on one day of one track, from `start` for `minutes`. The
- * sessions of one track-day never overlap; the time between them is
- * unscheduled.
+ * sessions of one lane of a track-day never overlap; the time between them is
+ * unscheduled. Lane 0 is the day's main line; a session in lane 1 or 2 runs
+ * beside the ones it overlaps in the lanes before it.
  */
 export const scheduleSessions = pgTable(
   "schedule_sessions",
@@ -2019,6 +2022,8 @@ export const scheduleSessions = pgTable(
     /** Minutes after midnight, on the quarter hour. */
     start: integer("start_minute").notNull(),
     minutes: integer("minutes").notNull(),
+    /** 0 for the main line; 1 or 2 beside it, the newest furthest right. */
+    lane: integer("lane").notNull().default(0),
     kind: text("kind").$type<SessionKind>().notNull(),
     /** Ignored for an unstructured session, which teaches no one. */
     audience: text("audience").$type<SessionAudience>().notNull().default("both"),
@@ -2043,6 +2048,7 @@ export const scheduleSessions = pgTable(
     check("schedule_sessions_audience_check", sql`${t.audience} in ('both', 'sales', 'engineers')`),
     check("schedule_sessions_day_check", sql`${t.day} between 1 and 30`),
     check("schedule_sessions_minutes_check", sql`${t.minutes} between 15 and 600 and ${t.minutes} % 15 = 0`),
+    check("schedule_sessions_lane_check", sql`${t.lane} between 0 and 2`),
     check("schedule_sessions_start_check", sql`${t.start} >= 0 and ${t.start} % 15 = 0 and ${t.start} + ${t.minutes} <= 1440`),
   ],
 );

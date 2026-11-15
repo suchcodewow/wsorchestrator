@@ -57,7 +57,17 @@ import { confirmDialog, noticeDialog } from "@/components/ui/confirm";
 
 export type SessionTarget =
   /** `start` is the unscheduled time it was added in; without one it goes after the last session of the day. */
-  { mode: "new"; track: ScheduleTrack; day: number; start?: number } | { mode: "edit"; session: SessionRow };
+  | {
+      mode: "new";
+      track: ScheduleTrack;
+      day: number;
+      start?: number;
+      /** Beside the sessions it overlaps, from the + at a card's edge or unscheduled time beside one; the main line when left out. */
+      lane?: number;
+      /** How long it starts out: the card it is put beside, or the unscheduled time it fills. */
+      minutes?: number;
+    }
+  | { mode: "edit"; session: SessionRow };
 
 const ERRORS: Record<string, string> = {
   invalid: "Give it a name, and a length in whole quarter hours.",
@@ -156,7 +166,7 @@ export function SessionDialog({
     setWas(target);
     if (target) {
       const s = target.mode === "edit" ? target.session : null;
-      setLook(s ? lookOf(s) : BLANK);
+      setLook(s ? lookOf(s) : target.mode === "new" && target.minutes ? { ...BLANK, minutes: target.minutes } : BLANK);
       setTypeId(s?.typeId ?? null);
       setAudience(s?.audience ?? defaultAudience(target.mode === "new" ? target.track : target.session.track));
       setStaff(s?.staff ?? []);
@@ -285,7 +295,17 @@ export function SessionDialog({
         {
           method: existing ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(existing ? fields : { track: where!.track, day: where!.day, start: where!.start, ...fields }),
+          body: JSON.stringify(
+            existing
+              ? fields
+              : {
+                  track: where!.track,
+                  day: where!.day,
+                  start: where!.start,
+                  lane: target?.mode === "new" ? target.lane : undefined,
+                  ...fields,
+                },
+          ),
         },
       );
       const out = await res.json().catch(() => null);
