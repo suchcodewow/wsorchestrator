@@ -396,6 +396,10 @@ function DraggableSession({
   const { session, scale, canManage } = props;
   // The card stays put while a copy follows the pointer; where it would land is shown by moving the card itself.
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: session.id, disabled: !canManage });
+  const beside = useDroppable({ id: `${BESIDE_PREFIX}${session.id}`, disabled: !onBeside || isDragging });
+  const [atEdge, setAtEdge] = useState(false);
+  // Open, the + takes the right edge and the card's text moves over to make room for it.
+  const open = Boolean(onBeside) && !isDragging && (beside.isOver || (atEdge && !dragging));
   return (
     <div
       ref={setNodeRef}
@@ -414,45 +418,70 @@ function DraggableSession({
         paddingRight: box.padRight,
       }}
     >
-      <SessionFace
-        {...props}
-        handle={{
-          ...attributes,
-          ...listeners,
-          onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
-            listeners?.onKeyDown?.(e);
-            if (e.key === "Enter" && !isDragging) props.onOpen(session);
-          },
-        }}
-      />
-      {onBeside && !isDragging && <BesideButton session={session} padRight={box.padRight} dragging={dragging} onClick={onBeside} />}
+      <div className="relative h-full">
+        <div className="h-full transition-[margin] duration-150 ease-out" style={{ marginRight: open ? BESIDE_WIDTH : 0 }}>
+          <SessionFace
+            {...props}
+            handle={{
+              ...attributes,
+              ...listeners,
+              onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+                listeners?.onKeyDown?.(e);
+                if (e.key === "Enter" && !isDragging) props.onOpen(session);
+              },
+            }}
+          />
+        </div>
+        {onBeside && !isDragging && (
+          <BesideButton
+            session={session}
+            dropRef={beside.setNodeRef}
+            open={open}
+            dragging={dragging}
+            onEdge={setAtEdge}
+            onClick={onBeside}
+          />
+        )}
+      </div>
     </div>
   );
 }
 
+/** How much of a card's right edge the + takes: a tenth of it, and never too narrow to aim at. */
+const BESIDE_WIDTH = "max(10%, 1rem)";
+
 /**
- * The + along a card's right edge: shown on hover, and on every card a
- * dragged one could be dropped beside while one is dragged. Clicking it adds
- * a session beside the card; dropping a card on it puts that card there.
+ * The + along a card's right edge. It opens when the pointer reaches that
+ * edge, or a dragged card is held over it, pushing the card's text over;
+ * while a card is dragged, every card it could go beside marks its edge.
+ * Clicking it adds a session beside the card; dropping a card on it puts
+ * that card there.
  */
 function BesideButton({
   session,
-  padRight,
+  dropRef,
+  open,
   dragging,
+  onEdge,
   onClick,
 }: {
   session: SessionRow;
-  padRight: string;
+  dropRef: (node: HTMLElement | null) => void;
+  open: boolean;
   dragging: boolean;
+  onEdge: (on: boolean) => void;
   onClick: () => void;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `${BESIDE_PREFIX}${session.id}` });
   return (
     <button
-      ref={setNodeRef}
+      ref={dropRef}
       type="button"
       aria-label={`Add a session beside ${session.name}`}
       title={dragging ? `Drop to put it beside ${session.name}` : `Add a session beside ${session.name}`}
+      onPointerEnter={() => onEdge(true)}
+      onPointerLeave={() => onEdge(false)}
+      onFocus={() => onEdge(true)}
+      onBlur={() => onEdge(false)}
       // Kept from the card, which would otherwise start dragging it.
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
@@ -460,17 +489,22 @@ function BesideButton({
         onClick();
       }}
       className={cn(
-        "absolute top-px bottom-2.5 z-20 flex w-[10%] min-w-4 items-center justify-center rounded-r-md border-l text-brand transition-[opacity,background-color]",
-        "focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
-        isOver
-          ? "border-brand bg-brand/25 opacity-100"
-          : dragging
-            ? "border-dashed border-brand-border bg-brand/8 opacity-100"
-            : "border-brand-border bg-card/90 opacity-0 group-hover/card:opacity-100 hover:bg-brand/15",
+        "absolute inset-y-0 right-0 z-20 flex items-center justify-center rounded-md border border-dashed text-brand transition-[opacity,background-color,border-color] duration-150",
+        "focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+        open
+          ? "border-brand-border bg-brand/15 opacity-100 hover:bg-brand/20"
+          : // While a card is dragged, a thin line at the edge says it can go beside this one.
+            dragging
+            ? "border-transparent opacity-100"
+            : "border-transparent opacity-0",
       )}
-      style={{ right: padRight }}
+      style={{ width: BESIDE_WIDTH }}
     >
-      <Plus className="size-3.5 shrink-0" />
+      {open ? (
+        <Plus className="size-3.5 shrink-0" />
+      ) : (
+        dragging && <span aria-hidden className="absolute inset-y-1 right-0 w-0.5 rounded-full bg-brand/60" />
+      )}
     </button>
   );
 }
