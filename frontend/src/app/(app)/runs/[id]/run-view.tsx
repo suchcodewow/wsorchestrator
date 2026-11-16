@@ -6,7 +6,9 @@ import { StatusBadge } from "@/components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CLOUD_LABELS, editabilityOf, type RunLog, type RunResource, type WorkshopAccount, type WorkshopRun } from "@/db/schema";
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowRight,
   Boxes,
   Building2,
   Check,
@@ -419,10 +421,61 @@ const RESOURCE_ICONS: Record<string, LucideIcon> = {
   harness_repos: Github,
 };
 
+type Group = "workspace" | "harness" | "cloud";
+
+const CLOUD_GROUPS: { id: string; name: string; kinds: string[]; accent: string }[] = [
+  { id: "gcp", name: "Google Cloud", kinds: ["gcp_project", "gke_cluster"], accent: "text-blue-600 dark:text-blue-400" },
+  { id: "azure", name: "Azure", kinds: ["azure_resource_group", "aks_cluster"], accent: "text-sky-600 dark:text-sky-400" },
+  { id: "aws", name: "AWS", kinds: ["aws_account", "eks_cluster"], accent: "text-amber-600 dark:text-amber-400" },
+];
+
+function groupOf(kind: string): Group {
+  if (kind === "org_unit" || kind === "accounts") return "workspace";
+  if (kind.startsWith("harness_")) return "harness";
+  return "cloud";
+}
+
+const GROUP_STYLE: Record<Group, { name: string; icon: LucideIcon; badge: string; tile: string; bar: string }> = {
+  workspace: {
+    name: "Google Workspace",
+    icon: Building2,
+    badge: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+    tile: "border-blue-500/25 bg-blue-500/5",
+    bar: "bg-blue-500",
+  },
+  harness: {
+    name: "Harness",
+    icon: Layers,
+    badge: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+    tile: "border-cyan-500/25 bg-cyan-500/5",
+    bar: "bg-cyan-500",
+  },
+  cloud: {
+    name: "Cloud resources",
+    icon: Cloud,
+    badge: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+    tile: "border-violet-500/25 bg-violet-500/5",
+    bar: "bg-violet-500",
+  },
+};
+
 function BuiltPanel({ run, resources }: { run: WorkshopRun; resources: RunResource[] }) {
   const building = ACTIVE.has(run.status) && run.status !== "destroying";
   const teardownGaveUp = run.status === "destroy_failed";
   const tearingDown = !teardownGaveUp && (run.status === "destroying" || run.deleteRequested);
+
+  const workspace = resources.filter((r) => groupOf(r.kind) === "workspace");
+  const harness = resources.filter((r) => groupOf(r.kind) === "harness");
+  const cloud = resources.filter((r) => groupOf(r.kind) === "cloud");
+  const cloudCards = CLOUD_GROUPS.map((g) => ({ ...g, items: cloud.filter((r) => g.kinds.includes(r.kind)) })).filter(
+    (g) => g.items.length > 0,
+  );
+  const knownCloud = new Set(CLOUD_GROUPS.flatMap((g) => g.kinds));
+  const otherCloud = cloud.filter((r) => !knownCloud.has(r.kind));
+  if (otherCloud.length > 0) cloudCards.push({ id: "other", name: "Other", kinds: [], accent: "text-violet-600", items: otherCloud });
+
+  // The arrows move while the build runs and sit still once it is done.
+  const flowing = building;
 
   return (
     <Panel
@@ -440,62 +493,191 @@ function BuiltPanel({ run, resources }: { run: WorkshopRun; resources: RunResour
       {resources.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing built yet — the first items appear within a minute.</p>
       ) : (
-        <ul className="grid gap-2">
-          <AnimatePresence initial={false}>
-            {resources.map((r) => (
-              <ResourceRow key={r.id} resource={r} />
-            ))}
-          </AnimatePresence>
-        </ul>
+        <div className="grid gap-3">
+          <div className="grid items-stretch gap-3 lg:grid-cols-[1fr_auto_1fr] lg:gap-0">
+            {workspace.length > 0 ? <ToolCard group="workspace" items={workspace} /> : <div className="hidden lg:block" />}
+            {workspace.length > 0 && harness.length > 0 ? (
+              <Connector label="Accounts added" active={flowing} direction="right" />
+            ) : (
+              <div className="hidden lg:block" />
+            )}
+            {harness.length > 0 ? <ToolCard group="harness" items={harness} /> : <div className="hidden lg:block" />}
+          </div>
+
+          {cloudCards.length > 0 && (
+            <>
+              {workspace.length > 0 && (
+                <div className="lg:grid lg:grid-cols-[1fr_auto_1fr]">
+                  <Connector label="Cloud access granted" active={flowing} direction="down" />
+                </div>
+              )}
+              <section className={cn("rounded-xl border p-3", GROUP_STYLE.cloud.tile)}>
+                <ToolHeader group="cloud" />
+                <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <AnimatePresence initial={false}>
+                    {cloudCards.map((g) => (
+                      <motion.div
+                        key={g.id}
+                        layout
+                        initial={{ opacity: 0, scale: 0.97 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="rounded-lg border bg-card p-2.5"
+                      >
+                        <div className={cn("mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider", g.accent)}>
+                          <Cloud className="size-3.5" />
+                          {g.name}
+                        </div>
+                        <ul className="grid gap-2">
+                          {g.items.map((r) => (
+                            <ResourceTile key={r.id} resource={r} group="cloud" />
+                          ))}
+                        </ul>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              </section>
+            </>
+          )}
+        </div>
       )}
     </Panel>
   );
 }
 
-function ResourceRow({ resource }: { resource: RunResource }) {
+function ToolHeader({ group, count }: { group: Group; count?: number }) {
+  const style = GROUP_STYLE[group];
+  const Icon = style.icon;
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className={cn("flex size-8 items-center justify-center rounded-lg", style.badge)}>
+        <Icon className="size-4.5" />
+      </span>
+      <h3 className="text-sm font-semibold tracking-tight">{style.name}</h3>
+      {count !== undefined && (
+        <span className="ml-auto rounded-full bg-background/70 px-2 py-0.5 text-xs text-muted-foreground tnum">{count}</span>
+      )}
+    </div>
+  );
+}
+
+function ToolCard({ group, items }: { group: Group; items: RunResource[] }) {
+  return (
+    <section className={cn("rounded-xl border p-3", GROUP_STYLE[group].tile)}>
+      <ToolHeader group={group} count={items.length} />
+      <ul className="mt-3 grid gap-2">
+        <AnimatePresence initial={false}>
+          {items.map((r) => (
+            <ResourceTile key={r.id} resource={r} group={group} />
+          ))}
+        </AnimatePresence>
+      </ul>
+    </section>
+  );
+}
+
+/** An arrow between two tool cards; a dot travels along it while the build runs. */
+function Connector({ label, active, direction }: { label: string; active: boolean; direction: "right" | "down" }) {
+  const dot = (axis: "x" | "y") => (
+    <motion.span
+      aria-hidden
+      className="absolute size-1.5 rounded-full bg-brand"
+      style={axis === "x" ? { top: -2, left: 0 } : { left: -2, top: 0 }}
+      animate={axis === "x" ? { x: [0, 56], opacity: [0, 1, 0] } : { y: [0, 32], opacity: [0, 1, 0] }}
+      transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+    />
+  );
+  const label_ = (
+    <span className="rounded-full border bg-card px-2 py-0.5 text-[11px] whitespace-nowrap text-muted-foreground">{label}</span>
+  );
+  const horizontal = (
+    <div className="hidden flex-col items-center justify-center gap-1.5 px-3 lg:flex">
+      {label_}
+      <div className="relative flex w-16 items-center">
+        <span className="h-px flex-1 border-t-2 border-dashed border-muted-foreground/50" />
+        <ArrowRight className="-ml-1 size-4 text-muted-foreground" />
+        {active && dot("x")}
+      </div>
+    </div>
+  );
+  const vertical = (
+    <div className={cn("flex flex-col items-center gap-1.5", direction === "right" ? "lg:hidden" : "")}>
+      <div className="relative flex h-9 flex-col items-center">
+        <span className="w-px flex-1 border-l-2 border-dashed border-muted-foreground/50" />
+        <ArrowDown className="-mt-1 size-4 text-muted-foreground" />
+        {active && dot("y")}
+      </div>
+      {label_}
+    </div>
+  );
+  return direction === "right" ? (
+    <>
+      {horizontal}
+      {vertical}
+    </>
+  ) : (
+    <div className="flex justify-center lg:justify-self-center">{vertical}</div>
+  );
+}
+
+function ResourceTile({ resource, group }: { resource: RunResource; group: Group }) {
   const Icon = RESOURCE_ICONS[resource.kind] ?? Boxes;
   const { done, total } = resource;
   const counted = done !== null && total !== null;
   const pending = counted && done < total;
+  const pct = counted && total > 0 ? Math.round((done / total) * 100) : 100;
 
   return (
     <motion.li
       layout
-      initial={{ opacity: 0, y: -4 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: -6, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5"
+      transition={{ duration: 0.25 }}
+      className="rounded-lg border bg-card px-3 py-2.5 shadow-xs"
     >
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-        <Icon className="size-4" />
-      </span>
-
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium">{resource.label}</div>
-        {resource.detail && <div className="truncate font-mono text-xs text-muted-foreground">{resource.detail}</div>}
-      </div>
-
-      {counted && (
-        <span className={cn("shrink-0 text-sm tnum", pending ? "text-muted-foreground" : "text-foreground")}>
-          {done}
-          <span className="text-muted-foreground">/{total}</span>
+      <div className="flex items-center gap-3">
+        <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-md", GROUP_STYLE[group].badge)}>
+          <Icon className="size-4" />
         </span>
-      )}
 
-      {resource.url && (
-        <Button variant="ghost" size="sm" asChild>
-          <Link href={resource.url} target="_blank" rel="noreferrer">
-            Open
-            <ExternalLink />
-          </Link>
-        </Button>
-      )}
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium">{resource.label}</div>
+          {resource.detail && <div className="truncate font-mono text-xs text-muted-foreground">{resource.detail}</div>}
+        </div>
 
-      {pending ? (
-        <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
-      ) : (
-        <CircleCheck className="size-4 shrink-0 text-emerald-600" />
+        {counted && (
+          <span className={cn("shrink-0 text-sm tnum", pending ? "text-muted-foreground" : "text-foreground")}>
+            {done}
+            <span className="text-muted-foreground">/{total}</span>
+          </span>
+        )}
+
+        {resource.url && (
+          <Button variant="ghost" size="sm" asChild>
+            <Link href={resource.url} target="_blank" rel="noreferrer">
+              Open
+              <ExternalLink />
+            </Link>
+          </Button>
+        )}
+
+        {pending ? (
+          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+        ) : (
+          <CircleCheck className="size-4 shrink-0 text-emerald-600" />
+        )}
+      </div>
+      {counted && (
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
+          <motion.div
+            className={cn("h-full rounded-full", pending ? GROUP_STYLE[group].bar : "bg-emerald-500")}
+            initial={false}
+            animate={{ width: `${pct}%` }}
+            transition={{ duration: 0.4 }}
+          />
+        </div>
       )}
     </motion.li>
   );
