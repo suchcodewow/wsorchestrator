@@ -4186,6 +4186,18 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       },
       {
         method: "POST",
+        path: "/api/slack/commands",
+        summary: "Answers Slack's /val slash command with the upcoming bootcamps, as the Welcome page lists them.",
+        access: "internal",
+        token: false,
+        changesNothing: true,
+        notes:
+          "Accepts only a form-encoded post (with a command field, such as /val) signed by Slack with SLACK_SIGNING_SECRET (the X-Slack-Signature and X-Slack-Request-Timestamp headers, within five minutes); unset, every call is refused. /val answers up to 12 bootcamps not yet over, soonest first, in a reply only the person who asked sees; any other command is told to try /val. Set the command's Request URL in the Slack app to this path.",
+        returns: '{ response_type: "ephemeral", text: string }',
+        errors: [{ status: 401, error: "unauthorized", when: "the signature is missing, wrong or stale" }],
+      },
+      {
+        method: "POST",
         path: "/api/backups/production/finish",
         summary: "Finishes a production import, called by the import job.",
         access: "internal",

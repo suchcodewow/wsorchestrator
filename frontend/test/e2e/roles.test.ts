@@ -1131,6 +1131,18 @@ describe("the shared OAuth callback", () => {
   });
 });
 
+describe("Slack's slash commands", () => {
+  // Slack's signature is the only way in: no session, and no unsigned post, gets past it.
+  test("refuses every session and an unsigned post", async () => {
+    const wrong: string[] = [];
+    for (const who of [SIGNED_OUT, ...PERSONA_NAMES]) {
+      const { status } = await send(who, "POST", "/api/slack/commands", {});
+      if (status !== 401) wrong.push(`${label(who as Who)}: got ${status}`);
+    }
+    assert.deepEqual(wrong, []);
+  });
+});
+
 describe("the Timed Jobs dispatcher's tick", () => {
   // Cloud Scheduler's OIDC token is the only way in: no session, and no token
   // that is not Google's, gets past it.
