@@ -55,7 +55,7 @@ export function escapeSlack(text: string): string {
 }
 
 export function startedText(workshop: string, buildUrl: string): string {
-  return `:construction: Setup is underway for your workshop *${escapeSlack(workshop)}*. Follow the build here: <${buildUrl}|build page>`;
+  return `:building_construction: Setup is underway for your workshop *${escapeSlack(workshop)}*. Follow the build here: <${buildUrl}|build page>`;
 }
 
 export function readyText(workshop: string, userUrl: string): string {
