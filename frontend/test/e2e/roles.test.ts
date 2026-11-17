@@ -743,6 +743,7 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}/checklist/items/${MISSING}`, allowed: canManageTrainingSettings },
   { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/surveys`, allowed: canUseTraining },
   { method: "POST", path: `/api/scheduler/bootcamps/${MISSING}/surveys`, allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}/surveys`, allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: "/api/survey-results", allowed: canUseTraining },
   { method: "GET", path: "/api/games/guess-who", allowed: canManageTrainingSettings },
   { method: "PUT", path: "/api/games/guess-who", allowed: canManageTrainingSettings, body: () => ({}) },

@@ -3408,6 +3408,8 @@ export const dailySurveys = pgTable(
     sessions: jsonb("sessions").$type<SurveySession[]>().notNull().default([]),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Set while the survey is unassigned: hidden from attendees, its answers kept for Survey Results. */
+    unassignedAt: timestamp("unassigned_at", { withTimezone: true }),
   },
   (t) => [
     uniqueIndex("daily_surveys_day_idx").on(t.bootcampId, t.stage, t.day, t.audience),

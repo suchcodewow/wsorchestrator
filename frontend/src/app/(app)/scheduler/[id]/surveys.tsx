@@ -2,8 +2,10 @@
 
 /**
  * The schedule's "Assign Surveys" button, at the foot of each day of each
- * track. A manager presses it to send that day's surveys to the class; it
- * then reads "Surveys Sent", for everyone, with how many have answered. The
+ * track. A manager presses it, and confirms, to send that day's surveys to the
+ * class; it then becomes "Unassign Surveys", which takes the day back from
+ * attendees but keeps every answer given. Everyone else sees "Surveys Sent";
+ * both say how many have answered on hover. The
  * server announces them in the class's Slack channel; the manager is told
  * only when that did not happen. An eye beside each, for everyone who can
  * see the schedule, previews the survey it sends.
@@ -12,6 +14,7 @@
 import { useState, type ReactNode } from "react";
 import { Check, ClipboardList, Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { confirmDialog } from "@/components/ui/confirm";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SessionRow } from "@/lib/scheduler/schedule";
 import { TRACK_LABELS, stageOf } from "@/lib/scheduler/timeline";
@@ -65,7 +68,42 @@ export function useSurveyButtons({
   const [busy, setBusy] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState<BoardColumn | null>(null);
 
+  async function unassign(column: BoardColumn) {
+    const label = `${TRACK_LABELS[column.track]}, Day ${column.day}`;
+    const confirmed = await confirmDialog({
+      title: "Unassign these surveys?",
+      description: `Attendees will no longer see the surveys for ${label}. Answers already given are kept.`,
+      confirmLabel: "Unassign",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setBusy(column.key);
+    try {
+      const res = await fetch(`/api/scheduler/bootcamps/${bootcampId}/surveys`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ track: column.track, day: column.day }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        onNotice(ERRORS[body?.error ?? ""] ?? `Could not unassign the surveys (${res.status}).`);
+        return;
+      }
+      setSent(body.days);
+    } catch {
+      onNotice("Could not reach the server.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function assign(column: BoardColumn) {
+    const confirmed = await confirmDialog({
+      title: "Do you want to assign this now?",
+      description: `The surveys for ${TRACK_LABELS[column.track]}, Day ${column.day} will be sent to the class.`,
+      confirmLabel: "Assign",
+    });
+    if (!confirmed) return;
     setBusy(column.key);
     try {
       const res = await fetch(`/api/scheduler/bootcamps/${bootcampId}/surveys`, {
@@ -125,15 +163,29 @@ export function useSurveyButtons({
       const label = `${TRACK_LABELS[column.track]}, Day ${column.day}`;
       if (trackDaySent(sent, column.track, column.day)) {
         const status = sent.find((d) => d.day === column.day && d.stage === stageOf(column.track));
+        const answered = status ? `${status.answered} of ${status.assigned} answered` : undefined;
         return (
           <span className="flex items-center gap-1.5">
-            <span
-              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
-              title={status ? `${status.answered} of ${status.assigned} answered` : undefined}
-            >
-              <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-              Surveys Sent
-            </span>
+            {canManage ? (
+              // In place of "Surveys Sent": a day column has no room for both.
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={busy !== null}
+                title={answered}
+                aria-label={`Unassign surveys for ${label}`}
+                onClick={() => void unassign(column)}
+              >
+                {busy === column.key && <Loader2 className="size-3.5 animate-spin" />}
+                Unassign Surveys
+              </Button>
+            ) : (
+              <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground" title={answered}>
+                <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                Surveys Sent
+              </span>
+            )}
             {previewButton(column, label)}
           </span>
         );
