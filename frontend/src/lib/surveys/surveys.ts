@@ -5,12 +5,14 @@
  * A survey is one stage's class on one employee track for one day, its SE
  * track included, since they are the same people: Bootcamp Sales, Bootcamp
  * Engineers, and so on. Each person has at most one survey a day, and
- * sending a day again sends no one a second.
+ * sending a day again sends no one a second. A day can be unassigned, which
+ * hides its surveys from attendees but keeps every answer; assigning it again
+ * brings back the answers to sessions that are still on the day.
  */
 
 import "server-only";
 
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -51,7 +53,7 @@ export const surveyTrackSchema = z.enum(SCHEDULE_TRACKS);
 export const surveyDaySchema = z.number().int().min(1).max(30);
 export const assignSurveysSchema = z.object({ track: surveyTrackSchema, day: surveyDaySchema }).strict();
 
-/** Every stage-day of a bootcamp that has been sent a survey: at most two stages of thirty days. */
+/** Every stage-day of a bootcamp that is assigned a survey: at most two stages of thirty days. */
 export async function surveyDays(bootcampId: string): Promise<SurveyDayStatus[]> {
   const rows = await db
     .select({
@@ -63,7 +65,7 @@ export async function surveyDays(bootcampId: string): Promise<SurveyDayStatus[]>
     })
     .from(s)
     .leftJoin(a, eq(a.surveyId, s.id))
-    .where(eq(s.bootcampId, bootcampId))
+    .where(and(eq(s.bootcampId, bootcampId), isNull(s.unassignedAt)))
     .groupBy(s.stage, s.day)
     .orderBy(s.stage, s.day);
   return rows;
@@ -77,7 +79,7 @@ export type AssignedSurvey = {
   id: string;
   audience: SurveyAudience;
   sessions: number;
-  /** Whether this call made it, rather than finding it made by an earlier one. */
+  /** Whether this call made it, or brought it back, rather than finding it already assigned. */
   created: boolean;
   /** People sent it by this call; anyone who already had it is not counted. */
   sent: number;
@@ -90,7 +92,10 @@ export type AssignedSurvey = {
  * class, its sales attendees and its engineers; on an SE track, its
  * engineers. A survey already made for that day is reused as it is, with
  * the sessions it was made with, so no one is sent a second. One with no
- * sessions to ask about is made but sent to no one.
+ * sessions to ask about is made but sent to no one. A survey that was
+ * unassigned is brought back with the day's sessions as they now stand: an
+ * answer to a session still on the day is kept and shown again, and an
+ * answer to one that is gone is deleted.
  */
 export async function assignDaySurveys(
   actorId: string | null,
@@ -139,9 +144,15 @@ export async function assignDaySurveys(
         .onConflictDoNothing()
         .returning({ id: s.id });
       const [survey] = await tx
-        .select({ id: s.id, sessions: s.sessions })
+        .select({ id: s.id, sessions: s.sessions, unassignedAt: s.unassignedAt })
         .from(s)
         .where(and(eq(s.bootcampId, bootcampId), eq(s.stage, stage), eq(s.day, day), eq(s.audience, audience)));
+      const revived = survey!.unassignedAt !== null;
+      if (revived) {
+        survey!.sessions = surveySessions(daySessions, stage, audience);
+        await tx.update(s).set({ sessions: survey!.sessions, unassignedAt: null }).where(eq(s.id, survey!.id));
+        await keepAnswersToSessions(tx, survey!.id, new Set(survey!.sessions.map((x) => x.id)));
+      }
       const { attendees, hasMore } = people[i]!;
       let sent = 0;
       if (survey!.sessions.length > 0 && attendees.length > 0) {
@@ -152,7 +163,7 @@ export async function assignDaySurveys(
           .returning({ id: a.id });
         sent = inserted.length;
       }
-      made.push({ id: survey!.id, audience, sessions: survey!.sessions.length, created: fresh.length > 0, sent, hasMore });
+      made.push({ id: survey!.id, audience, sessions: survey!.sessions.length, created: fresh.length > 0 || revived, sent, hasMore });
     }
     return made;
   });
@@ -163,6 +174,64 @@ export async function assignDaySurveys(
     detail: { track, day, surveys: value.map((v) => ({ group: surveyGroupLabel(stage, v.audience), sent: v.sent })) },
   });
   return { ok: true, value };
+}
+
+/**
+ * Drops, from every copy of survey `surveyId`, the answers to sessions not in
+ * `sessionIds`. A copy left with no answer to any session is reset as if never
+ * answered; one that keeps some stays answered.
+ */
+async function keepAnswersToSessions(tx: Pick<typeof db, "select" | "update">, surveyId: string, sessionIds: Set<string>) {
+  const answered = await tx
+    .select({ id: a.id, sessionAnswers: a.sessionAnswers })
+    .from(a)
+    .where(and(eq(a.surveyId, surveyId), isNotNull(a.sessionAnswers)));
+  for (const row of answered) {
+    const kept = Object.fromEntries(Object.entries(row.sessionAnswers ?? {}).filter(([id]) => sessionIds.has(id)));
+    if (Object.keys(kept).length === Object.keys(row.sessionAnswers ?? {}).length) continue;
+    await tx
+      .update(a)
+      .set(
+        Object.keys(kept).length > 0
+          ? { sessionAnswers: kept }
+          : { sessionAnswers: null, dayRating: null, dayChange: "", submittedAt: null },
+      )
+      .where(eq(a.id, row.id));
+  }
+}
+
+/**
+ * Takes day `day` of `track` back from attendees: its surveys are hidden from
+ * them and from the scheduler's sent count, and every answer already given is
+ * kept for Survey Results and for the next time the day is assigned.
+ */
+export async function unassignDaySurveys(
+  bootcampId: string,
+  track: ScheduleTrack,
+  day: number,
+): Promise<{ ok: true; value: { unassigned: number } } | { ok: false; error: AssignError }> {
+  const [bootcamp] = await db.select({ startDate: bootcamps.startDate }).from(bootcamps).where(eq(bootcamps.id, bootcampId));
+  if (!bootcamp) return { ok: false, error: "not_found" };
+  const stage = stageOf(track);
+  const rows = await db
+    .update(s)
+    .set({ unassignedAt: new Date() })
+    .where(
+      and(
+        eq(s.bootcampId, bootcampId),
+        eq(s.stage, stage),
+        eq(s.day, day),
+        inArray(s.audience, surveyAudiencesOf(track)),
+        isNull(s.unassignedAt),
+      ),
+    )
+    .returning({ id: s.id });
+  noteAudit({
+    target: bootcampId,
+    targetLabel: `Daily surveys unassigned: ${TRACK_LABELS[track]}, Day ${day} (${dayDate(bootcamp.startDate, day)})`,
+    detail: { track, day, unassigned: rows.length },
+  });
+  return { ok: true, value: { unassigned: rows.length } };
 }
 
 /** One of someone's daily surveys, as their list of forms shows it. */
@@ -194,7 +263,7 @@ export async function listMySurveys(email: string): Promise<MySurveyListing[]> {
     .from(a)
     .innerJoin(s, eq(s.id, a.surveyId))
     .innerJoin(bootcamps, eq(bootcamps.id, s.bootcampId))
-    .where(eq(a.email, email.toLowerCase()))
+    .where(and(eq(a.email, email.toLowerCase()), isNull(s.unassignedAt)))
     .orderBy(sql`${a.submittedAt} is not null`, sql`${a.submittedAt} desc`, sql`${bootcamps.startDate} + ${s.day}`, s.stage)
     .limit(PAGE_SIZE);
   return rows.map(({ startDate, assignedAt, submittedAt, ...r }) => ({
@@ -236,7 +305,7 @@ export async function getMySurvey(email: string, id: string): Promise<MySurvey |
     .from(a)
     .innerJoin(s, eq(s.id, a.surveyId))
     .innerJoin(bootcamps, eq(bootcamps.id, s.bootcampId))
-    .where(and(eq(a.id, id), eq(a.email, email.toLowerCase())));
+    .where(and(eq(a.id, id), eq(a.email, email.toLowerCase()), isNull(s.unassignedAt)));
   if (!row) return null;
   return {
     id: row.id,

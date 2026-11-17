@@ -2753,6 +2753,28 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         ],
       },
       {
+        method: "DELETE",
+        path: "/api/scheduler/bootcamps/{id}/surveys",
+        summary: "Unassigns one track-day's surveys, keeping every answer given.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The day's surveys disappear from attendees' forms and from the scheduler's sent days, and their answers stay on Survey Results. Sending the day again with POST brings the surveys back with the day's sessions as they now stand: a person's answer to a session still on the day is kept and shown again, and an answer to a session no longer there is deleted (a person left with no answer to any session is reset as unanswered). unassigned is how many surveys this call took back; repeating the call returns 0.",
+        params: [BOOTCAMP_ID],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "track", type: TRACK_TYPE, required: true, note: "the track whose button was pressed" },
+            { name: "day", type: "integer", required: true, note: "from 1, a day the track runs at this bootcamp" },
+          ],
+        },
+        returns: `{ unassigned: number, days: ${SURVEY_DAY_SHAPE}[] }`,
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_found", when: "no such bootcamp" },
+        ],
+      },
+      {
         method: "GET",
         path: "/api/me/forms",
         summary:
