@@ -66,7 +66,7 @@ export function useReferenceRow(q: string) {
 const ICON = "size-4 stroke-[2.5] text-zinc-950 drop-shadow-[0_0_2px_rgb(220_38_38/0.8)] dark:text-zinc-400";
 
 /** The row, cell for cell with a candidate's; nothing on it can be changed, and a click anywhere plays the animation. */
-export function ReferenceRow({ btcDate, onClick }: { btcDate: boolean; onClick: () => void }) {
+export function ReferenceRow({ participation, btcDate, onClick }: { participation: boolean; btcDate: boolean; onClick: () => void }) {
   return (
     <tr onClick={onClick} className="cursor-pointer border-b transition-colors last:border-b-0 hover:bg-muted/30">
       <td className="px-5 py-2 font-medium">
@@ -82,6 +82,11 @@ export function ReferenceRow({ btcDate, onClick }: { btcDate: boolean; onClick: 
           {NAME}
         </button>
       </td>
+      {participation && (
+        <td className="px-5 py-1">
+          <Bird className={ICON} aria-label="Bird" />
+        </td>
+      )}
       <td className="px-5 py-1">
         <span className="flex p-0.5">
           <Bird className={ICON} aria-label="Bird" />

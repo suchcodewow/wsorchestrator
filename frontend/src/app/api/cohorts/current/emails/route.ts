@@ -3,10 +3,10 @@
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
 import { isCandidateStage, isCurrentTrack, listCurrentCohortEmails } from "@/lib/evals/current-cohort";
-import { canUseTraining } from "@/lib/roles";
+import { canSeeCurrentCohort } from "@/lib/roles";
 
 export async function GET(req: Request) {
-  const { error } = await requireCaller(req, canUseTraining);
+  const { error } = await requireCaller(req, canSeeCurrentCohort);
   if (error) return error;
 
   const params = new URL(req.url).searchParams;

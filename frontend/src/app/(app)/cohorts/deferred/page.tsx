@@ -1,10 +1,11 @@
 /** The Deferred tab: the bootcamp and intermediate candidates deferred to a later bootcamp, narrowed by stage, a page at a time. */
 
+import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { currentCohortSummary, isCandidateStage, listCurrentCohort } from "@/lib/evals/current-cohort";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
-import { canManageTrainingSettings } from "@/lib/roles";
+import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
 import { intakeQuestionsByForm, latestIntakesOf } from "@/lib/logistics/intake";
 import { CurrentCohortView } from "../current/current-view";
@@ -19,6 +20,8 @@ export default async function DeferredCohortPage({
   // A hand-typed stage that isn't one shows both, as a bad sort does.
   const filter = { stage: isCandidateStage(params.stage) ? params.stage : null, track: "deferred" as const };
   const session = await auth();
+  // The layout lets a guest judge in for Current; this tab is Training's alone.
+  if (!session?.user || !canUseTraining(session.user.access)) notFound();
   const [page, summary, active, intakeQuestions] = await Promise.all([
     listCurrentCohort(filter, query),
     currentCohortSummary(),
