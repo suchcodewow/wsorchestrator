@@ -84,7 +84,7 @@ Slack* on that tab runs Slack's OAuth install with `SLACK_APP_CLIENT_ID` and
 `SLACK_APP_CLIENT_SECRET` (from `slack_app_client_id` /
 `tf_slack_app_client_secret`, set on production's workspace only; see
 [What the two share](environments.md#what-the-two-share-and-why-that-matters))
-and seals the bot token into `slack_installation`. The app's Redirect URLs on
+and seals the bot token into `slack_installation`. The slash command `/val` (`POST /api/slack/commands`) is verified with `SLACK_SIGNING_SECRET` (`slack_signing_secret`, Harness secret `tf_slack_signing_secret`, set on both workspaces); unset, every command is refused. The app's Redirect URLs on
 api.slack.com must include `{app_url}/api/auth/callback/google`, the
 [one OAuth callback](#one-oauth-callback) every connection shares, or Slack
 refuses the install with `bad_redirect_uri`. Until the app is added, a

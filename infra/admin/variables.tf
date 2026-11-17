@@ -146,6 +146,13 @@ variable "slack_app_client_secret" {
   default     = ""
 }
 
+variable "slack_signing_secret" {
+  description = "Signing Secret of that Slack app (Basic Information), which proves a slash command such as /val is Slack's. Stored in Secret Manager as slack-signing-secret and read by the app alone. Empty refuses every slash command, so /val answers nothing. Both environments share the one app, so both set it."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "slack_bot_token" {
   description = "Bot token (xoxb-) for the Slack app that keeps each active bootcamp's cohort channels in step with the Cohorts page; it needs users:read, users:read.email, channels:read, channels:join and channels:manage. Stored in Secret Manager as slack-bot-token and read by the app alone. Empty leaves the channel sync off: every run is logged as not configured. QA shares production's Slack workspace, so leave it empty there or keep QA's sync in dry run."
   type        = string

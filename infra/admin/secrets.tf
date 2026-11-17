@@ -36,6 +36,8 @@ locals {
     nonsensitive(var.eleven_labs_token != "") ? ["eleven-labs-token"] : [],
     # Likewise the Slack bot token.
     nonsensitive(var.slack_bot_token != "") ? ["slack-bot-token"] : [],
+    # Likewise the Slack app's signing secret, for slash commands.
+    nonsensitive(var.slack_signing_secret != "") ? ["slack-signing-secret"] : [],
     # Gated on the Slack app's client id, as Mindtickle's is on its tenant.
     var.slack_app_client_id != "" ? ["slack-app-client-secret"] : [],
     # Gated on the tenant, not the key pair, as HiBob's is on its service user.
@@ -63,6 +65,7 @@ locals {
     "eleven-labs-token"          = var.eleven_labs_token
     "slack-bot-token"            = var.slack_bot_token
     "slack-app-client-secret"    = var.slack_app_client_secret
+    "slack-signing-secret"       = var.slack_signing_secret
     "mindtickle-api-key"         = var.mindtickle_api_key
     "mindtickle-secret-key"      = var.mindtickle_secret_key
     "zoom-client-secret"         = var.zoom_client_secret
