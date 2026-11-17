@@ -749,6 +749,8 @@ const ROUTES: RouteCase[] = [
   { method: "PUT", path: "/api/games/guess-who", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "DELETE", path: "/api/games/guess-who", allowed: canManageTrainingSettings },
   { method: "GET", path: `/api/survey-results/${MISSING}`, allowed: canUseTraining },
+  { method: "GET", path: `/api/survey-results/${MISSING}/sessions/${MISSING}/comments`, allowed: canUseTraining },
+  { method: "POST", path: `/api/survey-results/${MISSING}/summary`, allowed: canManageTrainingSettings },
   { method: "GET", path: "/api/scheduler/facilities", allowed: canUseTraining },
   { method: "POST", path: "/api/scheduler/facilities", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: `/api/scheduler/facilities/${MISSING}`, allowed: canUseTraining },

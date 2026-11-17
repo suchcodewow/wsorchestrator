@@ -157,6 +157,15 @@ const staffJson = sql<StaffRow[]>`coalesce((
   from ${scheduleSessionStaff} st where st.session_id = ${scheduleSessions}.id
 ), '[]'::json)`;
 
+/** A session's leader, named as `staffJson` names its staff; '' when it has none. */
+export const sessionLeaderName = sql<string>`coalesce((
+  select coalesce(
+    (select nullif(u.name, '') from users u where lower(u.email) = st.email order by u.id limit 1),
+    nullif(${employeeNameOf(sql`st.email`)}, ''),
+    st.email)
+  from ${scheduleSessionStaff} st where st.session_id = ${scheduleSessions}.id and st.leader limit 1
+), '')`;
+
 const commentCount = sql<number>`(select count(*)::int from ${scheduleSessionComments} c where c.session_id = ${scheduleSessions}.id)`;
 
 const largestGroup = sql<number>`coalesce((

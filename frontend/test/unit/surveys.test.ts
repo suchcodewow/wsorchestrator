@@ -17,6 +17,7 @@ import {
   surveyDate,
   surveyGroupLabel,
   surveyMonth,
+  surveySessionLine,
   surveySessions,
   trackDaySent,
   type SurveyDayStatus,
@@ -68,6 +69,20 @@ describe("the sessions a survey asks about", () => {
     assert.deepEqual(surveySessions([session({ id: "a", emoji: "🎤" })], "bootcamp", "sales"), [
       { id: "a", track: "btc", name: "a", emoji: "🎤", start: 540, minutes: 60 },
     ]);
+  });
+
+  test("keeps the leader's name, and leaves it off a session with none", () => {
+    assert.deepEqual(
+      surveySessions([session({ id: "a", leader: "Ana Ruiz" }), session({ id: "b", start: 600, leader: "" })], "bootcamp", "sales").map(
+        (s) => s.leader,
+      ),
+      ["Ana Ruiz", undefined],
+    );
+  });
+
+  test("shows the time and the leader under the name", () => {
+    assert.equal(surveySessionLine({ start: 540, leader: "Ana Ruiz" }), "9:00 AM · Led by Ana Ruiz");
+    assert.equal(surveySessionLine({ start: 540 }), "9:00 AM");
   });
 });
 

@@ -14,9 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SURVEY_LIMITS } from "@/db/schema";
 import { riseChild, staggerParent } from "@/lib/motion";
-import { formatClock } from "@/lib/scheduler/timeline";
 import type { MySurvey } from "@/lib/surveys/surveys";
-import { RATINGS, RATING_LABELS, SURVEY_QUESTIONS, SURVEY_STAGE_LABELS, surveyDate } from "@/lib/surveys/survey-values";
+import { RATINGS, RATING_LABELS, SURVEY_QUESTIONS, SURVEY_STAGE_LABELS, surveyDate, surveySessionLine } from "@/lib/surveys/survey-values";
 import { cn } from "@/lib/utils";
 
 /** Where the day's own questions are held, beside the sessions' ids. */
@@ -113,7 +112,7 @@ export function SurveyFiller({ survey }: { survey: MySurvey }) {
                 {s.emoji && <span className="mr-1.5">{s.emoji}</span>}
                 {s.name}
               </p>
-              <p className="text-xs text-muted-foreground">{formatClock(s.start)}</p>
+              <p className="text-xs text-muted-foreground">{surveySessionLine(s)}</p>
             </div>
             <Rating
               name={`rating-${s.id}`}

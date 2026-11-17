@@ -32,6 +32,7 @@ import type { SurveyResponseSort, SurveyResultSort } from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
 import { surveyAttendees } from "@/lib/scheduler/attendees";
+import { sessionLeaderName } from "@/lib/scheduler/schedule";
 import { TRACK_LABELS, dayDate, stageOf, trackDays } from "@/lib/scheduler/timeline";
 import {
   STAGE_TRACKS,
@@ -121,6 +122,7 @@ export async function assignDaySurveys(
       emoji: scheduleSessions.emoji,
       start: scheduleSessions.start,
       minutes: scheduleSessions.minutes,
+      leader: sessionLeaderName,
     })
     .from(scheduleSessions)
     .where(
@@ -418,11 +420,21 @@ export async function listSurveyResults(query: ListQuery<SurveyResultSort>): Pro
 }
 
 /** One session's ratings across a survey's responses. */
-export type SessionSummary = SurveySession & { average: number | null; ratings: number; comments: number };
+export type SessionSummary = SurveySession & {
+  average: number | null;
+  ratings: number;
+  comments: number;
+  /** How many rated it 1, 2, 3, 4 and 5, in that order. */
+  breakdown: [number, number, number, number, number];
+  /** Claude's summary of it, from the last Generate AI Summary; null before one. */
+  summary: string | null;
+};
 
 export type SurveyResult = Omit<SurveyResultCard, "average" | "sessions"> & {
   average: number | null;
   sessions: SessionSummary[];
+  /** When Generate AI Summary last ran on it; null before it has. */
+  summarizedAt: string | null;
 };
 
 /** A daily survey and how each of its sessions was rated, or null. */
@@ -437,6 +449,8 @@ export async function getSurveyResult(id: string): Promise<SurveyResult | null> 
       audience: s.audience,
       day: s.day,
       sessions: s.sessions,
+      summaries: s.summaries,
+      summarizedAt: s.summarizedAt,
       assigned: sql<number>`count(${a.id})::int`,
       responses,
       average: sql<number | null>`avg(${a.dayRating})::float`,
@@ -456,19 +470,66 @@ export async function getSurveyResult(id: string): Promise<SurveyResult | null> 
       average: sql<number>`avg((answer.value->>'rating')::int)::float`,
       ratings: sql<number>`count(*)::int`,
       comments: sql<number>`count(nullif(answer.value->>'feedback', ''))::int`,
+      breakdown: sql<[number, number, number, number, number]>`array[
+        count(*) filter (where answer.value->>'rating' = '1'), count(*) filter (where answer.value->>'rating' = '2'),
+        count(*) filter (where answer.value->>'rating' = '3'), count(*) filter (where answer.value->>'rating' = '4'),
+        count(*) filter (where answer.value->>'rating' = '5')]::int[]`,
     })
     .from(sql`${a}, jsonb_each(${a.sessionAnswers}) as ${answer}`)
     .where(and(eq(a.surveyId, id), isNotNull(a.submittedAt)))
     .groupBy(sql`answer.key`);
   const byId = new Map(perSession.map((p) => [p.id, p]));
 
+  const { summaries, summarizedAt, ...rest } = row;
   return {
-    ...row,
+    ...rest,
     date: dayDate(row.startDate, row.day),
+    summarizedAt: summarizedAt?.toISOString() ?? null,
     sessions: row.sessions.map((x) => {
       const p = byId.get(x.id);
-      return { ...x, average: p?.average ?? null, ratings: p?.ratings ?? 0, comments: p?.comments ?? 0 };
+      return {
+        ...x,
+        average: p?.average ?? null,
+        ratings: p?.ratings ?? 0,
+        comments: p?.comments ?? 0,
+        breakdown: p?.breakdown ?? [0, 0, 0, 0, 0],
+        summary: summaries[x.id] ?? null,
+      };
     }),
+  };
+}
+
+/** Someone's comment on one session of a survey, with the rating they gave it. */
+export type SessionComment = { id: string; email: string; fullName: string; rating: number; feedback: string; submittedAt: string };
+
+/**
+ * The comments left on session `sessionId` of survey `surveyId`, the lowest
+ * ratings first, at most a page of them; null when there is no such survey.
+ */
+export async function listSessionComments(
+  surveyId: string,
+  sessionId: string,
+): Promise<{ comments: SessionComment[]; hasMore: boolean } | null> {
+  if (!z.string().uuid().safeParse(surveyId).success) return null;
+  const [survey] = await db.select({ id: s.id }).from(s).where(eq(s.id, surveyId));
+  if (!survey) return null;
+  const answer = sql`${a.sessionAnswers}->${sessionId}`;
+  const rows = await db
+    .select({
+      id: a.id,
+      email: a.email,
+      fullName: a.fullName,
+      rating: sql<number>`(${answer}->>'rating')::int`,
+      feedback: sql<string>`${answer}->>'feedback'`,
+      submittedAt: a.submittedAt,
+    })
+    .from(a)
+    .where(and(eq(a.surveyId, surveyId), isNotNull(a.submittedAt), sql`coalesce(${answer}->>'feedback', '') <> ''`))
+    .orderBy(sql`(${answer}->>'rating')::int`, sql`lower(${a.fullName})`, a.email)
+    .limit(PAGE_SIZE + 1);
+  return {
+    comments: rows.slice(0, PAGE_SIZE).map((r) => ({ ...r, submittedAt: r.submittedAt!.toISOString() })),
+    hasMore: rows.length > PAGE_SIZE,
   };
 }
 

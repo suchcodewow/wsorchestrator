@@ -18,7 +18,7 @@ import {
   type SurveySessionAnswers,
 } from "@/db/schema";
 import type { CohortChannelKind } from "@/lib/cohorts/slack-plan";
-import { stageOf } from "@/lib/scheduler/timeline";
+import { formatClock, stageOf } from "@/lib/scheduler/timeline";
 
 /** The two questions asked about each session, and the two about the day, worded as they are asked. */
 export const SURVEY_QUESTIONS = {
@@ -127,6 +127,8 @@ type DaySession = {
   emoji: string;
   start: number;
   minutes: number;
+  /** Its leader's name; empty or absent when it has none. */
+  leader?: string;
 };
 
 /**
@@ -139,7 +141,20 @@ export function surveySessions(sessions: readonly DaySession[], stage: IntakeFor
   return sessions
     .filter((s) => tracks.includes(s.track) && s.kind !== "unstructured" && AUDIENCE_TRACKS[s.audience].includes(audience))
     .sort((a, b) => a.start - b.start || tracks.indexOf(a.track) - tracks.indexOf(b.track))
-    .map(({ id, track, name, emoji, start, minutes }) => ({ id, track, name, emoji, start, minutes }));
+    .map(({ id, track, name, emoji, start, minutes, leader }) => ({
+      id,
+      track,
+      name,
+      emoji,
+      start,
+      minutes,
+      ...(leader ? { leader } : {}),
+    }));
+}
+
+/** What a survey shows under a session's name: "9:00 AM · Led by Ana Ruiz". */
+export function surveySessionLine(session: Pick<SurveySession, "start" | "leader">): string {
+  return session.leader ? `${formatClock(session.start)} · Led by ${session.leader}` : formatClock(session.start);
 }
 
 const rating = z.number().int().min(1).max(5);
