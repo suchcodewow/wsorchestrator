@@ -220,6 +220,7 @@ resource "google_cloud_run_v2_service" "app" {
           nonsensitive(var.anthropic_api_key != "") ? { ANTHROPIC_API_KEY = "anthropic-api-key" } : {},
           nonsensitive(var.slack_bot_token != "") ? { SLACK_BOT_TOKEN = "slack-bot-token" } : {},
           var.slack_app_client_id != "" ? { SLACK_APP_CLIENT_SECRET = "slack-app-client-secret" } : {},
+          nonsensitive(var.slack_signing_secret != "") ? { SLACK_SIGNING_SECRET = "slack-signing-secret" } : {},
           var.mindtickle_company_id != "" ? {
             MT_API_KEY    = "mindtickle-api-key"
             MT_SECRET_KEY = "mindtickle-secret-key"
