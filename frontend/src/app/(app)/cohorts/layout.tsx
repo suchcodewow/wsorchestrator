@@ -4,15 +4,16 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
 import { CURRENT_TRACKS, currentCohortSummary } from "@/lib/evals/current-cohort";
-import { canUseTraining } from "@/lib/roles";
+import { canSeeCurrentCohort } from "@/lib/roles";
 import { CohortsTabs } from "./cohorts-tabs";
+import { visibleCohortsTabs } from "./tabs";
 
 export const metadata: Metadata = { title: "Cohorts" };
 
 export default async function CohortsLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canUseTraining(session.user.access)) notFound();
+  if (!canSeeCurrentCohort(session.user.access)) notFound();
 
   // Everyone the Current tab lists, bootcamp and intermediate, whatever its filter.
   const { counts } = await currentCohortSummary();
@@ -23,7 +24,11 @@ export default async function CohortsLayout({ children }: { children: React.Reac
     <div className="space-y-6">
       <h1 className="text-3xl font-medium tracking-tight">Cohorts</h1>
 
-      <CohortsTabs currentCount={currentCount} deferredCount={deferredCount} />
+      <CohortsTabs
+        hrefs={visibleCohortsTabs(session.user.access).map((t) => t.href)}
+        currentCount={currentCount}
+        deferredCount={deferredCount}
+      />
 
       {children}
     </div>

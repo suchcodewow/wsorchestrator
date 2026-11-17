@@ -141,6 +141,13 @@ export const canManageTrainingSettings = (access: Access) => trainingAtLeast(acc
  */
 export const canSeeScheduler = (access: Access) => canUseTraining(access) || access.judging;
 
+/**
+ * Cohorts → Current: a Training Viewer or above, and the active bootcamp's
+ * guest judges, who read it and mark participation from it but change nothing
+ * else on it and see none of Cohorts' other tabs.
+ */
+export const canSeeCurrentCohort = (access: Access) => canUseTraining(access) || access.judging;
+
 /** Mimir's library and coach are for everyone who can sign in, whatever their roles. */
 export const canUseMimir: (access: Access) => boolean = () => true;
 

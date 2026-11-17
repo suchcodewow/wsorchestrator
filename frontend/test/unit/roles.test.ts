@@ -71,6 +71,8 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
   },
   // The active bootcamp's guest judges see its schedule, and no other bootcamp's.
   canSeeScheduler: { actual: roles.canSeeScheduler, expected: (a) => training("viewer")(a) || a.judging },
+  // The active bootcamp's guest judges read Cohorts → Current, to mark participation from it.
+  canSeeCurrentCohort: { actual: roles.canSeeCurrentCohort, expected: (a) => training("viewer")(a) || a.judging },
   // Mimir is for everyone signed in, with or without a role anywhere.
   canUseMimir: { actual: roles.canUseMimir, expected: () => true },
   // Coach Canary sits in Assessments, so its settings are an Assessments Administrator's.

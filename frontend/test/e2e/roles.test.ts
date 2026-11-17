@@ -55,6 +55,7 @@ import {
   canManageUsers,
   canPublishComponents,
   canScoreAssessments,
+  canSeeCurrentCohort,
   canSeeEvals,
   canSearchEmployees,
   canRefreshCanaryWire,
@@ -224,9 +225,9 @@ const PAGES: Record<string, PageCase> = {
   },
   "/cohorts": {
     path: () => "/cohorts",
-    expect: (a) => (canUseTraining(a) ? { to: COHORTS_TABS[0]!.href } : 404),
+    expect: (a) => (canSeeCurrentCohort(a) ? { to: COHORTS_TABS[0]!.href } : 404),
   },
-  "/cohorts/current": { path: () => "/cohorts/current", expect: gated(canUseTraining) },
+  "/cohorts/current": { path: () => "/cohorts/current", expect: gated(canSeeCurrentCohort) },
   "/cohorts/deferred": { path: () => "/cohorts/deferred", expect: gated(canUseTraining) },
   "/cohorts/name-cards": { path: () => "/cohorts/name-cards", expect: gated(canUseTraining) },
   "/cohorts/previous": { path: () => "/cohorts/previous", expect: gated(canUseTraining) },
@@ -644,8 +645,8 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/diagnostic/questions/approve-drafts", allowed: canManageIris, body: () => ({}) },
 
   // Cohorts
-  { method: "GET", path: "/api/cohorts/current", allowed: canUseTraining },
-  { method: "GET", path: "/api/cohorts/current/emails", allowed: canUseTraining },
+  { method: "GET", path: "/api/cohorts/current", allowed: canSeeCurrentCohort },
+  { method: "GET", path: "/api/cohorts/current/emails", allowed: canSeeCurrentCohort },
   { method: "GET", path: "/api/cohorts/deferred", allowed: canUseTraining },
   { method: "POST", path: "/api/cohorts/current/attendees", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "DELETE", path: "/api/cohorts/current/attendees?email=nobody%40example.test", allowed: canManageTrainingSettings },

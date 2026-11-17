@@ -12,11 +12,11 @@ import { currentCohortSummary, isCandidateStage, isCurrentTrack, listCurrentCoho
 import { meetingStatusesFor } from "@/lib/evals/google-meetings";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
-import { canUseTraining } from "@/lib/roles";
+import { canSeeCurrentCohort } from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
 
 export async function GET(req: Request) {
-  const { error } = await requireCaller(req, canUseTraining);
+  const { error } = await requireCaller(req, canSeeCurrentCohort);
   if (error) return error;
 
   const params = new URL(req.url).searchParams;
