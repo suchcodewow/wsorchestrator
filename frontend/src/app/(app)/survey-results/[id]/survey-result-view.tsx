@@ -2,35 +2,71 @@
 
 /**
  * One daily survey's results: each session it asked about with its average
- * rating, then everyone who answered. A response opens with every answer
- * they gave, their feedback on each session included.
+ * rating, which opens on its rating breakdown and its comments, then
+ * everyone who answered. A response opens with every answer they gave, their
+ * feedback on each session included. An administrator's Generate AI Summary
+ * has Claude summarize each session, shown at the top of its accordion.
  */
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Loader2, Sparkles } from "lucide-react";
 import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
+import { Button } from "@/components/ui/button";
+import { noticeDialog } from "@/components/ui/confirm";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { SurveyResponseSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
-import { formatClock } from "@/lib/scheduler/timeline";
 import type { SurveyResponseRow, SurveyResult } from "@/lib/surveys/surveys";
-import { SURVEY_QUESTIONS, formatAverage, surveyDate, surveyGroupLabel, surveyMonth } from "@/lib/surveys/survey-values";
+import { SURVEY_QUESTIONS, formatAverage, surveyDate, surveyGroupLabel, surveyMonth, surveySessionLine } from "@/lib/surveys/survey-values";
+import { SessionAccordion } from "./session-accordion";
+
+const SUMMARY_ERRORS: Record<string, string> = {
+  no_responses: "No one has answered this survey yet, so there is nothing to summarize.",
+  unconfigured: "Claude is not set up on this deployment (no ANTHROPIC_API_KEY).",
+  upstream: "Claude could not write the summary. Try again in a minute.",
+  not_found: "This survey no longer exists.",
+};
 
 export function SurveyResultView({
   survey,
   query,
   page,
+  canSummarize,
 }: {
   survey: SurveyResult;
   query: ListQuery<SurveyResponseSort>;
   page: Page<SurveyResponseRow>;
+  canSummarize: boolean;
 }) {
+  const router = useRouter();
+  const [summarizing, setSummarizing] = useState(false);
   const rowLink = useRowLink();
   const sortProps = { sort: query.sort, dir: query.dir };
   const [open, setOpen] = useState<SurveyResponseRow | null>(null);
+
+  async function summarize() {
+    setSummarizing(true);
+    try {
+      const res = await fetch(`/api/survey-results/${survey.id}/summary`, { method: "POST" });
+      if (res.ok) {
+        router.refresh();
+        return;
+      }
+      const body = await res.json().catch(() => null);
+      await noticeDialog({
+        title: "No summary",
+        description: SUMMARY_ERRORS[body?.error ?? ""] ?? `The summary failed (${res.status}).`,
+      });
+    } catch {
+      await noticeDialog({ title: "No summary", description: "Could not reach the server." });
+    } finally {
+      setSummarizing(false);
+    }
+  }
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
@@ -42,31 +78,26 @@ export function SurveyResultView({
           <ChevronLeft className="size-4" />
           Survey Results
         </Link>
-        <h1 className="text-3xl font-medium tracking-tight">
-          {surveyMonth(survey.startDate)} {surveyGroupLabel(survey.stage, survey.audience)}, Day {survey.day}
-        </h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-3xl font-medium tracking-tight">
+            {surveyMonth(survey.startDate)} {surveyGroupLabel(survey.stage, survey.audience)}, Day {survey.day}
+          </h1>
+          {canSummarize && (
+            <Button variant="outline" disabled={summarizing || survey.responses === 0} onClick={() => void summarize()}>
+              {summarizing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+              {summarizing ? "Generating…" : "Generate AI Summary"}
+            </Button>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground">
           {surveyDate(survey.date)} · {survey.responses} of {survey.assigned} answered · day overall{" "}
           <span className="font-medium text-foreground tabular-nums">{formatAverage(survey.average)}</span> out of 5
+          {survey.summarizedAt && <> · AI summary {new Date(survey.summarizedAt).toLocaleString()}</>}
         </p>
       </motion.div>
 
-      <motion.div variants={riseChild} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
-        {survey.sessions.map((s) => (
-          <div key={s.id} className="flex items-center gap-4 px-5 py-4">
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">
-                {s.emoji && <span className="mr-1.5">{s.emoji}</span>}
-                {s.name}
-              </p>
-              <p className="text-xs text-muted-foreground tabular-nums">
-                {formatClock(s.start)} · {s.ratings} {s.ratings === 1 ? "rating" : "ratings"} · {s.comments}{" "}
-                {s.comments === 1 ? "comment" : "comments"}
-              </p>
-            </div>
-            <p className="shrink-0 text-xl font-medium tabular-nums">{formatAverage(s.average)}</p>
-          </div>
-        ))}
+      <motion.div variants={riseChild}>
+        <SessionAccordion surveyId={survey.id} sessions={survey.sessions} />
       </motion.div>
 
       <motion.div variants={riseChild}>
@@ -143,10 +174,13 @@ function ResponseDialog({ survey, response, onClose }: { survey: SurveyResult; r
                 return (
                   <div key={s.id} className="space-y-1.5 px-5 py-4">
                     <div className="flex items-start justify-between gap-3">
-                      <p className="text-sm font-medium">
-                        {s.emoji && <span className="mr-1.5">{s.emoji}</span>}
-                        {s.name}
-                      </p>
+                      <div>
+                        <p className="text-sm font-medium">
+                          {s.emoji && <span className="mr-1.5">{s.emoji}</span>}
+                          {s.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{surveySessionLine(s)}</p>
+                      </div>
                       <Score value={answer?.rating} />
                     </div>
                     <Said text={answer?.feedback} />

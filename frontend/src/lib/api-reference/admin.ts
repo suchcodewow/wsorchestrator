@@ -185,10 +185,10 @@ const ACTIVE_EXISTS_ERROR: EndpointError = {
 };
 
 const SURVEY_DAY_SHAPE = `{ stage: "bootcamp" | "intermediate", day: number, audiences: ("sales" | "engineer")[], assigned: number, answered: number }`;
-const SURVEY_SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, name, emoji, start: number, minutes: number }`;
+const SURVEY_SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, name, emoji, start: number, minutes: number, leader?: string }`;
 const MY_SURVEY_SHAPE = `{ id, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer", day: number, date, sessions: ${SURVEY_SESSION_SHAPE}[], answers: { sessions: Record<string, { rating: number, feedback }>, dayRating: number, dayChange } | null, submittedAt: string | null }`;
 const SURVEY_CARD_SHAPE = `{ id, bootcampId, startDate, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer", day: number, date, sessions: number, assigned: number, responses: number, average: number }`;
-const SURVEY_RESULT_SHAPE = `{ id, bootcampId, startDate, stage, audience, day: number, date, assigned: number, responses: number, average: number | null, sessions: (${SURVEY_SESSION_SHAPE} & { average: number | null, ratings: number, comments: number })[] }`;
+const SURVEY_RESULT_SHAPE = `{ id, bootcampId, startDate, stage, audience, day: number, date, assigned: number, responses: number, average: number | null, summarizedAt: string | null, sessions: (${SURVEY_SESSION_SHAPE} & { average: number | null, ratings: number, comments: number, breakdown: [number, number, number, number, number], summary: string | null })[] }`;
 
 const INTAKE_QUESTION_SHAPE = `{ id, kind: "short" | "paragraph" | "choice" | "checkboxes" | "dropdown", title, description, required: boolean, options: string[], other: boolean }`;
 
@@ -2847,11 +2847,43 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "survey.sessions are the sessions it asks about, each with its mean rating, how many rated it, and how many left feedback on it. responses are the people who have answered, with every answer they gave.",
+          "survey.sessions are the sessions it asks about, each with its leader's name when it had one as the survey was assigned, its mean rating, how many rated it, how many left feedback on it, breakdown (how many rated it 1, 2, 3, 4 and 5), and summary, Claude's summary of it from the last POST /api/survey-results/{id}/summary (null before one). responses are the people who have answered, with every answer they gave.",
         params: [{ name: "id", type: "string", required: true, note: "the survey's id, as GET /api/survey-results lists it" }],
         query: listQuery(SURVEY_RESPONSE_LIST.sorts, "the name or email", "desc"),
         returns: `{ survey: ${SURVEY_RESULT_SHAPE}, responses: { id, email, fullName, submittedAt, dayRating: number, dayChange, sessions: Record<string, { rating: number, feedback }> }[], ${PAGE_FIELDS} }`,
         errors: [{ status: 404, error: "not_found", when: "no such survey" }],
+      },
+      {
+        method: "GET",
+        path: "/api/survey-results/{id}/sessions/{sessionId}/comments",
+        summary:
+          "Lists the comments left on one session of a daily survey, with who left each, as Survey Results' session accordion shows them.",
+        access: "trainingViewer",
+        token: true,
+        notes: `Only answers with feedback are listed, the lowest ratings first, then by name. At most ${PAGE_SIZE} are returned; hasMore says there were more. A session the survey does not ask about has no comments.`,
+        params: [
+          { name: "id", type: "string", required: true, note: "the survey's id, as GET /api/survey-results lists it" },
+          { name: "sessionId", type: "string", required: true, note: "one of survey.sessions' ids" },
+        ],
+        returns: "{ comments: { id, email, fullName, rating: number, feedback, submittedAt }[], hasMore: boolean }",
+        errors: [{ status: 404, error: "not_found", when: "no such survey" }],
+      },
+      {
+        method: "POST",
+        path: "/api/survey-results/{id}/summary",
+        summary: "Generate AI Summary: asks Claude to summarize each session of a daily survey, and keeps the summaries on it.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "Each session anyone has rated gets two to four sentences on how it was received and what its feedback says. Claude is sent each session's name, leader, ratings and feedback; no attendee's name or email. The summaries replace those from before, except that a session Claude leaves blank keeps its old one. Takes up to about two minutes.",
+        params: [{ name: "id", type: "string", required: true, note: "the survey's id, as GET /api/survey-results lists it" }],
+        returns: "{ summaries: Record<string, string>, summarizedAt: string }",
+        errors: [
+          { status: 400, error: "no_responses", when: "no one has answered the survey" },
+          { status: 404, error: "not_found", when: "no such survey" },
+          { status: 502, error: "upstream", when: "Claude failed or declined" },
+          { status: 503, error: "unconfigured", when: "no ANTHROPIC_API_KEY is set on this deployment" },
+        ],
       },
     ],
   },
