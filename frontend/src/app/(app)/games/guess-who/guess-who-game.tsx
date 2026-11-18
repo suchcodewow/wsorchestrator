@@ -10,65 +10,40 @@
  * the answers, and stands it back up at no cost. A team that solves its board
  * waits while the other finishes, then the recap reveals both mysteries.
  *
- * Play is kept in this browser only, so a reload carries on where it was.
+ * Play is kept in this browser, so a reload carries on where it was, until
+ * the facilitator invites reps: then the game is shared (`use-shared-game.ts`)
+ * and reps knock down their own team's cards from `/guess-who` while this
+ * screen shows the room both boards. Sharing here ends a game shared from
+ * another screen, which carries on there unshared.
  */
 
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Check, Maximize, Minimize, Minus, Plus, RotateCcw, Search, Trophy, X } from "lucide-react";
+import { ArrowRight, Check, Copy, Maximize, Minimize, Minus, Plus, RotateCcw, Search, Trophy, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { confirmDialog } from "@/components/ui/confirm";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { boardOrder, TEAMS, type GuessWhoConfig, type GuessWhoTool, type Team } from "@/lib/games/guess-who";
+import {
+  canFlip,
+  freshGame,
+  makeReducer,
+  OTHER,
+  roundScore,
+  type GameAction as Action,
+  type GameState as State,
+  type Side,
+} from "@/lib/games/guess-who-play";
 import { SPRING_SNAPPY } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { ToolLogo } from "./tool-logo";
+import { sharedGamePath, useSharedGame, useStored, writeStored, type SharedGame } from "./use-shared-game";
 
-type Log = { kind: "question"; down: string[]; up: string[] } | { kind: "guess"; tool: string; correct: boolean };
-
-type Side = {
-  down: string[];
-  questions: number;
-  /** The facilitator's correction to this round's score, in questions. */
-  adjust: number;
-  status: "playing" | "solved" | "capped";
-  log: Log[];
-  /** Cards knocked down or stood up since the turn began. */
-  turnDown: string[];
-  turnUp: string[];
-};
-
-type State = {
-  version: string;
-  round: number;
-  turn: Team;
-  phase: "playing" | "recap" | "final";
-  guessing: boolean;
-  sides: Record<Team, Side>;
-  /** Each finished round's score per team. */
-  results: Record<Team, number>[];
-  /**
-   * A guess the room is watching land: shown for a beat (the card shakes or
-   * grows, a banner says whether it is right) before it is applied by
-   * `resolveGuess`. Everything waits while it is set.
-   */
-  pending?: { team: Team; id: string; correct: boolean };
-};
-
-type Action =
-  | { type: "toggle"; id: string }
-  | { type: "endTurn" }
-  | { type: "guessMode"; on: boolean }
-  | { type: "guess"; id: string }
-  | { type: "resolveGuess" }
-  | { type: "adjust"; team: Team; by: number }
-  | { type: "nextRound" }
-  | { type: "restart" }
-  | { type: "load"; state: State };
-
-const OTHER: Record<Team, Team> = { red: "blue", blue: "red" };
-const NAME: Record<Team, string> = { red: "Red", blue: "Blue" };
+export const NAME: Record<Team, string> = { red: "Red", blue: "Blue" };
 const STORAGE_KEY = "guess-who:game";
+/** The code of the game this browser shared, while it is shared. */
+const SHARED_KEY = "guess-who:shared";
 /** How long a guess is shown before it is applied, in milliseconds. */
 const VERDICT_MS = { wrong: 1600, right: 2800 } as const;
 
@@ -77,7 +52,7 @@ const VERDICT_MS = { wrong: 1600, right: 2800 } as const;
  * back on a big monitor or projector; the minimums keep a laptop as it was.
  * Card text grows with the card instead (see ToolCard).
  */
-const FLUID = {
+export const FLUID = {
   small: "text-[clamp(0.75rem,0.8vw,1.125rem)]",
   label: "text-[clamp(0.875rem,0.95vw,1.375rem)]",
   pill: "text-[clamp(0.875rem,1.15vw,1.625rem)]",
@@ -91,123 +66,6 @@ const FLUID = {
   iconButton: "size-[clamp(2.25rem,2.6vw,3.5rem)] [&_svg]:size-[clamp(1rem,1.1vw,1.625rem)]",
 } as const;
 
-const freshSide = (): Side => ({ down: [], questions: 0, adjust: 0, status: "playing", log: [], turnDown: [], turnUp: [] });
-/** Red starts the first round, and the start alternates after. */
-const firstTeam = (round: number): Team => (round % 2 === 0 ? "red" : "blue");
-const roundScore = (s: Side) => Math.max(0, s.questions + s.adjust);
-
-function fresh(version: string, round = 0, results: State["results"] = []): State {
-  return {
-    version,
-    round,
-    turn: firstTeam(round),
-    phase: "playing",
-    guessing: false,
-    sides: { red: freshSide(), blue: freshSide() },
-    results,
-  };
-}
-
-function makeReducer(config: GuessWhoConfig) {
-  /** After a turn: pass to the other team while it is still playing, and end the round once neither is. */
-  function afterTurn(state: State, team: Team, side: Side): State {
-    let s: Side = side;
-    if (s.status === "playing" && s.questions >= config.questionCap) s = { ...s, status: "capped" };
-    const sides = { ...state.sides, [team]: s };
-    const other = OTHER[team];
-    if (s.status !== "playing" && sides[other].status !== "playing") {
-      return { ...state, sides, guessing: false, phase: "recap" };
-    }
-    const turn = sides[other].status === "playing" ? other : team;
-    return { ...state, sides, guessing: false, turn };
-  }
-
-  /** Applies the pending guess: the turn it took, and either the solve or the card it rules out. */
-  function resolve(state: State): State {
-    const p = state.pending;
-    if (!p) return state;
-    const team = p.team;
-    const side = state.sides[team];
-    const mystery = config.rounds[state.round]![team];
-    const log: Log[] = [...side.log];
-    // Knockdowns made before the guess still count as that turn's.
-    if (side.turnDown.length || side.turnUp.length) log.push({ kind: "question", down: side.turnDown, up: side.turnUp });
-    log.push({ kind: "guess", tool: p.id, correct: p.correct });
-    const next: Side = {
-      ...side,
-      questions: side.questions + 1,
-      log,
-      turnDown: [],
-      turnUp: [],
-      status: p.correct ? "solved" : side.status,
-      down: p.correct ? config.tools.map((t) => t.id).filter((id) => id !== mystery) : [...side.down, p.id],
-    };
-    return afterTurn({ ...state, pending: undefined }, team, next);
-  }
-
-  return function reduce(state: State, action: Action): State {
-    const team = state.turn;
-    const side = state.sides[team];
-    // While a guess is on show, only its own resolution, a restart or a load gets through.
-    if (state.pending && !["resolveGuess", "restart", "load"].includes(action.type)) return state;
-    switch (action.type) {
-      case "toggle": {
-        if (state.phase !== "playing" || side.status !== "playing" || state.guessing) return state;
-        const id = action.id;
-        const without = (list: string[]) => list.filter((d) => d !== id);
-        let { turnDown, turnUp } = side;
-        // A card knocked down and stood back up in the same turn (or the reverse) leaves no trace.
-        if (side.down.includes(id)) {
-          if (turnDown.includes(id)) turnDown = without(turnDown);
-          else turnUp = [...turnUp, id];
-          return { ...state, sides: { ...state.sides, [team]: { ...side, down: without(side.down), turnDown, turnUp } } };
-        }
-        if (turnUp.includes(id)) turnUp = without(turnUp);
-        else turnDown = [...turnDown, id];
-        return { ...state, sides: { ...state.sides, [team]: { ...side, down: [...side.down, id], turnDown, turnUp } } };
-      }
-      case "endTurn": {
-        if (state.phase !== "playing" || side.status !== "playing") return state;
-        const next: Side = {
-          ...side,
-          questions: side.questions + 1,
-          log: [...side.log, { kind: "question", down: side.turnDown, up: side.turnUp }],
-          turnDown: [],
-          turnUp: [],
-        };
-        return afterTurn(state, team, next);
-      }
-      case "guessMode":
-        if (state.phase !== "playing" || side.status !== "playing") return state;
-        return { ...state, guessing: action.on };
-      case "guess": {
-        if (state.phase !== "playing" || side.status !== "playing" || !state.guessing) return state;
-        if (side.down.includes(action.id)) return state;
-        const correct = action.id === config.rounds[state.round]![team];
-        return { ...state, guessing: false, pending: { team, id: action.id, correct } };
-      }
-      case "resolveGuess":
-        return resolve(state);
-      case "adjust": {
-        if (state.phase === "final") return state;
-        const s = state.sides[action.team];
-        return { ...state, sides: { ...state.sides, [action.team]: { ...s, adjust: s.adjust + action.by } } };
-      }
-      case "nextRound": {
-        if (state.phase !== "recap") return state;
-        const results = [...state.results, { red: roundScore(state.sides.red), blue: roundScore(state.sides.blue) }];
-        if (state.round + 1 >= config.rounds.length) return { ...state, results, phase: "final" };
-        return fresh(state.version, state.round + 1, results);
-      }
-      case "restart":
-        return fresh(state.version);
-      case "load":
-        // A guess left on show when the page closed is simply applied.
-        return resolve(action.state);
-    }
-  };
-}
-
 function load(version: string, config: GuessWhoConfig): State {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -218,12 +76,25 @@ function load(version: string, config: GuessWhoConfig): State {
   } catch {
     // Storage blocked or the saved game unreadable: start fresh.
   }
-  return fresh(version);
+  return freshGame(version);
 }
 
-export function GuessWhoGame({ config, version }: { config: GuessWhoConfig; version: string }) {
-  const reducer = useMemo(() => makeReducer(config), [config]);
-  const [state, dispatch] = useReducer(reducer, version, fresh);
+/** The link reps open, on this site: the same for every game. */
+function joinUrl(): string {
+  return `${window.location.origin}/guess-who`;
+}
+
+export function GuessWhoGame({ config: settingsConfig, version }: { config: GuessWhoConfig; version: string }) {
+  const localReducer = useMemo(() => makeReducer(settingsConfig), [settingsConfig]);
+  const [local, dispatchLocal] = useReducer(localReducer, version, freshGame);
+
+  const [code, setCode] = useStored(SHARED_KEY);
+  const shared = useSharedGame(code);
+  const live = code ? shared.game : null;
+  const config = live?.config ?? settingsConfig;
+  const state = live?.state ?? local;
+  const reducer = useMemo(() => (live ? makeReducer(live.config) : localReducer), [live, localReducer]);
+
   const byId = useMemo(() => new Map(config.tools.map((t) => [t.id, t])), [config.tools]);
 
   // The saved game is read after the first render, so the server's HTML and the browser's agree.
@@ -231,34 +102,85 @@ export function GuessWhoGame({ config, version }: { config: GuessWhoConfig; vers
   useEffect(() => {
     if (loaded.current) return;
     loaded.current = true;
-    dispatch({ type: "load", state: load(version, config) });
-  }, [config, version]);
+    dispatchLocal({ type: "load", state: load(version, settingsConfig) });
+  }, [settingsConfig, version]);
 
+  // The game is kept here as well while it is shared, so ending it carries on from where the room was.
   useEffect(() => {
     if (!loaded.current) return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // Not saved; the game carries on regardless.
-    }
+    writeStored(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
 
-  // A guess on show is applied once the room has seen it land.
+  // Ended (here, in another tab, or by the API): carry on in this browser where the shared game was.
+  const { gone } = shared;
   useEffect(() => {
-    if (!state.pending) return;
-    const timer = window.setTimeout(() => dispatch({ type: "resolveGuess" }), state.pending.correct ? VERDICT_MS.right : VERDICT_MS.wrong);
+    if (!gone) return;
+    if (live) dispatchLocal({ type: "load", state: live.state });
+    setCode(null);
+  }, [gone, live, setCode]);
+
+  function dispatch(action: Action) {
+    if (!live) return dispatchLocal(action);
+    if (action.type === "load") return;
+    shared.send("/moves", action, (g) => ({ ...g, state: reducer(g.state, action) }));
+  }
+
+  // A guess on show is applied once the room has seen it land.
+  const pending = state.pending;
+  const resolveRef = useRef(dispatch);
+  useEffect(() => {
+    resolveRef.current = dispatch;
+  });
+  useEffect(() => {
+    if (!pending) return;
+    const timer = window.setTimeout(() => resolveRef.current({ type: "resolveGuess" }), pending.correct ? VERDICT_MS.right : VERDICT_MS.wrong);
     return () => window.clearTimeout(timer);
-  }, [state.pending]);
+  }, [pending]);
+
+  const [inviting, setInviting] = useState(false);
+  async function invite() {
+    if (code) return setInviting(true);
+    const res = await fetch("/api/games/guess-who/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state: local }),
+    });
+    if (!res.ok) return;
+    const game = (await res.json()) as SharedGame;
+    setCode(game.code);
+    setInviting(true);
+  }
+  async function stopSharing() {
+    if (!code) return;
+    setInviting(false);
+    await fetch(sharedGamePath(code), { method: "DELETE" }).catch(() => undefined);
+    if (live) dispatchLocal({ type: "load", state: live.state });
+    setCode(null);
+  }
 
   const { full, toggle } = useFullScreen();
 
   // Both boards share one order, new each round; the reducer doesn't care about order.
   const shown = useMemo(
-    () => ({ ...config, tools: boardOrder(config.tools, `${version}:${state.round}`) }),
-    [config, version, state.round],
+    () => ({ ...config, tools: boardOrder(config.tools, `${state.version}:${state.round}`) }),
+    [config, state.version, state.round],
   );
 
-  const board = <Board config={shown} state={state} dispatch={dispatch} byId={byId} full={full} onFullScreen={toggle} />;
+  const board = (
+    <>
+      <Board
+        config={shown}
+        state={state}
+        dispatch={dispatch}
+        byId={byId}
+        full={full}
+        onFullScreen={toggle}
+        code={code}
+        onInvite={() => void invite()}
+      />
+      {code && <InviteDialog open={inviting} onOpenChange={setInviting} onStop={() => void stopSharing()} />}
+    </>
+  );
   // The shell's <main> is a size container, which would hold a fixed cover inside it, so the cover goes on <body>.
   if (full) return createPortal(<div className="fixed inset-0 z-45 overflow-auto bg-background p-6">{board}</div>, document.body);
   return board;
@@ -310,6 +232,8 @@ function Board({
   byId,
   full,
   onFullScreen,
+  code,
+  onInvite,
 }: {
   config: GuessWhoConfig;
   state: State;
@@ -317,7 +241,21 @@ function Board({
   byId: Map<string, GuessWhoTool>;
   full: boolean;
   onFullScreen: () => void;
+  /** The code reps join with, while the game is shared. */
+  code: string | null;
+  onInvite: () => void;
 }) {
+  const inviteButton = (
+    <Button
+      variant={code ? "secondary" : "outline"}
+      onClick={onInvite}
+      className={FLUID.button}
+      title={code ? "The link to send reps, and stop sharing" : "Let reps flip their team's cards from their own laptops"}
+    >
+      <Users />
+      {code ? "Shared with reps" : "Invite reps"}
+    </Button>
+  );
   const fullScreenButton = (
     <Button
       variant="ghost"
@@ -350,7 +288,10 @@ function Board({
   if (state.phase === "final") {
     return (
       <div className="space-y-3">
-        <div className="flex justify-end">{fullScreenButton}</div>
+        <div className="flex justify-end gap-2">
+          {code && inviteButton}
+          {fullScreenButton}
+        </div>
         <FinalScreen state={state} totals={totals} onRestart={() => dispatch({ type: "restart" })} />
       </div>
     );
@@ -376,6 +317,7 @@ function Board({
           </span>
         )}
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {inviteButton}
           {state.phase === "playing" && (
             <>
               <Button
@@ -427,7 +369,8 @@ function Board({
             mystery={byId.get(round[team])!}
             byId={byId}
             active={state.phase === "playing" && state.turn === team && !state.pending}
-            guessing={state.guessing && state.turn === team}
+            flippable={canFlip(state, team)}
+            guessing={state.guessing && state.turn === team && !state.pending}
             recap={state.phase === "recap"}
             verdict={state.pending?.team === team ? verdictOf(state, team, byId) : undefined}
             total={totals(team)}
@@ -467,6 +410,7 @@ function TeamBoard({
   mystery,
   byId,
   active,
+  flippable,
   guessing,
   recap,
   verdict,
@@ -478,7 +422,10 @@ function TeamBoard({
   side: Side;
   mystery: GuessWhoTool;
   byId: Map<string, GuessWhoTool>;
+  /** Whose turn it is. */
   active: boolean;
+  /** Its cards can be knocked down or stood up: any time in a round, not only on its turn, since reps flip their own. */
+  flippable: boolean;
   guessing: boolean;
   recap: boolean;
   verdict: Verdict | undefined;
@@ -533,20 +480,23 @@ function TeamBoard({
       <div
         className={cn("grid grid-cols-4 gap-2.5 px-4 pb-4 sm:grid-cols-6", !active && !recap && side.status === "playing" && "opacity-60")}
       >
-        {config.tools.map((tool, i) => (
-          <ToolCard
-            key={tool.id}
-            tool={tool}
-            index={i}
-            team={team}
-            down={side.down.includes(tool.id)}
-            winner={side.status === "solved" && tool.id === mystery.id}
-            verdict={verdict?.id === tool.id ? (verdict.correct ? "right" : "wrong") : undefined}
-            clickable={active}
-            guessing={guessing}
-            onClick={() => dispatch(guessing ? { type: "guess", id: tool.id } : { type: "toggle", id: tool.id })}
-          />
-        ))}
+        {config.tools.map((tool, i) => {
+          const down = side.down.includes(tool.id);
+          return (
+            <ToolCard
+              key={tool.id}
+              tool={tool}
+              index={i}
+              team={team}
+              down={down}
+              winner={side.status === "solved" && tool.id === mystery.id}
+              verdict={verdict?.id === tool.id ? (verdict.correct ? "right" : "wrong") : undefined}
+              clickable={guessing || flippable}
+              guessing={guessing}
+              onClick={() => dispatch(guessing ? { type: "guess", id: tool.id } : { type: "flip", team, id: tool.id, down: !down })}
+            />
+          );
+        })}
       </div>
 
       <AnimatePresence>
@@ -594,7 +544,7 @@ function TeamBoard({
   );
 }
 
-function StatusChip({ side }: { side: Side }) {
+export function StatusChip({ side }: { side: Side }) {
   if (side.status === "playing") return null;
   return (
     <span className={cn(FLUID.label, "flex items-center gap-1 rounded-full bg-white/20 px-[0.75em] py-[0.15em] font-medium")}>
@@ -608,7 +558,7 @@ function StatusChip({ side }: { side: Side }) {
  * One card, hinged along its bottom edge as on the real board: knocked down,
  * it folds back nearly flat into its slot, and stood up it springs upright.
  */
-function ToolCard({
+export function ToolCard({
   tool,
   index,
   team,
@@ -692,6 +642,65 @@ function ToolCard({
         )}
       </motion.span>
     </button>
+  );
+}
+
+/** The link to send reps, and ending the shared game. */
+function InviteDialog({ open, onOpenChange, onStop }: { open: boolean; onOpenChange: (open: boolean) => void; onStop: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const url = joinUrl();
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard refused: the link is on screen to select.
+    }
+  }
+
+  async function stop() {
+    if (
+      await confirmDialog({
+        title: "Stop sharing this game?",
+        description: "The reps' page shows no game until you share one again. The game carries on here from where it is.",
+        confirmLabel: "Stop sharing",
+        destructive: true,
+      })
+    ) {
+      onStop();
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Invite reps</DialogTitle>
+          <DialogDescription>
+            Reps open the link, pick Red or Blue, and knock down their team&apos;s cards from their own laptops. Their flips show here within a
+            second. The link is the same for every game, so it can stay pinned in Slack.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex min-w-0 items-center gap-3 rounded-2xl border px-5 py-2.5">
+          <span className="text-sm text-muted-foreground">Link</span>
+          <span className="min-w-0 truncate font-mono text-sm select-all">{url}</span>
+          <Button variant="ghost" size="sm" className="ml-auto shrink-0" onClick={() => void copy()}>
+            {copied ? <Check /> : <Copy />}
+            {copied ? "Copied" : "Copy"}
+          </Button>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => void stop()}>
+            Stop sharing
+          </Button>
+          <Button variant="brand" onClick={() => onOpenChange(false)}>
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
