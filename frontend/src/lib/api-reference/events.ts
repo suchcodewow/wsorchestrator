@@ -37,7 +37,7 @@ export const EVENT_GROUPS: EndpointGroup[] = [
               name: "userCount",
               type: "number",
               required: true,
-              note: "integer; 1–50 for a workshop, 1–5 for a challenge",
+              note: "integer; 1–50 for a workshop, 1–8 for a challenge",
             },
             { name: "ttlDays", type: "number", note: "integer 1–3, default 1; how long it runs before teardown" },
             {

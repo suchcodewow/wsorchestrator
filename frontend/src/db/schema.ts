@@ -191,7 +191,7 @@ export const EVENT_LIMITS: Record<EventMode, { maxUsers: number; defaultUsers: n
     minClouds: 0,
     maxClouds: CLOUDS.length,
   },
-  challenge: { maxUsers: 5, defaultUsers: 1, minClouds: 1, maxClouds: 1 },
+  challenge: { maxUsers: 8, defaultUsers: 1, minClouds: 1, maxClouds: 1 },
 };
 
 export const limitsFor = (mode: EventMode) => EVENT_LIMITS[mode];

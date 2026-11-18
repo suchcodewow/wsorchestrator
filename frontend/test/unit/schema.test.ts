@@ -83,7 +83,7 @@ describe("EVENT_LIMITS / limitsFor", () => {
   });
 
   test("a challenge is small and on exactly one cloud", () => {
-    assert.deepEqual(limitsFor("challenge"), { maxUsers: 5, defaultUsers: 1, minClouds: 1, maxClouds: 1 });
+    assert.deepEqual(limitsFor("challenge"), { maxUsers: 8, defaultUsers: 1, minClouds: 1, maxClouds: 1 });
   });
 
   test("every mode's limits are internally consistent", () => {
