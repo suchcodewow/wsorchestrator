@@ -5,6 +5,7 @@
  * leaders in the employee list from HiBob who have done neither.
  */
 
+import { officialNameSql } from "@/lib/evals/official-name-sql";
 import "server-only";
 
 import { and, eq, inArray, or, sql } from "drizzle-orm";
@@ -237,7 +238,11 @@ export async function listJudgeProspects(
     })
     .from(employees)
     .where(
-      and(isProspect, inGroup(group), searchAny(query.q, [employees.fullName, employees.email, employees.title, location, employees.site])),
+      and(
+        isProspect,
+        inGroup(group),
+        searchAny(query.q, [employees.fullName, officialNameSql, employees.email, employees.title, location, employees.site]),
+      ),
     )
     .orderBy(...orderFor(PROSPECT_SORTS[query.sort], query.dir, sql`lower(${employees.fullName})`, employees.email))
     .limit(limit)

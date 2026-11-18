@@ -16,6 +16,7 @@ import "server-only";
 import { and, eq, gt, gte, inArray, isNotNull, isNull, not, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { cohortAdditions, employees, intakeResponses, type Employee } from "@/db/schema";
+import { officialNameSql } from "@/lib/evals/official-name-sql";
 import { attended, classDate } from "@/lib/evals/attendance";
 import { getCandidateCutoffs, getDeferralDays, type CandidateCutoffs } from "@/lib/evals/settings";
 import { nextBootcampStart } from "@/lib/evals/tracks";
@@ -218,7 +219,7 @@ function currentCohortWhere(filter: CurrentCohortFilter, q: string, cutoffs: Can
     filter.stage ? IN_STAGE[filter.stage] : undefined,
     filter.track ? ON_TRACK[filter.track] : or(isNull(e.track), inArray(e.track, [...ATTENDING])),
     filter.unanswered ? not(rsvped) : undefined,
-    searchAny(q, [e.fullName, e.email, e.title, candidateTrack]),
+    searchAny(q, [e.fullName, officialNameSql, e.email, e.title, candidateTrack]),
   );
 }
 

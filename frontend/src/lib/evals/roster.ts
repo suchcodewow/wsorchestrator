@@ -8,6 +8,7 @@ import "server-only";
 import { and, desc, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, hibobSyncRuns, type Employee, type EvalsTitleList } from "@/db/schema";
+import { officialNameSql } from "@/lib/evals/official-name-sql";
 import { classDate, classScore } from "@/lib/evals/attendance";
 import { orgUnder } from "@/lib/evals/org";
 import type { EmployeeSort, OrganizationSort } from "@/lib/list-specs";
@@ -94,9 +95,10 @@ export async function listEmployees(query: ListQuery<EmployeeSort>, match: Emplo
   const { limit, offset } = pageWindow(query.page);
   const searched =
     match === "person"
-      ? [employees.fullName, employees.email]
+      ? [employees.fullName, officialNameSql, employees.email]
       : [
           employees.fullName,
+          officialNameSql,
           employees.email,
           employees.title,
           employees.department,
@@ -239,7 +241,7 @@ export async function listOrganizationMembers(query: ListQuery<OrganizationSort>
       .where(
         and(
           isNotNull(e.orgDepth),
-          searchAny(query.q, [e.fullName, e.email, e.title, e.department, e.reportsToName, e.reportsToEmail, e.track]),
+          searchAny(query.q, [e.fullName, officialNameSql, e.email, e.title, e.department, e.reportsToName, e.reportsToEmail, e.track]),
         ),
       )
       .orderBy(...orderFor(ORGANIZATION_SORT_COLUMNS[query.sort], query.dir, sql`lower(${e.fullName})`, e.id))
