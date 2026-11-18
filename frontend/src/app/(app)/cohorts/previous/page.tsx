@@ -4,6 +4,9 @@
  * already open, so coming back to the tab finds it as it was left.
  */
 
+import { notFound } from "next/navigation";
+import { auth } from "@/auth";
+import { canUseTraining } from "@/lib/roles";
 import { getSessionDetail, listPreviousSessions, previousSessionsSummary } from "@/lib/evals/previous-sessions";
 import { PREVIOUS_SESSION_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
@@ -15,6 +18,9 @@ export default async function PreviousCohortsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // The layout lets a guest judge in for Current; this tab is Training's alone.
+  const session = await auth();
+  if (!session?.user || !canUseTraining(session.user.access)) notFound();
   const params = await searchParams;
   const query = parseListQuery(params, PREVIOUS_SESSION_LIST);
   const [page, summary, opened] = await Promise.all([

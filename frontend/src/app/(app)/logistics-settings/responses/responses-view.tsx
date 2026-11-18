@@ -4,14 +4,13 @@
  * One page of one intake form's responses, or both forms' together, each
  * person's latest, a column per question as the forms stand now. The search reaches the name, email and
  * every answer; the filter beside it narrows to one answer to one list
- * question. Import brings in a Google Form's responses sheet.
+ * question.
  */
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Loader2, Upload } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { INTAKE_FORM_IDS, type IntakeFormId, type IntakeQuestion } from "@/db/schema";
 import type { IntakeResponseSort } from "@/lib/list-specs";
@@ -20,7 +19,6 @@ import type { AnswerFilter, IntakeResponseRow } from "@/lib/logistics/responses"
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
-import { ImportResponsesDialog } from "./import-dialog";
 
 const SELECT = cn(
   "h-9 rounded-md border border-input bg-field px-2 text-sm text-foreground shadow-xs outline-none",
@@ -56,7 +54,6 @@ const PROGRAMS: Record<IntakeFormId, string> = { bootcamp: "Bootcamp", intermedi
 export function ResponsesView({
   form,
   questions,
-  questionsByForm,
   query,
   filter,
   page,
@@ -64,13 +61,11 @@ export function ResponsesView({
   form: ResponsesForm;
   /** The columns: the form's questions, or with both listed every question either asks, once. */
   questions: IntakeQuestion[];
-  questionsByForm: Record<IntakeFormId, IntakeQuestion[]>;
   query: ListQuery<IntakeResponseSort>;
   filter: AnswerFilter | null;
   page: Page<IntakeResponseRow>;
 }) {
   const { set, pending } = useAnswerFilter();
-  const [importing, setImporting] = useState(false);
   const lists = questions.filter((q) => HAS_OPTIONS.has(q.kind));
   const chosen = lists.find((q) => q.id === filter?.question);
 
@@ -125,18 +120,7 @@ export function ResponsesView({
           )}
           {pending && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
         </div>
-        <Button variant="outline" onClick={() => setImporting(true)}>
-          <Upload />
-          Import
-        </Button>
       </motion.div>
-
-      <ImportResponsesDialog
-        initialForm={form === "all" ? "bootcamp" : form}
-        questionsByForm={questionsByForm}
-        open={importing}
-        onClose={() => setImporting(false)}
-      />
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">

@@ -23,5 +23,5 @@ export default async function IntakeResponsesPage({
   ]);
   const byForm = { bootcamp: bootcamp.questions, intermediate: intermediate.questions };
   const questions = form === "all" ? questionsOfBoth(byForm.bootcamp, byForm.intermediate) : byForm[form];
-  return <ResponsesView form={form} questions={questions} questionsByForm={byForm} query={query} filter={filter} page={page} />;
+  return <ResponsesView form={form} questions={questions} query={query} filter={filter} page={page} />;
 }

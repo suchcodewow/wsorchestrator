@@ -185,10 +185,10 @@ const ACTIVE_EXISTS_ERROR: EndpointError = {
 };
 
 const SURVEY_DAY_SHAPE = `{ stage: "bootcamp" | "intermediate", day: number, audiences: ("sales" | "engineer")[], assigned: number, answered: number }`;
-const SURVEY_SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, name, emoji, start: number, minutes: number }`;
+const SURVEY_SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, name, emoji, start: number, minutes: number, leader?: string }`;
 const MY_SURVEY_SHAPE = `{ id, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer", day: number, date, sessions: ${SURVEY_SESSION_SHAPE}[], answers: { sessions: Record<string, { rating: number, feedback }>, dayRating: number, dayChange } | null, submittedAt: string | null }`;
 const SURVEY_CARD_SHAPE = `{ id, bootcampId, startDate, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer", day: number, date, sessions: number, assigned: number, responses: number, average: number }`;
-const SURVEY_RESULT_SHAPE = `{ id, bootcampId, startDate, stage, audience, day: number, date, assigned: number, responses: number, average: number | null, sessions: (${SURVEY_SESSION_SHAPE} & { average: number | null, ratings: number, comments: number })[] }`;
+const SURVEY_RESULT_SHAPE = `{ id, bootcampId, startDate, stage, audience, day: number, date, assigned: number, responses: number, average: number | null, summarizedAt: string | null, sessions: (${SURVEY_SESSION_SHAPE} & { average: number | null, ratings: number, comments: number, breakdown: [number, number, number, number, number], summary: string | null })[] }`;
 
 const INTAKE_QUESTION_SHAPE = `{ id, kind: "short" | "paragraph" | "choice" | "checkboxes" | "dropdown", title, description, required: boolean, options: string[], other: boolean }`;
 
@@ -554,7 +554,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         path: "/api/cohorts/current",
         summary:
           "Lists the org members still to train — bootcamp and intermediate candidates — narrowed to a stage and a track, a page at a time. The deferred are left out; GET /api/cohorts/deferred lists them.",
-        access: "trainingViewer",
+        access: "cohortReader",
         token: true,
         notes:
           "A bootcamp candidate is anyone under the Organization Leader, on the sales, engineer or deferred track or on none, who has attended no BTC; an intermediate candidate has attended a BTC and no INT. Someone attended a class when they were assessed in it at a bootcamp whose class has since been released (POST /api/reporting/bootcamp/release). Either must also pass the date cutoffs in GET /api/evals/candidate-cutoffs, which cutoffs echoes. The ignored and exempt tracks are left out. A track is, first, one an administrator set by hand with PUT /api/cohorts/current/track, which overridden marks, exempt among them; then ignored for a title on the Ignored list; then deferred when their HiBob start date is fewer than deferral.days before deferral.bootcampStart, or after it; then the Sales or Engineer list their title is on. undecided is a title on no list. members never includes anyone deferred, and track cannot ask for them; they are on GET /api/cohorts/deferred. deferral echoes GET /api/evals/deferral-days. counts gives each stage on each track, deferred included; each stage's counts ignore the track filter, each track's ignore the stage filter, and neither depends on the search. unanswered is the same counts of only those who have not RSVP'd: saved no answers to their stage's registration form. activeBootcamp is the one active bootcamp, or null. No scores are returned, to anyone; GET /api/reporting/bootcamp/people/{key} and the eVals routes have them. meetings lists where each member stands with each Google meeting picked for their stage and track (GET /api/evals/google-meetings): attended, by Zoom or an administrator's mark; accepted or pending on the invite they hold, startsAt and endsAt being when it runs (on a meeting without allOccurrences, one they declined is not the invite they hold); uninvited until the next sync invites them, startsAt and endsAt then being the occurrence it would pick, as the sync picks it, with predicted true (null on a meeting with nothing to offer yet); or none_left with no occurrence left in their window: before the active bootcamp, or, for an Intermediate meeting they will take after it, from the day after its last day to the next intermediate class; or finished in place of none_left on a meeting with allOccurrences, where having none left needs nothing more. marked is an administrator's mark, or null when Zoom decides. timezone is the member's own, or null when the app has none. outOfHours is true when that occurrence is still to come and, in their time zone, starts before 9:00, ends after 17:00 or ends on a later day; it is false for anyone with no time zone. instances is null unless the meeting invites to every occurrence; then it lists, soonest first, each occurrence they hold an invite to, attended or missed once Zoom has been read and accepted or pending before, leaving when the next sync would take them off it, and each the next sync would add them to, uninvited, and outOfHours is true when any of them is. leaving is null unless the next sync would take them off an invite it added; then occurrences lists those, soonest first, why says they attended, the meeting is no longer for them (not_for_them, the one case where a meeting not picked for their stage and track is listed), or it is one more invite than they should hold (extra), and dryRun is true while the sync only logs what it would do. It is null with no active bootcamp or with the test group on, when no sync changes these invites. mark is leaving when that leaves them with no invite still to come. recordKey is the key of their page on GET /api/reporting/bootcamp/people/{key} once they have attended a BTC, and null before. btcDate is the day of the latest BTC they attended.",
@@ -576,7 +576,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         path: "/api/cohorts/current/emails",
         summary:
           "Lists the email address of everyone GET /api/cohorts/current would show for the same filters and search, across every page.",
-        access: "trainingViewer",
+        access: "cohortReader",
         token: true,
         notes:
           "Takes stage, track, rsvp and q as GET /api/cohorts/current does, and draws the same people, so the list matches the table however many pages it has. emails is in the table's default name order, one address per person, with no names or other fields. The Current tab's copy button calls it.",
@@ -2391,34 +2391,6 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: `{ form: "bootcamp" | "intermediate" | "all", responses: { id, form: "bootcamp" | "intermediate", email, name: string | null, answers: Record<string, string | string[]>, submittedAt }[], ${PAGE_FIELDS} }`,
       },
       {
-        method: "POST",
-        path: "/api/logistics/intake-responses/import",
-        summary: "Brings a Google Form's responses sheet into one intake form, or with commit left out only says how it lines up.",
-        access: "trainingAdmin",
-        token: true,
-        notes:
-          "The sheet's first row is its headers, as Google writes them: an Email Address column is needed, a Timestamp column dates each response, and every other column answers the question whose title it is, or ends with. Columns that answer no question are left out. Each row is stored as that person's answers, dated by its timestamp, so an answer they give at /intake afterwards is newer; a row with the same email and timestamp as one already stored is skipped, so the same sheet twice adds nothing. inCohort is how many of its people are in the current cohort, the ones Dietary needs lists.",
-        query: [
-          { name: "form", type: '"bootcamp" | "intermediate"', required: true, note: "the form to bring the responses into" },
-          { name: "commit", type: '"1"', note: "store them; left out, nothing is written" },
-        ],
-        body: {
-          kind: "multipart",
-          fields: [{ name: "file", type: "File", required: true, note: "the responses sheet as .csv or .xlsx, up to 2 MB and 2,000 rows" }],
-        },
-        returns:
-          '{ imported: boolean, columns: { header, questionId: string | null }[], added: number, alreadyThere: number, inCohort: number, people: number, problems: { row: number, problem: "no_email" | "not_an_email" }[] }',
-        errors: [
-          { status: 400, error: "no_file", when: "no file was sent" },
-          { status: 400, error: "unreadable", when: "the file is neither a .csv nor an .xlsx" },
-          { status: 400, error: "empty", when: "it has no rows under its headers" },
-          { status: 400, error: "no_email_column", when: "no column is headed Email or Email Address" },
-          { status: 404, error: "not_found", when: "form is not bootcamp or intermediate" },
-          { status: 413, error: "too_large", when: "the file is over 2 MB" },
-          { status: 413, error: "too_many_rows", when: "it has more than 2,000 rows" },
-        ],
-      },
-      {
         method: "GET",
         path: "/api/logistics/dietary",
         summary:
@@ -2753,6 +2725,28 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         ],
       },
       {
+        method: "DELETE",
+        path: "/api/scheduler/bootcamps/{id}/surveys",
+        summary: "Unassigns one track-day's surveys, keeping every answer given.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The day's surveys disappear from attendees' forms and from the scheduler's sent days, and their answers stay on Survey Results. Sending the day again with POST brings the surveys back with the day's sessions as they now stand: a person's answer to a session still on the day is kept and shown again, and an answer to a session no longer there is deleted (a person left with no answer to any session is reset as unanswered). unassigned is how many surveys this call took back; repeating the call returns 0.",
+        params: [BOOTCAMP_ID],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "track", type: TRACK_TYPE, required: true, note: "the track whose button was pressed" },
+            { name: "day", type: "integer", required: true, note: "from 1, a day the track runs at this bootcamp" },
+          ],
+        },
+        returns: `{ unassigned: number, days: ${SURVEY_DAY_SHAPE}[] }`,
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_found", when: "no such bootcamp" },
+        ],
+      },
+      {
         method: "GET",
         path: "/api/me/forms",
         summary:
@@ -2825,11 +2819,43 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "survey.sessions are the sessions it asks about, each with its mean rating, how many rated it, and how many left feedback on it. responses are the people who have answered, with every answer they gave.",
+          "survey.sessions are the sessions it asks about, each with its leader's name when it had one as the survey was assigned, its mean rating, how many rated it, how many left feedback on it, breakdown (how many rated it 1, 2, 3, 4 and 5), and summary, Claude's summary of it from the last POST /api/survey-results/{id}/summary (null before one). responses are the people who have answered, with every answer they gave.",
         params: [{ name: "id", type: "string", required: true, note: "the survey's id, as GET /api/survey-results lists it" }],
         query: listQuery(SURVEY_RESPONSE_LIST.sorts, "the name or email", "desc"),
         returns: `{ survey: ${SURVEY_RESULT_SHAPE}, responses: { id, email, fullName, submittedAt, dayRating: number, dayChange, sessions: Record<string, { rating: number, feedback }> }[], ${PAGE_FIELDS} }`,
         errors: [{ status: 404, error: "not_found", when: "no such survey" }],
+      },
+      {
+        method: "GET",
+        path: "/api/survey-results/{id}/sessions/{sessionId}/comments",
+        summary:
+          "Lists the comments left on one session of a daily survey, with who left each, as Survey Results' session accordion shows them.",
+        access: "trainingViewer",
+        token: true,
+        notes: `Only answers with feedback are listed, the lowest ratings first, then by name. At most ${PAGE_SIZE} are returned; hasMore says there were more. A session the survey does not ask about has no comments.`,
+        params: [
+          { name: "id", type: "string", required: true, note: "the survey's id, as GET /api/survey-results lists it" },
+          { name: "sessionId", type: "string", required: true, note: "one of survey.sessions' ids" },
+        ],
+        returns: "{ comments: { id, email, fullName, rating: number, feedback, submittedAt }[], hasMore: boolean }",
+        errors: [{ status: 404, error: "not_found", when: "no such survey" }],
+      },
+      {
+        method: "POST",
+        path: "/api/survey-results/{id}/summary",
+        summary: "Generate AI Summary: asks Claude to summarize each session of a daily survey, and keeps the summaries on it.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "Each session anyone has rated gets two to four sentences on how it was received and what its feedback says. Claude is sent each session's name, leader, ratings and feedback; no attendee's name or email. The summaries replace those from before, except that a session Claude leaves blank keeps its old one. Takes up to about two minutes.",
+        params: [{ name: "id", type: "string", required: true, note: "the survey's id, as GET /api/survey-results lists it" }],
+        returns: "{ summaries: Record<string, string>, summarizedAt: string }",
+        errors: [
+          { status: 400, error: "no_responses", when: "no one has answered the survey" },
+          { status: 404, error: "not_found", when: "no such survey" },
+          { status: 502, error: "upstream", when: "Claude failed or declined" },
+          { status: 503, error: "unconfigured", when: "no ANTHROPIC_API_KEY is set on this deployment" },
+        ],
       },
     ],
   },

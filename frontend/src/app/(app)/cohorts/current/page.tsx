@@ -6,7 +6,14 @@ import { meetingStatusesFor } from "@/lib/evals/google-meetings";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { getTestGroup } from "@/lib/cohorts/test-group";
-import { canManageTestGroup, canManageTrainingSettings } from "@/lib/roles";
+import {
+  canManageBootcampRecords,
+  canManageTestGroup,
+  canManageTrainingSettings,
+  canScoreAssessments,
+  canSeeEvals,
+  canUseTraining,
+} from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
 import { intakeQuestionsByForm, latestIntakesOf } from "@/lib/logistics/intake";
 import { CurrentCohortView, type MemberMeetings } from "./current-view";
@@ -65,6 +72,10 @@ export default async function CurrentCohortPage({
         canSetTrack={session?.user ? canManageTrainingSettings(session.user.access) : false}
         meetings={meetings}
         canMarkAttendance={session?.user ? canManageTrainingSettings(session.user.access) : false}
+        canSeeParticipation={session?.user ? canSeeEvals(session.user.access) : false}
+        canMarkParticipation={session?.user ? canScoreAssessments(session.user.access) : false}
+        canRegenerateParticipation={session?.user ? canManageBootcampRecords(session.user.access) : false}
+        canPrintNameCards={session?.user ? canUseTraining(session.user.access) : false}
         intakes={intakes}
         intakeQuestions={intakeQuestions}
       />

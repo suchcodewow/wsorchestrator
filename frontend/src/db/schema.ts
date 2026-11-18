@@ -3384,7 +3384,12 @@ export type SurveySession = {
   emoji: string;
   start: number;
   minutes: number;
+  /** Its leader's name when the survey was assigned; absent when it had none. */
+  leader?: string;
 };
+
+/** Claude's summary of one session's ratings and feedback, keyed by session id. */
+export type SurveySessionSummaries = Record<string, string>;
 
 /** One person's answers to one daily survey: a rating and optional feedback for each session. */
 export type SurveySessionAnswers = Record<string, { rating: number; feedback: string }>;
@@ -3408,6 +3413,11 @@ export const dailySurveys = pgTable(
     sessions: jsonb("sessions").$type<SurveySession[]>().notNull().default([]),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Set while the survey is unassigned: hidden from attendees, its answers kept for Survey Results. */
+    unassignedAt: timestamp("unassigned_at", { withTimezone: true }),
+    /** Claude's summary of each session, from Survey Results' Generate AI Summary; empty until then. */
+    summaries: jsonb("summaries").$type<SurveySessionSummaries>().notNull().default({}),
+    summarizedAt: timestamp("summarized_at", { withTimezone: true }),
   },
   (t) => [
     uniqueIndex("daily_surveys_day_idx").on(t.bootcampId, t.stage, t.day, t.audience),

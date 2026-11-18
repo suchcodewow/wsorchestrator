@@ -12,13 +12,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Feedback, Rating } from "@/app/intake/surveys/[id]/survey-form";
 import type { SessionRow } from "@/lib/scheduler/schedule";
-import { TRACK_LABELS, formatClock, stageOf } from "@/lib/scheduler/timeline";
+import { TRACK_LABELS, stageOf } from "@/lib/scheduler/timeline";
 import {
   SURVEY_AUDIENCE_LABELS,
   SURVEY_QUESTIONS,
   SURVEY_STAGE_LABELS,
   surveyAudiencesOf,
   surveyDate,
+  surveySessionLine,
   surveySessions,
 } from "@/lib/surveys/survey-values";
 import type { BoardColumn } from "./board";
@@ -52,7 +53,7 @@ function Body({ column, sessions, sent }: { column: BoardColumn; sessions: Sessi
   const audiences = surveyAudiencesOf(column.track);
   const [audience, setAudience] = useState(audiences[0]!);
   const asked = surveySessions(
-    sessions.filter((s) => s.day === column.day),
+    sessions.filter((s) => s.day === column.day).map((s) => ({ ...s, leader: s.staff.find((x) => x.leader)?.fullName })),
     stage,
     audience,
   );
@@ -91,7 +92,7 @@ function Body({ column, sessions, sent }: { column: BoardColumn; sessions: Sessi
                 {s.emoji && <span className="mr-1.5">{s.emoji}</span>}
                 {s.name}
               </p>
-              <p className="text-xs text-muted-foreground">{formatClock(s.start)}</p>
+              <p className="text-xs text-muted-foreground">{surveySessionLine(s)}</p>
             </div>
             <Rating
               name={`preview-${s.id}`}

@@ -43,6 +43,7 @@ import {
   canManageSignInDomains,
   canManageTrainingSettings,
   canManageUsers,
+  canSeeCurrentCohort,
   canSeeReporting,
   canSeeEvals,
   canSeeScheduler,
@@ -156,7 +157,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Cohorts",
         Icon: Users,
         description: "Who is in each bootcamp cohort.",
-        visible: canUseTraining,
+        visible: canSeeCurrentCohort,
       },
       {
         href: "/cohort-settings",

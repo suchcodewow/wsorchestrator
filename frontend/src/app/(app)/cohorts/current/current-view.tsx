@@ -10,7 +10,8 @@
  * through every sync until they hand it back to the rules. A row opens to show the rest of what the sync knows about them.
  * No view shows a score: Cohorts is who is in them, and eVals and Reporting
  * are how they did. The Current tab's one exception is the participation
- * popup, for someone who can score, while a bootcamp is active.
+ * popup, while a bootcamp is active: anyone in eVals reads it, and someone
+ * who can score, a guest judge among them, moves its marks.
  * The Current tab's Attendance column, beside each name, holds an RSVP mark if
  * they saved their stage's registration form, then a mark for each picked
  * Google meeting that is for them, and an eVals administrator can override
@@ -18,6 +19,7 @@
  */
 
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
+import { ParticipationButton } from "@/components/participation/participation-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -190,6 +192,10 @@ export function CurrentCohortView({
   canSetTrack,
   meetings = {},
   canMarkAttendance = false,
+  canSeeParticipation = false,
+  canMarkParticipation = false,
+  canRegenerateParticipation = false,
+  canPrintNameCards = false,
   intakes,
   intakeQuestions,
 }: {
@@ -210,6 +216,14 @@ export function CurrentCohortView({
   meetings?: MemberMeetings;
   /** Whether the viewer may say someone attended or missed a meeting, over what Zoom said. */
   canMarkAttendance?: boolean;
+  /** Whether the viewer may open the participation popup; only with a bootcamp active. */
+  canSeeParticipation?: boolean;
+  /** Whether the popup's marks have arrows: someone who scores, a guest judge among them. */
+  canMarkParticipation?: boolean;
+  /** Whether the popup offers AI comments. */
+  canRegenerateParticipation?: boolean;
+  /** Whether the viewer may open the name cards, which a guest judge may not. */
+  canPrintNameCards?: boolean;
   /** Each person on the page's latest answers to each registration form, by lowercased email. */
   intakes: Record<string, IntakeOnFile[]>;
   /** Both forms' questions as they stand now, to label those answers. */
@@ -239,7 +253,8 @@ export function CurrentCohortView({
   const columns = showBtcDate ? COLUMNS : COLUMNS.filter((c) => c.column !== "btcDate");
   // The RSVP and meeting marks are the Current tab's; the Deferred tab has none.
   const showAttendance = tab === "current";
-  const columnCount = columns.length + (showAttendance ? 1 : 0);
+  const showParticipation = tab === "current" && canSeeParticipation && activeBootcamp !== null;
+  const columnCount = columns.length + (showAttendance ? 1 : 0) + (showParticipation ? 1 : 0);
   // Each counter counts within the other picks; the Deferred tab has only the deferred to count.
   const picked = filter.unanswered ? unanswered : counts;
   const inTracks = (cells: CurrentCohortCounts, stage: CandidateStage) =>
@@ -390,12 +405,14 @@ export function CurrentCohortView({
                 Add attendee
               </Button>
             )}
-            <Button variant="secondary" asChild>
-              <a href="/cohorts/name-cards" target="_blank" rel="noopener">
-                <Printer />
-                Print Name Cards
-              </a>
-            </Button>
+            {canPrintNameCards && (
+              <Button variant="secondary" asChild>
+                <a href="/cohorts/name-cards" target="_blank" rel="noopener">
+                  <Printer />
+                  Print Name Cards
+                </a>
+              </Button>
+            )}
           </div>
         )}
       </motion.div>
@@ -453,13 +470,14 @@ export function CurrentCohortView({
                     <SortHeader column={c.column} sort={query.sort} dir={query.dir}>
                       {c.label}
                     </SortHeader>
+                    {c.column === "fullName" && showParticipation && <PlainHeader>Participation</PlainHeader>}
                     {c.column === "fullName" && showAttendance && <PlainHeader>Attendance</PlainHeader>}
                   </Fragment>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {reference.shown && <ReferenceRow btcDate={showBtcDate} onClick={reference.play} />}
+              {reference.shown && <ReferenceRow participation={showParticipation} btcDate={showBtcDate} onClick={reference.play} />}
               {page.rows.map((m) => {
                 const expanded = open.has(m.email);
                 return (
@@ -496,6 +514,19 @@ export function CurrentCohortView({
                           )}
                         </button>
                       </td>
+                      {showParticipation && (
+                        <td className="px-5 py-1" onClick={(ev) => ev.stopPropagation()}>
+                          {m.track !== "undecided" && (
+                            <ParticipationButton
+                              employeeId={m.id}
+                              fullName={m.fullName}
+                              canMark={canMarkParticipation}
+                              canRegenerate={canRegenerateParticipation}
+                              labelled
+                            />
+                          )}
+                        </td>
+                      )}
                       {showAttendance && (
                         <td className="px-5 py-1">
                           <MeetingMarks

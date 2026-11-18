@@ -15,6 +15,7 @@ export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  *   eventAdmin   Event Administrator                   (canManageSettings, canAuditProjects)
  *   trainingViewer Training Viewer or above           (canUseTraining)
  *   scheduleReader Training Viewer or above, or a guest judge on the active bootcamp for that bootcamp (canSeeScheduler, mayReadBootcamp)
+ *   cohortReader Training Viewer or above, or a guest judge on the active bootcamp (canSeeCurrentCohort)
  *   trainingAdmin Training Administrator              (canManageTrainingSettings)
  *   assessmentsViewer Assessments Viewer or above      (canUseEvals, canTakeIris)
  *   assessmentsAdmin Assessments Administrator         (canManageEvalsSettings, canManageIris)
@@ -40,6 +41,7 @@ export type AccessKey =
   | "eventAdmin"
   | "trainingViewer"
   | "scheduleReader"
+  | "cohortReader"
   | "trainingAdmin"
   | "assessmentsViewer"
   | "assessmentsAdmin"
@@ -66,6 +68,7 @@ export const ACCESS_LABELS: Record<AccessKey, string> = {
   eventAdmin: EVENT_ROLE_LABELS.administrator,
   trainingViewer: `${TRAINING_ROLE_LABELS.viewer} or above`,
   scheduleReader: `${TRAINING_ROLE_LABELS.viewer} or above, or a guest judge on the active bootcamp for that bootcamp alone`,
+  cohortReader: `${TRAINING_ROLE_LABELS.viewer} or above, or a guest judge on the active bootcamp`,
   trainingAdmin: TRAINING_ROLE_LABELS.administrator,
   assessmentsViewer: `${ASSESSMENTS_ROLE_LABELS.viewer} or above`,
   assessmentsAdmin: ASSESSMENTS_ROLE_LABELS.administrator,
