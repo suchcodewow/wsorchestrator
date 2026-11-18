@@ -542,6 +542,19 @@ export function ScheduleView({
             variant="outline"
             size="icon"
             className="size-8 rounded-full"
+            aria-label="Hours assigned to each person"
+            title="Hours assigned to each person"
+            onClick={() => setShowHours(true)}
+          >
+            <span className="relative inline-flex">
+              <UserRound />
+              <Clock className="absolute -right-1.5 -bottom-1 size-2.5 rounded-full bg-background" strokeWidth={3} />
+            </span>
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8 rounded-full"
             aria-label={view === "week" ? `Print ${TRACK_LABELS[shownTrack]}, every day` : `Print Day ${day}, every track`}
             title={view === "week" ? `Print ${TRACK_LABELS[shownTrack]}, every day` : `Print Day ${day}, every track`}
             onClick={() => void printView(view === "week" ? `track=${shownTrack}` : `day=${day}`)}
