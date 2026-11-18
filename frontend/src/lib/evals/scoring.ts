@@ -16,6 +16,7 @@ import "server-only";
 import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
+import { officialNameSql } from "@/lib/evals/official-name-sql";
 import {
   EVALS_ASSESSMENT_LIMITS,
   SCHEDULE_LIMITS,
@@ -201,7 +202,7 @@ export async function listAttendees(
       and(
         await attendeeCondition(assessment),
         mine ? assignedTo(assessment, bootcampId, mine) : undefined,
-        searchAny(query.q, [e.fullName, e.email, e.title]),
+        searchAny(query.q, [e.fullName, officialNameSql, e.email, e.title]),
       ),
     )
     .orderBy(...orderFor(SORT_COLUMNS[query.sort], query.dir, sql`lower(${e.fullName})`, e.id))
