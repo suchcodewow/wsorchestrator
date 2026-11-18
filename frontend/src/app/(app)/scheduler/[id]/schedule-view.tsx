@@ -520,8 +520,8 @@ export function ScheduleView({
           )}
           <Button
             variant="outline"
-            size="icon"
-            className="size-8 rounded-full"
+            size="sm"
+            className="h-8 rounded-full px-2.5"
             aria-label="Hours assigned to each person"
             title="Hours assigned to each person"
             onClick={() => setShowHours(true)}
@@ -530,6 +530,7 @@ export function ScheduleView({
               <UserRound />
               <Clock className="absolute -right-1.5 -bottom-1 size-2.5 rounded-full bg-background" strokeWidth={3} />
             </span>
+            hours
           </Button>
           <Button
             variant="outline"
