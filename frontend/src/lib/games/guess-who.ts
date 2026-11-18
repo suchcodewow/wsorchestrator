@@ -19,6 +19,8 @@ export const GUESS_WHO_LIMITS = {
   nameMax: 40,
   capMin: 3,
   capMax: 30,
+  /** The letters and digits in a shared game's code. */
+  codeLength: 6,
 } as const;
 
 export const guessWhoToolSchema = z.object({

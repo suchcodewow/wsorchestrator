@@ -2914,6 +2914,26 @@ export const trainingGames = pgTable("training_games", {
 });
 
 /**
+ * Training → Games → Guess Who, shared with the room: the game a facilitator
+ * opened to reps, who flip their team's cards from their own laptops at the
+ * fixed link `/guess-who`. Sharing a game ends any other, so there is at most
+ * one row; `code` names it for the facilitator's screen and the API. `config`
+ * is the setup the game started with, so a later change in settings doesn't
+ * move a game under way; `state` is the play
+ * (`src/lib/games/guess-who-play.ts`), and `rev` counts its changes so every
+ * screen can tell when it is behind. It lasts until the facilitator ends it.
+ */
+export const guessWhoSessions = pgTable("guess_who_sessions", {
+  code: text("code").primaryKey(),
+  config: jsonb("config").$type<Record<string, unknown>>().notNull(),
+  state: jsonb("state").$type<Record<string, unknown>>().notNull(),
+  rev: integer("rev").notNull().default(0),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * Training → Presentations: a Google Slides deck, by its Drive file, to present
  * full screen and read speaker notes from. The deck itself stays in Google;
  * `syncedAt` is when its slides were last read from there.
