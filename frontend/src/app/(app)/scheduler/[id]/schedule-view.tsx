@@ -29,7 +29,20 @@ import {
   type DragStartEvent,
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
-import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Loader2, Pencil, Printer, Rows3 } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  Check,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Loader2,
+  Pencil,
+  Printer,
+  Rows3,
+  UserRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
@@ -49,6 +62,7 @@ import { useChecklistButtons } from "./checklist";
 import { useSurveyButtons } from "./surveys";
 import { dayOf, everyDay, keyOf, locate, moveTo, resize, type Days } from "./days";
 import { CopyDialog } from "./copy-dialog";
+import { HoursDialog } from "./hours-dialog";
 import { SessionDialog, type SessionTarget } from "./session-dialog";
 
 type View = ScheduleViewMode;
@@ -112,6 +126,7 @@ export function ScheduleView({
   const [track, setTrack] = useState<ScheduleTrack>(linked?.track ?? "btc");
   const [target, setTarget] = useState<SessionTarget | null>(linked ? { mode: "edit", session: linked } : null);
   const [filling, setFilling] = useState(false);
+  const [showHours, setShowHours] = useState(false);
   const [editingBootcamp, setEditingBootcamp] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [save, setSave] = useState<SaveState>({ state: "idle" });
@@ -507,6 +522,19 @@ export function ScheduleView({
             variant="outline"
             size="icon"
             className="size-8 rounded-full"
+            aria-label="Hours assigned to each person"
+            title="Hours assigned to each person"
+            onClick={() => setShowHours(true)}
+          >
+            <span className="relative inline-flex">
+              <UserRound />
+              <Clock className="absolute -right-1.5 -bottom-1 size-2.5 rounded-full bg-background" strokeWidth={3} />
+            </span>
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8 rounded-full"
             aria-label={view === "week" ? `Print ${TRACK_LABELS[shownTrack]}, every day` : `Print Day ${day}, every track`}
             title={view === "week" ? `Print ${TRACK_LABELS[shownTrack]}, every day` : `Print Day ${day}, every track`}
             onClick={() => void printView(view === "week" ? `track=${shownTrack}` : `day=${day}`)}
@@ -664,6 +692,7 @@ export function ScheduleView({
         onChanged={afterChange}
       />
       {checklistButtons.board}
+      <HoursDialog open={showHours} onOpenChange={setShowHours} sessions={everyDay(days).flat()} />
       {canManage && (
         <CopyDialog
           open={filling}
