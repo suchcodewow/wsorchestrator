@@ -62,7 +62,11 @@ export function HoursDialog({
             </span>
             <span className="flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-blue-500" />
-              Judging a breakout
+              Judging
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="size-2.5 rounded-full border bg-white" />
+              Assisting
             </span>
           </div>
           {rows.length === 0 ? (
