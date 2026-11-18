@@ -57,7 +57,7 @@ import { type ScheduleViewMode, writeScheduleCondensedCookie, writeScheduleViewC
 import { cn } from "@/lib/utils";
 import { PillSwitch } from "@/components/pill-switch";
 import { BootcampDialog } from "../bootcamp-dialog";
-import { BESIDE_PREFIX, Board, COLUMN_ATTR, SCALE, SessionFace, type BoardColumn, type Density } from "./board";
+import { BESIDE_PREFIX, Board, COLUMN_ATTR, SCALE, SessionFace, useClock, type BoardColumn, type Density } from "./board";
 import { useChecklistButtons } from "./checklist";
 import { useSurveyButtons } from "./surveys";
 import { dayOf, everyDay, keyOf, locate, moveTo, resize, type Days } from "./days";
@@ -122,7 +122,7 @@ export function ScheduleView({
     const at = locate(initial.days, searchParams.get("session") ?? "");
     return at ? dayOf(initial.days, at.key)[at.index] : undefined;
   });
-  const [day, setDay] = useState(linked?.day ?? 1);
+  const [picked, setDay] = useState<number | null>(linked?.day ?? null);
   const [track, setTrack] = useState<ScheduleTrack>(linked?.track ?? "btc");
   const [target, setTarget] = useState<SessionTarget | null>(linked ? { mode: "edit", session: linked } : null);
   const [filling, setFilling] = useState(false);
@@ -153,6 +153,12 @@ export function ScheduleView({
 
   const tracks = SCHEDULE_TRACKS.filter((t) => (trackDays(t, bootcamp) ?? 0) > 0);
   const dayCount = Math.max(bootcamp.btcDays, bootcamp.intDays ?? 0);
+
+  // While the bootcamp is running, open on today's day until one is picked.
+  const clock = useClock();
+  let todayDay: number | null = null;
+  for (let d = 1; clock && !linked && d <= dayCount; d++) if (dayDate(bootcamp.startDate, d) === clock.date) todayDay = d;
+  const day = picked ?? todayDay ?? 1;
 
   // ── Saving ──────────────────────────────────────────────────────────────
   const daysRef = useRef(days);

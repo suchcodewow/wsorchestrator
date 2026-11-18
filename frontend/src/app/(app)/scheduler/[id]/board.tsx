@@ -159,7 +159,7 @@ const tickNow = () => Math.floor(Date.now() / TICK);
  * Today's date, as "2026-09-14", and the minute of the day it is now, both on
  * the viewer's clock; null while rendering on the server.
  */
-function useClock(): { date: string; minute: number } | null {
+export function useClock(): { date: string; minute: number } | null {
   const tick = useSyncExternalStore(everyTick, tickNow, () => null);
   if (tick === null) return null;
   const now = new Date(tick * TICK);
@@ -321,7 +321,7 @@ function Column({
         {now !== null && (
           <div
             aria-hidden
-            className="pointer-events-none absolute -right-px left-0 z-30 h-0.5 -translate-y-1/2 bg-emerald-500"
+            className="pointer-events-none absolute -right-px left-0 z-30 h-px -translate-y-1/2 bg-emerald-500"
             style={{ top: now.top }}
           >
             {now.dot && <div className="absolute top-1/2 -left-1 size-2.5 -translate-y-1/2 rounded-full bg-emerald-500" />}
