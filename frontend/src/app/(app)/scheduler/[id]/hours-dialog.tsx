@@ -9,15 +9,26 @@ import { useMemo } from "react";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { SessionRow } from "@/lib/scheduler/schedule";
 
-export type StaffHours = { email: string; name: string; minutes: number; sessions: number };
+export type StaffHours = {
+  email: string;
+  name: string;
+  minutes: number;
+  sessions: number;
+  /** Minutes spent leading a session. */
+  leading: number;
+  /** Minutes spent as a judge in a breakout. */
+  judging: number;
+};
 
 export function staffHours(sessions: SessionRow[]): StaffHours[] {
   const byEmail = new Map<string, StaffHours>();
   for (const s of sessions) {
     for (const p of s.staff) {
-      const row = byEmail.get(p.email) ?? { email: p.email, name: p.fullName, minutes: 0, sessions: 0 };
+      const row = byEmail.get(p.email) ?? { email: p.email, name: p.fullName, minutes: 0, sessions: 0, leading: 0, judging: 0 };
       row.minutes += s.minutes;
       row.sessions += 1;
+      if (s.kind === "breakout") row.judging += s.minutes;
+      else if (p.leader) row.leading += s.minutes;
       byEmail.set(p.email, row);
     }
   }
@@ -44,15 +55,39 @@ export function HoursDialog({
           <DialogTitle>Hours assigned</DialogTitle>
         </DialogHeader>
         <DialogBody>
+          <div className="mb-3 flex gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="size-2.5 rounded-full bg-green-500" />
+              Leading
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="size-2.5 rounded-full bg-blue-500" />
+              Judging
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="size-2.5 rounded-full border bg-white" />
+              Assisting
+            </span>
+          </div>
           {rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nobody is assigned to a session yet.</p>
           ) : (
             <ul className="space-y-2">
               {rows.map((r) => (
-                <li key={r.email} className="grid grid-cols-[10rem_1fr_4.5rem] items-center gap-3 text-sm" title={`${r.sessions} sessions`}>
+                <li
+                  key={r.email}
+                  className="grid grid-cols-[10rem_1fr_4.5rem] items-center gap-3 text-sm"
+                  title={`${r.sessions} sessions: ${hours(r.leading)} leading, ${hours(r.judging)} judging`}
+                >
                   <span className="truncate">{r.name}</span>
                   <span className="h-4 rounded-full bg-muted">
-                    <span className="block h-full rounded-full bg-primary" style={{ width: `${(r.minutes / most) * 100}%` }} />
+                    <span
+                      className="flex h-full overflow-hidden rounded-full border bg-white"
+                      style={{ width: `${(r.minutes / most) * 100}%` }}
+                    >
+                      <span className="h-full bg-green-500" style={{ width: `${(r.leading / r.minutes) * 100}%` }} />
+                      <span className="h-full bg-blue-500" style={{ width: `${(r.judging / r.minutes) * 100}%` }} />
+                    </span>
                   </span>
                   <span className="text-right tabular-nums">{hours(r.minutes)}</span>
                 </li>

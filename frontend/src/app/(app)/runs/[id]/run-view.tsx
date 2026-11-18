@@ -493,8 +493,8 @@ function BuiltPanel({ run, resources }: { run: WorkshopRun; resources: RunResour
       {resources.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing built yet — the first items appear within a minute.</p>
       ) : (
-        <div className="grid gap-3">
-          <div className="grid items-stretch gap-3 lg:grid-cols-[1fr_auto_1fr] lg:gap-0">
+        <div className="grid min-w-0 gap-3">
+          <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-0">
             {workspace.length > 0 ? <ToolCard group="workspace" items={workspace} /> : <div className="hidden lg:block" />}
             {workspace.length > 0 && harness.length > 0 ? (
               <Connector label="Accounts added" active={flowing} direction="right" />
@@ -507,7 +507,7 @@ function BuiltPanel({ run, resources }: { run: WorkshopRun; resources: RunResour
           {cloudCards.length > 0 && (
             <>
               {workspace.length > 0 && (
-                <div className="lg:grid lg:grid-cols-[1fr_auto_1fr]">
+                <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
                   <Connector label="Cloud access granted" active={flowing} direction="down" />
                 </div>
               )}
@@ -562,17 +562,49 @@ function ToolHeader({ group, count }: { group: Group; count?: number }) {
   );
 }
 
+/** Kinds shown up front under Harness; everything created after the projects sits in the accordion. */
+const HARNESS_TOP = new Set(["harness_org", "harness_projects"]);
+
 function ToolCard({ group, items }: { group: Group; items: RunResource[] }) {
+  const [open, setOpen] = useState(false);
+  const top = group === "harness" ? items.filter((r) => HARNESS_TOP.has(r.kind)) : items;
+  const components = group === "harness" ? items.filter((r) => !HARNESS_TOP.has(r.kind)) : [];
+  const pending = components.filter((r) => r.done !== null && r.total !== null && r.done < r.total).length;
   return (
-    <section className={cn("rounded-xl border p-3", GROUP_STYLE[group].tile)}>
+    <section className={cn("min-w-0 rounded-xl border p-3", GROUP_STYLE[group].tile)}>
       <ToolHeader group={group} count={items.length} />
       <ul className="mt-3 grid gap-2">
         <AnimatePresence initial={false}>
-          {items.map((r) => (
+          {top.map((r) => (
             <ResourceTile key={r.id} resource={r} group={group} />
           ))}
         </AnimatePresence>
       </ul>
+      {components.length > 0 && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            className="flex w-full items-center gap-2 rounded-lg border bg-card px-3 py-2.5 text-left text-sm font-medium shadow-xs"
+          >
+            <Boxes className="size-4 text-muted-foreground" />
+            Harness components
+            {pending > 0 && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
+            <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tnum">{components.length}</span>
+            <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+          </button>
+          {open && (
+            <ul className="mt-2 grid gap-2">
+              <AnimatePresence initial={false}>
+                {components.map((r) => (
+                  <ResourceTile key={r.id} resource={r} group={group} />
+                ))}
+              </AnimatePresence>
+            </ul>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -635,7 +667,7 @@ function ResourceTile({ resource, group }: { resource: RunResource; group: Group
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.25 }}
-      className="rounded-lg border bg-card px-3 py-2.5 shadow-xs"
+      className="min-w-0 rounded-lg border bg-card px-3 py-2.5 shadow-xs"
     >
       <div className="flex items-center gap-3">
         <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-md", GROUP_STYLE[group].badge)}>
@@ -643,7 +675,7 @@ function ResourceTile({ resource, group }: { resource: RunResource; group: Group
         </span>
 
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium">{resource.label}</div>
+          <div className="truncate text-sm font-medium">{resource.label}</div>
           {resource.detail && <div className="truncate font-mono text-xs text-muted-foreground">{resource.detail}</div>}
         </div>
 
