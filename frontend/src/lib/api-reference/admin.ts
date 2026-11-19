@@ -50,6 +50,7 @@ import {
   MEETING_SELECTION_LIMITS,
   RECORDING_LIMITS,
   SCHEDULE_LIMITS,
+  SUPERLATIVE_LIMITS,
   SURVEY_LIMITS,
   VIDEO_FEEDBACK_LIMITS,
 } from "@/db/schema";
@@ -188,6 +189,10 @@ const SURVEY_DAY_SHAPE = `{ stage: "bootcamp" | "intermediate", day: number, aud
 const SURVEY_SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, name, emoji, start: number, minutes: number, leader?: string }`;
 const MY_SURVEY_SHAPE = `{ id, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer", day: number, date, sessions: ${SURVEY_SESSION_SHAPE}[], answers: { sessions: Record<string, { rating: number, feedback }>, dayRating: number, dayChange } | null, submittedAt: string | null }`;
 const SURVEY_CARD_SHAPE = `{ id, bootcampId, startDate, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer", day: number, date, sessions: number, assigned: number, responses: number, average: number }`;
+const SUPERLATIVE_SHAPE = "{ id, title }";
+const SUPERLATIVE_LIST_SHAPE = `{ superlatives: ${SUPERLATIVE_SHAPE}[], updatedAt: string | null }`;
+const SUPERLATIVE_STATUS_SHAPE = "{ assigned: number, answered: number } | null";
+const MY_SUPERLATIVES_SHAPE = `{ id, startDate, superlatives: ${SUPERLATIVE_SHAPE}[], ballot: { email, fullName }[], votes: Record<string, string> | null, submittedAt: string | null }`;
 const SURVEY_RESULT_SHAPE = `{ id, bootcampId, startDate, stage, audience, day: number, date, assigned: number, responses: number, average: number | null, summarizedAt: string | null, sessions: (${SURVEY_SESSION_SHAPE} & { average: number | null, ratings: number, comments: number, breakdown: [number, number, number, number, number], summary: string | null })[] }`;
 
 const INTAKE_QUESTION_SHAPE = `{ id, kind: "short" | "paragraph" | "choice" | "checkboxes" | "dropdown", title, description, required: boolean, options: string[], other: boolean }`;
@@ -2750,11 +2755,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/me/forms",
         summary:
-          "Lists everything the caller has been asked to fill in, as /intake shows it: their registration form and their daily surveys.",
+          "Lists everything the caller has been asked to fill in, as /intake shows it: their registration form, their daily surveys and their Bootcamp's superlatives.",
         access: "signedIn",
         token: true,
-        notes: `The ones still to answer come first: the registration form, then surveys by day. Those answered follow, most recently answered first. The registration form is listed only for someone in the current cohort (see GET /api/intake) whose form has questions; a test group member in both stages has both. At most ${PAGE_SIZE} surveys are listed.`,
-        returns: '{ forms: { kind: "registration" | "survey", id, title, detail, href, completedAt: string | null }[] }',
+        notes: `The ones still to answer come first: the registration form, then surveys by day, then superlatives. Those answered follow, most recently answered first. The registration form is listed only for someone in the current cohort (see GET /api/intake) whose form has questions; a test group member in both stages has both. At most ${PAGE_SIZE} surveys are listed.`,
+        returns: '{ forms: { kind: "registration" | "survey" | "superlatives", id, title, detail, href, completedAt: string | null }[] }',
       },
       {
         method: "GET",
@@ -2856,6 +2861,145 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 502, error: "upstream", when: "Claude failed or declined" },
           { status: 503, error: "unconfigured", when: "no ANTHROPIC_API_KEY is set on this deployment" },
         ],
+      },
+    ],
+  },
+  {
+    id: "superlatives",
+    title: "Bootcamp superlatives",
+    intro: `The survey a Bootcamp's whole class, Sales and Engineers together, fills in once: for each superlative on the standing list ("Most likely to…"), one classmate, never themselves. Training Administrators edit the standing list on Logistics settings → Superlatives and send it from the Bootcamp's schedule; it is answered at /intake beside the daily surveys, and its votes are counted on Survey Results. A Bootcamp has at most one. Sending it copies the list and the class in, so a later change to either does not reach a survey already out.`,
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/logistics/superlatives",
+        summary: "Reads the standing list of superlatives.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "superlatives are in the order the survey asks them. updatedAt is null before the list has been saved, when it is empty.",
+        returns: SUPERLATIVE_LIST_SHAPE,
+      },
+      {
+        method: "PUT",
+        path: "/api/logistics/superlatives",
+        summary: "Replaces the standing list of superlatives.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The list given is the whole list, in order. A superlative keeps its id; one without an id, or repeating another's, is given a new one. A survey already sent keeps the list it was sent with.",
+        body: {
+          kind: "json",
+          fields: [
+            {
+              name: "superlatives",
+              type: "{ id?: string, title: string }[]",
+              required: true,
+              note: `at most ${SUPERLATIVE_LIMITS.superlatives}, each title trimmed and 1 to ${SUPERLATIVE_LIMITS.title} characters`,
+            },
+          ],
+        },
+        returns: SUPERLATIVE_LIST_SHAPE,
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}/superlatives",
+        summary: "Says whether a Bootcamp's superlatives are out, as its schedule's Send Superlatives button reads it.",
+        access: "scheduleReader",
+        token: true,
+        notes: "status is null while they are not out: never sent, or unassigned. Otherwise assigned is how many people were sent them, and answered how many have voted.",
+        params: [BOOTCAMP_ID],
+        returns: `{ status: ${SUPERLATIVE_STATUS_SHAPE} }`,
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
+      },
+      {
+        method: "POST",
+        path: "/api/scheduler/bootcamps/{id}/superlatives",
+        summary: "Sends a Bootcamp's superlatives survey to its whole class.",
+        access: "trainingAdmin",
+        token: true,
+        notes: `It asks the standing list, of the Bootcamp class's current candidates on the Sales and Engineer tracks, as the scheduler's class lists count them, at most ${SURVEY_LIMITS.people} of them; hasMore says there were more. Once out, repeating the call sends it to anyone who has joined the class since, and they can be voted for too; the list stays as it was sent. A survey that was unassigned is brought back with the list and the class as they now stand: each vote for a superlative and classmate still on it is kept, and someone left short of a vote is asked again. When the call makes or brings back the survey and sends it to someone, it announces it in the class's sales-bootcamp-<mon>-<yyyy> channel, which holds its Engineers too, with a link to /intake; slack is as for POST /api/scheduler/bootcamps/{id}/surveys.`,
+        params: [BOOTCAMP_ID],
+        returns: `{ survey: { id, created: boolean, sent: number, hasMore: boolean, superlatives: number }, slack: { channel, status: "posted" | "dry_run" | "no_channel" | "not_connected" | "failed", error? } | null, status: ${SUPERLATIVE_STATUS_SHAPE} }`,
+        errors: [
+          { status: 404, error: "not_found", when: "no such bootcamp" },
+          { status: 409, error: "no_superlatives", when: "the standing list is empty" },
+          { status: 409, error: "no_class", when: "the Bootcamp class has fewer than two people, so no one to vote for" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/scheduler/bootcamps/{id}/superlatives",
+        summary: "Unassigns a Bootcamp's superlatives survey, keeping every vote given.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The survey disappears from the class's forms, and its votes stay on Survey Results. unassigned is 1 when this call took it back, 0 when it was not out.",
+        params: [BOOTCAMP_ID],
+        returns: `{ unassigned: number, status: ${SUPERLATIVE_STATUS_SHAPE} }`,
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
+      },
+      {
+        method: "GET",
+        path: "/api/superlatives/{id}",
+        summary: "Reads the caller's own superlatives survey, with the votes they last saved.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "id is the caller's copy of the survey, as GET /api/me/forms lists it. ballot is the class but the caller, by name. votes are keyed by superlative id, each the email of the classmate chosen; null until they have voted.",
+        params: [{ name: "id", type: "string", required: true, note: "the caller's survey" }],
+        returns: MY_SUPERLATIVES_SHAPE,
+        errors: [{ status: 404, error: "not_found", when: "no such survey, it was not sent to the caller, or it is unassigned" }],
+      },
+      {
+        method: "PUT",
+        path: "/api/superlatives/{id}",
+        summary: "Saves the caller's votes on their own superlatives survey.",
+        access: "signedIn",
+        token: true,
+        notes: "Every superlative needs a vote, for a classmate on the ballot. Saving again replaces the votes given before.",
+        params: [{ name: "id", type: "string", required: true, note: "the caller's survey" }],
+        body: {
+          kind: "json",
+          fields: [
+            {
+              name: "votes",
+              type: "Record<string, string>",
+              required: true,
+              note: "keyed by superlative id, one for each superlative the survey asks: the email of the classmate chosen",
+            },
+          ],
+        },
+        returns: MY_SUPERLATIVES_SHAPE,
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 400, error: "required", when: "a superlative has no vote; superlativeId names it" },
+          { status: 400, error: "self_vote", when: "the caller voted for themselves; superlativeId names it" },
+          { status: 400, error: "not_a_nominee", when: "the classmate chosen is not in the class; superlativeId names it" },
+          { status: 400, error: "unknown_superlative", when: "a vote is for a superlative the survey does not ask; superlativeId names it" },
+          { status: 404, error: "not_found", when: "no such survey, it was not sent to the caller, or it is unassigned" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/survey-results/superlatives",
+        summary: "Lists the Bootcamp superlatives surveys anyone has voted on, as Survey Results shows them.",
+        access: "trainingViewer",
+        token: true,
+        notes: `The latest Bootcamp first, at most ${PAGE_SIZE}. superlatives is how many it asks, assigned how many people were sent it, and responses how many have voted.`,
+        returns: "{ surveys: { id, bootcampId, startDate, superlatives: number, assigned: number, responses: number }[] }",
+      },
+      {
+        method: "GET",
+        path: "/api/survey-results/superlatives/{id}",
+        summary: "Reads one Bootcamp superlatives survey's results: the votes on each superlative.",
+        access: "trainingViewer",
+        token: true,
+        notes:
+          "superlatives are in the order the survey asks them, each with votes (how many voted on it) and standings: everyone voted for, the most votes first, then by name. Only the votes of people who have submitted count. unassigned says it is hidden from the class now.",
+        params: [{ name: "id", type: "string", required: true, note: "the survey's id, as GET /api/survey-results/superlatives lists it" }],
+        returns:
+          "{ survey: { id, bootcampId, startDate, assigned: number, responses: number, unassigned: boolean, superlatives: { id, title, votes: number, standings: { email, fullName, votes: number }[] }[] } }",
+        errors: [{ status: 404, error: "not_found", when: "no such survey" }],
       },
     ],
   },

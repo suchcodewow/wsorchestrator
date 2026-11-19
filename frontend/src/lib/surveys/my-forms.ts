@@ -1,18 +1,20 @@
 /**
  * Everything someone has been asked to fill in, as /intake lists it: their
- * stage's registration form, and each daily survey sent to them. The ones
- * they have yet to answer come first.
+ * stage's registration form, each daily survey sent to them, and their
+ * Bootcamp's superlatives. The ones they have yet to answer come first.
  */
 
 import "server-only";
 
 import type { IntakeFormId } from "@/db/schema";
 import { getMyIntake } from "@/lib/logistics/intake";
+import { SUPERLATIVES_TITLE } from "@/lib/surveys/superlative-values";
+import { listMySuperlatives } from "@/lib/surveys/superlatives";
 import { listMySurveys } from "@/lib/surveys/surveys";
-import { SURVEY_STAGE_LABELS, surveyDate } from "@/lib/surveys/survey-values";
+import { SURVEY_STAGE_LABELS, surveyDate, surveyMonth } from "@/lib/surveys/survey-values";
 
 export type MyForm = {
-  kind: "registration" | "survey";
+  kind: "registration" | "survey" | "superlatives";
   /** The registration form's stage, or the survey's id. */
   id: string;
   title: string;
@@ -25,7 +27,7 @@ export type MyForm = {
 
 /** `email`'s forms and surveys, the unanswered first, each half in the order to do or review them. */
 export async function listMyForms(email: string): Promise<MyForm[]> {
-  const [intake, surveys] = await Promise.all([getMyIntake(email), listMySurveys(email)]);
+  const [intake, surveys, superlatives] = await Promise.all([getMyIntake(email), listMySurveys(email), listMySuperlatives(email)]);
 
   const forms: MyForm[] = [];
   if (intake) {
@@ -51,6 +53,16 @@ export async function listMyForms(email: string): Promise<MyForm[]> {
       title: `Day ${s.day} Survey`,
       detail: `${SURVEY_STAGE_LABELS[s.stage]} · ${surveyDate(s.date)} · ${s.sessions} ${s.sessions === 1 ? "session" : "sessions"}`,
       href: `/intake/surveys/${s.id}`,
+      completedAt: s.submittedAt,
+    });
+  }
+  for (const s of superlatives) {
+    forms.push({
+      kind: "superlatives",
+      id: s.id,
+      title: SUPERLATIVES_TITLE,
+      detail: `${surveyMonth(s.startDate)} Bootcamp · ${s.superlatives} ${s.superlatives === 1 ? "superlative" : "superlatives"}`,
+      href: `/intake/superlatives/${s.id}`,
       completedAt: s.submittedAt,
     });
   }

@@ -211,6 +211,7 @@ const PAGES: Record<string, PageCase> = {
   "/scheduler/<not an id>": { path: () => "/scheduler/nonsense", expect: () => 404 },
   "/survey-results": { path: () => "/survey-results", expect: gated(canUseTraining) },
   "/survey-results/<unknown>": { path: () => `/survey-results/${MISSING}`, expect: () => 404 },
+  "/survey-results/superlatives/<unknown>": { path: () => `/survey-results/superlatives/${MISSING}`, expect: () => 404 },
   "/scheduler-settings": {
     path: () => "/scheduler-settings",
     expect: (a) => (canManageTrainingSettings(a) ? { to: SCHEDULER_SETTINGS_TABS[0]!.href } : 404),
@@ -264,6 +265,7 @@ const PAGES: Record<string, PageCase> = {
   "/logistics-settings/pre-bootcamp": { path: () => "/logistics-settings/pre-bootcamp", expect: gated(canManageTrainingSettings) },
   "/logistics-settings/pre-intermediate": { path: () => "/logistics-settings/pre-intermediate", expect: gated(canManageTrainingSettings) },
   "/logistics-settings/responses": { path: () => "/logistics-settings/responses", expect: gated(canManageTrainingSettings) },
+  "/logistics-settings/superlatives": { path: () => "/logistics-settings/superlatives", expect: gated(canManageTrainingSettings) },
   "/logistics-settings/responses?all": {
     path: () => "/logistics-settings/responses?form=all&q=x",
     expect: gated(canManageTrainingSettings),
@@ -490,6 +492,7 @@ const PAGES: Record<string, PageCase> = {
   "/intake?preview": { path: () => "/intake?preview=bootcamp", expect: () => ({ to: "/intake/registration" }) },
   // Someone else's survey, or none, is not found.
   "/intake/surveys/<unknown>": { path: () => `/intake/surveys/${MISSING}`, expect: () => 404 },
+  "/intake/superlatives/<unknown>": { path: () => `/intake/superlatives/${MISSING}`, expect: () => 404 },
   // Anyone in the org records, signed in but with no role; signed out, they are sent to sign in.
   "/record": { path: () => "/record", expect: () => 200 },
   "/api": { path: () => "/api", expect: () => 200, signedOut: 200 },
@@ -746,6 +749,11 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/surveys`, allowed: canUseTraining },
   { method: "POST", path: `/api/scheduler/bootcamps/${MISSING}/surveys`, allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}/surveys`, allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/superlatives`, allowed: canUseTraining },
+  { method: "POST", path: `/api/scheduler/bootcamps/${MISSING}/superlatives`, allowed: canManageTrainingSettings },
+  { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}/superlatives`, allowed: canManageTrainingSettings },
+  { method: "GET", path: "/api/survey-results/superlatives", allowed: canUseTraining },
+  { method: "GET", path: `/api/survey-results/superlatives/${MISSING}`, allowed: canUseTraining },
   { method: "GET", path: "/api/survey-results", allowed: canUseTraining },
   { method: "GET", path: "/api/games/guess-who", allowed: canManageTrainingSettings },
   { method: "PUT", path: "/api/games/guess-who", allowed: canManageTrainingSettings, body: () => ({}) },
@@ -772,6 +780,8 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/logistics/intake-forms/bootcamp", allowed: canManageTrainingSettings },
   { method: "GET", path: "/api/logistics/intake-forms/intermediate", allowed: canManageTrainingSettings },
   { method: "PUT", path: "/api/logistics/intake-forms/bootcamp", allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "GET", path: "/api/logistics/superlatives", allowed: canManageTrainingSettings },
+  { method: "PUT", path: "/api/logistics/superlatives", allowed: canManageTrainingSettings, body: () => ({}) },
   {
     method: "GET",
     path: "/api/logistics/intake-responses?form=intermediate&question=dietary&answer=Yes",
@@ -802,6 +812,8 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/me/forms", allowed: true },
   { method: "GET", path: `/api/surveys/${MISSING}`, allowed: true },
   { method: "PUT", path: `/api/surveys/${MISSING}`, allowed: true, body: () => ({}) },
+  { method: "GET", path: `/api/superlatives/${MISSING}`, allowed: true },
+  { method: "PUT", path: `/api/superlatives/${MISSING}`, allowed: true, body: () => ({}) },
 
   // Recordings: the recorder is any signed-in account's; reading is a Training Viewer's, deleting a Training Administrator's
   { method: "GET", path: "/api/recordings", allowed: canUseTraining },
@@ -1100,6 +1112,7 @@ describe("a guest judge in the Scheduler", () => {
     `/api/scheduler/bootcamps/${bootcampId}/checklist`,
     `/api/scheduler/bootcamps/${bootcampId}/checklist/btc/1`,
     `/api/scheduler/bootcamps/${bootcampId}/surveys`,
+    `/api/scheduler/bootcamps/${bootcampId}/superlatives`,
     `/api/scheduler/bootcamps/${bootcampId}/attendees?track=btc`,
   ];
 

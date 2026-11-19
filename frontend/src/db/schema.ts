@@ -3479,6 +3479,80 @@ export const dailySurveyAssignments = pgTable(
 
 export type DailySurveyAssignment = typeof dailySurveyAssignments.$inferSelect;
 
+export const SUPERLATIVE_LIMITS = {
+  /** One superlative's wording, "Most likely to close a deal on the first call". */
+  title: 200,
+  /** The superlatives on the standing list, so on one survey. */
+  superlatives: 30,
+} as const;
+
+/** One superlative: what the class votes for a classmate on. */
+export type Superlative = { id: string; title: string };
+
+/** Someone a superlatives survey can be voted for, copied from the class when it was sent. */
+export type SuperlativeNominee = { email: string; fullName: string };
+
+/** One person's votes: the lowercased email of the classmate they chose, keyed by superlative id. */
+export type SuperlativeVotes = Record<string, string>;
+
+/**
+ * The standing list of superlatives every Bootcamp's survey asks, edited on
+ * Logistics settings. One row; a survey copies the list when it is sent, so
+ * editing it never changes a survey already out.
+ */
+export const superlativeLists = pgTable(
+  "superlative_lists",
+  {
+    id: text("id").$type<"bootcamp">().primaryKey(),
+    superlatives: jsonb("superlatives").$type<Superlative[]>().notNull().default([]),
+    updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("superlative_lists_id_check", sql`${t.id} = 'bootcamp'`)],
+);
+
+/**
+ * A Bootcamp's superlatives survey, sent from its schedule: the whole class,
+ * Sales and Engineers together, votes a classmate for each superlative. The
+ * superlatives and the class are copied in when it is sent.
+ */
+export const superlativeSurveys = pgTable(
+  "superlative_surveys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bootcampId: uuid("bootcamp_id")
+      .notNull()
+      .references(() => bootcamps.id, { onDelete: "cascade" }),
+    superlatives: jsonb("superlatives").$type<Superlative[]>().notNull().default([]),
+    nominees: jsonb("nominees").$type<SuperlativeNominee[]>().notNull().default([]),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Set while it is unassigned: hidden from the class, its votes kept for Survey Results. */
+    unassignedAt: timestamp("unassigned_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("superlative_surveys_bootcamp_idx").on(t.bootcampId)],
+);
+
+/** One person's copy of a superlatives survey, under their lowercased email, and their votes once given. */
+export const superlativeAssignments = pgTable(
+  "superlative_assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    surveyId: uuid("survey_id")
+      .notNull()
+      .references(() => superlativeSurveys.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    fullName: text("full_name").notNull().default(""),
+    assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
+    votes: jsonb("votes").$type<SuperlativeVotes>(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("superlative_assignments_person_idx").on(t.surveyId, t.email),
+    index("superlative_assignments_email_idx").on(t.email, t.assignedAt),
+  ],
+);
+
 export const FOOD_ORDER_LIMITS = {
   vendor: 200,
   needs: 5000,
