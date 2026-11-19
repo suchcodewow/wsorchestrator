@@ -1,7 +1,9 @@
 /**
- * Announcing a day's surveys in the class's cohort channel when the
- * scheduler's "Assign Surveys" sends them: `sales-bootcamp-nov-2026` for
- * the Bootcamp button, `se-bootcamp-nov-2026` for SE Bootcamp, and so on.
+ * Announcing surveys in the class's cohort channel when they are sent: a
+ * day's from the scheduler's "Assign Surveys", in `sales-bootcamp-nov-2026`
+ * for the Bootcamp button, `se-bootcamp-nov-2026` for SE Bootcamp, and so on;
+ * the superlatives from "Send Superlatives", in the Bootcamp's `sales-`
+ * channel, which holds its Engineers too.
  *
  * It posts only with the Slack sync live, since QA shares production's
  * workspace and stays in dry run, and only to a channel the sync has made.
@@ -14,11 +16,12 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { bootcamps, slackChannels, type ScheduleTrack } from "@/db/schema";
-import { cohortChannels } from "@/lib/cohorts/slack-plan";
+import { cohortChannels, type CohortChannelKind } from "@/lib/cohorts/slack-plan";
 import { getSlackSyncLive } from "@/lib/cohorts/slack-sync";
 import { getTestGroup } from "@/lib/cohorts/test-group";
 import { dayDate } from "@/lib/scheduler/timeline";
 import { SlackError, SlackOutOfTime, slackClient, slackToken } from "@/lib/slack";
+import { SUPERLATIVES_CHANNEL_KIND, superlativesAnnouncementText } from "@/lib/surveys/superlative-values";
 import { surveyAnnouncementText, surveyChannelKind, type SurveySlackOutcome } from "@/lib/surveys/survey-values";
 
 /** How long to wait on Slack before giving up; the manager is waiting on the button. */
@@ -31,6 +34,22 @@ export async function announceDaySurveys(
   day: number,
   intakeUrl: string,
 ): Promise<SurveySlackOutcome | null> {
+  return postInClassChannel(bootcampId, surveyChannelKind(track), (startDate) =>
+    surveyAnnouncementText(day, dayDate(startDate, day), intakeUrl),
+  );
+}
+
+/** Announces a Bootcamp's superlatives, linking to `intakeUrl`; null when the bootcamp is gone. */
+export async function announceSuperlatives(bootcampId: string, intakeUrl: string): Promise<SurveySlackOutcome | null> {
+  return postInClassChannel(bootcampId, SUPERLATIVES_CHANNEL_KIND, () => superlativesAnnouncementText(intakeUrl));
+}
+
+/** Posts `text`, made from the bootcamp's start date, in its `kind` cohort channel. */
+async function postInClassChannel(
+  bootcampId: string,
+  kind: CohortChannelKind,
+  text: (startDate: string) => string,
+): Promise<SurveySlackOutcome | null> {
   const [bootcamp] = await db
     .select({ startDate: bootcamps.startDate, intDays: bootcamps.intDays })
     .from(bootcamps)
@@ -38,7 +57,6 @@ export async function announceDaySurveys(
   if (!bootcamp) return null;
 
   const group = await getTestGroup();
-  const kind = surveyChannelKind(track);
   const channel = cohortChannels(bootcamp.startDate, bootcamp.intDays !== null, group.on ? group.suffix : null).find(
     (c) => c.kind === kind,
   );
@@ -54,7 +72,7 @@ export async function announceDaySurveys(
   try {
     await slackClient(token, Date.now() + DEADLINE_MS).call("chat.postMessage", {
       channel: stored.id,
-      text: surveyAnnouncementText(day, dayDate(bootcamp.startDate, day), intakeUrl),
+      text: text(bootcamp.startDate),
       unfurl_links: "false",
     });
     return { channel: name, status: "posted" };
