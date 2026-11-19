@@ -55,6 +55,16 @@ export async function surveyAttendees(
   return { attendees: attendees.slice(0, SURVEY_LIMITS.people), hasMore: rows > SURVEY_LIMITS.people };
 }
 
+/**
+ * Everyone in the Bootcamp class, Sales and Engineers together, as its
+ * superlatives survey is sent to them and votes among them, at most
+ * `SURVEY_LIMITS.people`; `hasMore` when there are more.
+ */
+export async function superlativeAttendees(): Promise<{ attendees: GroupAttendee[]; hasMore: boolean }> {
+  const { rows, attendees } = await stageAttendees("bootcamp", ["sales", "engineer"], SURVEY_LIMITS.people);
+  return { attendees: attendees.slice(0, SURVEY_LIMITS.people), hasMore: rows > SURVEY_LIMITS.people };
+}
+
 /** `stage`'s candidates on `tracks`, by name, fetching one past `limit` rows; `rows` is how many came back. */
 async function stageAttendees(
   stage: CandidateStage,

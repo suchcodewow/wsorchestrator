@@ -1,7 +1,8 @@
 /**
  * Everything whoever is signed in has been asked to fill in: their
  * registration form while they are in the current cohort, and each daily
- * survey the scheduler has sent them. The ones still to do come first.
+ * survey and superlatives survey the scheduler has sent them. The ones still
+ * to do come first.
  *
  * `?preview=` and `?form=` belong to the registration form, which this page
  * used to be, so links made before it moved are sent on to it.
@@ -10,7 +11,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CheckCircle2, ChevronRight, ClipboardList, MessageSquareText } from "lucide-react";
+import { CheckCircle2, ChevronRight, ClipboardList, MessageSquareText, Trophy } from "lucide-react";
 import { auth, signInPath } from "@/auth";
 import { listMyForms, type MyForm } from "@/lib/surveys/my-forms";
 import { IntakeNotice, IntakeShell } from "./intake-shell";
@@ -68,7 +69,7 @@ function FormList({ heading, forms }: { heading: string; forms: MyForm[] }) {
       <h2 className="text-sm font-medium text-muted-foreground">{heading}</h2>
       <ul className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
         {forms.map((f) => {
-          const Icon = f.kind === "registration" ? ClipboardList : MessageSquareText;
+          const Icon = f.kind === "registration" ? ClipboardList : f.kind === "superlatives" ? Trophy : MessageSquareText;
           return (
             <li key={`${f.kind}-${f.id}`}>
               <Link href={f.href} className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/50">

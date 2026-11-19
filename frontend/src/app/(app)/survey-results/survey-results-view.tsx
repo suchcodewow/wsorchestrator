@@ -3,24 +3,66 @@
 /**
  * Every daily survey with at least one response, as a card: the bootcamp's
  * month, the group it went to, the day, and the day's average overall
- * rating. A card opens the survey's responses.
+ * rating. A card opens the survey's responses. Above them, while nothing is
+ * searched, a card for each Bootcamp's superlatives anyone has voted on.
  */
 
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { Trophy } from "lucide-react";
 import { Pager, TableSearch } from "@/components/data-table";
 import type { SurveyResultSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
+import { SUPERLATIVES_TITLE } from "@/lib/surveys/superlative-values";
+import type { SuperlativeResultCard } from "@/lib/surveys/superlatives";
 import type { SurveyResultCard } from "@/lib/surveys/surveys";
 import { formatAverage, surveyDate, surveyGroupLabel, surveyMonth } from "@/lib/surveys/survey-values";
 
-export function SurveyResultsView({ query, page }: { query: ListQuery<SurveyResultSort>; page: Page<SurveyResultCard> }) {
+const CARD =
+  "group flex h-full flex-col gap-4 rounded-2xl border bg-card px-5 py-4 shadow-sm transition-colors hover:border-brand-border hover:bg-muted/30 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none";
+
+export function SurveyResultsView({
+  query,
+  page,
+  superlatives,
+}: {
+  query: ListQuery<SurveyResultSort>;
+  page: Page<SurveyResultCard>;
+  superlatives: SuperlativeResultCard[];
+}) {
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.h1 variants={riseChild} className="text-3xl font-medium tracking-tight">
         Survey Results
       </motion.h1>
+
+      {!query.q && superlatives.length > 0 && (
+        <motion.section variants={riseChild} className="space-y-3">
+          <h2 className="text-sm font-medium text-muted-foreground">Superlatives</h2>
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {superlatives.map((r) => (
+              <li key={r.id}>
+                <Link href={`/survey-results/superlatives/${r.id}`} className={CARD}>
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-muted-foreground">{surveyMonth(r.startDate)}</p>
+                    <p className="flex items-center gap-1.5 font-medium group-hover:underline">
+                      <Trophy className="size-4 text-brand" />
+                      {SUPERLATIVES_TITLE}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {r.superlatives} {r.superlatives === 1 ? "superlative" : "superlatives"}
+                    </p>
+                  </div>
+                  <p className="mt-auto text-right text-xs text-muted-foreground tabular-nums">
+                    {r.responses} of {r.assigned} voted
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </motion.section>
+      )}
 
       <motion.div variants={riseChild}>
         <TableSearch value={query.q} placeholder="Search by month or group" label="Search survey results" className="max-w-md" />
@@ -34,10 +76,7 @@ export function SurveyResultsView({ query, page }: { query: ListQuery<SurveyResu
         <motion.ul variants={staggerParent(0.03)} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {page.rows.map((r) => (
             <motion.li key={r.id} variants={riseChild}>
-              <Link
-                href={`/survey-results/${r.id}`}
-                className="group flex h-full flex-col gap-4 rounded-2xl border bg-card px-5 py-4 shadow-sm transition-colors hover:border-brand-border hover:bg-muted/30 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-              >
+              <Link href={`/survey-results/${r.id}`} className={CARD}>
                 <div className="space-y-0.5">
                   <p className="text-xs text-muted-foreground">{surveyMonth(r.startDate)}</p>
                   <p className="font-medium group-hover:underline">{surveyGroupLabel(r.stage, r.audience)}</p>
