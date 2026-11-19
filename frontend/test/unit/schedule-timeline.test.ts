@@ -22,10 +22,12 @@ import {
   formatLength,
   gapsOf,
   place,
+  roomAt,
   settle,
   sideBySide,
   snapMinutes,
   snapStart,
+  swapAt,
   trackDays,
   type ClashSession,
 } from "@/lib/scheduler/timeline";
@@ -171,6 +173,70 @@ describe("moving sessions", () => {
     assert.equal(fitsDay([a, session("y", { start: 510 })]), false);
     assert.equal(fitsDay([session("late", { start: 1410, minutes: 60 })]), false);
     assert.equal(fitsDay([session("odd", { start: 490 })]), false);
+  });
+});
+
+describe("moving a session up or down its own column", () => {
+  const a = session("a", { start: 480 });
+  const b = session("b", { start: 540, minutes: 90 });
+  const c = session("c", { start: 660 });
+
+  test("dragged down onto the next session, the two swap and nothing after them moves", () => {
+    // a's middle at 10:00 is in b (9:00–10:30): b goes to 8:00, a ends where b did.
+    assert.deepEqual(order(swapAt([a, b, c], "a", 570)), ["b@480", "a@570", "c@660"]);
+  });
+
+  test("dragged up onto the one before, the two swap", () => {
+    assert.deepEqual(order(swapAt([a, b, c], "c", 540)), ["a@480", "c@540", "b@630"]);
+  });
+
+  test("the unscheduled time between the two stays where it is", () => {
+    const later = session("d", { start: 720 });
+    assert.deepEqual(order(swapAt([a, later], "a", 720)), ["d@480", "a@720"]);
+  });
+
+  test("swapped past a session between them, that one moves only within the span", () => {
+    const x = session("x", { start: 480, minutes: 30 });
+    const y = session("y", { start: 510, minutes: 60 });
+    const z = session("z", { start: 570, minutes: 60 });
+    const w = session("w", { start: 630 });
+    assert.deepEqual(order(swapAt([x, y, z, w], "x", 585)), ["z@480", "y@540", "x@600", "w@630"]);
+  });
+
+  test("into unscheduled time it fits in, it goes there and nothing else moves", () => {
+    assert.deepEqual(order(swapAt([a, c], "c", 600)), ["a@480", "c@600"]);
+  });
+
+  test("slid to fit the unscheduled time its middle is in, rather than pushing", () => {
+    // 9:00–11:00 is free; dropped at 10:15 its end would run into d at 11:00, so it ends there instead.
+    const d = session("d", { start: 660 });
+    const e = session("e", { start: 900 });
+    assert.deepEqual(order(swapAt([a, d, e], "e", 615)), ["a@480", "e@600", "d@660"]);
+  });
+
+  test("where it does not fit, it stays where it was", () => {
+    const long = session("long", { start: 720, minutes: 120 });
+    // The middle lands in the 9:00–10:00 gap, which is too short for two hours.
+    const day = swapAt([a, session("m", { start: 600 }), long], "long", 480 + 30);
+    assert.deepEqual(order(day), ["a@480", "m@600", "long@720"]);
+  });
+});
+
+describe("the time free for a session", () => {
+  const a = session("a", { start: 480 });
+  const b = session("b", { start: 600 });
+
+  test("runs to the next session in its lane", () => {
+    assert.equal(roomAt([a, b], 540), 60);
+    assert.equal(roomAt([a, b], 480, 0, "a"), 120);
+  });
+
+  test("ignores the other lanes, and stops at the longest a session may be", () => {
+    assert.equal(roomAt([a, b], 480, 1), 600);
+  });
+
+  test("at the end of the day runs to midnight", () => {
+    assert.equal(roomAt([session("late", { start: 1320 })], 1320, 0, "late"), 120);
   });
 });
 

@@ -248,6 +248,60 @@ export function dropAt<S extends Laned & { id: string }>(sessions: readonly S[],
   return settle([...rest, { ...moved, start: at, lane }], moved.id);
 }
 
+/**
+ * The day with session `id` moved up or down its own lane to `start`. Its
+ * middle over another session in the lane, the two swap places: the earlier
+ * slot's start and the later one's end stay put, as does the unscheduled time
+ * between the sessions from one to the other, so nothing outside them moves.
+ * Otherwise it goes into the unscheduled time its middle is in, slid to fit
+ * there, and stays where it was if it does not fit. Nothing is ever pushed.
+ */
+export function swapAt<S extends Laned & { id: string }>(sessions: readonly S[], id: string, start: number): S[] {
+  const moved = sessions.find((s) => s.id === id);
+  if (!moved) return [...sessions];
+  const lane = laneOf(moved);
+  const line = sessions.filter((s) => laneOf(s) === lane).sort((a, b) => a.start - b.start);
+  const rest = line.filter((s) => s.id !== id);
+  const at = snapStart(start, moved.minutes);
+  const middle = at + moved.minutes / 2;
+
+  const over = rest.find((s) => s.start <= middle && middle < s.start + s.minutes);
+  if (over) {
+    const [i, j] = [line.indexOf(moved), line.indexOf(over)];
+    const block = line.slice(Math.min(i, j), Math.max(i, j) + 1);
+    const gaps = block.slice(1).map((s, k) => s.start - (block[k]!.start + block[k]!.minutes));
+    const order = block.map((s) => (s === moved ? over : s === over ? moved : s));
+    const starts = new Map<string, number>();
+    let t = block[0]!.start;
+    order.forEach((s, k) => {
+      starts.set(s.id, t);
+      t += s.minutes + (gaps[k] ?? 0);
+    });
+    return settle(sessions.map((s) => (starts.has(s.id) && starts.get(s.id) !== s.start ? { ...s, start: starts.get(s.id)! } : s)));
+  }
+
+  const { dayStart, latestEnd } = SCHEDULE_LIMITS;
+  const from = Math.max(dayStart, ...rest.filter((s) => s.start + s.minutes <= middle).map((s) => s.start + s.minutes));
+  const until = Math.min(latestEnd, ...rest.filter((s) => s.start > middle).map((s) => s.start));
+  if (until - from < moved.minutes) return [...sessions];
+  const placed = Math.min(until - moved.minutes, Math.max(from, at));
+  return settle(sessions.map((s) => (s.id === id ? { ...s, start: placed } : s)));
+}
+
+/**
+ * The longest a session starting at `start` in `lane` can run without
+ * running into the next session there, or past midnight; at least a slot.
+ * Session `excludeId`, the one being edited, is left out.
+ */
+export function roomAt(sessions: readonly (Laned & { id?: string })[], start: number, lane = 0, excludeId?: string): number {
+  const { slot, maxMinutes, latestEnd } = SCHEDULE_LIMITS;
+  const next = Math.min(
+    latestEnd,
+    ...sessions.filter((s) => s.id !== excludeId && laneOf(s) === lane && s.start + s.minutes > start).map((s) => s.start),
+  );
+  return Math.max(slot, Math.min(maxMinutes, next - start));
+}
+
 /** Whether a day's sessions are each on the quarter hour, inside the day, in a lane there is, and clear of the rest of their lane. */
 export function fitsDay(sessions: readonly Laned[]): boolean {
   const { slot, dayStart, latestEnd, lanes } = SCHEDULE_LIMITS;
