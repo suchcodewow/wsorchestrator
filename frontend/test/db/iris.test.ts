@@ -25,7 +25,8 @@ import { irisAttempts, irisItemReviews, irisResponses } from "@/db/schema";
 import { answer, myIris, openSitting, setTrack, shuffledOrder, sittingModes, startSitting, type SittingView } from "@/lib/iris/attempts";
 import { clearResults, cohortSummary, personDetail, resetSitting } from "@/lib/iris/cohort";
 import { listParticipants } from "@/lib/iris/participants";
-import { IDK } from "@/lib/iris/engine";
+import { IDK, TYPED, isTextItem, type ChoiceItem } from "@/lib/iris/engine";
+import type { Grader } from "@/lib/iris/grade";
 import { IRIS_ITEMS } from "@/lib/iris/items";
 import { listQuestions } from "@/lib/iris/questions";
 import { ITEMS_BY_ID, approveDrafts, poolFor, setReviews } from "@/lib/iris/reviews";
@@ -61,15 +62,26 @@ async function onScreen(attemptId: string): Promise<{ itemId: string; order: num
   return { itemId: row!.itemId!, order: row!.order! };
 }
 
-/** Answers every question the way `pick` says, as an original option A–D, until the sitting ends. */
+/** A stand-in for Claude that grades every typed answer right. */
+const gradesRight: Grader = async () => ({
+  ok: true,
+  model: "test-model",
+  grade: { correct: true, matched: ["the key"], confidence: "high", reason: "Right." },
+});
+
+/**
+ * Answers every question the way `pick` says, as an original option A–D,
+ * "I don't know", or TYPED for a right answer typed into a typed question,
+ * until the sitting ends.
+ */
 async function finish(user: TestUser, first: SittingView, pick: (itemId: string) => number) {
   let sitting = first;
   for (let guard = 0; guard < 30; guard++) {
     const { itemId, order } = await onScreen(sitting.attemptId);
     const original = pick(itemId);
-    // The taker answers by where the option sits on their screen.
-    const choice = original === IDK ? IDK : order.indexOf(original);
-    const res = await answer(user.id, sitting.attemptId, sitting.number, choice, seeded(guard));
+    // The taker answers by where the option sits on their screen, or types an answer.
+    const reply = original === TYPED ? { text: "a right answer" } : original === IDK ? IDK : order.indexOf(original);
+    const res = await answer(user.id, sitting.attemptId, sitting.number, reply, seeded(guard), undefined, gradesRight);
     assert.ok(res.ok, JSON.stringify(res));
     if (res.done) return res;
     sitting = res.sitting;
@@ -77,7 +89,11 @@ async function finish(user: TestUser, first: SittingView, pick: (itemId: string)
   throw new Error("the sitting never finished");
 }
 
-const right = (id: string) => ITEMS_BY_ID.get(id)!.answer;
+/** The right option, or TYPED to type a right answer into a typed question. */
+const right = (id: string) => {
+  const item = ITEMS_BY_ID.get(id)!;
+  return isTextItem(item) ? TYPED : item.answer;
+};
 
 describe("before any question is approved", () => {
   test("a live sitting is not ready, and a subject shows as unavailable", async () => {
@@ -114,7 +130,8 @@ describe("a live sitting", () => {
   test("sends the question without its id, answer, level or explanation", async () => {
     const res = await startSitting(taker.id, "sdlc", "A", "live");
     assert.ok(res.ok);
-    assert.deepEqual(Object.keys(res.sitting.question).sort(), ["options", "stem"]);
+    // kind only says whether to show options or a box to type in.
+    assert.deepEqual(Object.keys(res.sitting.question).sort(), ["kind", "options", "stem"]);
     assert.equal(res.sitting.number, 1);
     const item = ITEMS_BY_ID.get((await onScreen(res.sitting.attemptId)).itemId)!;
     assert.equal(item.level, 2, "it starts at Intermediate");
@@ -130,7 +147,7 @@ describe("a live sitting", () => {
     const start = await startSitting(shuffler.id, "sdlc", "A", "live", seeded(42));
     assert.ok(start.ok);
     const { itemId, order } = await onScreen(start.sitting.attemptId);
-    const item = ITEMS_BY_ID.get(itemId)!;
+    const item = ITEMS_BY_ID.get(itemId)! as ChoiceItem;
     assert.deepEqual([...order].sort(), [0, 1, 2, 3]);
     assert.deepEqual(
       start.sitting.question.options,

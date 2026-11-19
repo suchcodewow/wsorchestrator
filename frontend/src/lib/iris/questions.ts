@@ -8,7 +8,7 @@ import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { irisAttempts, irisResponses, type IrisReviewStatus } from "@/db/schema";
-import { IDK, type Form, type Level } from "@/lib/iris/engine";
+import { IDK, isTextItem, type AnswerKey, type Form, type Level } from "@/lib/iris/engine";
 import { itemsOf, reviewsOf, type Review } from "@/lib/iris/reviews";
 import type { SubjectKey } from "@/lib/iris/subjects";
 
@@ -33,8 +33,12 @@ export type QuestionRow = {
   level: Level;
   subtopic: string;
   stem: string;
+  /** A–D, or none for a typed question. */
   options: readonly string[];
+  /** The right option, 0–3; -1 for a typed question, which has `key` instead. */
   answer: number;
+  /** What a typed answer is graded against; null for a question with options. */
+  key: AnswerKey | null;
   rationale: string;
   review: Review;
   stats: ItemStats;
@@ -48,7 +52,8 @@ export const CALIBRATION_MIN = 20;
 /** Responses before an option nobody chose counts as a dead distractor. */
 export const DISTRACTOR_MIN = 10;
 
-export function calibrationOf(stats: ItemStats, answer: number): Calibration {
+/** `answer` is the right option, or null for a typed question, which has no options to go unpicked. */
+export function calibrationOf(stats: ItemStats, answer: number | null): Calibration {
   const rate = stats.responses ? stats.correct / stats.responses : 0;
   const base =
     stats.responses < CALIBRATION_MIN
@@ -60,7 +65,7 @@ export function calibrationOf(stats: ItemStats, answer: number): Calibration {
           : ({ kind: "healthy" } as const);
   // A wrong option nobody picks is a hint, not a distractor: the question can
   // be answered by elimination.
-  const dead = stats.responses >= DISTRACTOR_MIN ? [0, 1, 2, 3].filter((i) => i !== answer && stats.picks[i] === 0) : [];
+  const dead = answer !== null && stats.responses >= DISTRACTOR_MIN ? [0, 1, 2, 3].filter((i) => i !== answer && stats.picks[i] === 0) : [];
   if (dead.length) return { kind: "dead_distractors", options: dead, also: base.kind === "healthy" ? null : base.kind };
   return base;
 }
@@ -85,12 +90,13 @@ export async function listQuestions(
         level: i.level,
         subtopic: i.subtopic,
         stem: i.stem,
-        options: i.options,
-        answer: i.answer,
+        options: isTextItem(i) ? [] : i.options,
+        answer: isTextItem(i) ? -1 : i.answer,
+        key: isTextItem(i) ? i.key : null,
         rationale: i.rationale,
         review: reviews.get(i.id)!,
         stats: s,
-        calibration: calibrationOf(s, i.answer),
+        calibration: calibrationOf(s, isTextItem(i) ? null : i.answer),
       };
     });
 }

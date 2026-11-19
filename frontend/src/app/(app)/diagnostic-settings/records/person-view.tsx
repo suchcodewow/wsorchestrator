@@ -314,7 +314,18 @@ function AnswerTable({ answers }: { answers: DetailAnswer[] }) {
                 <span className="mt-1 block font-mono text-xs text-muted-foreground">{a.itemId}</span>
               </td>
               <td className="max-w-xs px-5 py-3">
-                {a.chosen ? (
+                {a.typed ? (
+                  <>
+                    <span>&ldquo;{a.chosen?.text ?? ""}&rdquo;</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {a.typed.reason}
+                      {a.typed.reviewStatus === "pending" && " · Claude was unsure: waiting for review"}
+                      {a.typed.reviewStatus === "overturned" &&
+                        ` · Claude said ${a.typed.gradedCorrect ? "right" : "wrong"}; overturned on review`}
+                      {a.typed.reviewStatus === "upheld" && " · upheld on review"}
+                    </span>
+                  </>
+                ) : a.chosen ? (
                   <>
                     <span className="font-mono text-xs text-muted-foreground">{LETTERS[a.chosen.index]}.</span> {a.chosen.text ?? ""}
                   </>

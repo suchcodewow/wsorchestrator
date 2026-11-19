@@ -12,10 +12,23 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { ENGINE, confidenceOf, drawItem, newRunState, placementOf, submit, type Asked, type Level } from "@/lib/iris/engine";
+import {
+  ENGINE,
+  confidenceOf,
+  drawItem,
+  isTextItem,
+  newRunState,
+  placementOf,
+  reviewVersionOf,
+  submit,
+  type Asked,
+  type Level,
+  type TextItem,
+} from "@/lib/iris/engine";
+import { keyProblem } from "@/lib/iris/grade";
 import { IRIS_ITEMS } from "@/lib/iris/items";
 import { OPEN_SUBJECT_KEYS, SUBJECTS, SUBJECT_KEYS, TRACKS, TRACK_WEIGHTS, compositeOf, isSubjectKey } from "@/lib/iris/subjects";
-import { PROFILES, longestOption, runOnce, seeded } from "../support/iris-sim";
+import { PROFILES, longestOption, rightOption, runOnce, seeded } from "../support/iris-sim";
 
 const RUNS = 2000;
 const poolOf = (subject: string) => IRIS_ITEMS.filter((i) => i.subject === subject && i.form === "A");
@@ -48,16 +61,21 @@ describe("the bank", () => {
     }
   });
 
-  test("every question has four different options, a keyed answer, a stem, a subtopic and a known subject", () => {
+  test("every question has a stem, a subtopic and a known subject; one with options has four different ones and a keyed answer", () => {
     const wrong = IRIS_ITEMS.filter(
       (i) =>
         !isSubjectKey(i.subject) ||
-        i.options.length !== 4 ||
-        new Set(i.options).size !== 4 ||
-        ![0, 1, 2, 3].includes(i.answer) ||
         !i.stem.trim() ||
-        !i.subtopic,
+        !i.subtopic ||
+        (!isTextItem(i) && (i.options.length !== 4 || new Set(i.options).size !== 4 || ![0, 1, 2, 3].includes(i.answer))),
     ).map((i) => i.id);
+    assert.deepEqual(wrong, []);
+  });
+
+  test("every typed question has a key Claude can grade against", () => {
+    const wrong = IRIS_ITEMS.filter((i) => isTextItem(i) && (keyProblem(i.key) !== null || !Number.isInteger(i.key.keyVersion))).map(
+      (i) => i.id,
+    );
     assert.deepEqual(wrong, []);
   });
 
@@ -165,7 +183,7 @@ describe("answer-length shortcuts", () => {
       const random = seeded(5);
       let top = 0;
       for (let r = 0; r < runs; r++) {
-        if (runOnce(poolOf(s), (item) => longestOption(item) === item.answer, random).placement === 3) top++;
+        if (runOnce(poolOf(s), (item) => longestOption(item) === rightOption(item), random).placement === 3) top++;
       }
       assert.ok(top / runs < 0.001, `${s}: ${top} of ${runs}`);
     }
@@ -185,5 +203,46 @@ describe("the overall score", () => {
     assert.equal(compositeOf({ sdlc: 3, champion: 3 }, "AE"), 100);
     assert.equal(compositeOf({ sdlc: 3, champion: 1 }, "SE"), 67);
     assert.equal(compositeOf({ sdlc: 1, companies: 2, aisdlc: 3 }, "SDR"), 67);
+  });
+});
+
+describe("typed questions", () => {
+  const typed: TextItem = {
+    id: "sdlc-l1-99",
+    kind: "text",
+    subject: "sdlc",
+    form: "A",
+    level: 1,
+    subtopic: "version-control",
+    version: "1.0",
+    stem: "What is a pull request for?",
+    rationale: "",
+    key: {
+      expected: "Asking for a change on a branch to be reviewed and merged.",
+      mustInclude: ["review before merging"],
+      alsoAccept: ["merge request"],
+      knownWrong: ["a backup of the code"],
+      termRequired: false,
+      keyVersion: 1,
+    },
+  };
+
+  test("an approval names the key, so an edited key is a draft again", () => {
+    assert.equal(reviewVersionOf(typed), "1.0+key1");
+    assert.equal(reviewVersionOf({ ...typed, key: { ...typed.key, keyVersion: 2 } }), "1.0+key2");
+    const choice = IRIS_ITEMS.find((i) => !isTextItem(i))!;
+    assert.equal(reviewVersionOf(choice), choice.version, "a question with options keeps its plain version");
+  });
+
+  test("a key with no expected answer or nothing to look for cannot grade", () => {
+    assert.equal(keyProblem(typed.key), null);
+    assert.equal(keyProblem(undefined), "no answer key");
+    assert.equal(keyProblem({ ...typed.key, expected: "  " }), "no expected answer");
+    assert.equal(keyProblem({ ...typed.key, mustInclude: [" "] }), "nothing in mustInclude");
+  });
+
+  test("the longest-option shortcut has nothing to pick on a typed question", () => {
+    assert.equal(longestOption(typed), -1);
+    assert.equal(rightOption(typed), null);
   });
 });

@@ -353,6 +353,7 @@ const PAGES: Record<string, PageCase> = {
     expect: gated(canManageIris),
   },
   "/diagnostic-settings/feedback": { path: () => "/diagnostic-settings/feedback", expect: gated(canManageIris) },
+  "/diagnostic-settings/grades": { path: () => "/diagnostic-settings/grades", expect: gated(canManageIris) },
   "/diagnostic-settings/questions": { path: () => "/diagnostic-settings/questions", expect: gated(canManageIris) },
   "/diagnostic-settings/questions?subject": {
     path: () => "/diagnostic-settings/questions?subject=champion&level=3&status=draft",
@@ -630,6 +631,8 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/diagnostic/feedback", allowed: canSitIris, body: () => ({}) },
   { method: "GET", path: "/api/diagnostic/feedback", allowed: canManageIris },
   { method: "PATCH", path: `/api/diagnostic/feedback/${MISSING}`, allowed: canManageIris, body: () => ({}) },
+  { method: "GET", path: "/api/diagnostic/grades", allowed: canManageIris },
+  { method: "PATCH", path: `/api/diagnostic/grades/${MISSING}/1`, allowed: canManageIris, body: () => ({}) },
   { method: "GET", path: "/api/diagnostic/participants", allowed: canManageIris },
   { method: "POST", path: "/api/diagnostic/participants", allowed: canManageIris, body: () => ({}) },
   { method: "DELETE", path: "/api/diagnostic/participants", allowed: canManageIris, body: () => ({}) },
@@ -1410,7 +1413,7 @@ describe("a Diagnostic sitting, over HTTP", () => {
     assert.equal(started.status, 201, started.body);
     let sitting = JSON.parse(started.body).sitting as { attemptId: string; number: number; question: object };
     for (let guard = 0; guard < 20; guard++) {
-      assert.deepEqual(Object.keys(sitting.question).sort(), ["options", "stem"], "no id, answer or level is sent");
+      assert.deepEqual(Object.keys(sitting.question).sort(), ["kind", "options", "stem"], "no id, answer or level is sent");
       const res = await send(who, "POST", `/api/diagnostic/sittings/${sitting.attemptId}/answers`, {
         number: sitting.number,
         choice: -1,

@@ -44,6 +44,10 @@ export type IrisReminderMessageSort = (typeof IRIS_REMINDER_MESSAGE_LIST.sorts)[
 export const IRIS_FEEDBACK_LIST = spec(["createdAt", "user", "subject", "rating"], "desc");
 export type IrisFeedbackSort = (typeof IRIS_FEEDBACK_LIST.sorts)[number];
 
+/** Diagnostic Settings → Grades: typed answers Claude was unsure of, the oldest first so none waits long. */
+export const IRIS_GRADE_LIST = spec(["gradedAt", "user", "subject"], "asc");
+export type IrisGradeSort = (typeof IRIS_GRADE_LIST.sorts)[number];
+
 export const TITLE_LIST = spec(["title", "addedBy", "createdAt"]);
 export type TitleSort = (typeof TITLE_LIST.sorts)[number];
 

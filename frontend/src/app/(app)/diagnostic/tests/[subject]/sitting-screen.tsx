@@ -3,7 +3,9 @@
 /**
  * One sitting, a question at a time. The server holds the run and grades each
  * answer, so this only ever has the question on screen: no key, no level.
- * There is no going back, and leaving resumes the same question.
+ * There is no going back, and leaving resumes the same question. A typed
+ * question takes a few words, which can't be pasted in, and waits while they
+ * are graded; if grading fails the words stay in the box to send again.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -11,9 +13,11 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import type { SittingView } from "@/lib/iris/attempts";
 import type { Confidence, Level } from "@/lib/iris/engine";
 import { LEVEL_LABELS, TRAINING, type SubjectKey } from "@/lib/iris/subjects";
+import { TEXT_ANSWER_LIMITS, textAnswerProblem, wordsIn } from "@/lib/iris/text-answer";
 import { FADE, riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { LevelBadge } from "../../level-badge";
@@ -45,6 +49,7 @@ export function SittingScreen({
 }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [selected, setSelected] = useState<number | null>(null);
+  const [typed, setTyped] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
@@ -71,42 +76,57 @@ export function SittingScreen({
     })();
   }, [subject, mode]);
 
+  const isText = state.kind === "asking" && state.sitting.question.kind === "text";
+  // A typed question is sent as words, unless "I don't know" is picked.
+  const sendsText = isText && selected !== IDK;
+  const ready = sendsText ? textAnswerProblem(typed) === null : selected !== null;
+
   const send = useCallback(async () => {
-    if (state.kind !== "asking" || selected === null || sending) return;
+    if (state.kind !== "asking" || !ready || sending) return;
     setSending(true);
     setError(null);
     try {
       const res = await fetch(`/api/diagnostic/sittings/${state.sitting.attemptId}/answers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ number: state.sitting.number, choice: selected }),
+        body: JSON.stringify(
+          sendsText ? { number: state.sitting.number, text: typed } : { number: state.sitting.number, choice: selected },
+        ),
       });
       const body = await res.json().catch(() => null);
       if (res.status === 409 && body?.error === "stale" && body.sitting) {
         // Answered in another tab: carry on from where that left it.
         setState({ kind: "asking", sitting: body.sitting });
       } else if (!res.ok) {
-        throw new Error(body?.error === "finished" ? "This sitting is already over." : `Could not save (${res.status})`);
+        // Nothing was recorded, so the words stay in the box to send again.
+        throw new Error(
+          body?.error === "finished"
+            ? "This sitting is already over."
+            : body?.error === "grading_failed"
+              ? "We couldn't check your answer just now. Try again."
+              : `Could not save (${res.status})`,
+        );
       } else if (body.done) {
         setState({ kind: "done", questions: body.questions });
       } else {
         setState({ kind: "asking", sitting: body.sitting });
       }
       setSelected(null);
+      setTyped("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
     } finally {
       setSending(false);
     }
-  }, [state, selected, sending]);
+  }, [state, selected, typed, sendsText, ready, sending]);
 
   useEffect(() => {
     if (state.kind !== "asking") return;
     const options = state.sitting.question.options.length;
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      // Typing a comment, or pressing a face, is not answering.
-      if (e.target instanceof Element && e.target.closest("[data-question-feedback]")) return;
+      // Typing a comment or an answer, or pressing a face, is not picking an option.
+      if (e.target instanceof Element && e.target.closest("[data-question-feedback], textarea, input")) return;
       const key = e.key.toUpperCase();
       const letter = LETTERS.indexOf(key);
       if (letter >= 0 && letter < options) setSelected(letter);
@@ -207,24 +227,43 @@ export function SittingScreen({
             >
               <h2 className="text-xl leading-snug font-medium tracking-tight">{state.sitting.question.stem}</h2>
 
-              <div className="divide-y overflow-hidden rounded-2xl border bg-card text-sm shadow-sm" role="radiogroup">
-                {state.sitting.question.options.map((option, i) => (
-                  <Option key={i} letter={LETTERS[i]!} selected={selected === i} onSelect={() => setSelected(i)}>
-                    {option}
+              {state.sitting.question.kind === "text" ? (
+                <div className="divide-y overflow-hidden rounded-2xl border bg-card text-sm shadow-sm">
+                  <TypedAnswer
+                    value={typed}
+                    disabled={sending}
+                    onChange={(text) => {
+                      setTyped(text);
+                      setSelected(null);
+                    }}
+                    onSubmit={() => void send()}
+                  />
+                  <Option letter="E" selected={selected === IDK} onSelect={() => setSelected(selected === IDK ? null : IDK)} muted>
+                    I don&apos;t know
                   </Option>
-                ))}
-                <Option letter="E" selected={selected === IDK} onSelect={() => setSelected(IDK)} muted>
-                  I don&apos;t know
-                </Option>
-              </div>
+                </div>
+              ) : (
+                <div className="divide-y overflow-hidden rounded-2xl border bg-card text-sm shadow-sm" role="radiogroup">
+                  {state.sitting.question.options.map((option, i) => (
+                    <Option key={i} letter={LETTERS[i]!} selected={selected === i} onSelect={() => setSelected(i)}>
+                      {option}
+                    </Option>
+                  ))}
+                  <Option letter="E" selected={selected === IDK} onSelect={() => setSelected(IDK)} muted>
+                    I don&apos;t know
+                  </Option>
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">Pick the single best answer. You can&apos;t go back.</p>
-            <Button variant="brand" onClick={() => void send()} disabled={selected === null || sending}>
+            <p className="text-sm text-muted-foreground">
+              {isText ? "Answer in a few words, in your own words. You can't go back." : "Pick the single best answer. You can't go back."}
+            </p>
+            <Button variant="brand" onClick={() => void send()} disabled={!ready || sending}>
               {sending ? <Loader2 className="animate-spin" /> : <ArrowRight />}
-              Continue
+              {sending && sendsText ? "Checking your answer…" : isText ? "Submit" : "Continue"}
             </Button>
           </div>
           {error && (
@@ -272,5 +311,50 @@ function Option({
       </kbd>
       <span className={cn("pt-0.5", muted && !selected && "text-muted-foreground")}>{children}</span>
     </button>
+  );
+}
+
+/**
+ * The box for a typed answer. Pasting or dropping text in is refused, so the
+ * words are the taker's own; Enter sends, Shift+Enter starts a new line.
+ */
+function TypedAnswer({
+  value,
+  disabled,
+  onChange,
+  onSubmit,
+}: {
+  value: string;
+  disabled: boolean;
+  onChange: (text: string) => void;
+  onSubmit: () => void;
+}) {
+  const words = wordsIn(value);
+  const over = words > TEXT_ANSWER_LIMITS.words;
+  return (
+    <div className="space-y-1.5 px-5 py-4">
+      <Textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onPaste={(e) => e.preventDefault()}
+        onDrop={(e) => e.preventDefault()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            onSubmit();
+          }
+        }}
+        maxLength={TEXT_ANSWER_LIMITS.chars}
+        rows={2}
+        disabled={disabled}
+        autoFocus
+        autoComplete="off"
+        placeholder="Type your answer"
+        aria-label="Your answer"
+      />
+      <p className={cn("text-right text-xs tnum", over ? "text-destructive" : "text-muted-foreground")}>
+        {words} of {TEXT_ANSWER_LIMITS.words} words{over && ": shorten it to send"}
+      </p>
+    </div>
   );
 }

@@ -2669,7 +2669,12 @@ export const irisAttempts = pgTable(
 
 export type IrisAttempt = typeof irisAttempts.$inferSelect;
 
-/** One answered question, in order. `choice` is the option's index, or -1 for "I don't know". */
+/**
+ * One answered question, in order. `choice` is the option's index, -1 for "I
+ * don't know", or -2 for a typed answer, whose words and grade are in
+ * `iris_text_answers`. `correct` is the grade that counts: Claude's, until an
+ * Assessments Administrator overturns it.
+ */
 export const irisResponses = pgTable(
   "iris_responses",
   {
@@ -2691,9 +2696,65 @@ export const irisResponses = pgTable(
   (t) => [
     primaryKey({ columns: [t.attemptId, t.seq] }),
     index("iris_responses_item_idx").on(t.itemId, t.itemVersion),
-    check("iris_responses_choice_check", sql`${t.choice} between -1 and 3`),
+    check("iris_responses_choice_check", sql`${t.choice} between -2 and 3`),
   ],
 );
+
+export const IRIS_GRADE_CONFIDENCES = ["high", "low"] as const;
+export type IrisGradeConfidence = (typeof IRIS_GRADE_CONFIDENCES)[number];
+
+/** `pending` waits on an Assessments Administrator; `upheld` and `overturned` are their decision. */
+export const IRIS_GRADE_REVIEW_STATUSES = ["pending", "upheld", "overturned"] as const;
+export type IrisGradeReviewStatus = (typeof IRIS_GRADE_REVIEW_STATUSES)[number];
+
+/**
+ * A typed answer and Claude's grade of it, one per typed response. A grade
+ * Claude was unsure of in a live sitting still counts, so the test goes on,
+ * and waits here as `pending` until an Assessments Administrator upholds or
+ * overturns it.
+ */
+export const irisTextAnswers = pgTable(
+  "iris_text_answers",
+  {
+    attemptId: uuid("attempt_id").notNull(),
+    seq: integer("seq").notNull(),
+    answer: text("answer").notNull(),
+    /** The key it was graded against. */
+    keyVersion: integer("key_version").notNull(),
+    model: text("model").notNull(),
+    /** Claude's grade, kept as given; the response's `correct` is the one that counts. */
+    gradedCorrect: boolean("graded_correct").notNull(),
+    /** The key's ideas or terms Claude found in the answer. */
+    matched: text("matched")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    confidence: text("confidence").$type<IrisGradeConfidence>().notNull(),
+    reason: text("reason").notNull().default(""),
+    /** Null for a grade nobody needs to look at. */
+    reviewStatus: text("review_status").$type<IrisGradeReviewStatus>(),
+    reviewedBy: text("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    gradedAt: timestamp("graded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.attemptId, t.seq] }),
+    // Named by hand: the name Drizzle would make is past Postgres's 63 characters.
+    foreignKey({
+      columns: [t.attemptId, t.seq],
+      foreignColumns: [irisResponses.attemptId, irisResponses.seq],
+      name: "iris_text_answers_response_fk",
+    }).onDelete("cascade"),
+    index("iris_text_answers_review_idx").on(t.reviewStatus, t.gradedAt),
+    check("iris_text_answers_confidence_check", sql`${t.confidence} in ('high', 'low')`),
+    check(
+      "iris_text_answers_review_status_check",
+      sql`${t.reviewStatus} is null or ${t.reviewStatus} in ('pending', 'upheld', 'overturned')`,
+    ),
+  ],
+);
+
+export type IrisTextAnswer = typeof irisTextAnswers.$inferSelect;
 
 export const IRIS_REVIEW_STATUSES = ["approved", "rejected", "draft"] as const;
 export type IrisReviewStatus = (typeof IRIS_REVIEW_STATUSES)[number];
