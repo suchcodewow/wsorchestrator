@@ -2,9 +2,9 @@
  * The Diagnostic question bank: 228 Form A questions, 38 in each open
  * subject at 12 / 14 / 12 across 101, 201 and 301, from the Keyed Questions
  * sheet of the V2 workbook (Diagnostic-All-Questions-V2.1.xlsx, November 5,
- * 2026). SDLC 301 is typed: its twelve questions are the workbook's, asked
- * without options and graded by Claude against an answer key written from
- * each one's key, rationale and wrong options. The other subjects are coming
+ * 2026). Every subject's 301 is typed: its twelve questions are the
+ * workbook's, asked without options and graded by Claude against an answer
+ * key written from each one's key, rationale and wrong options. The other subjects are coming
  * and have none yet. Server-only,
  * because every entry carries its answer: a taker is sent one question at a
  * time through `toQuestion`, never the key.
