@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { IRIS_NOTE_MAX, type IrisReviewStatus } from "@/db/schema";
-import { ENGINE, LEVELS, type Level } from "@/lib/iris/engine";
+import { ENGINE, LEVELS, type AnswerKey, type Level } from "@/lib/iris/engine";
 import type { Calibration, QuestionRow } from "@/lib/iris/questions";
 import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, type SubjectKey } from "@/lib/iris/subjects";
 import { riseChild, staggerParent } from "@/lib/motion";
@@ -165,6 +165,7 @@ export function QuestionsView({
                   {STATUS_LABELS[q.review.status]}
                 </span>
                 <span className="text-xs text-muted-foreground">{q.subtopic}</span>
+                {q.key && <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">Typed answer</span>}
               </div>
               <p className="line-clamp-2">{q.stem}</p>
             </div>
@@ -281,6 +282,7 @@ function ReviewDialog({ row, onClose }: { row: Row | null; onClose: () => void }
               </DialogTitle>
               <DialogDescription>
                 {row.subtopic} · version {row.version}
+                {row.key && <> · key version {row.key.keyVersion}</>}
                 {row.review.reviewer && (
                   <>
                     {" "}
@@ -294,24 +296,28 @@ function ReviewDialog({ row, onClose }: { row: Row | null; onClose: () => void }
             <DialogBody className="grid gap-4">
               <p className="leading-relaxed font-medium">{row.stem}</p>
 
-              <div className="divide-y overflow-hidden rounded-lg border text-sm">
-                {row.options.map((o, i) => (
-                  <div key={i} className={cn("flex items-start gap-3 px-4 py-3", i === row.answer && "bg-emerald-500/10")}>
-                    <span
-                      className={cn(
-                        "flex size-5 shrink-0 items-center justify-center rounded font-mono text-xs",
-                        i === row.answer ? "bg-emerald-600 text-white" : "border text-muted-foreground",
+              {row.key ? (
+                <AnswerKeyView answerKey={row.key} />
+              ) : (
+                <div className="divide-y overflow-hidden rounded-lg border text-sm">
+                  {row.options.map((o, i) => (
+                    <div key={i} className={cn("flex items-start gap-3 px-4 py-3", i === row.answer && "bg-emerald-500/10")}>
+                      <span
+                        className={cn(
+                          "flex size-5 shrink-0 items-center justify-center rounded font-mono text-xs",
+                          i === row.answer ? "bg-emerald-600 text-white" : "border text-muted-foreground",
+                        )}
+                      >
+                        {LETTERS[i]}
+                      </span>
+                      <span className="flex-1">{o}</span>
+                      {row.stats.responses > 0 && (
+                        <span className="shrink-0 text-xs text-muted-foreground tnum">{row.stats.picks[i]} picked</span>
                       )}
-                    >
-                      {LETTERS[i]}
-                    </span>
-                    <span className="flex-1">{o}</span>
-                    {row.stats.responses > 0 && (
-                      <span className="shrink-0 text-xs text-muted-foreground tnum">{row.stats.picks[i]} picked</span>
-                    )}
-                  </div>
-                ))}
-              </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm">
                 <p className="text-xs font-medium text-muted-foreground">Why it is the answer</p>
@@ -352,5 +358,34 @@ function ReviewDialog({ row, onClose }: { row: Row | null; onClose: () => void }
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** A typed question's answer key, as Claude grades against it. */
+function AnswerKeyView({ answerKey }: { answerKey: AnswerKey }) {
+  const rows: { label: string; items: readonly string[] }[] = [
+    { label: "Must include one of", items: answerKey.mustInclude },
+    { label: "Also accept", items: answerKey.alsoAccept },
+    { label: "Wrong if it says", items: answerKey.knownWrong },
+  ];
+  return (
+    <div className="divide-y overflow-hidden rounded-lg border text-sm">
+      <div className="bg-emerald-500/10 px-4 py-3">
+        <p className="text-xs font-medium text-muted-foreground">Expected answer</p>
+        <p className="mt-1">{answerKey.expected}</p>
+      </div>
+      {rows.map((r) => (
+        <div key={r.label} className="flex items-start gap-3 px-4 py-2.5">
+          <span className="w-36 shrink-0 text-xs font-medium text-muted-foreground">{r.label}</span>
+          <span className={cn("flex-1", r.items.length === 0 && "text-muted-foreground")}>
+            {r.items.length ? r.items.join("; ") : "None"}
+          </span>
+        </div>
+      ))}
+      <div className="flex items-start gap-3 px-4 py-2.5">
+        <span className="w-36 shrink-0 text-xs font-medium text-muted-foreground">Term required</span>
+        <span className="flex-1">{answerKey.termRequired ? "Yes: the exact term must appear" : "No: the idea is enough"}</span>
+      </div>
+    </div>
   );
 }

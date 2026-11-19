@@ -8,7 +8,7 @@ import "server-only";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { irisItemReviews, users, type IrisReviewStatus } from "@/db/schema";
-import { ENGINE, type Form, type IrisItem } from "@/lib/iris/engine";
+import { ENGINE, reviewVersionOf, type Form, type IrisItem } from "@/lib/iris/engine";
 import { IRIS_ITEMS } from "@/lib/iris/items";
 import { SUBJECT_KEYS, type SubjectKey } from "@/lib/iris/subjects";
 
@@ -49,7 +49,9 @@ export async function reviewsOf(items: readonly IrisItem[]): Promise<Map<string,
     );
   const byId = new Map(items.map((i) => [i.id, i]));
   for (const r of rows) {
-    if (byId.get(r.itemId)?.version !== r.itemVersion) continue;
+    // A review is for one version, and for a typed question one key too: an edited key is a draft again.
+    const item = byId.get(r.itemId);
+    if (!item || reviewVersionOf(item) !== r.itemVersion) continue;
     out.set(r.itemId, {
       status: r.status as IrisReviewStatus,
       note: r.note,
@@ -76,7 +78,7 @@ export async function approvedCounts(form: Form): Promise<Record<SubjectKey, num
   const items = IRIS_ITEMS.filter((i) => i.form === form);
   if (items.length === 0) return counts;
   const current = sql.join(
-    items.map((i) => sql`(${i.id}, ${i.version}, ${i.subject})`),
+    items.map((i) => sql`(${i.id}, ${reviewVersionOf(i)}, ${i.subject})`),
     sql`, `,
   );
   const rows = await db.execute<{ subject: string; n: number }>(sql`
@@ -109,7 +111,7 @@ export async function setReviews(
       const item = ITEMS_BY_ID.get(c.id)!;
       const values = {
         itemId: c.id,
-        itemVersion: item.version,
+        itemVersion: reviewVersionOf(item),
         status: c.status,
         note: c.note ?? "",
         reviewerId,

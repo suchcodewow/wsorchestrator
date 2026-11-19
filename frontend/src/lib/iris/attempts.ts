@@ -12,12 +12,14 @@
 import "server-only";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { irisAttempts, irisParticipants, irisResponses, irisTakers, users, type IrisAttempt } from "@/db/schema";
+import { irisAttempts, irisParticipants, irisResponses, irisTakers, irisTextAnswers, users, type IrisAttempt } from "@/db/schema";
 import {
   ENGINE,
   IDK,
+  TYPED,
   confidenceOf,
   drawItem,
+  isTextItem,
   placementOf,
   submit,
   type Asked,
@@ -27,22 +29,28 @@ import {
   type Level,
   type Phase,
 } from "@/lib/iris/engine";
+import { gradeTextAnswer, type GradeError, type Grader } from "@/lib/iris/grade";
 import { ITEMS_BY_ID, approvedCounts, isLive, poolFor } from "@/lib/iris/reviews";
+import { textAnswerProblem } from "@/lib/iris/text-answer";
 import { OPEN_SUBJECT_KEYS, SUBJECTS, type SubjectKey, type Track } from "@/lib/iris/subjects";
 import { canManageIris, canTakeIris, type Access } from "@/lib/roles";
 
 /**
  * What a taker is shown of a question: its wording and options, nothing else.
  * Not even its id, which spells its level ("sdlc-l2-04"): watching that move
- * up or down would tell a taker whether their last answer was right.
+ * up or down would tell a taker whether their last answer was right. A typed
+ * question has no options, and its key never leaves the server.
  */
-export type Question = { stem: string; options: readonly string[] };
+export type Question = { kind: "choice" | "text"; stem: string; options: readonly string[] };
 
 /** What a taker is sent: the wording, and the options in the order shown to them. */
-export const toQuestion = (item: IrisItem, order: readonly number[] = [0, 1, 2, 3]): Question => ({
-  stem: item.stem,
-  options: order.map((i) => item.options[i]!),
-});
+export const toQuestion = (item: IrisItem, order: readonly number[] = [0, 1, 2, 3]): Question =>
+  isTextItem(item)
+    ? { kind: "text", stem: item.stem, options: [] }
+    : { kind: "choice", stem: item.stem, options: order.map((i) => item.options[i]!) };
+
+/** The order the next question shows its options in; a typed question has none. */
+const orderFor = (item: IrisItem, random: () => number) => (isTextItem(item) ? null : shuffledOrder(random));
 
 export type SittingView = {
   attemptId: string;
@@ -215,7 +223,7 @@ export async function startSitting(
       mode,
       level: ENGINE.START,
       currentItemId: first.id,
-      optionOrder: shuffledOrder(random),
+      optionOrder: orderFor(first, random),
       shownAt: new Date(),
     })
     .onConflictDoNothing()
@@ -257,8 +265,15 @@ export async function openSitting(
  * - `stale`     — they answered a question number that is no longer the one on
  *                 screen, from a second tab; `sitting` is the current one.
  * - `invalid_choice` — not one of the options or "I don't know".
+ * - `invalid_answer` — a typed answer to a question with options, or one that is
+ *                 empty or longer than the box allows.
+ * - `grading_failed` — the typed answer could not be graded; nothing was
+ *                 recorded, so the taker can send it again. `cause` says why.
  */
-export type AnswerError = "not_found" | "finished" | "stale" | "invalid_choice";
+export type AnswerError = "not_found" | "finished" | "stale" | "invalid_choice" | "invalid_answer" | "grading_failed";
+
+/** An option's position on screen, -1 for "I don't know", or the words of a typed answer. */
+export type Reply = number | { text: string };
 
 export type AnswerResult =
   | { ok: true; done: false; sitting: SittingView }
@@ -272,7 +287,7 @@ export type AnswerResult =
       placement: Level;
       confidence: Confidence;
     }
-  | { ok: false; error: AnswerError; sitting?: SittingView };
+  | { ok: false; error: AnswerError; sitting?: SittingView; cause?: GradeError };
 
 /** Longest time on one question worth recording; past this the taker walked away. */
 const MAX_MS = 60 * 60 * 1000;
@@ -281,21 +296,58 @@ export async function answer(
   userId: string,
   attemptId: string,
   number: number,
-  choice: number,
+  reply: Reply,
   random: () => number = Math.random,
   modes: readonly SittingMode[] = EVERY_MODE,
+  grade: Grader = gradeTextAnswer,
 ): Promise<AnswerResult> {
-  if (!Number.isInteger(choice) || choice < IDK || choice > 3) return { ok: false, error: "invalid_choice" };
+  const typed = typeof reply === "object" ? reply.text.trim() : null;
+  const choice = typeof reply === "number" ? reply : TYPED;
+  if (typed === null && (!Number.isInteger(choice) || choice < IDK || choice > 3)) return { ok: false, error: "invalid_choice" };
+  if (typed !== null && textAnswerProblem(typed)) return { ok: false, error: "invalid_answer" };
 
   // Which questions it may draw from next is a plain read, made before the
   // lock below. Reading it inside the transaction took a second connection
   // while the first was held, so a handful of answers at once could take
   // every connection in the pool and stall waiting for one more.
   const [sitting] = await db
-    .select({ subject: irisAttempts.subject, form: irisAttempts.form, mode: irisAttempts.mode })
+    .select()
     .from(irisAttempts)
     .where(and(eq(irisAttempts.id, attemptId), eq(irisAttempts.userId, userId)));
   if (!sitting || !modes.includes(sitting.mode as SittingMode)) return { ok: false, error: "not_found" };
+  if (sitting.finishedAt || !sitting.currentItemId) return { ok: false, error: "finished" };
+  if (!onBank(sitting)) return { ok: false, error: "not_found" };
+  if (sitting.questions + 1 !== number) return { ok: false, error: "stale", sitting: viewOf(sitting) };
+  const onScreen = ITEMS_BY_ID.get(sitting.currentItemId)!;
+  // A typed answer goes only with a typed question; a typed question takes nothing but words or "I don't know".
+  if (typed !== null && !isTextItem(onScreen)) return { ok: false, error: "invalid_answer" };
+  if (typed === null && isTextItem(onScreen) && choice !== IDK) return { ok: false, error: "invalid_choice" };
+
+  // Graded before the lock, as the pool is read: a taker can wait seconds on
+  // Claude, and nothing is held meanwhile. "I don't know" is never sent. A
+  // grade that fails records nothing, so the taker sends the same words again.
+  let graded: { correct: boolean; row: Omit<typeof irisTextAnswers.$inferInsert, "attemptId" | "seq"> } | null = null;
+  if (typed !== null && isTextItem(onScreen)) {
+    const result = await grade(onScreen, typed);
+    if (!result.ok) return { ok: false, error: "grading_failed", cause: result.error };
+    const { correct, matched, confidence, reason } = result.grade;
+    graded = {
+      correct,
+      row: {
+        answer: typed,
+        keyVersion: onScreen.key.keyVersion,
+        model: result.model,
+        gradedCorrect: correct,
+        matched,
+        confidence,
+        reason,
+        // A grade Claude was unsure of counts, so the test goes on, and waits for someone to check it.
+        // A preview is nobody's record, so its grades are never queued.
+        reviewStatus: confidence === "low" && sitting.mode === "live" ? "pending" : null,
+      },
+    };
+  }
+
   const pool = await poolFor(sitting.subject as SubjectKey, sitting.form as Form, sitting.mode as "live" | "preview");
 
   // The lock is on this one sitting only, so two tabs cannot record two
@@ -309,12 +361,15 @@ export async function answer(
     if (!attempt) return { ok: false, error: "not_found" };
     if (attempt.finishedAt || !attempt.currentItemId) return { ok: false, error: "finished" };
     if (!onBank(attempt)) return { ok: false, error: "not_found" };
-    if (attempt.questions + 1 !== number) return { ok: false, error: "stale", sitting: viewOf(attempt) };
+    // Another tab may have answered while this one was being graded.
+    if (attempt.questions + 1 !== number || attempt.currentItemId !== onScreen.id) {
+      return { ok: false, error: "stale", sitting: viewOf(attempt) };
+    }
 
-    const item = ITEMS_BY_ID.get(attempt.currentItemId)!;
+    const item = onScreen;
     // `choice` is a position on screen; the original option it shows is what is graded and stored.
-    const original = choice === IDK ? IDK : orderOf(attempt)[choice]!;
-    const correct = original !== IDK && original === item.answer;
+    const original = graded ? TYPED : choice === IDK ? IDK : orderOf(attempt)[choice]!;
+    const correct = graded ? graded.correct : original !== IDK && !isTextItem(item) && original === item.answer;
     const history = await tx
       .select({
         id: irisResponses.itemId,
@@ -352,6 +407,7 @@ export async function answer(
       phase: step.phase,
       answeredAt: now,
     });
+    if (graded) await tx.insert(irisTextAnswers).values({ attemptId: attempt.id, seq: asked.length + 1, ...graded.row, gradedAt: now });
 
     const questions = asked.length + 1;
     const engine = {
@@ -366,7 +422,7 @@ export async function answer(
     if (step.next) {
       const [updated] = await tx
         .update(irisAttempts)
-        .set({ ...engine, currentItemId: step.next.id, optionOrder: shuffledOrder(random), shownAt: now })
+        .set({ ...engine, currentItemId: step.next.id, optionOrder: orderFor(step.next, random), shownAt: now })
         .where(eq(irisAttempts.id, attempt.id))
         .returning();
       return { ok: true, done: false, sitting: viewOf(updated!) };

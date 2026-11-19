@@ -225,6 +225,7 @@ function CloseToggle({ feedback }: { feedback: IrisFeedbackRow }) {
  */
 function Answers({ stem, answers, sittingGone }: { stem: string; answers: IrisFeedbackAnswers | null; sittingGone: boolean }) {
   if (!answers) return <p className="text-muted-foreground">This question is no longer in the bank.</p>;
+  if (answers.typed) return <TypedAnswer stem={stem} answers={answers} typed={answers.typed} sittingGone={sittingGone} />;
   const { options, correct, chosen } = answers;
   const outcome =
     chosen === null
@@ -291,6 +292,51 @@ function Answers({ stem, answers, sittingGone }: { stem: string; answers: IrisFe
       <p className="text-xs text-muted-foreground">
         {outcome}
         {answers.reworded && " The question has been reworded since, so these may not be the options they saw."}
+      </p>
+    </div>
+  );
+}
+
+/** A rated typed question: what an expert would say, and what the person typed and how it was graded. */
+function TypedAnswer({
+  stem,
+  answers,
+  typed,
+  sittingGone,
+}: {
+  stem: string;
+  answers: IrisFeedbackAnswers;
+  typed: NonNullable<IrisFeedbackAnswers["typed"]>;
+  sittingGone: boolean;
+}) {
+  const outcome =
+    answers.chosen === null
+      ? sittingGone
+        ? "Their sitting was reset, so their answer is gone."
+        : "Not answered yet."
+      : answers.chosen === -1
+        ? "They answered “I don’t know”."
+        : typed.correct
+          ? "Their answer was graded right."
+          : "Their answer was graded wrong.";
+  return (
+    <div className="max-w-3xl space-y-2">
+      <p className="font-medium text-foreground">{stem}</p>
+      <div className="divide-y overflow-hidden rounded-lg border bg-card text-sm">
+        <div className="bg-emerald-500/10 px-4 py-2.5">
+          <p className="text-xs font-medium text-muted-foreground">Expected answer</p>
+          <p className="mt-0.5 text-foreground">{typed.expected}</p>
+        </div>
+        {typed.answer !== null && (
+          <div className={cn("px-4 py-2.5", typed.correct === false && "bg-destructive/10")}>
+            <p className="text-xs font-medium text-muted-foreground">Their answer</p>
+            <p className="mt-0.5 text-foreground">{typed.answer}</p>
+          </div>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {outcome}
+        {answers.reworded && " The question has been reworded since."}
       </p>
     </div>
   );
