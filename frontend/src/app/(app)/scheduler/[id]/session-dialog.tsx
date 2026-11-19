@@ -45,6 +45,7 @@ import {
   formatClock,
   formatLength,
   nextStart,
+  roomAt,
   type Clash,
   type Placed,
 } from "@/lib/scheduler/timeline";
@@ -75,6 +76,7 @@ const ERRORS: Record<string, string> = {
   no_day: "That track does not run on that day.",
   day_full: `That day already holds ${SCHEDULE_LIMITS.sessionsPerDay} sessions.`,
   past_midnight: "That would push the day past midnight.",
+  no_room: "It would run into the next session — make it shorter.",
   no_leader: "Pick one leader.",
   unknown_room: "That room is not at this bootcamp's facility any more — reload the page.",
   shared_room: "Two instructors cannot share a breakout room.",
@@ -187,20 +189,24 @@ export function SessionDialog({
     if (!target) return null;
     if (target.mode === "new") {
       const list = days[target.track][target.day - 1] ?? [];
-      return { track: target.track, day: target.day, start: target.start ?? nextStart(list) };
+      const start = target.start ?? nextStart(list);
+      return { track: target.track, day: target.day, start, room: roomAt(list, start, target.lane ?? 0) };
     }
     const at = locate(days, target.session.id);
-    if (!at) return { track: target.session.track, day: target.session.day, start: target.session.start };
-    const s = dayOf(days, at.key)[at.index]!;
-    return { track: s.track, day: s.day, start: s.start };
+    if (!at) return { track: target.session.track, day: target.session.day, start: target.session.start, room: target.session.minutes };
+    const list = dayOf(days, at.key);
+    const s = list[at.index]!;
+    return { track: s.track, day: s.day, start: s.start, room: roomAt(list, s.start, s.lane, s.id) };
   }, [target, days]);
+  // Never longer than the time free before the next session, so saving it pushes nothing.
+  const minutes = where ? Math.min(look.minutes, where.room) : look.minutes;
 
   const busy = useMemo(
     () =>
       where
-        ? busyDuring(placed, { day: where.day, start: where.start, end: where.start + look.minutes, excludeId: existing?.id })
+        ? busyDuring(placed, { day: where.day, start: where.start, end: where.start + minutes, excludeId: existing?.id })
         : { people: new Map<string, Clash[]>(), rooms: new Map<string, Clash[]>() },
-    [placed, where, look.minutes, existing?.id],
+    [placed, where, minutes, existing?.id],
   );
 
   const taughtBeside = useMemo(
@@ -209,10 +215,10 @@ export function SessionDialog({
         ? audienceClashes(
             placed,
             { track: where.track, kind: look.kind, audience },
-            { day: where.day, start: where.start, end: where.start + look.minutes, excludeId: existing?.id },
+            { day: where.day, start: where.start, end: where.start + minutes, excludeId: existing?.id },
           )
         : [],
-    [placed, where, look.kind, look.minutes, audience, existing?.id],
+    [placed, where, look.kind, minutes, audience, existing?.id],
   );
 
   const before = useMemo(() => {
@@ -251,7 +257,7 @@ export function SessionDialog({
     setStaff((now) => now.map((s) => (s.email in picks ? { ...s, roomId: picks[s.email]! } : s)));
 
   const roomName = (id: string) => rooms.find((r) => r.id === id)?.name ?? "A removed room";
-  const end = where.start + look.minutes;
+  const end = where.start + minutes;
 
   const tabs: Tab[] = ["session", ...(existing ? (["comments"] as const) : []), ...(look.kind === "breakout" ? (["groups"] as const) : [])];
   const shown: Tab = tabs.includes(tab) ? tab : "session";
@@ -280,7 +286,7 @@ export function SessionDialog({
         name: look.name.trim(),
         emoji: look.emoji.trim(),
         color: look.color,
-        minutes: look.minutes,
+        minutes,
         description: look.description,
         typeId,
         roomId: look.kind === "main" ? roomId : null,
@@ -501,7 +507,8 @@ export function SessionDialog({
 
               <SessionLookFields
                 id="session"
-                value={look}
+                value={{ ...look, minutes }}
+                maxMinutes={where.room}
                 onChange={setLook}
                 autoFocus={!existing}
                 afterLength={

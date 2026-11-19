@@ -5,7 +5,8 @@
  * four tracks, and one track across every day; either can be condensed to
  * names only. A session is dragged to any time of any column — another track
  * of the day, or in one track's view another day — and what it lands on is
- * pushed later. Moves and length changes are saved a moment after the last
+ * pushed later; moved up or down its own column, it swaps places with what it
+ * lands on instead. Moves and length changes are saved a moment after the last
  * one, a track-day at a time; what clashes is worked out here as things move.
  */
 
