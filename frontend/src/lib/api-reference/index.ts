@@ -57,6 +57,7 @@ export const GROUPS: EndpointGroup[] = [
   "mimir",
   "logistics",
   "daily-surveys",
+  "superlatives",
   "recordings",
   "presentations",
   "training-games",

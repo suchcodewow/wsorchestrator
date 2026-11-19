@@ -13,6 +13,7 @@ import { facilityPicks } from "@/lib/scheduler/facilities";
 import { parseScheduleCondensed, parseScheduleView, SCHEDULE_CONDENSED_COOKIE, SCHEDULE_VIEW_COOKIE } from "@/lib/scheduler/schedule-prefs";
 import { copySources, type Schedule } from "@/lib/scheduler/schedule";
 import { allSessionTypes } from "@/lib/scheduler/session-types";
+import { getSuperlativeList, superlativeStatus } from "@/lib/surveys/superlatives";
 import { surveyDays } from "@/lib/surveys/surveys";
 import { WideView } from "@/components/wide-view";
 import { ScheduleView } from "./schedule-view";
@@ -21,12 +22,14 @@ const MONTH_YEAR = new Intl.DateTimeFormat("en-US", { month: "short", year: "num
 
 export async function SchedulePage({ schedule, viewer }: { schedule: Schedule; viewer: { id: string; email: string; access: Access } }) {
   const canManage = canManageTrainingSettings(viewer.access);
-  const [types, sources, checklist, checklistTimed, surveys, facilities, cookieJar] = await Promise.all([
+  const [types, sources, checklist, checklistTimed, surveys, superlatives, superlativeList, facilities, cookieJar] = await Promise.all([
     canManage ? allSessionTypes() : [],
     canManage ? copySources(schedule.bootcamp.id) : [],
     checklistCounts(schedule.bootcamp.id),
     checklistMarks(schedule.bootcamp.id),
     surveyDays(schedule.bootcamp.id),
+    superlativeStatus(schedule.bootcamp.id),
+    canManage ? getSuperlativeList() : null,
     canManage ? facilityPicks() : [],
     cookies(),
   ]);
@@ -52,6 +55,7 @@ export async function SchedulePage({ schedule, viewer }: { schedule: Schedule; v
         checklist={checklist}
         checklistMarks={checklistTimed}
         surveys={surveys}
+        superlatives={{ status: superlatives, listed: superlativeList?.superlatives.length ?? 0 }}
         initialView={initialView}
         initialCondensed={initialCondensed}
       />

@@ -1,4 +1,4 @@
-/** Everything the signed-in caller has been asked to fill in: their registration form and their daily surveys. */
+/** Everything the signed-in caller has been asked to fill in: their registration form, their daily surveys and their Bootcamp's superlatives. */
 
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";

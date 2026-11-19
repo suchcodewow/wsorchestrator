@@ -51,6 +51,7 @@ import type { ChecklistDayCount, ChecklistMark } from "@/lib/scheduler/checklist
 import { findIssues, tally } from "@/lib/scheduler/issues";
 import type { CopySource, Schedule, SessionRow } from "@/lib/scheduler/schedule";
 import type { SessionTypeRow } from "@/lib/scheduler/session-types";
+import type { SuperlativeStatus } from "@/lib/surveys/superlative-values";
 import type { SurveyDayStatus } from "@/lib/surveys/survey-values";
 import { TRACK_LABELS, attendeeCount, dayDate, describeClash, findClashes, place, snapStart, trackDays } from "@/lib/scheduler/timeline";
 import { type ScheduleViewMode, writeScheduleCondensedCookie, writeScheduleViewCookie } from "@/lib/scheduler/schedule-prefs";
@@ -59,6 +60,7 @@ import { PillSwitch } from "@/components/pill-switch";
 import { BootcampDialog } from "../bootcamp-dialog";
 import { BESIDE_PREFIX, Board, COLUMN_ATTR, SCALE, SessionFace, useClock, type BoardColumn, type Density } from "./board";
 import { useChecklistButtons } from "./checklist";
+import { SuperlativesButton } from "./superlatives-button";
 import { useSurveyButtons } from "./surveys";
 import { dayOf, everyDay, keyOf, locate, moveTo, resize, type Days } from "./days";
 import { CopyDialog } from "./copy-dialog";
@@ -90,6 +92,7 @@ export function ScheduleView({
   checklist,
   checklistMarks,
   surveys,
+  superlatives,
   initialView,
   initialCondensed,
 }: {
@@ -106,6 +109,8 @@ export function ScheduleView({
   checklistMarks: ChecklistMark[];
   /** Which days have been sent their surveys. */
   surveys: SurveyDayStatus[];
+  /** Whether the Bootcamp's superlatives are out, and how many superlatives the standing list has to send. */
+  superlatives: { status: SuperlativeStatus | null; listed: number };
   /** The manager's last-chosen view and density, from a cookie read on the server. */
   initialView: View;
   initialCondensed: boolean;
@@ -594,6 +599,13 @@ export function ScheduleView({
               </Tooltip>
             </TooltipProvider>
           )}
+          <SuperlativesButton
+            bootcampId={bootcamp.id}
+            initial={superlatives.status}
+            listed={superlatives.listed}
+            canManage={canManage}
+            onNotice={setNotice}
+          />
           {canManage && <SaveBadge save={save} onRetry={() => void flush()} />}
           {canManage && sources.length > 0 && (
             <Button variant="outline" size="sm" onClick={() => setFilling(true)}>
