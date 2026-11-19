@@ -3,8 +3,8 @@
 /**
  * Adding or changing one session: what it is, who it is taught to, who leads
  * it and who else teaches, and which rooms it takes. Anyone or any room
- * already busy at that time is shown in red with what they are busy with, and
- * cannot be added. Attendees taught something else beside it on their class
+ * already busy at that time is shown in red with what they are busy with; a
+ * busy room cannot be added, a busy instructor can. Attendees taught something else beside it on their class
  * or SE track are shown in red too, but it still saves, as a moved session
  * does. Its comments are on a tab of their own, and a breakout's assessment,
  * its groups and each instructor's room on a third. A viewer sees the same, without the
@@ -224,7 +224,6 @@ export function SessionDialog({
   const before = useMemo(() => {
     const s = existing;
     return {
-      people: new Set(s && s.kind !== "unstructured" ? s.staff.map((p) => p.email) : []),
       rooms: new Set(s ? (s.kind === "main" ? [s.roomId] : s.kind === "breakout" ? s.staff.map((p) => p.roomId) : []) : []),
     };
   }, [existing]);
@@ -513,14 +512,7 @@ export function SessionDialog({
                 autoFocus={!existing}
                 afterLength={
                   look.kind !== "unstructured" && (
-                    <InstructorPicker
-                      pool={pool}
-                      staff={staff}
-                      busy={busy.people}
-                      before={before.people}
-                      onToggle={toggle}
-                      onLeader={makeLeader}
-                    />
+                    <InstructorPicker pool={pool} staff={staff} busy={busy.people} onToggle={toggle} onLeader={makeLeader} />
                   )
                 }
               />
@@ -704,21 +696,19 @@ const TRIGGER =
  * Who teaches it, as one dropdown: anyone free first, then anyone busy, each
  * by first name. Click a row to add or drop someone; the leader's crown is
  * gold, and a grey crown beside anyone else added makes them the leader.
- * Someone busy then cannot be added unless the session already had them;
- * anyone added who is busy is named under it in red.
+ * Someone busy then can still be added; anyone added who is busy is named
+ * under it in red.
  */
 function InstructorPicker({
   pool,
   staff,
   busy,
-  before,
   onToggle,
   onLeader,
 }: {
   pool: PoolPerson[];
   staff: StaffRow[];
   busy: Map<string, Clash[]>;
-  before: Set<string>;
   onToggle: (p: PoolPerson) => void;
   onLeader: (email: string) => void;
 }) {
@@ -797,7 +787,6 @@ function InstructorPicker({
                   <DropdownMenuItem
                     role="menuitemcheckbox"
                     aria-checked={Boolean(added)}
-                    disabled={theirs.length > 0 && !before.has(p.email) && !added}
                     onSelect={(e) => {
                       keepOpen(e);
                       onToggle(p);

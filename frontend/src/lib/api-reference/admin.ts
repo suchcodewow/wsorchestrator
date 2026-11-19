@@ -165,7 +165,11 @@ const SESSION_ERRORS: EndpointError[] = [
   { status: 400, error: "unknown_type", when: "typeId names no session type" },
   { status: 400, error: "unknown_assessment", when: "assessmentId names no assessment, or one of the other stage" },
   { status: 404, error: "not_found", when: "no such bootcamp or session" },
-  { status: 409, error: "clash", when: "someone or a room added is in another session at the same time; clashes says which" },
+  {
+    status: 409,
+    error: "clash",
+    when: "a room added is in another session at the same time; clashes says which (a busy instructor is allowed)",
+  },
 ];
 
 const FILL_ERRORS: EndpointError[] = [
@@ -2911,7 +2915,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Says whether a Bootcamp's superlatives are out, as its schedule's Send Superlatives button reads it.",
         access: "scheduleReader",
         token: true,
-        notes: "status is null while they are not out: never sent, or unassigned. Otherwise assigned is how many people were sent them, and answered how many have voted.",
+        notes:
+          "status is null while they are not out: never sent, or unassigned. Otherwise assigned is how many people were sent them, and answered how many have voted.",
         params: [BOOTCAMP_ID],
         returns: `{ status: ${SUPERLATIVE_STATUS_SHAPE} }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
@@ -2980,7 +2985,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 400, error: "required", when: "a superlative has no vote; superlativeId names it" },
           { status: 400, error: "self_vote", when: "the caller voted for themselves; superlativeId names it" },
           { status: 400, error: "not_a_nominee", when: "the classmate chosen is not in the class; superlativeId names it" },
-          { status: 400, error: "unknown_superlative", when: "a vote is for a superlative the survey does not ask; superlativeId names it" },
+          {
+            status: 400,
+            error: "unknown_superlative",
+            when: "a vote is for a superlative the survey does not ask; superlativeId names it",
+          },
           { status: 404, error: "not_found", when: "no such survey, it was not sent to the caller, or it is unassigned" },
         ],
       },

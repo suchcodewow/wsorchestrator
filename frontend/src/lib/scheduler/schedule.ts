@@ -4,8 +4,9 @@
  * at a time, so no query fetches more than `SCHEDULE_LIMITS.sessionsPerDay`.
  *
  * Who can run a session is the bootcamp's instructors: every Training
- * administrator and every guest judge of that bootcamp. Adding someone, or a
- * room, that is busy elsewhere at the time is refused as a clash. Moving or
+ * administrator and every guest judge of that bootcamp. Adding a room that is
+ * busy elsewhere at the time is refused as a clash; adding someone busy is not,
+ * and the schedule shows it in red. Moving or
  * resizing sessions is not, nor is pushing the ones after a session later to
  * make room for it: it saves, and the schedule shows what now clashes
  * in red, since a day is often rearranged through a clash on the way to a
@@ -544,8 +545,10 @@ const missing = (asked: { typeId?: string | null; assessmentId?: string | null }
   asked.typeId ? "unknown_type" : asked.assessmentId ? "unknown_assessment" : "unknown_room";
 
 /**
- * Refuses the people and rooms that are new to the session — not in `before` —
- * when they are busy elsewhere during `slot`.
+ * Refuses the rooms that are new to the session — not in `before` — when they
+ * are busy elsewhere during `slot`. A busy person is allowed: the session
+ * shows the clash and the schedule's issues count it, so nobody has to be
+ * removed from another session first.
  */
 async function newClashes(
   bootcamp: ScheduleBootcamp,
@@ -553,13 +556,11 @@ async function newClashes(
   next: Staffing,
   before: Staffing | null,
 ): Promise<SessionFailure | null> {
-  const oldPeople = new Set(before && before.kind !== "unstructured" ? before.staff.map((s) => s.email) : []);
   const oldRooms = new Set(before ? roomIdsOf(before) : []);
-  const people = next.staff.map((s) => s.email).filter((e) => !oldPeople.has(e));
   const rooms = roomIdsOf(next).filter((r) => !oldRooms.has(r));
-  if (people.length === 0 && rooms.length === 0) return null;
+  if (rooms.length === 0) return null;
   const busy = await availability(bootcamp, slot);
-  const clashes = [...people.flatMap((e) => busy.people[e] ?? []), ...rooms.flatMap((r) => busy.rooms[r] ?? [])];
+  const clashes = rooms.flatMap((r) => busy.rooms[r] ?? []);
   return clashes.length > 0 ? { ok: false, error: "clash", clashes } : null;
 }
 
