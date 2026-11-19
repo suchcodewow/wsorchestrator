@@ -17,10 +17,12 @@ import {
   irisAttempts,
   irisFeedback,
   irisResponses,
+  irisTextAnswers,
   users,
   type VideoFeedbackRating,
 } from "@/db/schema";
 import type { SittingMode } from "@/lib/iris/attempts";
+import { TYPED, isTextItem } from "@/lib/iris/engine";
 import { ITEMS_BY_ID } from "@/lib/iris/reviews";
 import type { SubjectKey } from "@/lib/iris/subjects";
 import type { IrisFeedbackSort } from "@/lib/list-specs";
@@ -62,20 +64,31 @@ export type IrisFeedbackRow = {
 };
 
 export type IrisFeedbackAnswers = {
-  /** The options in the bank's order, A–D, not the shuffled order the taker saw. */
+  /** The options in the bank's order, A–D, not the shuffled order the taker saw; none for a typed question. */
   options: readonly string[];
-  /** The correct option, 0–3. */
+  /** The correct option, 0–3; -1 for a typed question. */
   correct: number;
-  /** What they answered, 0–3 or -1 for "I don't know"; null when they have not, or the sitting was reset. */
+  /** What they answered, 0–3, -1 for "I don't know" or -2 for typed words; null when they have not, or the sitting was reset. */
   chosen: number | null;
+  /** For a typed question: what an expert would say, and what they typed and how it was graded once they answered. */
+  typed: { expected: string; answer: string | null; correct: boolean | null } | null;
   /** The question has been reworded since it was rated, so the options may not be the ones they saw. */
   reworded: boolean;
 };
 
-function answersOf(itemId: string, itemVersion: string, chosen: number | null): IrisFeedbackAnswers | null {
+function answersOf(
+  itemId: string,
+  itemVersion: string,
+  chosen: number | null,
+  typed: { answer: string | null; correct: boolean | null } = { answer: null, correct: null },
+): IrisFeedbackAnswers | null {
   const item = ITEMS_BY_ID.get(itemId);
   if (!item) return null;
-  return { options: item.options, correct: item.answer, chosen, reworded: item.version !== itemVersion };
+  const reworded = item.version !== itemVersion;
+  if (isTextItem(item)) {
+    return { options: [], correct: -1, chosen, typed: { expected: item.key.expected, ...typed }, reworded };
+  }
+  return { options: item.options, correct: item.answer, chosen, typed: null, reworded };
 }
 
 /**
@@ -161,6 +174,8 @@ export async function listIrisFeedback(
     Omit<IrisFeedbackRow, "user" | "closedBy" | "answers"> & {
       itemVersion: string;
       chosen: number | null;
+      typedAnswer: string | null;
+      typedCorrect: boolean | null;
       userName: string | null;
       userEmail: string | null;
       userId: string | null;
@@ -172,23 +187,27 @@ export async function listIrisFeedback(
     select f.id, f.attempt_id as "attemptId", f.subject, f.mode, f.number, f.item_id as "itemId", f.stem, f.rating, f.comment,
            f.created_at as "createdAt", f.user_id as "userId", u.name as "userName", u.email as "userEmail",
            f.closed_at as "closedAt", f.closed_by as "closerId", c.name as "closerName", c.email as "closerEmail",
-           f.item_version as "itemVersion", r.choice as "chosen"
+           f.item_version as "itemVersion", r.choice as "chosen",
+           t.answer as "typedAnswer", case when r.choice = ${TYPED} then r.correct end as "typedCorrect"
       from ${irisFeedback} f
       left join ${users} u on u.id = f.user_id
       left join ${users} c on c.id = f.closed_by
       left join ${irisResponses} r on r.attempt_id = f.attempt_id and r.seq = f.number and r.item_id = f.item_id
+      left join ${irisTextAnswers} t on t.attempt_id = r.attempt_id and t.seq = r.seq
      where ${where}
      order by ${sql.join(order, sql`, `)}
      limit ${limit} offset ${offset}`);
   return toPage(
-    rows.map(({ userId, userName, userEmail, closerId, closerName, closerEmail, itemVersion, chosen, ...r }) => ({
-      ...r,
-      createdAt: new Date(r.createdAt).toISOString(),
-      user: userId ? { name: userName, email: userEmail } : null,
-      closedAt: r.closedAt ? new Date(r.closedAt).toISOString() : null,
-      closedBy: closerId ? { name: closerName, email: closerEmail } : null,
-      answers: answersOf(r.itemId, itemVersion, chosen),
-    })),
+    rows.map(
+      ({ userId, userName, userEmail, closerId, closerName, closerEmail, itemVersion, chosen, typedAnswer, typedCorrect, ...r }) => ({
+        ...r,
+        createdAt: new Date(r.createdAt).toISOString(),
+        user: userId ? { name: userName, email: userEmail } : null,
+        closedAt: r.closedAt ? new Date(r.closedAt).toISOString() : null,
+        closedBy: closerId ? { name: closerName, email: closerEmail } : null,
+        answers: answersOf(r.itemId, itemVersion, chosen, { answer: typedAnswer, correct: typedCorrect }),
+      }),
+    ),
     query.page,
   );
 }

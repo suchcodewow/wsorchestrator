@@ -1,6 +1,6 @@
 /** Simulated Diagnostic takers, for checking the engine against the real bank. */
 
-import { ENGINE, drawItem, newRunState, placementOf, submit, type Asked, type IrisItem, type Level } from "@/lib/iris/engine";
+import { ENGINE, drawItem, isTextItem, newRunState, placementOf, submit, type Asked, type IrisItem, type Level } from "@/lib/iris/engine";
 
 /** A small seeded generator, so a simulation gives the same numbers every run. */
 export function seeded(seed: number): () => number {
@@ -42,8 +42,12 @@ export function runOnce(
   return { placement: placementOf(asked), asked };
 }
 
-/** The option with the most words: what a taker who knows nothing but reads length would pick. */
+/** The option with the most words: what a taker who knows nothing but reads length would pick; -1 for a typed question. */
 export const longestOption = (item: IrisItem) => {
+  if (isTextItem(item)) return -1;
   const words = item.options.map((o) => o.trim().split(/\s+/).length);
   return words.indexOf(Math.max(...words));
 };
+
+/** The right option's index; null for a typed question, which has none. */
+export const rightOption = (item: IrisItem) => (isTextItem(item) ? null : item.answer);

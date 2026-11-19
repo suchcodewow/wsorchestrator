@@ -9,8 +9,17 @@
 import "server-only";
 import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { irisAttempts, irisParticipants, irisResponses, irisTakers, users } from "@/db/schema";
-import { IDK, type Confidence, type Form, type Level, type Phase } from "@/lib/iris/engine";
+import {
+  irisAttempts,
+  irisParticipants,
+  irisResponses,
+  irisTakers,
+  irisTextAnswers,
+  users,
+  type IrisGradeConfidence,
+  type IrisGradeReviewStatus,
+} from "@/db/schema";
+import { IDK, TYPED, isTextItem, type Confidence, type Form, type Level, type Phase } from "@/lib/iris/engine";
 import { participantEmails } from "@/lib/iris/participants";
 import { ITEMS_BY_ID } from "@/lib/iris/reviews";
 import { SUBJECT_KEYS, compositeOf, isSubjectKey, type SubjectKey, type Track } from "@/lib/iris/subjects";
@@ -90,8 +99,10 @@ export type DetailAnswer = {
   level: Level;
   phase: Phase;
   stem: string | null;
-  /** The option they chose, null for "I don't know". */
+  /** The option they chose, or for a typed question index -2 and their words; null for "I don't know". */
   chosen: { index: number; text: string | null } | null;
+  /** How Claude graded a typed answer; null for an option or "I don't know". `correct` is the grade that counts. */
+  typed: { gradedCorrect: boolean; confidence: IrisGradeConfidence; reason: string; reviewStatus: IrisGradeReviewStatus | null } | null;
   correct: boolean;
   ms: number;
 };
@@ -135,7 +146,12 @@ export async function personDetail(userId: string, form: Form): Promise<PersonDe
   // One query per sitting keeps each to at most 17 rows.
   // A sitting on a subject that is no longer offered is left out rather than shown nameless.
   for (const a of attempts.filter((a) => isSubjectKey(a.subject))) {
-    const responses = await db.select().from(irisResponses).where(eq(irisResponses.attemptId, a.id)).orderBy(asc(irisResponses.seq));
+    const responses = await db
+      .select({ r: irisResponses, t: irisTextAnswers })
+      .from(irisResponses)
+      .leftJoin(irisTextAnswers, and(eq(irisTextAnswers.attemptId, irisResponses.attemptId), eq(irisTextAnswers.seq, irisResponses.seq)))
+      .where(eq(irisResponses.attemptId, a.id))
+      .orderBy(asc(irisResponses.seq));
     sittings.push({
       subject: a.subject as SubjectKey,
       placement: (a.placement as Level | null) ?? null,
@@ -143,9 +159,15 @@ export async function personDetail(userId: string, form: Form): Promise<PersonDe
       questions: a.questions,
       startedAt: a.startedAt,
       finishedAt: a.finishedAt,
-      answers: responses.map((r) => {
+      answers: responses.map(({ r, t }) => {
         const item = ITEMS_BY_ID.get(r.itemId);
         const current = item?.version === r.itemVersion ? item : undefined;
+        const chosen =
+          r.choice === IDK
+            ? null
+            : r.choice === TYPED
+              ? { index: TYPED, text: t?.answer ?? null }
+              : { index: r.choice, text: current && !isTextItem(current) ? current.options[r.choice]! : null };
         return {
           seq: r.seq,
           itemId: r.itemId,
@@ -153,7 +175,8 @@ export async function personDetail(userId: string, form: Form): Promise<PersonDe
           level: r.level as Level,
           phase: r.phase as Phase,
           stem: current?.stem ?? null,
-          chosen: r.choice === IDK ? null : { index: r.choice, text: current?.options[r.choice] ?? null },
+          chosen,
+          typed: t ? { gradedCorrect: t.gradedCorrect, confidence: t.confidence, reason: t.reason, reviewStatus: t.reviewStatus } : null,
           correct: r.correct,
           ms: r.ms,
         };

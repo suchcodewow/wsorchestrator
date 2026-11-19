@@ -25,7 +25,7 @@ import { irisAttempts, irisItemReviews, irisResponses } from "@/db/schema";
 import { answer, myIris, openSitting, setTrack, shuffledOrder, sittingModes, startSitting, type SittingView } from "@/lib/iris/attempts";
 import { clearResults, cohortSummary, personDetail, resetSitting } from "@/lib/iris/cohort";
 import { listParticipants } from "@/lib/iris/participants";
-import { IDK } from "@/lib/iris/engine";
+import { IDK, isTextItem, type ChoiceItem } from "@/lib/iris/engine";
 import { IRIS_ITEMS } from "@/lib/iris/items";
 import { listQuestions } from "@/lib/iris/questions";
 import { ITEMS_BY_ID, approveDrafts, poolFor, setReviews } from "@/lib/iris/reviews";
@@ -77,7 +77,11 @@ async function finish(user: TestUser, first: SittingView, pick: (itemId: string)
   throw new Error("the sitting never finished");
 }
 
-const right = (id: string) => ITEMS_BY_ID.get(id)!.answer;
+const right = (id: string) => {
+  const item = ITEMS_BY_ID.get(id)!;
+  if (isTextItem(item)) throw new Error(`${id} is a typed question`);
+  return item.answer;
+};
 
 describe("before any question is approved", () => {
   test("a live sitting is not ready, and a subject shows as unavailable", async () => {
@@ -114,7 +118,8 @@ describe("a live sitting", () => {
   test("sends the question without its id, answer, level or explanation", async () => {
     const res = await startSitting(taker.id, "sdlc", "A", "live");
     assert.ok(res.ok);
-    assert.deepEqual(Object.keys(res.sitting.question).sort(), ["options", "stem"]);
+    // kind only says whether to show options or a box to type in.
+    assert.deepEqual(Object.keys(res.sitting.question).sort(), ["kind", "options", "stem"]);
     assert.equal(res.sitting.number, 1);
     const item = ITEMS_BY_ID.get((await onScreen(res.sitting.attemptId)).itemId)!;
     assert.equal(item.level, 2, "it starts at Intermediate");
@@ -130,7 +135,7 @@ describe("a live sitting", () => {
     const start = await startSitting(shuffler.id, "sdlc", "A", "live", seeded(42));
     assert.ok(start.ok);
     const { itemId, order } = await onScreen(start.sitting.attemptId);
-    const item = ITEMS_BY_ID.get(itemId)!;
+    const item = ITEMS_BY_ID.get(itemId)! as ChoiceItem;
     assert.deepEqual([...order].sort(), [0, 1, 2, 3]);
     assert.deepEqual(
       start.sitting.question.options,

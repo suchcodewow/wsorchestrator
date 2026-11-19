@@ -41,7 +41,13 @@ export function isForm(value: unknown): value is Form {
  */
 export const IDK = -1;
 
-export type IrisItem = {
+/**
+ * A typed answer, recorded in place of an option's index: the words themselves
+ * are kept with their grade (`iris_text_answers`).
+ */
+export const TYPED = -2;
+
+type ItemBase = {
   id: string;
   subject: SubjectKey;
   form: Form;
@@ -49,10 +55,44 @@ export type IrisItem = {
   subtopic: string;
   version: string;
   stem: string;
-  options: readonly [string, string, string, string];
-  answer: 0 | 1 | 2 | 3;
   rationale: string;
 };
+
+/** Four options and the index of the right one. A question is one of these unless it says otherwise. */
+export type ChoiceItem = ItemBase & {
+  kind?: "choice";
+  options: readonly [string, string, string, string];
+  answer: 0 | 1 | 2 | 3;
+};
+
+/** What a typed answer is graded against. */
+export type AnswerKey = {
+  /** What an expert would say, in one sentence. */
+  expected: string;
+  /** The ideas an answer needs, at least one of them, to count as right. */
+  mustInclude: readonly string[];
+  /** Other terms for the same thing. */
+  alsoAccept: readonly string[];
+  /** Misconceptions that make an answer wrong. */
+  knownWrong: readonly string[];
+  /** True when the exact term is needed; false when the idea is enough. */
+  termRequired: boolean;
+  /** Bumped on every edit to the key, so an approval and each grade name the key they were made on. */
+  keyVersion: number;
+};
+
+/** The taker types a short answer, which Claude grades right or wrong against `key`. */
+export type TextItem = ItemBase & { kind: "text"; key: AnswerKey };
+
+export type IrisItem = ChoiceItem | TextItem;
+
+export const isTextItem = (item: IrisItem): item is TextItem => item.kind === "text";
+
+/**
+ * The version an approval is for. A typed question's key is part of it, so an
+ * edited key sends the question back to draft until it is approved again.
+ */
+export const reviewVersionOf = (item: IrisItem): string => (isTextItem(item) ? `${item.version}+key${item.key.keyVersion}` : item.version);
 
 export type Phase = "main" | "tiebreak";
 

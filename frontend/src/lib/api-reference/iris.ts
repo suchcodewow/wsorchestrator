@@ -2,8 +2,10 @@
 
 import { IRIS_NOTE_MAX, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { SUBJECT_KEYS } from "@/lib/iris/subjects";
+import { TEXT_ANSWER_LIMITS } from "@/lib/iris/text-answer";
 import {
   IRIS_FEEDBACK_LIST,
+  IRIS_GRADE_LIST,
   IRIS_PARTICIPANT_LIST,
   IRIS_RECORD_LIST,
   IRIS_REMINDER_MESSAGE_LIST,
@@ -15,8 +17,9 @@ import type { EndpointGroup, Field } from "./types";
 const SUBJECT_TYPE = SUBJECT_KEYS.map((k) => `"${k}"`).join(" | ");
 const FORM_QUERY: Field = { name: "form", type: `"A" | "B"`, note: "Default A." };
 const FORM_ERROR = { status: 400, error: "invalid_form", when: "form is neither A nor B" };
-const SITTING_SHAPE = `{ attemptId, subject, form: "A" | "B", mode: "live" | "preview", number, progress, question: { stem, options: string[] } }`;
-const FEEDBACK_SHAPE = `{ id, attemptId: string | null, subject: ${SUBJECT_TYPE}, mode: "live" | "preview", number, itemId, stem, rating: "up" | "down", comment: string | null, createdAt, user: { name, email } | null, closedAt: string | null, closedBy: { name, email } | null, answers: { options: string[], correct: 0 | 1 | 2 | 3, chosen: -1 | 0 | 1 | 2 | 3 | null, reworded: boolean } | null }`;
+const SITTING_SHAPE = `{ attemptId, subject, form: "A" | "B", mode: "live" | "preview", number, progress, question: { kind: "choice" | "text", stem, options: string[] } }`;
+const FEEDBACK_SHAPE = `{ id, attemptId: string | null, subject: ${SUBJECT_TYPE}, mode: "live" | "preview", number, itemId, stem, rating: "up" | "down", comment: string | null, createdAt, user: { name, email } | null, closedAt: string | null, closedBy: { name, email } | null, answers: { options: string[], correct: -1 | 0 | 1 | 2 | 3, chosen: -2 | -1 | 0 | 1 | 2 | 3 | null, typed: { expected, answer: string | null, correct: boolean | null } | null, reworded: boolean } | null }`;
+const GRADE_SHAPE = `{ attemptId, seq, subject: ${SUBJECT_TYPE}, itemId, stem: string | null, expected: string | null, answer, gradedCorrect: boolean, correct: boolean, confidence: "high" | "low", matched: string[], reason, reviewStatus: "pending" | "upheld" | "overturned", gradedAt, user: { name, email } | null, reviewedAt: string | null, reviewedBy: { name, email } | null }`;
 const SITTING_ID: Field = { name: "id", type: "string", required: true, note: "the sitting's attemptId" };
 
 export const IRIS_GROUPS: EndpointGroup[] = [
@@ -99,23 +102,29 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         summary: "Answers the question on screen and returns the next one.",
         access: "diagnosticSitter",
         token: true,
-        notes:
-          'A question is sent as its wording and options only, never its id or level. Each taker sees the options in their own shuffled order, and choice is the position on their screen, from 0, or -1 for "I don\'t know", which is graded as wrong. A sitting ends after 10 to 14 questions plus up to 3 tiebreak questions; the last answer returns done: true and the number of questions, never a placement or confidence.',
+        notes: `A question is sent as its wording and options only, never its id, level or answer key. Each taker sees the options in their own shuffled order, and choice is the position on their screen, from 0, or -1 for "I don't know", which is graded as wrong. A question of kind text has no options: send text, the taker's own words, or choice -1. Claude grades text right or wrong against the question's answer key before anything is recorded; if it cannot, the answer is refused with grading_failed and nothing changes, so the same text can be sent again. A grade Claude is unsure of counts, and in a live sitting waits on review in Diagnostic Settings → Grades. A sitting ends after 10 to 14 questions plus up to 3 tiebreak questions; the last answer returns done: true and the number of questions, never a placement or confidence.`,
         params: [SITTING_ID],
         body: {
           kind: "json",
           fields: [
             { name: "number", type: "integer", required: true, note: "the sitting's number for the question being answered" },
-            { name: "choice", type: "-1 | 0 | 1 | 2 | 3", required: true },
+            { name: "choice", type: "-1 | 0 | 1 | 2 | 3", note: "for a question with options, or -1 on any question; send this or text" },
+            {
+              name: "text",
+              type: "string",
+              note: `for a question of kind text: up to ${TEXT_ANSWER_LIMITS.words} words and ${TEXT_ANSWER_LIMITS.chars} characters once trimmed; send this or choice`,
+            },
           ],
         },
         returns: `{ done: false, sitting: ${SITTING_SHAPE} } or { done: true, subject, mode, questions: number }`,
         errors: [
           { status: 400, error: "invalid_body", when: "the body does not parse" },
-          { status: 400, error: "invalid_choice", when: "choice is not -1 to 3" },
+          { status: 400, error: "invalid_choice", when: "choice is not -1 to 3, or is an option on a question of kind text" },
+          { status: 400, error: "invalid_answer", when: "text on a question with options, or text that is empty or too long" },
           { status: 404, error: "not_found", when: "no sitting of yours has that id, or it is live and you are no longer a Participant" },
           { status: 409, error: "finished", when: "the sitting is over" },
           { status: 409, error: "stale", when: "number is not the question on screen; the body carries the current sitting" },
+          { status: 503, error: "grading_failed", when: "Claude could not grade text; nothing was recorded, so send it again" },
         ],
       },
       {
@@ -151,7 +160,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "number is the question's place in its sitting, from 1. itemId and stem are the question as it was when rated. Previews' ratings are included, with mode preview. Closed ratings are left out unless closed=1. user is null once the account that gave it is deleted, and closedBy likewise, or while it is open. answers has the question's options in the bank's order (not the taker's shuffled order), the correct one, and chosen, what the taker went on to answer: -1 for \"I don't know\", null before they answer or once the sitting is reset (attemptId is then null too). reworded is true when the question has changed since it was rated. answers is null for a question no longer in the bank.",
+          "number is the question's place in its sitting, from 1. itemId and stem are the question as it was when rated. Previews' ratings are included, with mode preview. Closed ratings are left out unless closed=1. user is null once the account that gave it is deleted, and closedBy likewise, or while it is open. answers has the question's options in the bank's order (not the taker's shuffled order), the correct one, and chosen, what the taker went on to answer: -1 for \"I don't know\", null before they answer or once the sitting is reset (attemptId is then null too). For a typed question, options is empty, correct is -1, chosen is -2 once they have typed an answer, and typed has the expected answer, their words and the grade that counts; typed is null for a question with options. reworded is true when the question has changed since it was rated. answers is null for a question no longer in the bank.",
         query: [
           ...listQuery(IRIS_FEEDBACK_LIST.sorts, "the comment, the question, or the name or email of who gave it", "desc"),
           { name: "closed", type: `"1"`, note: "1 includes closed ratings; otherwise only open ones are listed." },
@@ -171,6 +180,39 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 400, error: "invalid_body", when: "closed is not a boolean" },
           { status: 404, error: "not_found", when: "no rating has that id" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/diagnostic/grades",
+        summary: "Lists typed answers whose grade Claude was unsure of, a page at a time, the oldest first.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "Live sittings only: a preview's grades are never queued. Each shows the question and its expected answer (null once the question is no longer in the bank), the taker's words, Claude's grade as given (gradedCorrect) with its reason and the key's ideas it found, and correct, the grade that counts. Only those waiting on review are listed unless decided=1.",
+        query: [
+          ...listQuery(IRIS_GRADE_LIST.sorts, "the answer, the question's id, or the name or email of who gave it", "asc"),
+          { name: "decided", type: `"1"`, note: "1 includes upheld and overturned grades; otherwise only pending ones are listed." },
+        ],
+        returns: `{ grades: ${GRADE_SHAPE}[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "PATCH",
+        path: "/api/diagnostic/grades/{attemptId}/{seq}",
+        summary: "Decides a queued grade of a typed answer: right or wrong.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "correct is the grade the answer deserves: the same as Claude's upholds it, the other overturns it and puts the new grade on the record. A finished sitting's placement and confidence are worked out again from its answers, and returned; they are null for a sitting still going, which reads the corrected grade on its next answer. A grade can be decided again, and the latest decision stands.",
+        params: [
+          { name: "attemptId", type: "string", required: true, note: "the sitting's id" },
+          { name: "seq", type: "integer", required: true, note: "the answer's place in the sitting, from 1" },
+        ],
+        body: { kind: "json", fields: [{ name: "correct", type: "boolean", required: true }] },
+        returns: `{ ok: true, reviewStatus: "upheld" | "overturned", placement: 1 | 2 | 3 | null, confidence: "high" | "medium" | "low" | null }`,
+        errors: [
+          { status: 400, error: "invalid_body", when: "correct is not a boolean" },
+          { status: 404, error: "not_found", when: "no queued grade has that sitting and place" },
         ],
       },
       {
@@ -260,11 +302,12 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         summary: "Returns one person's live sittings on one form, each with every answer in order.",
         access: "assessmentsAdmin",
         token: true,
-        notes: 'chosen is null for "I don\'t know". stem and chosen.text are null for an answer given to an older version of a question.',
+        notes:
+          "chosen is null for \"I don't know\". For a typed answer chosen.index is -2 and chosen.text is their words, and typed has Claude's grade as given, its confidence and reason, and reviewStatus: pending, upheld or overturned, or null when no review was needed; typed is null otherwise. correct is the grade that counts. stem and an option's chosen.text are null for an answer given to an older version of a question.",
         params: [{ name: "id", type: "string", required: true, note: "the user's id" }],
         query: [FORM_QUERY],
         returns:
-          '{ userId, name, email, track, form, composite, sittings: { subject, placement, confidence: "high" | "medium" | "low" | null, questions, startedAt, finishedAt, answers: { seq, itemId, itemVersion, level, phase: "main" | "tiebreak", stem, chosen: { index, text } | null, correct, ms }[] }[] }',
+          '{ userId, name, email, track, form, composite, sittings: { subject, placement, confidence: "high" | "medium" | "low" | null, questions, startedAt, finishedAt, answers: { seq, itemId, itemVersion, level, phase: "main" | "tiebreak", stem, chosen: { index, text } | null, typed: { gradedCorrect, confidence: "high" | "low", reason, reviewStatus: "pending" | "upheld" | "overturned" | null } | null, correct, ms }[] }[] }',
         errors: [FORM_ERROR, { status: 404, error: "not_found", when: "no such user" }],
       },
       {
@@ -357,7 +400,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "At most 38 questions, in bank order. A question nobody has reviewed in its current version is a draft. Statistics count live sittings of the current version only. calibration reads too_easy above 85% correct and too_hard below 45% once 20 have answered; dead_distractors lists wrong options nobody has chosen once 10 have.",
+          "At most 38 questions, in bank order. A question nobody has reviewed in its current version is a draft. Statistics count live sittings of the current version only. calibration reads too_easy above 85% correct and too_hard below 45% once 20 have answered; dead_distractors lists wrong options nobody has chosen once 10 have. A typed question has no options, answer -1 and its answer key in key; key is null for a question with options. Its approval is for the key too, so a key with a new keyVersion is a draft again.",
         query: [
           { name: "subject", type: SUBJECT_TYPE, required: true },
           FORM_QUERY,
@@ -365,7 +408,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
           { name: "status", type: `"approved" | "rejected" | "draft"`, note: "One review state only." },
         ],
         returns:
-          "{ questions: { id, version, level, subtopic, stem, options, answer, rationale, review: { status, note, reviewer, updatedAt }, stats: { responses, correct, dontKnow, picks: [a, b, c, d], medianMs }, calibration: { kind, ... } }[], counts: { approved, rejected, draft } }",
+          "{ questions: { id, version, level, subtopic, stem, options, answer, key: { expected, mustInclude, alsoAccept, knownWrong, termRequired, keyVersion } | null, rationale, review: { status, note, reviewer, updatedAt }, stats: { responses, correct, dontKnow, picks: [a, b, c, d], medianMs }, calibration: { kind, ... } }[], counts: { approved, rejected, draft } }",
         errors: [
           { status: 400, error: "invalid_subject", when: "subject is missing or unknown" },
           FORM_ERROR,
