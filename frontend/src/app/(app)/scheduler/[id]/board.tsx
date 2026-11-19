@@ -198,6 +198,39 @@ function boxes(count: number, wide: number): Box[] {
   });
 }
 
+/**
+ * The session whose + a pointer at (`x`, `y`) is over, with `sessions` laid
+ * out in `column` as the board draws them while a card is dragged; none when
+ * it is over no +. `dragged` has no + of its own. Worked out from the
+ * sessions rather than from the + on screen, so a drag can find the + where
+ * a card stood before the preview pushed it away.
+ */
+export function besideAt(
+  column: Element,
+  sessions: readonly SessionRow[],
+  scale: number,
+  x: number,
+  y: number,
+  dragged: string,
+): string | null {
+  const r = column.getBoundingClientRect();
+  if (x < r.left || x > r.right || y < r.top || y > r.bottom || sessions.length >= SCHEDULE_LIMITS.sessionsPerDay) return null;
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  for (const g of sideBySide(sessions)) {
+    const box = boxes(g.columns.length, -1).at(-1)!;
+    const right = r.left + ((box.left + box.width) / 100) * r.width - parseFloat(box.padRight) * rem;
+    const left = r.left + (box.left / 100) * r.width + parseFloat(box.padLeft) * rem;
+    const strip = Math.max((BESIDE_DROP.share / 100) * (right - left), BESIDE_DROP.min * rem);
+    if (x < right - strip || x > right) continue;
+    const s = g.columns.at(-1)!.sessions.find((s) => {
+      const top = r.top + (s.start - dayStart) * scale;
+      return s.id !== dragged && s.lane + 1 < SCHEDULE_LIMITS.lanes && y >= top && y < top + s.minutes * scale;
+    });
+    if (s) return s.id;
+  }
+  return null;
+}
+
 function Column({
   column,
   height,
@@ -419,7 +452,7 @@ function DraggableSession({
       }}
     >
       <div className="relative h-full">
-        <div className="h-full transition-[margin] duration-150 ease-out" style={{ marginRight: open ? BESIDE_WIDTH : 0 }}>
+        <div className="h-full transition-[margin] duration-150 ease-out" style={{ marginRight: open ? besideWidth(dragging) : 0 }}>
           <SessionFace
             {...props}
             handle={{
@@ -447,8 +480,14 @@ function DraggableSession({
   );
 }
 
-/** How much of a card's right edge the + takes: a tenth of it, and never too narrow to aim at. */
-const BESIDE_WIDTH = "max(10%, 1rem)";
+/** How much of a card's right edge the + takes, in percent of the card and at least `min` rem: a tenth of it, never too narrow to aim at. */
+const BESIDE_HOVER = { share: 10, min: 1 };
+/** The same while a card is dragged, wider, so a card can be dropped beside another on a narrow column too. */
+const BESIDE_DROP = { share: 20, min: 2 };
+const besideWidth = (dragging: boolean) => {
+  const { share, min } = dragging ? BESIDE_DROP : BESIDE_HOVER;
+  return `max(${share}%, ${min}rem)`;
+};
 
 /**
  * The + along a card's right edge. It opens when the pointer reaches that
@@ -498,7 +537,7 @@ function BesideButton({
             ? "border-transparent opacity-100"
             : "border-transparent opacity-0",
       )}
-      style={{ width: BESIDE_WIDTH }}
+      style={{ width: besideWidth(dragging) }}
     >
       {open ? (
         <Plus className="size-3.5 shrink-0" />
