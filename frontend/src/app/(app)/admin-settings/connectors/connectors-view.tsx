@@ -369,7 +369,7 @@ const MODES = {
     name: "Slack",
     route: "/api/settings/slack-mode",
     confirm:
-      "From now on the cohort Slack sync creates channels, invites and removes people and sends reminders; the daily surveys are announced; the Live Sessions Slack button opens channels; and releasing scores messages managers.",
+      "From now on the cohort Slack sync creates channels, invites and removes people and sends reminders; the daily surveys and the Bootcamp superlatives are announced; the Live Sessions Slack button opens channels; and releasing scores messages managers.",
   },
 } as const;
 

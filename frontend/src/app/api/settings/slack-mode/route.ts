@@ -1,8 +1,8 @@
 /**
  * Whether the app changes Slack and sends messages there (`live`), or only
  * logs what it would do: one switch for the cohort Slack sync and its
- * reminders, the daily survey announcements, the Live Sessions channels and
- * the release message. It starts as a dry run; QA, which shares production's
+ * reminders, the daily survey and Bootcamp superlatives announcements, the
+ * Live Sessions channels and the release message. It starts as a dry run; QA, which shares production's
  * workspace, leaves it there.
  */
 
