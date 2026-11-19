@@ -5,7 +5,8 @@
  * four tracks, and one track across every day; either can be condensed to
  * names only. A session is dragged to any time of any column — another track
  * of the day, or in one track's view another day — and what it lands on is
- * pushed later. Moves and length changes are saved a moment after the last
+ * pushed later; moved up or down its own column, it swaps places with what it
+ * lands on instead. Moves and length changes are saved a moment after the last
  * one, a track-day at a time; what clashes is worked out here as things move.
  */
 
@@ -58,7 +59,7 @@ import { type ScheduleViewMode, writeScheduleCondensedCookie, writeScheduleViewC
 import { cn } from "@/lib/utils";
 import { PillSwitch } from "@/components/pill-switch";
 import { BootcampDialog } from "../bootcamp-dialog";
-import { BESIDE_PREFIX, Board, COLUMN_ATTR, SCALE, SessionFace, useClock, type BoardColumn, type Density } from "./board";
+import { BESIDE_PREFIX, Board, COLUMN_ATTR, SCALE, SessionFace, besideAt, useClock, type BoardColumn, type Density } from "./board";
 import { useChecklistButtons } from "./checklist";
 import { SuperlativesButton } from "./superlatives-button";
 import { useSurveyButtons } from "./surveys";
@@ -328,14 +329,19 @@ export function ScheduleView({
    * quarter hour; or, over the + at a card's right edge, that card's time in
    * the lane beside it.
    */
-  const dropPoint = ({ active, over }: DragMoveEvent | DragEndEvent, from: Days): { key: string; start: number; lane: number } | null => {
+  const dropPoint = (
+    { active, over, collisions }: DragMoveEvent | DragEndEvent,
+    from: Days,
+  ): { key: string; start: number; lane: number; held?: boolean } | null => {
     const rect = active.rect.current.translated;
-    if (over && String(over.id).startsWith(BESIDE_PREFIX)) {
-      const id = String(over.id).slice(BESIDE_PREFIX.length);
+    // Read from the collisions rather than `over`: a + found where its card started may not be on the board yet.
+    const beside = collisions?.find((c) => String(c.id).startsWith(BESIDE_PREFIX));
+    if (beside) {
+      const id = String(beside.id).slice(BESIDE_PREFIX.length);
       const at = locate(from, id);
       const next = at && dayOf(from, at.key)[at.index];
       return next && next.id !== active.id && next.lane + 1 < SCHEDULE_LIMITS.lanes
-        ? { key: at.key, start: next.start, lane: next.lane + 1 }
+        ? { key: at.key, start: next.start, lane: next.lane + 1, held: Boolean(beside.data?.[AS_STARTED]) }
         : null;
     }
     if (!over || !rect || !String(over.id).startsWith("col:")) return null;
@@ -359,11 +365,16 @@ export function ScheduleView({
     const from = origin.current;
     const point = from && dropPoint(event, from.days);
     if (!from || !point) return;
-    const at = `${point.key}@${point.start}/${point.lane}`;
+    const at = `${point.key}@${point.start}/${point.lane}${point.held ? "*" : ""}`;
     if (at === dropping.current) return;
     dropping.current = at;
-    // Over a +, the preview holds still, so the + stays under the pointer; the card goes beside on letting go.
-    if (point.lane > 0) return;
+    // Over a +, the card goes beside on letting go. Over one where its card started, the
+    // day goes back as it was, so that card comes back under the pointer and stays there;
+    // over one the preview moved, the preview holds still, so the + stays under the pointer.
+    if (point.lane > 0) {
+      if (point.held) setDays(from.days);
+      return;
+    }
     setDays(moveTo(from.days, String(event.active.id), point.key, point.start));
   };
 
@@ -392,6 +403,24 @@ export function ScheduleView({
     if (origin.current) setDays(origin.current.days);
     origin.current = null;
     setActiveId(null);
+  };
+
+  /**
+   * The + under the pointer as the day stood when the drag began, so it can be
+   * reached however the preview has pushed its card since; else what is under
+   * the pointer now.
+   */
+  const collide: CollisionDetection = (args) => {
+    const from = origin.current;
+    const p = args.pointerCoordinates;
+    if (from && p) {
+      for (const column of document.querySelectorAll(`[${COLUMN_ATTR}]`)) {
+        const key = column.getAttribute(COLUMN_ATTR)!;
+        const id = besideAt(column, dayOf(from.days, key), scale, p.x, p.y, String(args.active.id));
+        if (id) return [{ id: `${BESIDE_PREFIX}${id}`, data: { [AS_STARTED]: true } }];
+      }
+    }
+    return underPointer(args);
   };
 
   const active = activeId ? placed.find((s) => s.id === activeId) : undefined;
@@ -547,19 +576,6 @@ export function ScheduleView({
             variant="outline"
             size="icon"
             className="size-8 rounded-full"
-            aria-label="Hours assigned to each person"
-            title="Hours assigned to each person"
-            onClick={() => setShowHours(true)}
-          >
-            <span className="relative inline-flex">
-              <UserRound />
-              <Clock className="absolute -right-1.5 -bottom-1 size-2.5 rounded-full bg-background" strokeWidth={3} />
-            </span>
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8 rounded-full"
             aria-label={view === "week" ? `Print ${TRACK_LABELS[shownTrack]}, every day` : `Print Day ${day}, every track`}
             title={view === "week" ? `Print ${TRACK_LABELS[shownTrack]}, every day` : `Print Day ${day}, every track`}
             onClick={() => void printView(view === "week" ? `track=${shownTrack}` : `day=${day}`)}
@@ -651,7 +667,7 @@ export function ScheduleView({
           <DndContext
             id={`schedule-${bootcamp.id}`}
             sensors={sensors}
-            collisionDetection={underPointer}
+            collisionDetection={collide}
             measuring={MEASURING}
             onDragStart={onDragStart}
             onDragMove={onDragMove}
@@ -749,6 +765,9 @@ export function ScheduleView({
     </motion.div>
   );
 }
+
+/** Marks a + found where its card stood when the drag began, rather than where the preview has it. */
+const AS_STARTED = "asStarted";
 
 /** The + beside a card under the pointer, else the column under it; for a card moved by keyboard, the column it overlaps most. */
 const underPointer: CollisionDetection = (args) => {

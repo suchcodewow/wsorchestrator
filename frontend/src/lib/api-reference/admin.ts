@@ -1602,7 +1602,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "If it runs into a session after it in its lane, that one and any it then runs into are pushed later; unscheduled time between them takes up the push first. Given a lane of 1 or 2, it runs beside the sessions it overlaps; one that overlaps nothing in a lane before it is put in the first such lane. Sessions side by side on one track split its class, so they never clash over attendees, only over a person or a room. An unstructured session keeps no staff or room; a main one keeps no rooms on its staff; a breakout keeps no room of its own.",
+          "It must fit in the unscheduled time where it lands: one that would run into the next session in its lane is refused rather than pushing it later. Given a lane of 1 or 2, it runs beside the sessions it overlaps; one that overlaps nothing in a lane before it is put in the first such lane. Sessions side by side on one track split its class, so they never clash over attendees, only over a person or a room. An unstructured session keeps no staff or room; a main one keeps no rooms on its staff; a breakout keeps no room of its own.",
         params: [BOOTCAMP_ID],
         body: {
           kind: "json",
@@ -1612,7 +1612,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             {
               name: "start",
               type: "number",
-              note: "minutes after midnight, rounded to the quarter hour; left out, straight after the day's last session. In the top half of another session in its lane it takes that one's place; in the bottom half, it goes after it",
+              note: "minutes after midnight, rounded to the quarter hour; left out, straight after the day's last session. In the bottom half of another session in its lane, it goes after it; in the top half it would take that one's place and run into it, so is refused",
             },
             { name: "lane", type: "number", note: `0 to ${SCHEDULE_LIMITS.lanes - 1}; left out, 0, the main line` },
             ...SESSION_LOOK_FIELDS,
@@ -1624,7 +1624,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           ...SESSION_ERRORS,
           { status: 400, error: "no_day", when: "the day is past the end of the track, or the bootcamp does not hold it" },
           { status: 409, error: "day_full", when: `the day has ${SCHEDULE_LIMITS.sessionsPerDay} sessions already` },
-          { status: 409, error: "past_midnight", when: "the push would run the day past midnight" },
+          { status: 409, error: "past_midnight", when: "it would run past midnight" },
+          { status: 409, error: "no_room", when: "it would run into the next session in its lane" },
         ],
       },
       {
@@ -1646,14 +1647,18 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Takes any of POST's fields but track, day and start; moving a session is the layout's job. Made longer, it pushes the sessions it runs into later, as POST does. staff replaces the whole set. Someone already on it stays even if no longer an instructor; only people and rooms new to it are checked for clashes. Anyone taken off the staff takes their breakout group with them, an audience narrowed to one track drops the attendees on the other, and a session that stops being a breakout loses all its groups; the attendees are then unassigned.",
+          "Takes any of POST's fields but track, day and start; moving a session is the layout's job. It can be made only as long as the unscheduled time before the next session in its lane; nothing is pushed. staff replaces the whole set. Someone already on it stays even if no longer an instructor; only people and rooms new to it are checked for clashes. Anyone taken off the staff takes their breakout group with them, an audience narrowed to one track drops the attendees on the other, and a session that stops being a breakout loses all its groups; the attendees are then unassigned.",
         params: [BOOTCAMP_ID, SESSION_ID],
         body: {
           kind: "json",
           fields: [...SESSION_LOOK_FIELDS.map((f) => ({ ...f, required: false })), ...SESSION_STAFF_FIELDS],
         },
         returns: SESSION_SHAPE,
-        errors: [...SESSION_ERRORS, { status: 409, error: "past_midnight", when: "the push would run the day past midnight" }],
+        errors: [
+          ...SESSION_ERRORS,
+          { status: 409, error: "past_midnight", when: "it would run past midnight" },
+          { status: 409, error: "no_room", when: "made longer, it would run into the next session in its lane" },
+        ],
       },
       {
         method: "DELETE",
@@ -2813,7 +2818,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "A survey is listed once it has at least one response. average is the mean of the day-overall ratings; Survey Results shows it to one decimal place. date is the day the survey is about. Sorting by date puts the latest day first by default.",
+          "A survey is listed once it has at least one response. average is the mean of the day-overall ratings; Survey Results shows it to one decimal place. date is the day the survey is about. Sorting by date puts the latest day first by default. today=1 keeps only the survey about today (UTC).",
         query: listQuery(SURVEY_RESULT_LIST.sorts, 'the bootcamp\'s month and the group, as in "November 2026 Bootcamp Sales"', "desc"),
         returns: `{ surveys: ${SURVEY_CARD_SHAPE}[], ${PAGE_FIELDS} }`,
       },

@@ -6,7 +6,7 @@
 
 import { SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
 import type { SessionRow } from "@/lib/scheduler/schedule";
-import { dropAt, settle } from "@/lib/scheduler/timeline";
+import { dropAt, settle, swapAt } from "@/lib/scheduler/timeline";
 
 export type Days = Record<ScheduleTrack, SessionRow[][]>;
 
@@ -48,13 +48,16 @@ export function withDay(days: Days, key: string, sessions: SessionRow[]): Days {
 /**
  * Moves a session to track-day `to`, starting at `start` in `lane` (the main
  * line unless it is put beside another), or as near it as fits; see `dropAt`.
- * Unchanged if `to` is another day and already full.
+ * Moved up or down its own lane of the same track-day, it swaps places with
+ * the session it lands on rather than pushing it; see `swapAt`. Unchanged if
+ * `to` is another day and already full.
  */
 export function moveTo(days: Days, id: string, to: string, start: number, lane = 0): Days {
   const from = locate(days, id);
   if (!from) return days;
   const source = dayOf(days, from.key);
   const target = from.key === to ? source : dayOf(days, to);
+  if (from.key === to && lane === source[from.index]!.lane) return withDay(days, to, swapAt(source, id, start));
   if (from.key !== to && target.length >= SCHEDULE_LIMITS.sessionsPerDay) return days;
   const { track, day } = parseKey(to);
   const moved = { ...source[from.index]!, track, day };

@@ -28,7 +28,8 @@ function drawPath(tl: gsap.core.Timeline, path: HTMLElement, wide: boolean) {
     const at = `rail+=${i * STEP}`;
     const sq = gsap.utils.selector(stage);
     if (wide) {
-      tl.from(sq('[data-timeline="segment"]'), { scaleX: 0, duration: STEP, ease: "none" }, `${at}+=0.15`);
+      const segment = sq('[data-timeline="segment"]');
+      if (segment.length) tl.from(segment, { scaleX: 0, duration: STEP, ease: "none" }, `${at}+=0.15`);
     }
     tl.from(sq('[data-timeline="dot"]'), { scale: 0, duration: 0.35, ease: "back.out(2.5)" }, at).from(
       sq('[data-timeline="card"]'),
@@ -38,16 +39,20 @@ function drawPath(tl: gsap.core.Timeline, path: HTMLElement, wide: boolean) {
 
     // Inside the card: a lab guide fills in its reader's project, rooms and
     // the room fill up, and a learner's checks land one by one before the cheer.
+    // Not every stage has every part; GSAP warns "target not found" for an
+    // empty selection, so a part a stage lacks is skipped.
     const ticks = sq('[data-timeline="tick"]');
-    tl.fromTo(sq('[data-timeline="var-from"]'), { opacity: 1 }, { opacity: 0, duration: 0.25, ease: "none" }, `${at}+=0.75`)
-      .from(sq('[data-timeline="var-to"]'), { opacity: 0, duration: 0.3, ease: "none" }, `${at}+=0.85`)
-      .from(sq('[data-timeline="fill"]'), { scaleX: 0, duration: 1.1, ease: "power2.out", stagger: 0.12 }, `${at}+=0.2`)
-      .from(ticks, { opacity: 0, x: -6, duration: 0.35, stagger: 0.18 }, `${at}+=0.45`)
-      .from(
-        sq('[data-timeline="cheer"]'),
-        { opacity: 0, scale: 0.6, duration: 0.5, ease: "back.out(3)" },
-        `${at}+=${0.45 + ticks.length * 0.18 + 0.1}`,
-      );
+    const part = (name: string) => sq(`[data-timeline="${name}"]`);
+    const when = (targets: HTMLElement[], add: (t: HTMLElement[]) => void) => {
+      if (targets.length) add(targets);
+    };
+    when(part("var-from"), (t) => tl.fromTo(t, { opacity: 1 }, { opacity: 0, duration: 0.25, ease: "none" }, `${at}+=0.75`));
+    when(part("var-to"), (t) => tl.from(t, { opacity: 0, duration: 0.3, ease: "none" }, `${at}+=0.85`));
+    when(part("fill"), (t) => tl.from(t, { scaleX: 0, duration: 1.1, ease: "power2.out", stagger: 0.12 }, `${at}+=0.2`));
+    when(ticks, (t) => tl.from(t, { opacity: 0, x: -6, duration: 0.35, stagger: 0.18 }, `${at}+=0.45`));
+    when(part("cheer"), (t) =>
+      tl.from(t, { opacity: 0, scale: 0.6, duration: 0.5, ease: "back.out(3)" }, `${at}+=${0.45 + ticks.length * 0.18 + 0.1}`),
+    );
   });
 
   return stages.length;

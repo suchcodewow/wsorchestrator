@@ -452,6 +452,7 @@ export type SessionError =
   | "no_day"
   | "day_full"
   | "past_midnight"
+  | "no_room"
   | "no_leader"
   | "not_instructor"
   | "unknown_room"
@@ -466,6 +467,7 @@ export const SESSION_STATUS_FOR: Record<SessionError, number> = {
   no_day: 400,
   day_full: 409,
   past_midnight: 409,
+  no_room: 409,
   no_leader: 400,
   not_instructor: 400,
   unknown_room: 400,
@@ -601,8 +603,8 @@ const label = (bootcamp: ScheduleBootcamp, s: { name: string; track: ScheduleTra
 /**
  * Adds a session to a track-day at `start`, or straight after its last
  * session, in `lane`, or the main line. Started inside another in that lane,
- * it goes before or after that one as `dropAt` does; any it then runs into
- * are pushed later.
+ * it goes before or after that one as `dropAt` does. It must fit in the time
+ * free there: a new session never pushes another later.
  */
 export async function createSession(
   actorId: string,
@@ -629,6 +631,7 @@ export async function createSession(
   const timed = day.map(({ id, start, minutes, lane }) => ({ id, start, minutes, lane }));
   const laid = dropAt(timed, { id: NEW, start: 0, minutes: input.minutes, lane: 0 }, input.start ?? nextStart(day), input.lane ?? 0);
   if (!fitsDay(laid)) return { ok: false, error: "past_midnight" };
+  if (pushed(laid, timed)) return { ok: false, error: "no_room" };
   const { start, lane } = laid.find((s) => s.id === NEW)!;
   const clash = await newClashes(bootcamp, { day: input.day, start, minutes: input.minutes }, next, null);
   if (clash) return clash;
@@ -672,6 +675,12 @@ export async function createSession(
   }
   noteAudit({ target: id, targetLabel: label(bootcamp, input) });
   return { ok: true, session: (await getSession(bootcampId, id))! };
+}
+
+/** Whether laying out the day moved any session of `before` to a later start. */
+function pushed(laid: readonly { id: string; start: number }[], before: readonly { id: string; start: number }[]): boolean {
+  const was = new Map(before.map((s) => [s.id, s.start]));
+  return laid.some((s) => s.start > (was.get(s.id) ?? s.start));
 }
 
 /** Saves the start and lane of each session in `laid` whose start or lane differs from `before`. */
@@ -726,7 +735,7 @@ export async function updateSession(
     return { ok: false, error: "unknown_assessment" };
   }
 
-  // Made longer, it pushes whatever it now runs into in its lane later.
+  // It may be made only as long as the time free before the next session in its lane.
   const minutes = patch.minutes ?? before.minutes;
   const day = await loadDay(db, bootcampId, before.track, before.day);
   const laid = settle(
@@ -734,6 +743,7 @@ export async function updateSession(
     sessionId,
   );
   if (!fitsDay(laid)) return { ok: false, error: "past_midnight" };
+  if (pushed(laid, day)) return { ok: false, error: "no_room" };
   const clash = await newClashes(bootcamp, { day: before.day, start: before.start, minutes, excludeId: sessionId }, next, before);
   if (clash) return clash;
 

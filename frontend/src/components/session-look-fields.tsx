@@ -44,6 +44,7 @@ export function SessionLookFields({
   onChange,
   autoFocus,
   afterLength,
+  maxMinutes = SCHEDULE_LIMITS.maxMinutes,
 }: {
   /** Prefixes the inputs' ids. */
   id: string;
@@ -52,9 +53,11 @@ export function SessionLookFields({
   autoFocus?: boolean;
   /** Fields of the caller's own, shown under the length, icon and color. */
   afterLength?: ReactNode;
+  /** The longest it may be made; on the schedule, the time free before the next session. */
+  maxMinutes?: number;
 }) {
   const set = <K extends keyof SessionLook>(key: K, v: SessionLook[K]) => onChange({ ...value, [key]: v });
-  const step = (by: number) => set("minutes", snapMinutes(value.minutes + by));
+  const step = (by: number) => set("minutes", Math.min(maxMinutes, snapMinutes(value.minutes + by)));
 
   return (
     <div className="grid gap-4">
@@ -108,7 +111,7 @@ export function SessionLookFields({
           <button
             type="button"
             aria-label="15 minutes longer"
-            disabled={value.minutes >= SCHEDULE_LIMITS.maxMinutes}
+            disabled={value.minutes >= maxMinutes}
             onClick={() => step(SCHEDULE_LIMITS.slot)}
             className="flex size-9 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40"
           >

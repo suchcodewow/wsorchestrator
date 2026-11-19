@@ -13,7 +13,9 @@ export default async function SurveyResultsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const query = parseListQuery(await searchParams, SURVEY_RESULT_LIST);
-  const [page, superlatives] = await Promise.all([listSurveyResults(query), listSuperlativeResults()]);
-  return <SurveyResultsView query={query} page={page} superlatives={superlatives} />;
+  const params = await searchParams;
+  const query = parseListQuery(params, SURVEY_RESULT_LIST);
+  const today = params.today === "1";
+  const [page, superlatives] = await Promise.all([listSurveyResults(query, today), listSuperlativeResults()]);
+  return <SurveyResultsView query={query} today={today} page={page} superlatives={superlatives} />;
 }
