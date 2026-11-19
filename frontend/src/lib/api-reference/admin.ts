@@ -2808,7 +2808,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "A survey is listed once it has at least one response. average is the mean of the day-overall ratings; Survey Results shows it to one decimal place. date is the day the survey is about. Sorting by date puts the latest day first by default.",
+          "A survey is listed once it has at least one response. average is the mean of the day-overall ratings; Survey Results shows it to one decimal place. date is the day the survey is about. Sorting by date puts the latest day first by default. today=1 keeps only the survey about today (UTC).",
         query: listQuery(SURVEY_RESULT_LIST.sorts, 'the bootcamp\'s month and the group, as in "November 2026 Bootcamp Sales"', "desc"),
         returns: `{ surveys: ${SURVEY_CARD_SHAPE}[], ${PAGE_FIELDS} }`,
       },

@@ -8,22 +8,71 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Pager, TableSearch } from "@/components/data-table";
+import { Pager, TableSearch, useListParams } from "@/components/data-table";
+import { cn } from "@/lib/utils";
 import type { SurveyResultSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { SurveyResultCard } from "@/lib/surveys/surveys";
-import { formatAverage, surveyDate, surveyGroupLabel, surveyMonth } from "@/lib/surveys/survey-values";
+import { formatAverage, surveyGroupLabel, surveyMonth } from "@/lib/surveys/survey-values";
 
-export function SurveyResultsView({ query, page }: { query: ListQuery<SurveyResultSort>; page: Page<SurveyResultCard> }) {
+/** A small ring filled to `percent`. */
+function CompletionRing({ percent }: { percent: number }) {
+  const r = 9;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg viewBox="0 0 24 24" className="size-6 -rotate-90" role="img" aria-label={`${Math.round(percent)}% answered`}>
+      <circle cx="12" cy="12" r={r} fill="none" strokeWidth="3" className="stroke-muted" />
+      <circle
+        cx="12"
+        cy="12"
+        r={r}
+        fill="none"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={c * (1 - Math.min(Math.max(percent, 0), 100) / 100)}
+        className="stroke-brand"
+      />
+    </svg>
+  );
+}
+
+export function SurveyResultsView({
+  query,
+  today,
+  page,
+}: {
+  query: ListQuery<SurveyResultSort>;
+  today: boolean;
+  page: Page<SurveyResultCard>;
+}) {
+  const { set } = useListParams();
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.h1 variants={riseChild} className="text-3xl font-medium tracking-tight">
         Survey Results
       </motion.h1>
 
-      <motion.div variants={riseChild}>
+      <motion.div variants={riseChild} className="flex flex-wrap items-center gap-4">
         <TableSearch value={query.q} placeholder="Search by month or group" label="Search survey results" className="max-w-md" />
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={today}
+            onClick={() => set({ today: today ? null : "1" })}
+            className={cn(
+              "relative h-5 w-9 rounded-full border transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+              today ? "border-brand bg-brand" : "bg-muted",
+            )}
+          >
+            <span
+              className={cn("absolute top-0.5 size-3.5 rounded-full bg-white shadow transition-all", today ? "left-[1.1rem]" : "left-0.5")}
+            />
+          </button>
+          Today only
+        </label>
       </motion.div>
 
       {page.rows.length === 0 ? (
@@ -41,18 +90,16 @@ export function SurveyResultsView({ query, page }: { query: ListQuery<SurveyResu
                 <div className="space-y-0.5">
                   <p className="text-xs text-muted-foreground">{surveyMonth(r.startDate)}</p>
                   <p className="font-medium group-hover:underline">{surveyGroupLabel(r.stage, r.audience)}</p>
-                  <p className="text-sm text-muted-foreground">
-                    Day {r.day} · {surveyDate(r.date)}
-                  </p>
+                  <p className="text-sm text-muted-foreground">Day {r.day}</p>
                 </div>
                 <div className="mt-auto flex items-end justify-between gap-3">
                   <div>
                     <p className="text-3xl font-medium tabular-nums">{formatAverage(r.average)}</p>
                     <p className="text-xs text-muted-foreground">Day overall, out of 5</p>
                   </div>
-                  <p className="text-right text-xs text-muted-foreground tabular-nums">
-                    {r.responses} of {r.assigned} answered
-                  </p>
+                  <div title={`${r.responses} of ${r.assigned} answered`}>
+                    <CompletionRing percent={r.assigned ? (r.responses / r.assigned) * 100 : 0} />
+                  </div>
                 </div>
               </Link>
             </motion.li>

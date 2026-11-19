@@ -11,7 +11,8 @@ export async function GET(req: Request) {
   const { error } = await requireCaller(req, canUseTraining);
   if (error) return error;
 
-  const query = parseListQuery(new URL(req.url).searchParams, SURVEY_RESULT_LIST);
-  const { rows, page, hasMore } = await listSurveyResults(query);
+  const params = new URL(req.url).searchParams;
+  const query = parseListQuery(params, SURVEY_RESULT_LIST);
+  const { rows, page, hasMore } = await listSurveyResults(query, params.get("today") === "1");
   return NextResponse.json({ surveys: rows, page, hasMore });
 }

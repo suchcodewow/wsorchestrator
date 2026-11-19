@@ -388,8 +388,8 @@ const RESULT_SORTS: Record<SurveyResultSort, ReturnType<typeof sql>> = {
   responses,
 };
 
-/** The daily surveys anyone has answered, a page at a time. */
-export async function listSurveyResults(query: ListQuery<SurveyResultSort>): Promise<Page<SurveyResultCard>> {
+/** The daily surveys anyone has answered, a page at a time; `today` keeps only the one about today (UTC). */
+export async function listSurveyResults(query: ListQuery<SurveyResultSort>, today = false): Promise<Page<SurveyResultCard>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({
@@ -407,7 +407,12 @@ export async function listSurveyResults(query: ListQuery<SurveyResultSort>): Pro
     .from(s)
     .innerJoin(bootcamps, eq(bootcamps.id, s.bootcampId))
     .innerJoin(a, eq(a.surveyId, s.id))
-    .where(searchAny(query.q, [resultText]))
+    .where(
+      and(
+        searchAny(query.q, [resultText]),
+        today ? sql`${bootcamps.startDate} + ${s.day} - 1 = ${new Date().toISOString().slice(0, 10)}::date` : undefined,
+      ),
+    )
     .groupBy(s.id, bootcamps.startDate)
     .having(sql`count(${a.submittedAt}) > 0`)
     .orderBy(...orderFor(RESULT_SORTS[query.sort], query.dir, sql`${bootcamps.startDate} desc`, s.day, s.stage, s.audience))
