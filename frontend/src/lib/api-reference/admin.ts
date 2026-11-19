@@ -1286,7 +1286,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "platform",
         token: true,
         notes:
-          "One switch, on Admin Settings → External Connectors, and a dry run until someone turns it live. In a dry run the cohort Slack sync (POST /api/cohorts/slack/sync) logs the channels it would create, the people it would invite and remove and the reminders it would send; the daily survey announcement is not posted; the Live Sessions Slack button (POST /api/reporting/bootcamp/people/{key}/slack) answers dry_run; and a release logs the message it would send (GET /api/reporting/release-notices/{id}). QA shares production's Slack workspace, so leave QA in dry run.",
+          "One switch, on Admin Settings → External Connectors, and a dry run until someone turns it live. In a dry run the cohort Slack sync (POST /api/cohorts/slack/sync) logs the channels it would create, the people it would invite and remove and the reminders it would send; the daily survey and Bootcamp superlatives announcements are not posted; the Live Sessions Slack button (POST /api/reporting/bootcamp/people/{key}/slack) answers dry_run; and a release logs the message it would send (GET /api/reporting/release-notices/{id}). QA shares production's Slack workspace, so leave QA in dry run.",
         body: {
           kind: "json",
           fields: [{ name: "live", type: "boolean", required: true, note: "true to change Slack and send messages, false for a dry run" }],
