@@ -1,6 +1,7 @@
 /**
  * Claude's read of one filed transcript against the assessment's criteria: a
- * short note per criterion, which the scoring form appends to its comments.
+ * short note per criterion and the overall feedback, which the scoring form appends
+ * to its comments and feedback boxes.
  * Nothing is saved; the judge saves the form as usual.
  */
 
@@ -58,5 +59,9 @@ export const POST = audited(async function POST(req: Request, { params }: Params
     return NextResponse.json({ error: result.error }, { status: REVIEW_STATUS_FOR[result.error] });
   }
   noteAudit({ detail: { criteria: criteria.length, comments: result.comments.length } });
-  return NextResponse.json({ comments: result.comments });
+  return NextResponse.json({
+    comments: result.comments,
+    positiveFeedback: result.positiveFeedback,
+    constructiveFeedback: result.constructiveFeedback,
+  });
 });
