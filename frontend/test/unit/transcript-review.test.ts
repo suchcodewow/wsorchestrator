@@ -47,11 +47,20 @@ describe("reviewSchema", () => {
   const schema = reviewSchema([criteria[0]!.id, criteria[1]!.id]);
 
   test("takes a note for a criterion it was given", () => {
-    assert.ok(schema.safeParse({ comments: [{ criterionId: criteria[0]!.id, summary: "Asked well." }] }).success);
+    assert.ok(
+      schema.safeParse({
+        comments: [{ criterionId: criteria[0]!.id, summary: "Asked well." }],
+        positiveFeedback: "You asked well.",
+        constructiveFeedback: "",
+      }).success,
+    );
   });
 
   test("refuses a criterion it was not given", () => {
-    assert.ok(!schema.safeParse({ comments: [{ criterionId: "nope", summary: "Asked well." }] }).success);
+    assert.ok(
+      !schema.safeParse({ comments: [{ criterionId: "nope", summary: "Asked well." }], positiveFeedback: "", constructiveFeedback: "" })
+        .success,
+    );
   });
 });
 
