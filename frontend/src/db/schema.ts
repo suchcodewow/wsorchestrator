@@ -1047,8 +1047,6 @@ export const EVALS_SETTINGS_KEYS = {
   meetingEmailInvites: "meeting_email_invites",
   /** JSON `{ email, fullName }[]`, at most `MEETING_FACILITATORS_MAX`: who the sync adds to each occurrence a cohort member is on. */
   meetingFacilitators: "meeting_facilitators",
-  /** JSON `ParticipationBands`: the net marks each participation score starts at. See `lib/evals/participation-values.ts`. */
-  participationBands: "participation_bands",
 } as const;
 
 /** Most people the Google Meetings sync adds to every occurrence. */

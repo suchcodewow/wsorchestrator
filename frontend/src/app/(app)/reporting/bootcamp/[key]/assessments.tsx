@@ -8,9 +8,9 @@
  * With Edit on, each opens to a form and an Assessments Administrator corrects
  * any of it in place; Save Changes saves every form changed, and Discard drops
  * them all. One with no criteria, as the old bootcamp history left, has its
- * score set directly. The running bootcamp's Participation
- * assessment shows its marks, and with Edit on they move as they do in the
- * popup, taking a generated score with them.
+ * score set directly. A Participation assessment's score is set by hand on
+ * four buttons, never from its marks; the running bootcamp's shows its marks
+ * too, and with Edit on they move as they do in the popup.
  */
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
@@ -22,6 +22,7 @@ import { ParticipationMarks } from "@/components/participation/participation-dia
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { BOOTCAMP_EXAM, BOOTCAMP_SCORE, EVALS_ASSESSMENT_LIMITS } from "@/db/schema";
+import { DEFAULT_PARTICIPATION_SCORE } from "@/lib/evals/participation-values";
 import {
   CONSTRUCTIVE_REQUIRED_NOTE,
   CRITERION_SCORES,
@@ -301,7 +302,16 @@ function ClassGroup({
 /** Marks are kept only for the running bootcamp, so only its Participation assessment has any to show. */
 const hasMarks = (s: ViewSubmission) => s.builtIn === "participation" && s.bootcamp.status === "active";
 
-function SubmissionHeading({ submission: s, average }: { submission: ViewSubmission; average: number | null }) {
+function SubmissionHeading({
+  submission: s,
+  average,
+  action,
+}: {
+  submission: ViewSubmission;
+  average: number | null;
+  /** Beside the score, such as the buttons that set it. */
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0 space-y-0.5">
@@ -310,7 +320,10 @@ function SubmissionHeading({ submission: s, average }: { submission: ViewSubmiss
           {s.ownerName ?? "Unknown judge"} · {formatWhen(s.updatedAt)}
         </p>
       </div>
-      <span className="text-xl font-medium tabular-nums">{formatScore(average)}</span>
+      <div className="flex items-center gap-3">
+        {action}
+        <span className="text-xl font-medium tabular-nums">{formatScore(average)}</span>
+      </div>
     </div>
   );
 }
@@ -322,12 +335,14 @@ function SubmissionHeading({ submission: s, average }: { submission: ViewSubmiss
 function Collapsible({
   submission: s,
   average,
+  action,
   open,
   onToggle,
   children,
 }: {
   submission: ViewSubmission;
   average: number | null;
+  action?: React.ReactNode;
   open: boolean;
   onToggle: () => void;
   children: React.ReactNode;
@@ -350,7 +365,7 @@ function Collapsible({
           <ChevronRight className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-90")} />
         </button>
         <div className="min-w-0 flex-1">
-          <SubmissionHeading submission={s} average={average} />
+          <SubmissionHeading submission={s} average={average} action={action} />
         </div>
       </div>
       <div id={detailsId} hidden={!open} className="space-y-4 px-5 pb-4">
@@ -439,20 +454,19 @@ function SubmissionForm({
   const [constructive, setConstructive] = useState(s.constructiveFeedback);
   // An assessment with no criteria, as the old bootcamp history left, takes its score as typed.
   const direct = s.scores.length === 0;
-  const [typed, setTyped] = useState(s.averageScore === null ? "" : String(s.averageScore));
-  // A Participation score comes from its marks, as an average comes from its criteria; before Generate gives it
-  // one, saving gives it the score its marks make now.
-  const [marksScore, setMarksScore] = useState<number | null>(null);
-  const fromMarks = hasMarks(s) && (s.averageScore !== null || marksScore !== null);
+  // Participation's score is picked by hand on the 1 to 4 buttons, since marks never move it; one still blank is a 3.
+  const picked = s.builtIn === "participation";
+  const [typed, setTyped] = useState(
+    s.averageScore === null ? (picked ? String(DEFAULT_PARTICIPATION_SCORE) : "") : String(s.averageScore),
+  );
 
-  const typedScore = fromMarks ? (s.averageScore ?? marksScore!) : Number(typed);
+  const typedScore = Number(typed);
   const typedValid =
-    fromMarks ||
-    (typed.trim() !== "" &&
-      Number.isFinite(typedScore) &&
-      typedScore >= BOOTCAMP_SCORE.min &&
-      typedScore <= BOOTCAMP_SCORE.max &&
-      Number(typedScore.toFixed(1)) === typedScore);
+    typed.trim() !== "" &&
+    Number.isFinite(typedScore) &&
+    typedScore >= BOOTCAMP_SCORE.min &&
+    typedScore <= BOOTCAMP_SCORE.max &&
+    Number(typedScore.toFixed(1)) === typedScore;
   const average = direct ? (typedValid ? typedScore : null) : averageScore(scores.map((c) => c.score));
   const needed = direct || average === null ? null : requiredFeedback(wholeScore(average));
   const missing =
@@ -478,11 +492,35 @@ function SubmissionForm({
   }
 
   return (
-    <Collapsible submission={s} average={average} open={open} onToggle={onToggle}>
-      {hasMarks(s) && open && (
-        <ParticipationMarks employeeId={personKey} stage={s.stage} onMoved={() => router.refresh()} onScore={setMarksScore} />
-      )}
-      {direct && !fromMarks && (
+    <Collapsible
+      submission={s}
+      average={average}
+      open={open}
+      onToggle={onToggle}
+      action={
+        picked && (
+          <div role="radiogroup" aria-label="Participation score" onClick={(ev) => ev.stopPropagation()} className="flex gap-1.5">
+            {CRITERION_SCORES.map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={typedScore === n}
+                onClick={() => setTyped(String(n))}
+                className={cn(
+                  "flex size-8 items-center justify-center rounded-md border text-sm font-medium transition-colors",
+                  typedScore === n ? "border-brand bg-brand text-brand-foreground" : "border-input bg-field hover:bg-muted/50",
+                )}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        )
+      }
+    >
+      {hasMarks(s) && open && <ParticipationMarks employeeId={personKey} stage={s.stage} onMoved={() => router.refresh()} />}
+      {direct && !picked && (
         <label className="flex flex-wrap items-center justify-between gap-3 text-sm">
           Score
           <Input
@@ -548,7 +586,7 @@ function SubmissionForm({
           note={needed === "constructive" ? CONSTRUCTIVE_REQUIRED_NOTE : null}
         />
       </div>
-      {direct && !typedValid && (
+      {direct && !picked && !typedValid && (
         <p className="text-sm text-muted-foreground">
           Scores run from {BOOTCAMP_SCORE.min} to {BOOTCAMP_SCORE.max}, to one decimal place.
         </p>

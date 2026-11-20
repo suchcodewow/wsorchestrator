@@ -11,10 +11,11 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, Loader2, Pencil, Save, Undo2 } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, Pencil, Save, Undo2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { riseChild, staggerParent } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import type { PersonEmployee, PersonReview, PersonSubmission } from "@/lib/reporting/bootcamp";
 import type { ClassSummary, ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import type { PersonCoachCanary, PersonDiagnostic } from "@/lib/reporting/person-training";
@@ -42,6 +43,23 @@ export type ViewPerson = {
   coachCanary: PersonCoachCanary | null;
 };
 
+/** One of the previous/next buttons; dimmed and inert at the end of the list. */
+function StepLink({ href, label, Icon }: { href: string | null; label: string; Icon: LucideIcon }) {
+  const style = "inline-flex size-8 items-center justify-center rounded-lg border bg-card text-muted-foreground shadow-sm";
+  if (!href) {
+    return (
+      <span aria-label={label} aria-disabled="true" className={cn(style, "opacity-40")}>
+        <Icon className="size-4" />
+      </span>
+    );
+  }
+  return (
+    <Link href={href} aria-label={label} title={label} className={cn(style, "transition-colors hover:text-foreground")}>
+      <Icon className="size-4" />
+    </Link>
+  );
+}
+
 /** Records, once per opening, that the reader opened this card: the eye on the list names them. */
 function useRecordView(key: string) {
   const recorded = useRef<string | null>(null);
@@ -52,7 +70,18 @@ function useRecordView(key: string) {
   }, [key]);
 }
 
-export function PersonView({ person, canEdit, back }: { person: ViewPerson; canEdit: boolean; back: string }) {
+export function PersonView({
+  person,
+  canEdit,
+  back,
+  steps,
+}: {
+  person: ViewPerson;
+  canEdit: boolean;
+  back: string;
+  /** The previous and next person in the table they were opened from, or null at an end. */
+  steps: { prev: string | null; next: string | null };
+}) {
   const { employee, records } = person;
   useRecordView(person.key);
   const [editing, setEditing] = useState(false);
@@ -71,7 +100,7 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-4xl space-y-6">
-      <motion.div variants={riseChild}>
+      <motion.div variants={riseChild} className="flex items-center justify-between gap-4">
         <Link
           href={back}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -79,6 +108,12 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
           <ArrowLeft className="size-3.5" />
           Live Sessions
         </Link>
+        {(steps.prev || steps.next) && (
+          <div className="flex gap-1">
+            <StepLink href={steps.prev} label="Previous person" Icon={ChevronLeft} />
+            <StepLink href={steps.next} label="Next person" Icon={ChevronRight} />
+          </div>
+        )}
       </motion.div>
 
       <motion.div variants={staggerParent(0.04)} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
