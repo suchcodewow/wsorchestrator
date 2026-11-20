@@ -6,8 +6,8 @@
  * criterion's score and comment and both feedback boxes, each closed until
  * opened.
  * With Edit on, each opens to a form and an Assessments Administrator corrects
- * any of it in place; Save Changes saves every form changed, and Discard drops
- * them all. One with no criteria, as the old bootcamp history left, has its
+ * any of it in place; every form saves itself a moment after a change, and
+ * Close saves whatever is still waiting. One with no criteria, as the old bootcamp history left, has its
  * score set directly. A Participation assessment's score is set by hand on
  * four buttons, never from its marks; the running bootcamp's shows its marks
  * too, and with Edit on they move as they do in the popup.
@@ -45,11 +45,15 @@ const SAVE_ERRORS: Record<string, string> = {
   not_found: "This has been removed.",
 };
 
-/** Saves `body` to `url`, keeping the error to show, if any; the edit session reloads the page's data once all are in. */
+/**
+ * Saves `body` to `url`, keeping the error to show, if any. It returns the
+ * `updatedAt` the server gave the saved version, which the next save revises,
+ * or null when it failed; the page's data reloads when editing closes.
+ */
 function useSave() {
   const [error, setError] = useState<string | null>(null);
 
-  async function save(url: string, body: unknown, method: "PATCH" | "PUT" = "PATCH"): Promise<boolean> {
+  async function save(url: string, body: unknown, method: "PATCH" | "PUT" = "PATCH"): Promise<string | null> {
     setError(null);
     try {
       const res = await fetch(url, {
@@ -60,12 +64,13 @@ function useSave() {
       if (!res.ok) {
         const { error: code } = (await res.json().catch(() => ({}))) as { error?: string };
         setError((code && SAVE_ERRORS[code]) || `Could not save (${res.status})`);
-        return false;
+        return null;
       }
-      return true;
+      const out = (await res.json().catch(() => ({}))) as { submission?: { updatedAt?: string }; review?: { updatedAt?: string } };
+      return out.submission?.updatedAt ?? out.review?.updatedAt ?? null;
     } catch {
       setError("Could not save");
-      return false;
+      return null;
     }
   }
 
@@ -78,9 +83,9 @@ type PendingEdit = { valid: boolean; save: () => Promise<boolean> };
 const EditRegistry = createContext<((id: string, edit: PendingEdit | null) => void) | null>(null);
 
 /**
- * The Administration View's one save: every form with changes registers here,
- * and `saveAll` saves each in turn, then reloads the page's data once. A form
- * that cannot be saved as it stands holds up all of them.
+ * The Administration View's forms save themselves; each with changes still
+ * waiting registers here, and `saveAll`, which Close runs, saves each in turn.
+ * A form that cannot be saved as it stands holds up closing.
  */
 export function useEditSession() {
   const router = useRouter();
@@ -109,7 +114,7 @@ export function useEditSession() {
     let failed = 0;
     for (const edit of list) if (!(await edit.save())) failed++;
     setSaving(false);
-    if (list.length > 0) router.refresh();
+    router.refresh();
     if (failed > 0) {
       setProblem(`${failed} of ${list.length} could not be saved; each says why.`);
       return false;
@@ -122,21 +127,48 @@ export function useEditSession() {
 
 export const EditSessionProvider = EditRegistry.Provider;
 
+/** How long after the last change a form saves itself. */
+const AUTOSAVE_MS = 800;
+
 /**
- * Tells the edit session whether this form has changes, and how to save them.
- * `save` is read when Save Changes runs, so it may change every render.
+ * Tells the edit session whether this form has changes, and saves them
+ * `AUTOSAVE_MS` after the last one, while they are valid; Close saves any
+ * still waiting. `save` is read when it runs, so it may change every render,
+ * and `snapshot` names the form's current values, so a change restarts the
+ * wait. One save runs at a time per form, and one that failed is not retried
+ * until something changes again.
  */
-function usePendingEdit(id: string, changed: boolean, valid: boolean, save: () => Promise<boolean>) {
+function usePendingEdit(id: string, changed: boolean, valid: boolean, snapshot: string, save: () => Promise<boolean>) {
   const register = useContext(EditRegistry);
   const saveRef = useRef(save);
+  const running = useRef<Promise<boolean> | null>(null);
   useEffect(() => {
     saveRef.current = save;
   });
+  const run = useCallback(async (): Promise<boolean> => {
+    while (running.current) await running.current;
+    const now = saveRef.current();
+    running.current = now.finally(() => {
+      running.current = null;
+    });
+    return now;
+  }, []);
   useEffect(() => {
     if (!register) return;
-    register(id, changed ? { valid, save: () => saveRef.current() } : null);
+    register(id, changed ? { valid, save: run } : null);
     return () => register(id, null);
-  }, [register, id, changed, valid]);
+  }, [register, id, changed, valid, run]);
+  useEffect(() => {
+    if (!changed || !valid) return;
+    const timer = setTimeout(() => void run(), AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [changed, valid, snapshot, run]);
+}
+
+/** The later of two `updatedAt` versions, which is the one a save must revise. */
+function latestVersion(a: string | null, b: string | null): string | null {
+  if (a === null || b === null) return a ?? b;
+  return Date.parse(a) >= Date.parse(b) ? a : b;
 }
 
 /**
@@ -274,7 +306,7 @@ function ClassGroup({
       <div id={bodyId} hidden={!open} className="divide-y">
         {editing ? (
           <ClassReviewForm
-            key={review?.updatedAt ?? "new"}
+            key="review"
             personKey={personKey}
             bootcampId={first.bootcamp.id}
             stage={first.stage}
@@ -418,22 +450,10 @@ function SubmissionRow({ submission: s, personKey }: { submission: ViewSubmissio
   );
 }
 
-/**
- * Holds whether the form is open, so saving, which rebuilds the form from what
- * was saved, leaves it open. A move of a mark saves at once, so a form with
- * marks is not rebuilt, or it would lose the comments being typed.
- */
+/** Holds whether the form is open. A form is never rebuilt while editing, so what is being typed survives each save. */
 function EditableSubmission({ submission: s, personKey }: { submission: ViewSubmission; personKey: string }) {
   const [open, setOpen] = useState(false);
-  return (
-    <SubmissionForm
-      key={hasMarks(s) ? "marks" : s.updatedAt}
-      submission={s}
-      personKey={personKey}
-      open={open}
-      onToggle={() => setOpen((was) => !was)}
-    />
-  );
+  return <SubmissionForm submission={s} personKey={personKey} open={open} onToggle={() => setOpen((was) => !was)} />;
 }
 
 function SubmissionForm({
@@ -452,6 +472,16 @@ function SubmissionForm({
   const [scores, setScores] = useState(() => s.scores.map((c) => ({ ...c })));
   const [positive, setPositive] = useState(s.positiveFeedback);
   const [constructive, setConstructive] = useState(s.constructiveFeedback);
+  // What was last saved, which changes are measured against, and the version the next save revises.
+  const [base, setBase] = useState(() => ({
+    scores: s.scores.map((c) => ({ ...c })),
+    positive: s.positiveFeedback,
+    constructive: s.constructiveFeedback,
+    averageScore: s.averageScore,
+  }));
+  const revised = useRef(s.updatedAt);
+  // A blank Participation score shows as a 3 but is only saved once someone picks one.
+  const [touched, setTouched] = useState(false);
   // An assessment with no criteria, as the old bootcamp history left, takes its score as typed.
   const direct = s.scores.length === 0;
   // Participation's score is picked by hand on the 1 to 4 buttons, since marks never move it; one still blank is a 3.
@@ -472,20 +502,26 @@ function SubmissionForm({
   const missing =
     (direct && !typedValid) || (needed === "positive" && !positive.trim()) || (needed === "constructive" && !constructive.trim());
   const changed =
-    positive !== s.positiveFeedback ||
-    constructive !== s.constructiveFeedback ||
-    (direct && typedScore !== s.averageScore) ||
-    scores.some((c, i) => c.score !== s.scores[i]!.score || c.comment !== s.scores[i]!.comment);
+    positive !== base.positive ||
+    constructive !== base.constructive ||
+    (direct && touched && typedScore !== base.averageScore) ||
+    scores.some((c, i) => c.score !== base.scores[i]!.score || c.comment !== base.scores[i]!.comment);
 
-  usePendingEdit(`submission-${s.id}`, changed, !missing, () =>
-    save(`/api/reporting/bootcamp/submissions/${s.id}`, {
+  usePendingEdit(`submission-${s.id}`, changed, !missing, JSON.stringify([scores, positive, constructive, typed]), async () => {
+    const sent = { scores, positive, constructive, averageScore: direct ? typedScore : base.averageScore };
+    const saved = await save(`/api/reporting/bootcamp/submissions/${s.id}`, {
       scores: scores.map(({ criterionId, score, comment }) => ({ criterionId, score, comment })),
       positiveFeedback: positive,
       constructiveFeedback: constructive,
       ...(direct && { averageScore: typedScore }),
-      revises: s.updatedAt,
-    }),
-  );
+      // A mark moved in the popup also saves the assessment, so the page's own version may be the later one.
+      revises: latestVersion(revised.current, s.updatedAt),
+    });
+    if (saved === null) return false;
+    revised.current = saved;
+    setBase({ ...sent, scores: sent.scores.map((c) => ({ ...c })) });
+    return true;
+  });
 
   function set(i: number, change: Partial<{ score: number; comment: string }>) {
     setScores((all) => all.map((c, j) => (j === i ? { ...c, ...change } : c)));
@@ -506,7 +542,10 @@ function SubmissionForm({
                 type="button"
                 role="radio"
                 aria-checked={typedScore === n}
-                onClick={() => setTyped(String(n))}
+                onClick={() => {
+                  setTouched(true);
+                  setTyped(String(n));
+                }}
                 className={cn(
                   "flex size-8 items-center justify-center rounded-md border text-sm font-medium transition-colors",
                   typedScore === n ? "border-brand bg-brand text-brand-foreground" : "border-input bg-field hover:bg-muted/50",
@@ -531,7 +570,10 @@ function SubmissionForm({
             step={0.1}
             value={typed}
             aria-invalid={!typedValid}
-            onChange={(e) => setTyped(e.target.value)}
+            onChange={(e) => {
+              setTouched(true);
+              setTyped(e.target.value);
+            }}
             className="w-24 shrink-0"
           />
         </label>
@@ -699,10 +741,10 @@ const SUGGEST_ERRORS: Record<string, string> = {
 };
 
 /**
- * A class's overall feedback and both exams, as an administrator enters them;
- * saving rebuilds it from what was saved. Each feedback box's sparkle has
+ * A class's overall feedback and both exams, as an administrator enters them,
+ * saved as they type. Each feedback box's sparkle has
  * Claude sum up that side of every assessment's saved feedback into the box,
- * for the administrator to edit and save.
+ * for the administrator to edit; it saves like anything typed.
  */
 function ClassReviewForm({
   personKey,
@@ -729,16 +771,26 @@ function ClassReviewForm({
   const entrance = parseExam(entranceTyped);
   const exit = parseExam(exitTyped);
   const valid = !Number.isNaN(entrance) && !Number.isNaN(exit);
+  // What was last saved, which changes are measured against, and the version the next save revises.
+  const [base, setBase] = useState({
+    positive: review?.positiveFeedback ?? "",
+    constructive: review?.constructiveFeedback ?? "",
+    notes: review?.otherNotes ?? "",
+    entrance: review?.entranceExam ?? null,
+    exit: review?.exitExam ?? null,
+  });
+  const revised = useRef(review?.updatedAt ?? null);
   const changed =
-    positive !== (review?.positiveFeedback ?? "") ||
-    constructive !== (review?.constructiveFeedback ?? "") ||
-    notes !== (review?.otherNotes ?? "") ||
-    entrance !== (review?.entranceExam ?? null) ||
-    exit !== (review?.exitExam ?? null);
+    positive !== base.positive ||
+    constructive !== base.constructive ||
+    notes !== base.notes ||
+    entrance !== base.entrance ||
+    exit !== base.exit;
   const id = `${bootcampId}-${stage}`;
 
-  usePendingEdit(`review-${id}`, changed, valid, () =>
-    save(
+  usePendingEdit(`review-${id}`, changed, valid, JSON.stringify([positive, constructive, notes, entranceTyped, exitTyped]), async () => {
+    const sent = { positive, constructive, notes, entrance, exit };
+    const saved = await save(
       `/api/reporting/bootcamp/people/${encodeURIComponent(personKey)}/review`,
       {
         bootcampId,
@@ -748,11 +800,15 @@ function ClassReviewForm({
         otherNotes: notes,
         entranceExam: entrance,
         exitExam: exit,
-        revises: review?.updatedAt ?? null,
+        revises: revised.current,
       },
       "PUT",
-    ),
-  );
+    );
+    if (saved === null) return false;
+    revised.current = saved;
+    setBase(sent);
+    return true;
+  });
 
   async function suggest(side: OverallSide) {
     setWriting(side);
