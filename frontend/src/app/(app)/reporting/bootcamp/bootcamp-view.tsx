@@ -255,7 +255,12 @@ export function BootcampView({
   const stageFilter = useToggleFilter(`${BOOTCAMP_COHORT_PREFIX}.stage`, `${BOOTCAMP_COHORT_PREFIX}.page`);
   // A person's page links back to the list as it is now: search, sorts, pages and filters.
   const listParams = useSearchParams().toString();
-  const hrefFor = (key: string) => `/reporting/bootcamp/${encodeURIComponent(key)}${listParams ? `?${listParams}` : ""}`;
+  // `from` names the table a row was opened from, so the person's page can step to the next and previous in it.
+  const hrefIn = (from: "cohort" | "history") => (key: string) => {
+    const params = new URLSearchParams(listParams);
+    params.set("from", from);
+    return `/reporting/bootcamp/${encodeURIComponent(key)}?${params}`;
+  };
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-4xl space-y-6">
@@ -308,7 +313,7 @@ export function BootcampView({
             prefix={BOOTCAMP_COHORT_PREFIX}
             rows={cohort.page.rows.map((m) => ({ ...m, level: m.stage }))}
             page={cohort.page}
-            hrefFor={hrefFor}
+            hrefFor={hrefIn("cohort")}
             empty={
               query.q || cohort.stage
                 ? "No one in the cohort matches."
@@ -329,7 +334,7 @@ export function BootcampView({
           query={query}
           rows={records.rows}
           page={records}
-          hrefFor={hrefFor}
+          hrefFor={hrefIn("history")}
           empty={
             query.q || status
               ? "No one matches."
