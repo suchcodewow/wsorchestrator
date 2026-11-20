@@ -1,7 +1,8 @@
 /**
  * Claude's read of one transcript against the criteria a judge scores. It
  * writes a short note per criterion, which the scoring form appends to that
- * criterion's comment; it gives no score and nothing is saved here. The judge
+ * criterion's comment, and the overall positive and constructive feedback, which
+ * it appends the same way; it gives no score and nothing is saved here. The judge
  * reads, edits and saves the form as usual.
  *
  * Only the transcript and the assessment's own wording are sent. The reply is
@@ -53,6 +54,8 @@ export function reviewConfigured(): boolean {
 
 const SYSTEM = `You help a judge score an attendee's assessment at a Harness training bootcamp. You are given the transcript of a recording the judge made while the attendee was assessed, and the criteria the judge scores them on.
 
+Then write the attendee's overall feedback, which is sent to them: a short paragraph on what they did well (positiveFeedback) and a short paragraph on what to work on (constructiveFeedback), each in the second person, kind and specific, drawn from the transcript. If the transcript gives nothing for one side, leave that string empty rather than inventing it.
+
 For each criterion, write a short note the judge can keep in that criterion's comment field: one or two sentences on what the attendee did, or failed to do, that bears on it. Ground every note in what the transcript actually says, and point to a specific moment where that helps. If nothing in the transcript bears on a criterion, say so in a few words instead of guessing. Do not give a score or a verdict on the whole assessment.
 
 Write about the attendee in the third person, in plain text: no Markdown, no heading, and do not repeat the criterion's name.
@@ -74,15 +77,17 @@ export function buildReviewPrompt(req: ReviewRequest): { system: string; user: s
     `<attendee>${escape(req.attendeeName)}</attendee>`,
     `<criteria>\n${criteria}\n</criteria>`,
     `<transcript>\n${escape(req.transcript.trim())}\n</transcript>`,
-    "Write one note for each criterion above, by its id.",
+    "Write one note for each criterion above, by its id, then the overall positive and constructive feedback.",
   ].join("\n\n");
   return { system: SYSTEM, user };
 }
 
-/** The reply's shape: a note per criterion, each naming one of `ids`. */
+/** The reply's shape: a note per criterion, each naming one of `ids`, and the two overall feedback paragraphs. */
 export function reviewSchema(ids: [string, ...string[]]) {
   return z.object({
     comments: z.array(z.object({ criterionId: z.enum(ids), summary: z.string() })),
+    positiveFeedback: z.string(),
+    constructiveFeedback: z.string(),
   });
 }
 
@@ -113,10 +118,13 @@ let client: Anthropic | null = null;
  */
 export async function reviewTranscript(
   req: ReviewRequest,
-): Promise<{ ok: true; comments: ReviewComment[] } | { ok: false; error: ReviewError; detail?: string }> {
+): Promise<
+  | { ok: true; comments: ReviewComment[]; positiveFeedback: string; constructiveFeedback: string }
+  | { ok: false; error: ReviewError; detail?: string }
+> {
   if (!reviewConfigured()) return { ok: false, error: "unconfigured" };
   const [first, ...rest] = req.criteria.map((c) => c.id);
-  if (!first) return { ok: true, comments: [] };
+  if (!first) return { ok: true, comments: [], positiveFeedback: "", constructiveFeedback: "" };
 
   client ??= new Anthropic();
   const format = betaZodOutputFormat(reviewSchema([first, ...rest]));
@@ -143,7 +151,13 @@ export async function reviewTranscript(
   if (message.stop_reason === "refusal") return { ok: false, error: "refused" };
   if (message.stop_reason === "max_tokens") return { ok: false, error: "upstream", detail: "max_tokens" };
   try {
-    return { ok: true, comments: readReview(format.parse(textOf(message.content)).comments, req.criteria) };
+    const read = format.parse(textOf(message.content));
+    return {
+      ok: true,
+      comments: readReview(read.comments, req.criteria),
+      positiveFeedback: read.positiveFeedback.trim(),
+      constructiveFeedback: read.constructiveFeedback.trim(),
+    };
   } catch (err) {
     return { ok: false, error: "upstream", detail: err instanceof Error ? err.message : String(err) };
   }

@@ -3124,7 +3124,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "Claude Opus 5.5 is sent the assessment's name, the attendee's name, every criterion still asked with its description, and the transcript; it is told not to score. Nothing is saved: the scoring form appends each summary on a new line of that criterion's comment, and the judge saves the form as usual. comments follows the order of the criteria, one per criterion at most; a criterion Claude wrote nothing for has none. Takes up to two minutes.",
+          "Claude Opus 5.5 is sent the assessment's name, the attendee's name, every criterion still asked with its description, and the transcript; it is told not to score. Nothing is saved: the scoring form appends each summary on a new line of that criterion's comment, and positiveFeedback and constructiveFeedback the same way to the overall feedback boxes, and the judge saves the form as usual. comments follows the order of the criteria, one per criterion at most; a criterion Claude wrote nothing for has none. Takes up to two minutes.",
         params: [
           { name: "assessmentId", type: "string", required: true, note: "UUID" },
           { name: "employeeId", type: "string", required: true, note: "the employee's HiBob id" },
@@ -3135,7 +3135,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             note: "UUID; the id of a transcript filed for them, not its recordingId",
           },
         ],
-        returns: "{ comments: { criterionId, summary }[] }",
+        returns: "{ comments: { criterionId, summary }[], positiveFeedback: string, constructiveFeedback: string }",
         errors: [
           {
             status: 404,

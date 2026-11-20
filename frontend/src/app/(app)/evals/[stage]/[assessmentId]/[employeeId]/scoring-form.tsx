@@ -15,9 +15,12 @@
  * waits for its transcript before it sends the scores.
  *
  * Once a recording's transcript is filed, the AI comments button has Claude read it
- * against every criterion and appends its note to each comment, on a new
- * line after whatever is there, between [AI start] and [AI END]. Nothing is
- * saved until Submit.
+ * against every criterion and appends its note to each comment, and its overall
+ * positive and constructive feedback to those boxes, on a new line after
+ * whatever is there, between [AI start] and [AI END]. Anyone who can score can
+ * do this with any transcript filed for the attendee, whoever recorded it; the
+ * Recording section lists the ones made on other computers beside this one's.
+ * Nothing is saved until Submit.
  */
 
 import { useState } from "react";
@@ -28,6 +31,7 @@ import { ArrowLeft, ClipboardList, FileText, Info, Loader2, Send } from "lucide-
 import { AiCommentsButton } from "@/components/ai-comments-button";
 import { MentionTextarea } from "@/components/mention-textarea";
 import { ParticipationGroupButton } from "@/components/participation/participation-dialog";
+import { useRecordings } from "@/components/recording/recording-list";
 import { RecordingPanel } from "@/components/recording/recording-panel";
 import { useLiveTranscript } from "@/components/recording/use-live-transcript";
 import { useRecorder } from "@/components/recording/use-recorder";
@@ -45,6 +49,7 @@ import {
 import type { ScoringForm } from "@/lib/evals/scoring";
 import { appendSummary, type ReviewComment } from "@/lib/evals/transcript-review-values";
 import { mentionsIn, type MentionPick } from "@/lib/mentions";
+import { formatDuration } from "@/lib/recording/format";
 import { evalSubject, type StoredRecording } from "@/lib/recording/store";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ActiveBootcamp } from "@/lib/scheduler/bootcamps";
@@ -117,6 +122,7 @@ export function ScoringFormView({
   const [review, setReview] = useState<{ error: boolean; text: string } | null>(null);
   const subject = evalSubject(assessment.id, attendee.id);
   const [recordingsVersion, setRecordingsVersion] = useState(0);
+  const { recordings: mine } = useRecordings(viewerId, subject, recordingsVersion);
   const transcripts = useAssessmentTranscripts({
     assessmentId: assessment.id,
     employeeId: attendee.id,
@@ -172,6 +178,13 @@ export function ScoringFormView({
         return;
       }
       const added = ((body?.comments ?? []) as ReviewComment[]).filter((c) => entries[c.criterionId]);
+      const positiveAdd = typeof body?.positiveFeedback === "string" ? body.positiveFeedback : "";
+      const constructiveAdd = typeof body?.constructiveFeedback === "string" ? body.constructiveFeedback : "";
+      const positiveNext = appendSummary(positive, positiveAdd, EVALS_ASSESSMENT_LIMITS.feedback);
+      const constructiveNext = appendSummary(constructive, constructiveAdd, EVALS_ASSESSMENT_LIMITS.feedback);
+      setPositive(positiveNext);
+      setConstructive(constructiveNext);
+      const overall = Number(positiveNext !== positive) + Number(constructiveNext !== constructive);
       setEntries((all) => {
         const next = { ...all };
         for (const { criterionId, summary } of added) {
@@ -185,9 +198,9 @@ export function ScoringFormView({
       setReview({
         error: false,
         text:
-          added.length === 0
+          added.length === 0 && overall === 0
             ? "Claude had nothing to add."
-            : `Claude added a note to ${added.length} of ${criteria.length} ${criteria.length === 1 ? "comment" : "comments"}. Read and edit them before you submit.`,
+            : `Claude added a note to ${added.length} of ${criteria.length} ${criteria.length === 1 ? "comment" : "comments"} and to ${overall} of 2 overall feedback boxes. Read and edit them before you submit.`,
       });
     } catch {
       setReview({ error: true, text: "Could not reach the server." });
@@ -208,6 +221,10 @@ export function ScoringFormView({
       />
     );
   }
+
+  // Transcripts filed from another computer, or by someone else, have no recording here to put the button beside.
+  const mineIds = new Set((mine ?? []).map((r) => r.id));
+  const others = transcripts.transcripts.filter((t) => !mineIds.has(t.recordingId));
 
   async function submit() {
     setBusy("saving");
@@ -389,6 +406,34 @@ export function ScoringFormView({
               onChanged={() => setRecordingsVersion((v) => v + 1)}
               actions={bootcamp ? askClaudeButton : undefined}
             />
+            {bootcamp && others.length > 0 && (
+              <ul className="divide-y rounded-lg border">
+                {others.map((t) => (
+                  <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm">
+                    <span className="font-medium">
+                      {new Date(t.recordedAt).toLocaleString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {formatDuration(t.durationMs)}
+                      {t.recordedByName && <> · {t.recordedByName}</>}
+                    </span>
+                    <div className="ml-auto">
+                      <AiCommentsButton
+                        pending={reviewing === t.recordingId}
+                        disabled={!t.text.trim() || reviewing !== null}
+                        reason={!t.text.trim() ? "Nothing was heard in this recording" : undefined}
+                        onClick={() => askClaude(t)}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
             {reviewing && (
               <p role="status" className="text-sm text-muted-foreground">
                 Claude is reading the transcript…
