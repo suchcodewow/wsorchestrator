@@ -37,6 +37,7 @@ import {
   type Employee,
   type EvalsBuiltInAssessment,
 } from "@/db/schema";
+import { getLiveSessionsSettings } from "@/lib/reporting/live-sessions-settings";
 import { averageScore, requiredFeedback, wholeScore } from "@/lib/evals/assessment-values";
 import { attended } from "@/lib/evals/attendance";
 import { assessedOn, assessedTrackOf, isCandidate } from "@/lib/evals/current-cohort";
@@ -748,7 +749,12 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
   };
   // Not released in classes, so every reader who may see the person sees them.
   const userId = await userIdOf(email);
-  const [diagnostic, coachCanary] = userId ? await Promise.all([getPersonDiagnostic(userId), getPersonCoachCanary(userId)]) : [null, null];
+  // Each section shows only while Reporting Settings → Live Sessions Settings has it on.
+  const shown = await getLiveSessionsSettings();
+  const [diagnostic, coachCanary] = await Promise.all([
+    userId && shown.diagnostic ? getPersonDiagnostic(userId) : null,
+    userId && shown.coachCanary ? getPersonCoachCanary(userId) : null,
+  ]);
   if (!reader.all) return { key, email, employee: employee ?? null, classes, records: null, diagnostic, coachCanary };
 
   const ids = visible.map((x) => x.id);

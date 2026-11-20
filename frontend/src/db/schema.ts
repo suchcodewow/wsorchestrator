@@ -1047,6 +1047,10 @@ export const EVALS_SETTINGS_KEYS = {
   meetingEmailInvites: "meeting_email_invites",
   /** JSON `{ email, fullName }[]`, at most `MEETING_FACILITATORS_MAX`: who the sync adds to each occurrence a cohort member is on. */
   meetingFacilitators: "meeting_facilitators",
+  /** `true` to show the Diagnostic section on a Live Sessions person's page; anything else hides it. */
+  liveSessionsDiagnostic: "live_sessions_diagnostic",
+  /** `true` to show the Coach Canary section on a Live Sessions person's page; anything else hides it. */
+  liveSessionsCoachCanary: "live_sessions_coach_canary",
 } as const;
 
 /** Most people the Google Meetings sync adds to every occurrence. */

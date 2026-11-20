@@ -376,6 +376,7 @@ const PAGES: Record<string, PageCase> = {
   "/reporting-settings/feedback": { path: () => "/reporting-settings/feedback", expect: gated(canManageBootcampRecords) },
   "/reporting-settings/feedback/<unknown>": { path: () => `/reporting-settings/feedback/${MISSING}`, expect: () => 404 },
   "/reporting-settings/canary-wire": { path: () => "/reporting-settings/canary-wire", expect: gated(canManageBootcampRecords) },
+  "/reporting-settings/live-sessions": { path: () => "/reporting-settings/live-sessions", expect: gated(canManageBootcampRecords) },
   "/reporting/bootcamp?searched": {
     path: () => "/reporting/bootcamp?status=active&q=x&sort=averageScore&cohort.sort=stage&cohort.stage=intermediate&cohort.page=2",
     expect: gated(canSeeBootcampRecords),
@@ -605,6 +606,8 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/settings/google-meetings-invites", allowed: canManageConnectors },
   { method: "PUT", path: "/api/settings/google-meetings-invites", allowed: canManageConnectors, body: () => ({}) },
   { method: "PUT", path: "/api/settings/google-meetings-mode", allowed: canManageConnectors, body: () => ({}) },
+  { method: "GET", path: "/api/settings/live-sessions", allowed: canManageBootcampRecords },
+  { method: "PUT", path: "/api/settings/live-sessions", allowed: canManageBootcampRecords, body: () => ({}) },
   { method: "GET", path: "/api/settings/slack-mode", allowed: canManageConnectors },
   { method: "PUT", path: "/api/settings/slack-mode", allowed: canManageConnectors, body: () => ({}) },
   { method: "PATCH", path: "/api/settings/timed-jobs/missing", allowed: canManageTimedJobs, body: () => ({ enabled: true }) },
