@@ -1277,6 +1277,32 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       },
       {
         method: "GET",
+        path: "/api/settings/live-sessions",
+        summary: "Whether a person's Live Sessions page shows its Diagnostic and Coach Canary sections.",
+        access: "assessmentsAdmin",
+        token: true,
+        returns: "{ diagnostic: boolean, coachCanary: boolean }",
+      },
+      {
+        method: "PUT",
+        path: "/api/settings/live-sessions",
+        summary: "Shows or hides the Diagnostic and Coach Canary sections on a person's Live Sessions page.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "Both start off. Send either or both; a field left out keeps its value. A hidden section is left out of the page and of GET /api/reporting/bootcamp/people/{key}.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "diagnostic", type: "boolean", required: false, note: "true to show the Diagnostic section" },
+            { name: "coachCanary", type: "boolean", required: false, note: "true to show the Coach Canary section" },
+          ],
+        },
+        returns: "{ diagnostic: boolean, coachCanary: boolean }",
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
+      },
+      {
+        method: "GET",
         path: "/api/settings/slack-mode",
         summary: "Whether the app changes Slack and sends messages there, or only logs what it would.",
         access: "platform",
