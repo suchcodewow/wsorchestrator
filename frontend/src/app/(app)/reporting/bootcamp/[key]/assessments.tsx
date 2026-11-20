@@ -138,7 +138,15 @@ const AUTOSAVE_MS = 800;
  * wait. One save runs at a time per form, and one that failed is not retried
  * until something changes again.
  */
-function usePendingEdit(id: string, changed: boolean, valid: boolean, snapshot: string, save: () => Promise<boolean>) {
+function usePendingEdit(
+  id: string,
+  changed: boolean,
+  valid: boolean,
+  snapshot: string,
+  save: () => Promise<boolean>,
+  immediateRef?: { current: boolean },
+) {
+  const router = useRouter();
   const register = useContext(EditRegistry);
   const saveRef = useRef(save);
   const running = useRef<Promise<boolean> | null>(null);
@@ -160,9 +168,18 @@ function usePendingEdit(id: string, changed: boolean, valid: boolean, snapshot: 
   }, [register, id, changed, valid, run]);
   useEffect(() => {
     if (!changed || !valid) return;
-    const timer = setTimeout(() => void run(), AUTOSAVE_MS);
+    // A pick on buttons has nothing more to wait for, so it saves at once and the page's scores recalculate.
+    const now = immediateRef?.current === true;
+    if (immediateRef) immediateRef.current = false;
+    const timer = setTimeout(
+      () =>
+        void run().then((ok) => {
+          if (ok && now) router.refresh();
+        }),
+      now ? 0 : AUTOSAVE_MS,
+    );
     return () => clearTimeout(timer);
-  }, [changed, valid, snapshot, run]);
+  }, [changed, valid, snapshot, run, immediateRef, router]);
 }
 
 /** The later of two `updatedAt` versions, which is the one a save must revise. */
@@ -482,6 +499,7 @@ function SubmissionForm({
   const revised = useRef(s.updatedAt);
   // A blank Participation score shows as a 3 but is only saved once someone picks one.
   const [touched, setTouched] = useState(false);
+  const pickedNow = useRef(false);
   // An assessment with no criteria, as the old bootcamp history left, takes its score as typed.
   const direct = s.scores.length === 0;
   // Participation's score is picked by hand on the 1 to 4 buttons, since marks never move it; one still blank is a 3.
@@ -507,21 +525,28 @@ function SubmissionForm({
     (direct && touched && typedScore !== base.averageScore) ||
     scores.some((c, i) => c.score !== base.scores[i]!.score || c.comment !== base.scores[i]!.comment);
 
-  usePendingEdit(`submission-${s.id}`, changed, !missing, JSON.stringify([scores, positive, constructive, typed]), async () => {
-    const sent = { scores, positive, constructive, averageScore: direct ? typedScore : base.averageScore };
-    const saved = await save(`/api/reporting/bootcamp/submissions/${s.id}`, {
-      scores: scores.map(({ criterionId, score, comment }) => ({ criterionId, score, comment })),
-      positiveFeedback: positive,
-      constructiveFeedback: constructive,
-      ...(direct && { averageScore: typedScore }),
-      // A mark moved in the popup also saves the assessment, so the page's own version may be the later one.
-      revises: latestVersion(revised.current, s.updatedAt),
-    });
-    if (saved === null) return false;
-    revised.current = saved;
-    setBase({ ...sent, scores: sent.scores.map((c) => ({ ...c })) });
-    return true;
-  });
+  usePendingEdit(
+    `submission-${s.id}`,
+    changed,
+    !missing,
+    JSON.stringify([scores, positive, constructive, typed]),
+    async () => {
+      const sent = { scores, positive, constructive, averageScore: direct ? typedScore : base.averageScore };
+      const saved = await save(`/api/reporting/bootcamp/submissions/${s.id}`, {
+        scores: scores.map(({ criterionId, score, comment }) => ({ criterionId, score, comment })),
+        positiveFeedback: positive,
+        constructiveFeedback: constructive,
+        ...(direct && { averageScore: typedScore }),
+        // A mark moved in the popup also saves the assessment, so the page's own version may be the later one.
+        revises: latestVersion(revised.current, s.updatedAt),
+      });
+      if (saved === null) return false;
+      revised.current = saved;
+      setBase({ ...sent, scores: sent.scores.map((c) => ({ ...c })) });
+      return true;
+    },
+    pickedNow,
+  );
 
   function set(i: number, change: Partial<{ score: number; comment: string }>) {
     setScores((all) => all.map((c, j) => (j === i ? { ...c, ...change } : c)));
@@ -544,6 +569,7 @@ function SubmissionForm({
                 aria-checked={typedScore === n}
                 onClick={() => {
                   setTouched(true);
+                  pickedNow.current = true;
                   setTyped(String(n));
                 }}
                 className={cn(
@@ -590,7 +616,10 @@ function SubmissionForm({
                     type="button"
                     role="radio"
                     aria-checked={c.score === n}
-                    onClick={() => set(i, { score: n })}
+                    onClick={() => {
+                      pickedNow.current = true;
+                      set(i, { score: n });
+                    }}
                     className={cn(
                       "flex size-8 items-center justify-center rounded-md border text-sm font-medium transition-colors",
                       c.score === n ? "border-brand bg-brand text-brand-foreground" : "border-input bg-field hover:bg-muted/50",
