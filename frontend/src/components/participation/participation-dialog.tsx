@@ -8,8 +8,8 @@
  * so a recording or unsaved scores behind it carry on.
  *
  * Marks save as they are clicked. An administrator on Reporting also sees what
- * was generated; each mark carries through to the saved score, and the AI
- * comments button beside it writes the comments again from the marks as they are now.
+ * was saved, whose score marks never move, and the AI comments button beside
+ * it writes the comments again from the marks as they are now.
  */
 
 import { useEffect, useState } from "react";
@@ -96,7 +96,7 @@ function Counter({
   );
 }
 
-/** Reads one attendee's marks, and moves them; each move saves their score and clears that side's comment. */
+/** Reads one attendee's marks, and moves them; each move clears that side's comment. */
 function useParticipationSheet(employeeId: string, onMoved?: () => void) {
   const [sheet, setSheet] = useState<ParticipationSheet | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
@@ -198,26 +198,19 @@ function Counters({
 
 /**
  * The popup's marks inside the Administration View. With `onMoved` they have
- * arrows, and each move carries through to a saved score, as an edit does.
+ * arrows, and each move clears that side's comment.
  */
 export function ParticipationMarks({
   employeeId,
   stage,
   onMoved,
-  onScore,
 }: {
   employeeId: string;
   /** The class of the assessment they sit in; a person's marks in another class are not its marks. */
   stage: EvalsAssessmentStage;
   onMoved?: () => void;
-  /** Told the score the marks give whenever they are read or move, for a form whose saved score is still blank. */
-  onScore?: (score: number | null) => void;
 }) {
   const { sheet, saving, error, adjust } = useParticipationSheet(employeeId, onMoved);
-  const runningScore = sheet && sheet.attendee.stage === stage ? sheet.runningScore : null;
-  useEffect(() => {
-    onScore?.(runningScore);
-  }, [onScore, runningScore]);
   if (!sheet) return error ? <ErrorLine error={error} /> : <Loading />;
   if (sheet.attendee.stage !== stage) return null;
   return (
@@ -258,7 +251,6 @@ function useAiComments(employeeId: string, onDone: (sheet: ParticipationSheet) =
 
 function SheetPanel({ employeeId, canRegenerate, canMark }: { employeeId: string; canRegenerate: boolean; canMark: boolean }) {
   const router = useRouter();
-  // An administrator's marks carry through to the saved score, as they do in the Administration View.
   const { sheet, setSheet, saving, error, adjust } = useParticipationSheet(employeeId, () => router.refresh());
   const comments = useAiComments(employeeId, setSheet);
   if (!sheet) return error ? <ErrorLine error={error} /> : <Loading />;

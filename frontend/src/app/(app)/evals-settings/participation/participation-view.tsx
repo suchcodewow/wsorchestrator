@@ -1,10 +1,9 @@
 "use client";
 
 /**
- * The descriptors judges mark, positive and constructive, and the net marks
- * each participation score starts at. A descriptor taken off the list is
- * retired: the marks made on it stay, and count for nothing from then on.
- * Saved scores do not change when the bands do.
+ * The descriptors judges mark, positive and constructive. A descriptor taken
+ * off the list is retired: the marks made on it stay, and count for nothing
+ * from then on.
  */
 
 import { useState } from "react";
@@ -15,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PARTICIPATION_LIMITS, type ParticipationPolarity } from "@/db/schema";
 import type { ParticipationSettings } from "@/lib/evals/participation";
-import { bandsInOrder, type ParticipationBands } from "@/lib/evals/participation-values";
 import { riseChild, staggerParent } from "@/lib/motion";
 
 type Row = { key: string; id?: string; name: string; polarity: ParticipationPolarity };
@@ -25,15 +23,9 @@ const SECTIONS: { polarity: ParticipationPolarity; label: string }[] = [
   { polarity: "negative", label: "Constructive descriptors" },
 ];
 
-const BANDS: { band: keyof ParticipationBands; label: string }[] = [
-  { band: "four", label: "A 4 starts at" },
-  { band: "three", label: "A 3 starts at" },
-  { band: "two", label: "A 2 starts at" },
-];
-
 const ERRORS: Record<string, string> = {
   duplicate: "Two descriptors have the same name.",
-  invalid: "Name every descriptor, and keep the 4 above the 3 and the 3 above the 2.",
+  invalid: "Name every descriptor.",
   not_found: "A descriptor has been removed since this page loaded. Reload to see the list.",
   forbidden: "You can no longer change these — reload the page.",
 };
@@ -41,18 +33,11 @@ const ERRORS: Record<string, string> = {
 export function ParticipationView({ settings }: { settings: ParticipationSettings }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(() => settings.descriptors.map((d) => ({ ...d, key: d.id })));
-  const [bands, setBands] = useState<Record<keyof ParticipationBands, string>>({
-    four: String(settings.bands.four),
-    three: String(settings.bands.three),
-    two: String(settings.bands.two),
-  });
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const parsed = { four: Number(bands.four), three: Number(bands.three), two: Number(bands.two) };
-  const bandsValid = Object.values(parsed).every(Number.isInteger) && bandsInOrder(parsed);
-  const canSave = bandsValid && rows.every((r) => r.name.trim()) && rows.length <= PARTICIPATION_LIMITS.descriptors;
+  const canSave = rows.every((r) => r.name.trim()) && rows.length <= PARTICIPATION_LIMITS.descriptors;
 
   function change(next: Row[]) {
     setRows(next);
@@ -75,7 +60,6 @@ export function ParticipationView({ settings }: { settings: ParticipationSetting
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           descriptors: rows.map(({ id, name, polarity }) => ({ id, name, polarity })),
-          bands: parsed,
         }),
       });
       const body = await res.json().catch(() => null);
@@ -154,28 +138,6 @@ export function ParticipationView({ settings }: { settings: ParticipationSetting
             </section>
           );
         })}
-
-        <section className="space-y-3 px-5 py-4">
-          <h3 className="font-medium">Net marks for each score</h3>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {BANDS.map(({ band, label }) => (
-              <label key={band} className="space-y-1.5 text-sm">
-                <span className="text-muted-foreground">{label}</span>
-                <Input
-                  type="number"
-                  step={1}
-                  value={bands[band]}
-                  aria-invalid={!bandsValid}
-                  onChange={(e) => {
-                    setBands((all) => ({ ...all, [band]: e.target.value }));
-                    setSaved(false);
-                  }}
-                />
-              </label>
-            ))}
-          </div>
-          <p className="text-sm text-muted-foreground">Below {parsed.two} scores a 1. No marks at all scores a 2.</p>
-        </section>
       </motion.div>
 
       {error && (

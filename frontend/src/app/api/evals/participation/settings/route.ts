@@ -1,4 +1,4 @@
-/** The participation descriptors and the net marks each score starts at. */
+/** The participation descriptors. */
 
 import { NextResponse } from "next/server";
 import { requireCaller, requireEvalsAdministrator } from "@/lib/api-auth";
@@ -30,7 +30,7 @@ export const PUT = audited(async function PUT(req: Request) {
   noteAudit({
     target: "participation",
     targetLabel: "Participation settings",
-    detail: { descriptors: result.settings.descriptors.length, bands: result.settings.bands },
+    detail: { descriptors: result.settings.descriptors.length },
   });
   return NextResponse.json(result.settings);
 });

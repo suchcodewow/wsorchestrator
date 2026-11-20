@@ -3221,7 +3221,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "evalsReader",
         token: true,
         notes:
-          "descriptors is every descriptor on the list, positive first, with its shared count from 0 to 3 and adjustments, who moved it and by how much, leaving out anyone whose clicks cancelled out. runningScore is the 1 to 4 Generate would give them now, and null until they have a mark. saved is their Participation assessment, only for an Assessments Administrator: null before their first mark. locked is true once their class is released, for anyone but an Assessments Administrator, who may still move the marks.",
+          "descriptors is every descriptor on the list, positive first, with its shared count from 0 to 3 and adjustments, who moved it and by how much, leaving out anyone whose clicks cancelled out. runningScore is the default 3 a first mark gives them, and null until they have a mark. Marks never change a score; an administrator sets it on their Participation assessment. saved is their Participation assessment, only for an Assessments Administrator: null before their first mark. locked is true once their class is released, for anyone but an Assessments Administrator, who may still move the marks.",
         params: [{ name: "employeeId", type: "string", required: true }],
         returns:
           '{ attendee: { id, email, fullName, title, stage: "bootcamp" | "intermediate" }, descriptors: { id, name, polarity: "positive" | "negative", count: number, adjustments: { name, net: number }[] }[], runningScore: number | null, saved: { averageScore, positiveFeedback, constructiveFeedback } | null, locked: boolean }',
@@ -3238,7 +3238,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "Counters are shared by every judge and run from 0 to 3. A counter already at the end it was pushed towards stays there and logs nothing. Every move saves the score the marks now give to their Participation assessment, creating it on the first mark, and clears the comment on the moved descriptor's side: a positive descriptor clears positiveFeedback, a negative one constructiveFeedback. Once their class is released only an Assessments Administrator may move them; anyone else is refused. If their marks all return to zero and the assessment was made only by marks, with both comments blank, it is removed, so a mistaken click does not count as attendance. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}.",
+          "Counters are shared by every judge and run from 0 to 3. A counter already at the end it was pushed towards stays there and logs nothing. The first mark creates their Participation assessment at the default score of 3; no move changes a score afterwards. Every move clears the comment on the moved descriptor's side: a positive descriptor clears positiveFeedback, a negative one constructiveFeedback. Once their class is released only an Assessments Administrator may move them; anyone else is refused. If their marks all return to zero and the assessment was made only by marks, with both comments blank and its score still 3, it is removed, so a mistaken click does not count as attendance. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}.",
         params: [{ name: "employeeId", type: "string", required: true }],
         body: {
           kind: "json",
@@ -3259,35 +3259,26 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/evals/participation/settings",
-        summary: "Returns the participation descriptors and the net marks each score starts at.",
+        summary: "Returns the participation descriptors.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "bands holds the net marks a 4, a 3 and a 2 start at; anything lower scores a 1, and no marks at all scores a 2.",
-        returns: '{ descriptors: { id, name, polarity: "positive" | "negative" }[], bands: { four: number, three: number, two: number } }',
+        returns: '{ descriptors: { id, name, polarity: "positive" | "negative" }[] }',
       },
       {
         method: "PUT",
         path: "/api/evals/participation/settings",
-        summary: "Replaces the participation descriptors and bands.",
+        summary: "Replaces the participation descriptors.",
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "descriptors is the whole list, in order. An id keeps a descriptor, no id adds one, and one left out is retired: its marks stay and count for nothing from then on. Saved scores do not change.",
+          "descriptors is the whole list, in order. An id keeps a descriptor, no id adds one, and one left out is retired: its marks stay and count for nothing from then on.",
         body: {
           kind: "json",
-          fields: [
-            { name: "descriptors", type: '{ id?: uuid, name: string, polarity: "positive" | "negative" }[]', required: true },
-            {
-              name: "bands",
-              type: "{ four: number, three: number, two: number }",
-              required: true,
-              note: "whole numbers, four above three above two",
-            },
-          ],
+          fields: [{ name: "descriptors", type: '{ id?: uuid, name: string, polarity: "positive" | "negative" }[]', required: true }],
         },
         returns: "the settings, as GET returns them",
         errors: [
-          { status: 400, error: "invalid", when: "a name is blank or too long, or the bands are out of order" },
+          { status: 400, error: "invalid", when: "a name is blank or too long" },
           { status: 404, error: "not_found", when: "an id is not a descriptor on the list" },
           { status: 409, error: "duplicate", when: "two descriptors share a name" },
         ],

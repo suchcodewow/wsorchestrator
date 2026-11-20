@@ -132,14 +132,14 @@ describe("marks", () => {
     assert.equal(before.sheet.runningScore, null);
     const marked = await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false);
     assert.ok(marked.ok);
-    assert.equal(marked.sheet.runningScore, 2);
+    assert.equal(marked.sheet.runningScore, 3);
   });
 
-  test("the first mark creates the assessment with its score, and clearing the marks removes it", async () => {
+  test("the first mark creates the assessment at 3, and clearing the marks removes it", async () => {
     const a = await attendee("creates");
     assert.equal(await participationRow(a.email), null);
     await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false);
-    assert.equal((await participationRow(a.email))?.averageScore, 2);
+    assert.equal((await participationRow(a.email))?.averageScore, 3);
     await adjustMark(judge.id, a.id, { descriptorId: negative.id, delta: 1 }, false);
 
     await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: -1 }, false);
@@ -153,25 +153,33 @@ describe("marks", () => {
     await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false);
     await db.update(evalsSubmissions).set({ constructiveFeedback: "Speak up." }).where(eq(evalsSubmissions.attendeeEmail, a.email));
     await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: -1 }, false);
-    assert.equal((await participationRow(a.email))?.averageScore, 2, "no marks scores a 2, as Generate would");
+    assert.equal((await participationRow(a.email))?.averageScore, 3, "no marks keeps the default");
   });
 
-  test("anyone's click saves the score and clears the comment on its own side", async () => {
+  test("clearing the marks keeps the assessment of someone whose score was set by hand", async () => {
+    const a = await attendee("hand");
+    await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false);
+    await db.update(evalsSubmissions).set({ averageScore: 4 }).where(eq(evalsSubmissions.attendeeEmail, a.email));
+    await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: -1 }, false);
+    assert.equal((await participationRow(a.email))?.averageScore, 4);
+  });
+
+  test("a click clears the comment on its own side and leaves a manual score alone", async () => {
     const a = await attendee("rescored");
     const up = { descriptorId: positive.id, delta: 1 as const };
     await adjustMark(judge.id, a.id, up, false);
     await adjustMark(judge.id, a.id, up, false);
     await adjustMark(judge.id, a.id, up, false);
-    const comments = { positiveFeedback: "Strong.", constructiveFeedback: "Speak up." };
+    const comments = { positiveFeedback: "Strong.", constructiveFeedback: "Speak up.", averageScore: 1 };
     await db.update(evalsSubmissions).set(comments).where(eq(evalsSubmissions.attendeeEmail, a.email));
 
     const down = await adjustMark(judge.id, a.id, { descriptorId: negative.id, delta: 1 }, true);
     assert.ok(down.ok);
     const row = await participationRow(a.email);
-    assert.equal(row?.averageScore, 3, "3 up and 1 down nets 2");
+    assert.equal(row?.averageScore, 1, "marks never move a score set by hand");
     assert.equal(row?.positiveFeedback, "Strong.");
     assert.equal(row?.constructiveFeedback, "");
-    assert.equal(down.sheet.saved?.averageScore, 3);
+    assert.equal(down.sheet.saved?.averageScore, 1);
 
     await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: -1 }, false);
     assert.equal((await participationRow(a.email))?.positiveFeedback, "");
@@ -273,7 +281,7 @@ describe("generating", () => {
     const ran = await generateParticipation(admin.id, "bootcamp");
     if (!ran.ok) assert.equal(ran.error, "unconfigured");
     else {
-      assert.equal((await participationRow(assessed.email))?.averageScore, 2);
+      assert.equal((await participationRow(assessed.email))?.averageScore, 3);
       assert.equal((await participationRow(assessed.email))?.positiveFeedback, "");
       assert.equal(await participationRow(absent.email), null);
     }
@@ -291,20 +299,18 @@ describe("generating", () => {
     const ran = await regenerateParticipation(admin.id, a.id);
     // Claude is not set up here, which is the furthest a run without a key gets.
     if (!ran.ok) assert.equal(ran.error, "unconfigured");
-    else assert.equal((await participationRow(a.email))?.averageScore, 2);
+    else assert.equal((await participationRow(a.email))?.averageScore, 3);
   });
 });
 
 describe("settings", () => {
-  test("a descriptor left off the list is retired, and the bands save", async () => {
+  test("a descriptor left off the list is retired, and the list saves", async () => {
     const before = await participationSettings();
     const extra = await saveParticipationSettings(admin.id, {
       descriptors: [...before.descriptors, { name: `${TEST_PREFIX}Extra`, polarity: "positive" }],
-      bands: { four: 7, three: 2, two: -1 },
     });
     assert.ok(extra.ok);
     const added = extra.settings.descriptors.find((d) => d.name === `${TEST_PREFIX}Extra`)!;
-    assert.equal(extra.settings.bands.four, 7);
 
     const back = await saveParticipationSettings(admin.id, before);
     assert.ok(back.ok);
@@ -318,9 +324,8 @@ describe("settings", () => {
   });
 
   test("two descriptors cannot share a name", async () => {
-    const { bands } = await participationSettings();
     const same = { name: "Same", polarity: "positive" as const };
-    assert.deepEqual(await saveParticipationSettings(admin.id, { descriptors: [same, same], bands }), {
+    assert.deepEqual(await saveParticipationSettings(admin.id, { descriptors: [same, same] }), {
       ok: false,
       error: "duplicate",
     });
