@@ -302,7 +302,16 @@ function ClassGroup({
 /** Marks are kept only for the running bootcamp, so only its Participation assessment has any to show. */
 const hasMarks = (s: ViewSubmission) => s.builtIn === "participation" && s.bootcamp.status === "active";
 
-function SubmissionHeading({ submission: s, average }: { submission: ViewSubmission; average: number | null }) {
+function SubmissionHeading({
+  submission: s,
+  average,
+  action,
+}: {
+  submission: ViewSubmission;
+  average: number | null;
+  /** Beside the score, such as the buttons that set it. */
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0 space-y-0.5">
@@ -311,7 +320,10 @@ function SubmissionHeading({ submission: s, average }: { submission: ViewSubmiss
           {s.ownerName ?? "Unknown judge"} · {formatWhen(s.updatedAt)}
         </p>
       </div>
-      <span className="text-xl font-medium tabular-nums">{formatScore(average)}</span>
+      <div className="flex items-center gap-3">
+        {action}
+        <span className="text-xl font-medium tabular-nums">{formatScore(average)}</span>
+      </div>
     </div>
   );
 }
@@ -323,12 +335,14 @@ function SubmissionHeading({ submission: s, average }: { submission: ViewSubmiss
 function Collapsible({
   submission: s,
   average,
+  action,
   open,
   onToggle,
   children,
 }: {
   submission: ViewSubmission;
   average: number | null;
+  action?: React.ReactNode;
   open: boolean;
   onToggle: () => void;
   children: React.ReactNode;
@@ -351,7 +365,7 @@ function Collapsible({
           <ChevronRight className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-90")} />
         </button>
         <div className="min-w-0 flex-1">
-          <SubmissionHeading submission={s} average={average} />
+          <SubmissionHeading submission={s} average={average} action={action} />
         </div>
       </div>
       <div id={detailsId} hidden={!open} className="space-y-4 px-5 pb-4">
@@ -478,12 +492,14 @@ function SubmissionForm({
   }
 
   return (
-    <Collapsible submission={s} average={average} open={open} onToggle={onToggle}>
-      {hasMarks(s) && open && <ParticipationMarks employeeId={personKey} stage={s.stage} onMoved={() => router.refresh()} />}
-      {picked && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-sm">Participation</span>
-          <div role="radiogroup" aria-label="Participation score" className="flex gap-1.5">
+    <Collapsible
+      submission={s}
+      average={average}
+      open={open}
+      onToggle={onToggle}
+      action={
+        picked && (
+          <div role="radiogroup" aria-label="Participation score" onClick={(ev) => ev.stopPropagation()} className="flex gap-1.5">
             {CRITERION_SCORES.map((n) => (
               <button
                 key={n}
@@ -500,8 +516,10 @@ function SubmissionForm({
               </button>
             ))}
           </div>
-        </div>
-      )}
+        )
+      }
+    >
+      {hasMarks(s) && open && <ParticipationMarks employeeId={personKey} stage={s.stage} onMoved={() => router.refresh()} />}
       {direct && !picked && (
         <label className="flex flex-wrap items-center justify-between gap-3 text-sm">
           Score
