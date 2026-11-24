@@ -16,7 +16,7 @@
 
 import "server-only";
 
-import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -269,7 +269,13 @@ export type CohortBootcamp = {
 const btcReleaser = sql`(select coalesce(nullif(u.name, ''), u.email) from ${users} u where u.id = ${bootcamps.btcReleasedBy})`;
 const intReleaser = sql`(select coalesce(nullif(u.name, ''), u.email) from ${users} u where u.id = ${bootcamps.intReleasedBy})`;
 
-/** The active bootcamp, or null when none is. */
+/**
+ * The bootcamp Live Sessions shows as the current cohort: the active one, or
+ * with none active, the latest that is complete and has started, so marking a
+ * bootcamp complete in the Scheduler leaves its cohort on the page until the
+ * next one goes active. Of two complete ones on the same day, the one people
+ * were scored at wins, then the one saved last. Null when there is neither.
+ */
 export async function cohortBootcamp(): Promise<CohortBootcamp | null> {
   const [row] = await db
     .select({
@@ -282,7 +288,14 @@ export async function cohortBootcamp(): Promise<CohortBootcamp | null> {
       intReleasedBy: sql<string | null>`${intReleaser}`,
     })
     .from(bootcamps)
-    .where(eq(bootcamps.status, "active"));
+    .where(or(eq(bootcamps.status, "active"), and(eq(bootcamps.status, "complete"), lte(bootcamps.startDate, sql`current_date`))))
+    .orderBy(
+      sql`(${bootcamps.status} = 'active') desc`,
+      desc(bootcamps.startDate),
+      sql`exists (select 1 from ${evalsSubmissions} cs where cs.bootcamp_id = ${bootcamps.id}) desc`,
+      desc(bootcamps.updatedAt),
+    )
+    .limit(1);
   if (!row) return null;
   return {
     id: row.id,

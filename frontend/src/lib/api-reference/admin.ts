@@ -3347,7 +3347,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/reporting/bootcamp/cohort",
         summary:
-          "Returns the active bootcamp, which of its classes are released, and a page of the people in its cohort the caller may see.",
+          "Returns the cohort's bootcamp (the active one, or with none active the latest complete one), which of its classes are released, and a page of the people in its cohort the caller may see.",
         access: "signedIn",
         token: true,
         notes:
@@ -3384,8 +3384,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           '{ stage, bootcamp: { id, startDate }, people: number, scores: number, comments: number, failed: number, overall: { written: number, failed: number, error: "unconfigured" | "upstream" | null } }',
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
-          { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
-          { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active and none is complete" },
+          { status: 409, error: "no_intermediate", when: "stage is intermediate and the cohort's bootcamp holds no intermediate class" },
           { status: 409, error: "released", when: "that class is already released" },
           { status: 409, error: "no_assessment", when: "the built-in assessment is missing on this database" },
           { status: 502, error: "upstream", when: "Claude wrote nothing" },
@@ -3416,7 +3416,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/reporting/bootcamp/release",
         summary:
-          "Releases the active bootcamp's BTC or INT results to managers, which marks everyone assessed in that class as having attended it.",
+          "Releases the cohort's bootcamp (the active one, or with none active the latest complete one)'s BTC or INT results to managers, which marks everyone assessed in that class as having attended it.",
         access: "assessmentsAdmin",
         token: true,
         notes:
@@ -3425,8 +3425,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: "{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number, notice: { runId, dryRun: boolean } | null }",
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
-          { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
-          { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active and none is complete" },
+          { status: 409, error: "no_intermediate", when: "stage is intermediate and the cohort's bootcamp holds no intermediate class" },
           { status: 409, error: "unscored", when: "someone in the class has an assessment still waiting on a score" },
           { status: 409, error: "no_exit_exam", when: "everyone is scored, but someone in the cohort has no exit exam" },
           {
@@ -3440,7 +3440,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/reporting/release-notices/preview",
         summary:
-          "Logs who releasing the active bootcamp's BTC or INT scores would message in Slack, without releasing or sending anything.",
+          "Logs who releasing the cohort's bootcamp (the active one, or with none active the latest complete one)'s BTC or INT scores would message in Slack, without releasing or sending anything.",
         access: "assessmentsAdmin",
         token: true,
         notes:
@@ -3449,8 +3449,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: "{ runId }",
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
-          { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
-          { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active and none is complete" },
+          { status: 409, error: "no_intermediate", when: "stage is intermediate and the cohort's bootcamp holds no intermediate class" },
         ],
       },
       {
