@@ -45,8 +45,9 @@ type Column = { column: BootcampRecordSort; label: string; className?: string };
 
 const COLUMNS: Column[] = [
   { column: "fullName", label: "Name" },
-  { column: "level", label: "Class", className: "w-36 whitespace-nowrap" },
-  { column: "averageScore", label: "Average score", className: "w-36 whitespace-nowrap text-right" },
+  { column: "level", label: "Most Recent Class", className: "w-44 whitespace-nowrap" },
+  { column: "bootcampScore", label: "BTC Score", className: "w-32 whitespace-nowrap" },
+  { column: "intermediateScore", label: "INT Score", className: "w-32 whitespace-nowrap" },
   { column: "date", label: "Session Date", className: "w-40 whitespace-nowrap" },
 ];
 
@@ -154,6 +155,22 @@ function FilterChip({
 }
 
 const Count = ({ n }: { n: number }) => <span className="font-medium tabular-nums text-foreground">{n.toLocaleString()}</span>;
+
+/** A whole-number score, orange at 1 or 2 and green at 4; empty before the class is attended or scored. */
+function ScoreCell({ score }: { score: number | null }) {
+  if (score === null) return null;
+  const whole = Number(formatWholeScore(score));
+  return (
+    <span
+      className={cn(
+        whole <= 2 && "font-medium text-orange-600 dark:text-orange-400",
+        whole === 4 && "font-medium text-green-600 dark:text-green-400",
+      )}
+    >
+      {formatWholeScore(score)}
+    </span>
+  );
+}
 
 export function BootcampView({
   everyone,
@@ -267,6 +284,7 @@ export function BootcampView({
             {TRACKS.map(({ track: t, label }) => (
               <FilterChip key={t} on={filters.track === t} disabled={pending} onClick={() => toggle("track", t)}>
                 {label}
+                <Count n={counts[t]} />
               </FilterChip>
             ))}
           </ChipGroup>
@@ -278,12 +296,7 @@ export function BootcampView({
               <table className="w-full min-w-200 table-fixed text-sm">
                 <thead>
                   <tr className={HEADER_ROW}>
-                    {COLUMNS.slice(0, 2).map(({ column, label, className }) => (
-                      <SortHeader key={column} column={column} sort={query.sort} dir={query.dir} className={className}>
-                        {label}
-                      </SortHeader>
-                    ))}
-                    {COLUMNS.slice(2).map(({ column, label, className }) => (
+                    {COLUMNS.map(({ column, label, className }) => (
                       <SortHeader key={column} column={column} sort={query.sort} dir={query.dir} className={className}>
                         {label}
                       </SortHeader>
@@ -305,7 +318,12 @@ export function BootcampView({
                         <td className="px-5 py-2.5">
                           <LevelChip level={p.level} />
                         </td>
-                        <td className="px-5 py-2.5 text-right whitespace-nowrap tabular-nums">{formatWholeScore(p.averageScore)}</td>
+                        <td className="px-5 py-2.5 whitespace-nowrap tabular-nums">
+                          <ScoreCell score={p.bootcampScore} />
+                        </td>
+                        <td className="px-5 py-2.5 whitespace-nowrap tabular-nums">
+                          <ScoreCell score={p.intermediateScore} />
+                        </td>
                         <td className="px-5 py-2.5 whitespace-nowrap tabular-nums text-muted-foreground">{formatDate(p.date)}</td>
                         <td className="px-3 py-2.5">
                           <ChevronRight className="ml-auto size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />

@@ -382,7 +382,7 @@ describe("releasing a class", () => {
     const viewerTable = await table(viewer(), { show: "class" });
     assert.equal(viewerTable.filters.show, "class");
     const inClass = viewerTable.rows.find((r) => r.email === emailOf("newcomer"));
-    assert.deepEqual([inClass?.level, inClass?.inClass, inClass?.averageScore], ["bootcamp", "bootcamp", 3]);
+    assert.deepEqual([inClass?.level, inClass?.inClass, inClass?.bootcampScore], ["bootcamp", "bootcamp", 3]);
     assert.ok((await cohortCounts(viewer(), bootcamp)).bootcamp >= 1);
     assert.deepEqual(await cohortCounts(manager(), bootcamp), { bootcamp: 0, intermediate: 0 });
 
@@ -741,7 +741,7 @@ describe("a class's overall review", () => {
   });
 
   test("counts the exams in the graduates' average", async () => {
-    const average = async () => (await table(viewer())).rows.find((r) => r.email === emailOf("newcomer"))!.averageScore;
+    const average = async () => (await table(viewer())).rows.find((r) => r.email === emailOf("newcomer"))!.bootcampScore;
     const scores = await db
       .select({ score: evalsSubmissions.averageScore })
       .from(evalsSubmissions)
