@@ -2,7 +2,8 @@
  * The intake form's daily Slack reminder: who is due one, and when. Everyone
  * in the current cohort (`currentCohortEmails`) who has not yet saved answers
  * to their stage's form is sent a direct message linking to /intake; a stage
- * whose form has no questions is sent nothing.
+ * whose form has no questions is sent nothing, and nothing is sent while
+ * no bootcamp is active or scheduled (`nextBootcamp`).
  *
  * The cohort Slack sync sends them (`lib/cohorts/slack-sync.ts`), and logs
  * them with everything else it does: after the channels, in the run that
