@@ -12,7 +12,7 @@ import { chosenNameOnRecord, setChosenName } from "@/lib/evals/chosen-names";
 import { attended } from "@/lib/evals/attendance";
 import { setTimezone, timezoneOnRecord } from "@/lib/evals/timezones";
 import { testGroupStageOf } from "@/lib/cohorts/test-group";
-import { register } from "@/lib/cohorts/registrations";
+import { register, registeredForNextOf } from "@/lib/cohorts/registrations";
 import { cohortStageOf } from "@/lib/evals/current-cohort";
 import { nextBootcamp, nextIntermediate, setTrack } from "@/lib/evals/tracks";
 import {
@@ -96,11 +96,13 @@ export type MyIntake = {
   canDefer: boolean;
   questions: IntakeForm["questions"];
   answers: IntakeAnswers;
+  /** When they last saved it for the next class, which registered them for it; null until they have. */
   savedAt: string | null;
   /**
-   * When `answers` start from what they told an earlier form rather than their
-   * own, which form and when: Pre-Intermediate, for someone with no answers to
-   * it yet, starts from their Pre-Bootcamp dietary needs. Unset otherwise.
+   * When `answers` start from what they told an earlier form rather than
+   * answers for this class, which form and when: their own answers to this
+   * form for an earlier class they did not attend, or for Pre-Intermediate
+   * with no answers to it yet, their Pre-Bootcamp dietary needs. Unset otherwise.
    */
   carriedFrom?: { form: IntakeFormId; savedAt: string };
   /** The preferred name they chose, which the name question starts from until they answer it; null if they have none. */
@@ -141,16 +143,20 @@ export async function getMyIntake(email: string, want: IntakeFormId | null = nul
   const found = await intakeStageFor(email, want);
   if (!found) return null;
   const { stage } = found;
-  const [{ introduction, questions }, name, timezone, latest] = await Promise.all([
+  const [{ introduction, questions }, name, timezone, latest, registered] = await Promise.all([
     getIntakeForm(stage),
     chosenNameOnRecord(email),
     timezoneOnRecord(email),
     latestAnswers(stage, email),
+    registeredForNextOf(stage, [email.trim().toLowerCase()]),
   ]);
 
-  // Someone at intermediate who answered Pre-Bootcamp in an earlier cohort starts from what lasts of that.
   let carriedFrom: MyIntake["carriedFrom"];
   let answers = latest?.answers ?? {};
+  // Answers saved for an earlier class are a starting point, not a registration for this one.
+  const current = latest && registered.size > 0 ? latest : undefined;
+  if (latest && !current) carriedFrom = { form: stage, savedAt: latest.submittedAt.toISOString() };
+  // Someone at intermediate who answered Pre-Bootcamp in an earlier cohort starts from what lasts of that.
   if (!latest && stage === "intermediate") {
     const earlier = await latestAnswers("bootcamp", email);
     const carried = earlier ? carriedAnswers({ introduction, questions }, earlier.answers) : {};
@@ -175,7 +181,7 @@ export async function getMyIntake(email: string, want: IntakeFormId | null = nul
     canDefer: true,
     questions,
     answers,
-    savedAt: latest?.submittedAt.toISOString() ?? null,
+    savedAt: current?.submittedAt.toISOString() ?? null,
     ...(carriedFrom ? { carriedFrom } : {}),
     name: name ? firstNameOf(name) : null,
     timezone,
@@ -297,14 +303,13 @@ export async function saveMyIntake(
   return { ok: true, form: stage, savedAt: row!.submittedAt.toISOString() };
 }
 
-/** Which of `emails`, lowercased, have saved answers to `form`. */
+/**
+ * Which of `emails`, lowercased, have answered `form` for the next class:
+ * registered for it, as the reminders and the Cohorts page count it
+ * (`registeredForNext`). Answers saved for an earlier class do not count.
+ */
 export async function answeredIntake(form: IntakeFormId, emails: string[]): Promise<Set<string>> {
-  if (emails.length === 0) return new Set();
-  const rows = await db
-    .selectDistinct({ email: intakeResponses.email })
-    .from(intakeResponses)
-    .where(and(eq(intakeResponses.form, form), inArray(intakeResponses.email, emails)));
-  return new Set(rows.map((r) => r.email));
+  return registeredForNextOf(form, emails);
 }
 
 /** One form's answers someone last saved, as the Cohorts page shows them under the person. */

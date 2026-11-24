@@ -34,8 +34,16 @@ import {
 } from "@/db/schema";
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
-import { BOOTCAMP_COHORT_LIST, BOOTCAMP_RECORD_LIST, RELEASE_NOTICE_LIST, RELEASE_NOTICE_MESSAGE_LIST } from "@/lib/list-specs";
+import {
+  BOOTCAMP_COHORT_LIST,
+  BOOTCAMP_RECORD_LIST,
+  CURRENT_COHORT_LIST,
+  RELEASE_NOTICE_LIST,
+  RELEASE_NOTICE_MESSAGE_LIST,
+} from "@/lib/list-specs";
 import { nextClassOf, register } from "@/lib/cohorts/registrations";
+import { answeredIntake, getMyIntake } from "@/lib/logistics/intake";
+import { listCurrentCohort } from "@/lib/evals/current-cohort";
 import { listCardViewers, recordCardView } from "@/lib/reporting/card-views";
 import {
   bootcampRecordCounts,
@@ -862,5 +870,48 @@ describe("the current cohort's bootcamp", () => {
       );
     }
     assert.equal((await cohortBootcamp())?.id, bootcampId);
+  });
+});
+
+describe("answering the registration form", () => {
+  test("is registering for the next class, so a registration for an earlier one asks again", async () => {
+    const lower = emailOf("no-rsvp");
+    const unanswered = async () =>
+      (
+        await listCurrentCohort(
+          { stage: "bootcamp", track: null, unanswered: true },
+          { ...CURRENT_COHORT_LIST, q: lower, page: 1, sort: "email", dir: "asc" },
+        )
+      ).rows.some((m) => m.email === lower);
+    // They answered for an earlier bootcamp they never came to.
+    const [earlier] = await db
+      .insert(bootcamps)
+      .values({ startDate: "2026-05-04", btcDays: 4, intDays: 3, status: "complete", createdBy: admin.id })
+      .returning({ id: bootcamps.id });
+    const answers = { attend: "Yes" };
+    const [saved] = await db
+      .insert(intakeResponses)
+      .values({ form: "bootcamp", email: lower, answers, submittedAt: new Date("2026-04-20T12:00:00Z") })
+      .returning({ submittedAt: intakeResponses.submittedAt });
+    await db.insert(bootcampRegistrations).values({ bootcampId: earlier!.id, stage: "bootcamp", email: lower });
+    try {
+      assert.equal(await unanswered(), true, "no RSVP mark, and the reminders count them");
+      assert.deepEqual(await answeredIntake("bootcamp", [lower]), new Set());
+      const mine = (await getMyIntake(lower))!;
+      assert.equal(mine.savedAt, null, "their form is to do again");
+      assert.deepEqual(mine.carriedFrom, { form: "bootcamp", savedAt: saved!.submittedAt.toISOString() });
+      assert.deepEqual(mine.answers, answers, "starting from what they said last time");
+
+      await register("bootcamp", lower, false);
+      assert.equal(await unanswered(), false);
+      assert.deepEqual(await answeredIntake("bootcamp", [lower]), new Set([lower]));
+      const now = (await getMyIntake(lower))!;
+      assert.equal(now.savedAt, saved!.submittedAt.toISOString());
+      assert.equal(now.carriedFrom, undefined);
+    } finally {
+      await db.delete(intakeResponses).where(eq(intakeResponses.email, lower));
+      await db.delete(bootcampRegistrations).where(eq(bootcampRegistrations.email, lower));
+      await db.delete(bootcamps).where(eq(bootcamps.id, earlier!.id));
+    }
   });
 });
