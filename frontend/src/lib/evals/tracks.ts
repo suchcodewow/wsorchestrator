@@ -221,6 +221,21 @@ export async function unpin(email: string) {
 }
 
 /**
+ * Hands everyone pinned to Deferred back to the rules, for when the active
+ * bootcamp is complete: they sat that one out, so the next one is theirs
+ * unless the rules defer them again. Returns their emails; retracking them is
+ * the caller's.
+ */
+export async function unpinDeferred(tx: Pick<typeof db, "update"> = db): Promise<string[]> {
+  const rows = await tx
+    .update(employees)
+    .set({ trackPinned: false, trackOverride: null })
+    .where(and(eq(employees.trackPinned, true), eq(employees.trackOverride, "deferred")))
+    .returning({ email: employees.email });
+  return rows.map((r) => r.email).sort();
+}
+
+/**
  * Sets one org member's track, or an added attendee's, whatever the rules say.
  *
  * Sales, Engineer and Ignored are title lists: picking one puts the person's

@@ -4,7 +4,8 @@
  * that would break it is refused with the bootcamp already active, unless it
  * names that one in `completeActive`, which marks it complete first. Every
  * write retracks the org, since it can change which bootcamp is next and so
- * who is deferred from it.
+ * who is deferred from it. Completing the active bootcamp also hands everyone
+ * pinned to Deferred back to the rules: they sat that one out.
  */
 
 import "server-only";
@@ -27,7 +28,7 @@ import {
 } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
 import { isIsoDay } from "@/lib/evals/history-values";
-import { retrackOrg } from "@/lib/evals/tracks";
+import { retrackOrg, unpinDeferred } from "@/lib/evals/tracks";
 import type { BootcampSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -253,12 +254,23 @@ async function activeConflict(
   return { ok: false, error: "active_exists", active };
 }
 
-/** Marks the bootcamp `id` complete if it is still the active one. */
-async function completeIfActive(tx: Pick<typeof db, "update">, id: string): Promise<void> {
-  await tx
+/**
+ * Marks the bootcamp `id` complete if it is still the active one, and then
+ * unpins everyone pinned to Deferred. Returns their emails, or null when `id`
+ * was not active, so nothing was completed.
+ */
+async function completeIfActive(tx: Pick<typeof db, "update">, id: string): Promise<string[] | null> {
+  const done = await tx
     .update(bootcamps)
     .set({ status: "complete", updatedAt: new Date() })
-    .where(and(eq(bootcamps.id, id), eq(bootcamps.status, "active")));
+    .where(and(eq(bootcamps.id, id), eq(bootcamps.status, "active")))
+    .returning({ id: bootcamps.id });
+  return done.length > 0 ? unpinDeferred(tx) : null;
+}
+
+/** Names on the audit record who completing the active bootcamp handed back to the rules. */
+function noteUnpinned(unpinned: string[] | null): void {
+  if (unpinned) noteAudit({ detail: { unpinnedDeferred: unpinned } });
 }
 
 export async function createBootcamp(actorId: string, input: BootcampInput): Promise<{ ok: true; id: string } | BootcampFailure> {
@@ -269,16 +281,17 @@ export async function createBootcamp(actorId: string, input: BootcampInput): Pro
   const conflict = await activeConflict(null, input.status, completeActive);
   if (conflict) return conflict;
   try {
-    const row = await db.transaction(async (tx) => {
-      if (input.status === "active" && completeActive) await completeIfActive(tx, completeActive);
+    const { made: row, unpinned } = await db.transaction(async (tx) => {
+      const unpinned = input.status === "active" && completeActive ? await completeIfActive(tx, completeActive) : null;
       const [made] = await tx
         .insert(bootcamps)
         .values({ ...fields, createdBy: actorId })
         .returning({ id: bootcamps.id });
       if (judges.judges) await setJudges(tx, actorId, made!.id, judges.judges);
-      return made;
+      return { made, unpinned };
     });
     noteAudit({ target: row!.id, targetLabel: `Bootcamp starting ${input.startDate}` });
+    noteUnpinned(unpinned);
     await retrackOrg();
     return { ok: true, id: row!.id };
   } catch (err) {
@@ -302,8 +315,11 @@ export async function updateBootcamp(actorId: string, id: string, patch: Bootcam
   if (!(await facilityKnown(patch.facilityId))) return { ok: false, error: "unknown_facility" };
   const moved = patch.facilityId !== undefined && patch.facilityId !== before.facilityId;
   try {
-    const updated = await db.transaction(async (tx) => {
-      if (patch.status === "active" && completeActive && completeActive !== id) await completeIfActive(tx, completeActive);
+    const { rows: updated, unpinned } = await db.transaction(async (tx) => {
+      let unpinned =
+        patch.status === "active" && completeActive && completeActive !== id ? await completeIfActive(tx, completeActive) : null;
+      // The status it had when the write began: an edit that completes the active bootcamp.
+      const [was] = await tx.select({ status: bootcamps.status }).from(bootcamps).where(eq(bootcamps.id, id)).for("update");
       const rows = await tx
         .update(bootcamps)
         .set({ ...fields, updatedAt: new Date() })
@@ -311,9 +327,11 @@ export async function updateBootcamp(actorId: string, id: string, patch: Bootcam
         .returning({ id: bootcamps.id });
       if (rows.length > 0 && judges.judges) await setJudges(tx, actorId, id, judges.judges);
       if (rows.length > 0 && moved) await clearRooms(tx, id);
-      return rows;
+      if (rows.length > 0 && was?.status === "active" && patch.status === "complete") unpinned = await unpinDeferred(tx);
+      return { rows, unpinned };
     });
     if (updated.length === 0) return { ok: false, error: "not_found" };
+    noteUnpinned(unpinned);
     await retrackOrg();
     return { ok: true };
   } catch (err) {

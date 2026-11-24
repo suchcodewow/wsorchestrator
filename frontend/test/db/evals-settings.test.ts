@@ -1141,6 +1141,61 @@ describe("bootcamps", () => {
     assert.equal(await activeBootcamp(), null);
   });
 
+  test("completing the active bootcamp hands everyone pinned to Deferred back to the rules", async (t) => {
+    if (await activeBootcamp()) return t.skip("another bootcamp is already active in this database");
+
+    const pins = { "u-deferred": "deferred", "u-deferred2": "deferred", "u-exempt": "exempt" } as const;
+    for (const [key, track] of Object.entries(pins)) {
+      await db.insert(employees).values({
+        id: `${TEST_PREFIX}${key}`,
+        email: email(key),
+        fullName: `Pinned ${key}`,
+        raw: {},
+        trackPinned: true,
+        trackOverride: track,
+      });
+    }
+    const pinned = async () =>
+      Object.fromEntries(
+        (
+          await db
+            .select({ email: employees.email, pinned: employees.trackPinned, override: employees.trackOverride })
+            .from(employees)
+            .where(like(employees.id, `${TEST_PREFIX}u-%`))
+        ).map((r) => [r.email.split("@")[0], r.pinned ? r.override : "automatic"]),
+      );
+
+    const first = await create({ startDate: "2033-03-07", btcDays: 4, intDays: 3, status: "active" });
+    assert.ok(first.ok);
+    // Moving it back to Scheduled completes nothing.
+    assert.deepEqual(await updateBootcamp(admin.id, first.id, { status: "scheduled" }), { ok: true });
+    assert.deepEqual(await updateBootcamp(admin.id, first.id, { status: "active" }), { ok: true });
+    assert.deepEqual(await pinned(), pins);
+
+    assert.deepEqual(await updateBootcamp(admin.id, first.id, { status: "complete" }), { ok: true });
+    assert.deepEqual(await pinned(), { "u-deferred": "automatic", "u-deferred2": "automatic", "u-exempt": "exempt" });
+    // Saving a bootcamp that is complete already unpins no one.
+    await db
+      .update(employees)
+      .set({ trackPinned: true, trackOverride: "deferred" })
+      .where(eq(employees.email, email("u-deferred")));
+    assert.deepEqual(await updateBootcamp(admin.id, first.id, { status: "complete", btcDays: 5 }), { ok: true });
+    assert.equal((await pinned())["u-deferred"], "deferred");
+
+    // Completing it by making another active does the same.
+    const second = await create({ startDate: "2033-06-06", btcDays: 4, intDays: 3, status: "active" });
+    const third = await create({
+      startDate: "2033-09-05",
+      btcDays: 4,
+      intDays: 3,
+      status: "active",
+      completeActive: second.ok ? second.id : "",
+    });
+    assert.ok(second.ok && third.ok);
+    assert.equal((await pinned())["u-deferred"], "automatic");
+    assert.deepEqual(await updateBootcamp(admin.id, third.id, { status: "scheduled" }), { ok: true });
+  });
+
   test("judges are saved with the bootcamp, replaced as a set, and must be employees", async () => {
     for (const key of ["j-ana", "j-ben"]) {
       await db.insert(employees).values({ id: `${TEST_PREFIX}${key}`, email: email(key), fullName: `Judge ${key}`, raw: {} });

@@ -659,7 +659,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "sales, engineer and ignored put the person's title on that list, moving it off another list if it is on one, and re-track everyone in the org who holds it, compared as the lists compare titles; title says where it went, and is null when it was on that list already or the person has no title. Anyone else with the title whose track was set by hand keeps it. The person is also pinned to the choice where the rules still give them something else, such as a late start, and always when they have no title. undecided, deferred and exempt pin just this person; deferred moves them from the Current tab to the Deferred tab. A pin holds through every later sync, title-list change and bootcamp change, until automatic hands the person back to the rules. ignored and exempt take people off the Current tab. Someone added to the cohort by hand (POST /api/cohorts/current/attendees), inside the org or not, is pinned to every choice with no title moved, and automatic gives them back the track they were added on. track in the response is the one the person has now, overridden whether they are pinned, and retracked how many people's tracks changed, the person included.",
+          "sales, engineer and ignored put the person's title on that list, moving it off another list if it is on one, and re-track everyone in the org who holds it, compared as the lists compare titles; title says where it went, and is null when it was on that list already or the person has no title. Anyone else with the title whose track was set by hand keeps it. The person is also pinned to the choice where the rules still give them something else, such as a late start, and always when they have no title. undecided, deferred and exempt pin just this person; deferred moves them from the Current tab to the Deferred tab. A pin holds through every later sync, title-list change and bootcamp change, until automatic hands the person back to the rules; a Deferred pin also ends when the active bootcamp is marked complete. ignored and exempt take people off the Current tab. Someone added to the cohort by hand (POST /api/cohorts/current/attendees), inside the org or not, is pinned to every choice with no title moved, and automatic gives them back the track they were added on. track in the response is the one the person has now, overridden whether they are pinned, and retracked how many people's tracks changed, the person included.",
         body: {
           kind: "json",
           fields: [
@@ -1384,7 +1384,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Only one bootcamp may be active; releasing its BTC or INT scores on Reporting → Live Sessions is what marks everyone assessed in that class as having attended it. To make a new one active while another is, name that other in completeActive: it is marked complete in the same write.",
+          "Only one bootcamp may be active; releasing its BTC or INT scores on Reporting → Live Sessions is what marks everyone assessed in that class as having attended it. To make a new one active while another is, name that other in completeActive: it is marked complete in the same write. Completing the active bootcamp hands everyone pinned to Deferred back to the rules, as automatic does, and the audit record lists them in unpinnedDeferred.",
         body: {
           kind: "json",
           fields: [
@@ -1423,7 +1423,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Takes any of POST's fields and changes only those. judges replaces the whole set: anyone left out is removed, and anyone kept keeps when and by whom they were added.",
+          "Takes any of POST's fields and changes only those. judges replaces the whole set: anyone left out is removed, and anyone kept keeps when and by whom they were added. Changing the active bootcamp's status to complete, or completing it through completeActive, hands everyone pinned to Deferred back to the rules, as POST does.",
         params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
         body: {
           kind: "json",
