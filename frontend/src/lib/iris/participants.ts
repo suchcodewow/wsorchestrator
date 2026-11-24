@@ -3,7 +3,7 @@
  * whatever their roles. Someone is one when an Assessments Administrator adds
  * them by hand on Diagnostic Settings, or, while Bootcamp Auto-Enroll is on,
  * when they are a bootcamp candidate on the Sales or Engineer track who has
- * RSVP'd (`rsvpedForBootcamp`).
+ * RSVP'd to the next Bootcamp class (`rsvpedForBootcamp`).
  *
  * Only the hand-added are stored. The auto-enrolled are worked out on each
  * read, so someone who RSVPs is enrolled at once, and stopping auto-enroll

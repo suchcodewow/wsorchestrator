@@ -25,6 +25,7 @@ process.env.AUTH_GOOGLE_SECRET = "test-client-secret";
 
 import { db } from "@/db";
 import {
+  bootcampRegistrations,
   bootcamps,
   EVALS_SETTINGS_KEYS,
   employees,
@@ -40,6 +41,7 @@ import {
   ZOOM_CONNECTION_KEY,
   zoomConnections,
 } from "@/db/schema";
+import { register } from "@/lib/cohorts/registrations";
 import {
   cancelTestMeetingInvites,
   REVENUE_ENABLEMENT_CALENDAR_ID,
@@ -601,7 +603,12 @@ describe("Sync Now", () => {
       await sync_ok();
       assert.ok(!fake.guests("e1").includes(salesEmail) && !fake.guests("e2").includes(salesEmail), "not before they RSVP");
 
+      // Answers alone, as for an earlier class, are no RSVP to this one: it is registering for it.
       await db.insert(intakeResponses).values({ form: "bootcamp", email: salesEmail, answers: {} });
+      await sync_ok();
+      assert.ok(!fake.guests("e2").includes(salesEmail), "not on answers for no class in particular");
+
+      assert.deepEqual(await register("bootcamp", salesEmail, false), { id: bootcamp.id, startDate: bootcamp.startDate });
       await sync_ok();
       assert.ok(!fake.guests("e1").includes(salesEmail), "not before the bootcamp");
       assert.ok(fake.guests("e2").includes(salesEmail), "but after it");
@@ -610,6 +617,7 @@ describe("Sync Now", () => {
       assert.equal(status?.mark, "pending");
     } finally {
       await db.delete(intakeResponses).where(eq(intakeResponses.email, salesEmail));
+      await db.delete(bootcampRegistrations).where(eq(bootcampRegistrations.email, salesEmail));
     }
   });
 

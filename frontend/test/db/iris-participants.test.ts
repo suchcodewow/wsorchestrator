@@ -21,7 +21,16 @@ import assert from "node:assert/strict";
 import { eq, like } from "drizzle-orm";
 
 import { db } from "@/db";
-import { IRIS_SETTINGS_KEYS, employees, intakeResponses, irisAttempts, irisSettings, type EmployeeTrack } from "@/db/schema";
+import {
+  IRIS_SETTINGS_KEYS,
+  bootcampRegistrations,
+  employees,
+  intakeResponses,
+  irisAttempts,
+  irisSettings,
+  type EmployeeTrack,
+} from "@/db/schema";
+import { register } from "@/lib/cohorts/registrations";
 import {
   addParticipant,
   getAutoEnroll,
@@ -52,10 +61,17 @@ before(async () => {
 
 after(async () => {
   await db.delete(intakeResponses).where(like(intakeResponses.email, scoped));
+  await db.delete(bootcampRegistrations).where(like(bootcampRegistrations.email, scoped));
   await db.delete(irisSettings).where(eq(irisSettings.key, IRIS_SETTINGS_KEYS.bootcampAutoEnroll));
   if (savedSetting.length) await db.insert(irisSettings).values(savedSetting);
   await scope.tearDown();
 });
+
+/** Saving the Bootcamp form: its answers, and a registration for the next Bootcamp class when there is one. */
+async function rsvpFor(email: string) {
+  await db.insert(intakeResponses).values({ form: "bootcamp", email, answers: {} });
+  await register("bootcamp", email, false);
+}
 
 /** A current bootcamp candidate on `track`, or none yet, who has RSVP'd when `rsvp` says so. */
 async function candidate(key: string, track: EmployeeTrack | null, rsvp: boolean): Promise<string> {
@@ -71,7 +87,7 @@ async function candidate(key: string, track: EmployeeTrack | null, rsvp: boolean
     activeEffectiveDate: today,
     raw: {},
   });
-  if (rsvp) await db.insert(intakeResponses).values({ form: "bootcamp", email, answers: {} });
+  if (rsvp) await rsvpFor(email);
   return email;
 }
 
@@ -195,7 +211,7 @@ describe("Bootcamp Auto-Enroll", () => {
   });
 
   test("someone who RSVPs while it is on is enrolled at once", async () => {
-    await db.insert(intakeResponses).values({ form: "bootcamp", email: silent, answers: {} });
+    await rsvpFor(silent);
     assert.equal(await isParticipantNow(silent), true);
   });
 

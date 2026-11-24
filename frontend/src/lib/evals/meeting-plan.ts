@@ -73,7 +73,7 @@ export type Member = {
   timezone?: string | null;
   /** The day they started, `YYYY-MM-DD`; null or missing when the record has none. */
   startDate?: string | null;
-  /** Whether they saved the Bootcamp intake form, RSVPing to the coming bootcamp. */
+  /** Whether they registered for the coming bootcamp's Bootcamp class by saving its form: RSVP'd to it. */
   rsvpd?: boolean;
   /** The day of the latest Bootcamp class they attended, `YYYY-MM-DD`; null or missing for none. */
   btcDate?: string | null;

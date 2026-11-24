@@ -88,16 +88,22 @@ function nextClassSql(stage: SQL): SQL {
  * for what they cannot give. A registration for an earlier class does not
  * count, so someone who did not attend it is asked again.
  */
-export function registeredForNext(stage: SQL, email: SQL): SQL<boolean> {
+export function registeredForNext(stage: SQL, email: SQL, test?: boolean): SQL<boolean> {
   const next = nextClassSql(stage);
+  // Only the test group's, or only the real cohort's, when asked.
+  const mode = test === undefined ? sql`` : sql` and nr.test = ${test}`;
   return sql<boolean>`(case when ${next} is null
-      then exists (select 1 from ${intakeResponses} nr where nr.form = ${stage} and nr.email = ${email})
-      else exists (select 1 from ${bootcampRegistrations} nr where nr.bootcamp_id = ${next} and nr.stage = ${stage} and nr.email = ${email})
+      then exists (select 1 from ${intakeResponses} nr where nr.form = ${stage} and nr.email = ${email}${mode})
+      else exists (select 1 from ${bootcampRegistrations} nr where nr.bootcamp_id = ${next} and nr.stage = ${stage} and nr.email = ${email}${mode})
     end)`;
 }
 
-/** Which of `emails`, lowercased, have answered `stage`'s form for the next class (`registeredForNext`). */
-export async function registeredForNextOf(stage: IntakeFormId, emails: string[]): Promise<Set<string>> {
+/**
+ * Which of `emails`, lowercased, have answered `stage`'s form for the next
+ * class (`registeredForNext`); with `test`, counting only the test group's
+ * registrations, or only the real cohort's.
+ */
+export async function registeredForNextOf(stage: IntakeFormId, emails: string[], test?: boolean): Promise<Set<string>> {
   if (emails.length === 0) return new Set();
   const rows = await db
     .selectDistinct({ email: intakeResponses.email })
@@ -106,7 +112,7 @@ export async function registeredForNextOf(stage: IntakeFormId, emails: string[])
       and(
         eq(intakeResponses.form, stage),
         inArray(intakeResponses.email, emails),
-        registeredForNext(sql`${stage}`, sql`${intakeResponses.email}`),
+        registeredForNext(sql`${stage}`, sql`${intakeResponses.email}`, test),
       ),
     );
   return new Set(rows.map((r) => r.email));

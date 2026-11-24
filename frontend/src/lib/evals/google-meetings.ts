@@ -20,7 +20,6 @@ import {
   GOOGLE_CONNECTION_KEY,
   googleConnections,
   googleMeetings,
-  intakeResponses,
   MEETING_FACILITATORS_MAX,
   MEETING_SELECTION_LIMITS,
   MEETING_STAGES,
@@ -40,6 +39,7 @@ import {
   type MeetingSyncTrigger,
   type MeetingTrack,
 } from "@/db/schema";
+import { registeredForNextOf } from "@/lib/cohorts/registrations";
 import { getTestGroup } from "@/lib/cohorts/test-group";
 import { currentCohortPeople } from "@/lib/evals/current-cohort";
 import {
@@ -541,12 +541,8 @@ export async function meetingStatusesFor(
       .where(inArray(sql`lower(${employees.email})`, emails))
       .limit(PAGE_SIZE)
       .then((rows) => new Map(rows.map((r) => [r.email, r]))),
-    db
-      .selectDistinct({ email: intakeResponses.email })
-      .from(intakeResponses)
-      .where(and(eq(intakeResponses.form, "bootcamp"), eq(intakeResponses.test, false), inArray(intakeResponses.email, emails)))
-      .limit(PAGE_SIZE)
-      .then((rows) => new Set(rows.map((r) => r.email))),
+    // Registered for the next Bootcamp class, which makes the Intermediate meetings after it theirs too.
+    registeredForNextOf("bootcamp", emails, false),
     getMeetingSyncLive(),
     getTestGroup(),
   ]);

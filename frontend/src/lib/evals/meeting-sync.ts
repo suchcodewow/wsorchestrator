@@ -47,7 +47,6 @@ import { db } from "@/db";
 import {
   employees,
   googleMeetings,
-  intakeResponses,
   meetingAttendanceMarks,
   meetingInvites,
   meetingOccurrences,
@@ -62,6 +61,7 @@ import {
   type MeetingSyncStatus,
   type MeetingSyncTrigger,
 } from "@/db/schema";
+import { registeredForNextOf } from "@/lib/cohorts/registrations";
 import { forgetTestArtifact, outboundCohort, testArtifacts } from "@/lib/cohorts/test-group";
 import { PAGE_SIZE } from "@/lib/paging";
 import {
@@ -1031,9 +1031,10 @@ async function withEmployeeRecord<T extends { email: string }>(
 }
 
 /**
- * `cohort` with whether each person RSVP'd to the coming bootcamp (saved its
- * intake form, in this run's mode) and the day of the latest Bootcamp class
- * they attended, which together decide when an Intermediate meeting is theirs.
+ * `cohort` with whether each person RSVP'd to the coming bootcamp (registered
+ * for its Bootcamp class by saving the form, in this run's mode) and the day
+ * of the latest Bootcamp class they attended, which together decide when an
+ * Intermediate meeting is theirs.
  */
 async function withClassRecord<T extends { email: string }>(
   cohort: readonly T[],
@@ -1045,18 +1046,14 @@ async function withClassRecord<T extends { email: string }>(
   for (let n = 0; n < emails.length; n += PAGE_SIZE) {
     const batch = emails.slice(n, n + PAGE_SIZE);
     const [rsvps, classes] = await Promise.all([
-      db
-        .selectDistinct({ email: intakeResponses.email })
-        .from(intakeResponses)
-        .where(and(eq(intakeResponses.form, "bootcamp"), eq(intakeResponses.test, test), inArray(intakeResponses.email, batch)))
-        .limit(PAGE_SIZE),
+      registeredForNextOf("bootcamp", batch, test),
       db
         .select({ email: sql<string>`lower(${employees.email})`, btcDate: classDate("bootcamp", sql`lower(${employees.email})`) })
         .from(employees)
         .where(inArray(sql`lower(${employees.email})`, batch))
         .limit(PAGE_SIZE),
     ]);
-    for (const r of rsvps) rsvpd.add(r.email);
+    for (const email of rsvps) rsvpd.add(email);
     for (const r of classes) btcDates.set(r.email, r.btcDate);
   }
   return cohort.map((m) => {

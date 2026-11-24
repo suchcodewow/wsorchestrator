@@ -205,15 +205,16 @@ export function isCandidate(
 
 /**
  * A bootcamp candidate on the Sales or Engineer track who has RSVP'd, by
- * saving the Bootcamp intake form: whom the Diagnostic's Bootcamp
- * Auto-Enroll makes a Participant. A condition on `employees`.
+ * saving the Bootcamp form, which registers them for the next Bootcamp class
+ * (`registeredForNext`): whom the Diagnostic's Bootcamp Auto-Enroll makes a
+ * Participant. A condition on `employees`.
  */
 export function rsvpedForBootcamp(cutoffs: CandidateCutoffs): SQL {
   return and(
     isCandidate(cutoffs),
     IN_STAGE.bootcamp,
     assessedOn(["sales", "engineer"]),
-    sql`exists (select 1 from ${intakeResponses} where ${intakeResponses.form} = 'bootcamp' and ${intakeResponses.email} = lower(${e.email}))`,
+    registeredForNext(sql`'bootcamp'`, sql`lower(${e.email})`),
   )!;
 }
 
@@ -333,13 +334,7 @@ export async function currentCohortPeople(
       and(
         isCandidate(cutoffs),
         stage === "intermediate"
-          ? or(
-              IN_STAGE.intermediate,
-              and(
-                IN_STAGE.bootcamp,
-                sql`exists (select 1 from ${intakeResponses} where ${intakeResponses.form} = 'bootcamp' and not ${intakeResponses.test} and ${intakeResponses.email} = lower(${e.email}))`,
-              ),
-            )
+          ? or(IN_STAGE.intermediate, and(IN_STAGE.bootcamp, registeredForNext(sql`'bootcamp'`, sql`lower(${e.email})`, false)))
           : IN_STAGE[stage],
         track === "both" ? assessedOn(["sales", "engineer"]) : assessedOn([track]),
       ),

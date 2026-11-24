@@ -27,7 +27,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
     id: "iris",
     title: "Diagnostic",
     intro:
-      "Adaptive placement tests, one per subject, for its Participants only: whoever an Assessments Administrator adds by hand, and, while Bootcamp Auto-Enroll is on, every bootcamp candidate on the Sales or Engineer track who has RSVP'd. Roles alone do not let anyone take them. The engine runs on the server: a taker is sent one question at a time without its answer, and posts a choice to get the next. Nobody sees their own placement, administrators included; it is recorded for the cohort records.",
+      "Adaptive placement tests, one per subject, for its Participants only: whoever an Assessments Administrator adds by hand, and, while Bootcamp Auto-Enroll is on, every bootcamp candidate on the Sales or Engineer track registered for the next Bootcamp class. Roles alone do not let anyone take them. The engine runs on the server: a taker is sent one question at a time without its answer, and posts a choice to get the next. Nobody sees their own placement, administrators included; it is recorded for the cohort records.",
     endpoints: [
       {
         method: "GET",
@@ -222,7 +222,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Everyone added by hand, and while Bootcamp Auto-Enroll is on, every bootcamp candidate on the Sales or Engineer track who has RSVP'd by saving the Bootcamp intake form; manual is true for the first. userId is null for someone who has not signed in yet. placements maps each subject finished to a level: 1 for 101, 2 for 201, 3 for 301. composite is the share of the top level reached, weighted for the person's track, 0 to 100, and null without a track or a weighted subject. Previews are never counted. counts and autoEnroll are whatever the search.",
+          "Everyone added by hand, and while Bootcamp Auto-Enroll is on, every bootcamp candidate on the Sales or Engineer track registered for the next Bootcamp class by saving its registration form; manual is true for the first. userId is null for someone who has not signed in yet. placements maps each subject finished to a level: 1 for 101, 2 for 201, 3 for 301. composite is the share of the top level reached, weighted for the person's track, 0 to 100, and null without a track or a weighted subject. Previews are never counted. counts and autoEnroll are whatever the search.",
         query: [FORM_QUERY, ...listQuery(IRIS_PARTICIPANT_LIST.sorts, "the name or email")],
         returns: `{ people: { email, name, userId: string | null, manual: boolean, addedAt: string | null, addedBy: string | null, track, placements: Record<subject, 1 | 2 | 3>, completed: number, composite: number | null, finishedAt: string | null }[], counts: { total, manual, auto }, autoEnroll: { on: boolean, changedAt: string | null, changedBy: string | null }, ${PAGE_FIELDS} }`,
         errors: [FORM_ERROR],
@@ -291,7 +291,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "On, every bootcamp candidate on the Sales or Engineer track who has RSVP'd is a Participant, and anyone who RSVPs later becomes one at once. Off, every one of them stops being a Participant and can no longer start or carry on a test; those added by hand stay.",
+          "On, every bootcamp candidate on the Sales or Engineer track registered for the next Bootcamp class is a Participant, and anyone who registers later becomes one at once. Off, every one of them stops being a Participant and can no longer start or carry on a test; those added by hand stay.",
         body: { kind: "json", fields: [{ name: "on", type: "boolean", required: true }] },
         returns: "{ on, changedAt, changedBy, counts: { total, manual, auto } }",
         errors: [{ status: 400, error: "invalid_body", when: "on is not a boolean" }],
