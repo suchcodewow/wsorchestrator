@@ -88,7 +88,19 @@ export function isHistoryStatus(value: unknown): value is HistoryStatus {
   return HISTORY_STATUSES.includes(value as HistoryStatus);
 }
 
-/** Reporting → Live Sessions narrowed to one assessed track, in either table. */
+/**
+ * Reporting → Live Sessions narrowed to the latest released bootcamp's
+ * graduates, which is where it opens, or for an Assessments Viewer to the
+ * class still being judged; `all` is everyone with a record.
+ */
+export const LIVE_SESSIONS_SHOWS = ["graduates", "class", "all"] as const;
+export type LiveSessionsShow = (typeof LIVE_SESSIONS_SHOWS)[number];
+
+export function isLiveSessionsShow(value: unknown): value is LiveSessionsShow {
+  return LIVE_SESSIONS_SHOWS.includes(value as LiveSessionsShow);
+}
+
+/** Reporting → Live Sessions narrowed to one assessed track. */
 export const TRACK_FILTERS = ["sales", "engineer"] as const;
 export type TrackFilter = (typeof TRACK_FILTERS)[number];
 

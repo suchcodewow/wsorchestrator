@@ -1,8 +1,9 @@
 /**
  * Turning the test group off: archives the Slack channels it made, cancels
  * the calendar invites it sent, and clears the day's intake reminder claim so
- * the real ones are not held back. The group stays on if any of that fails, so
- * nothing is left behind and unrecorded; try again.
+ * the real ones are not held back; the answers and registrations it saved go
+ * too. The group stays on if any of that fails, so nothing is left behind and
+ * unrecorded; try again.
  */
 
 import "server-only";
@@ -10,6 +11,7 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { EVALS_SETTINGS_KEYS, evalsSettings, intakeResponses } from "@/db/schema";
+import { deleteTestRegistrations } from "@/lib/cohorts/registrations";
 import { archiveTestChannels } from "@/lib/cohorts/slack-sync";
 import { cancelTestMeetingInvites } from "@/lib/evals/meeting-sync";
 
@@ -25,6 +27,7 @@ export async function takeDownTestGroup(): Promise<{
     await db.delete(evalsSettings).where(eq(evalsSettings.key, EVALS_SETTINGS_KEYS.intakeRemindersSentOn));
     // The answers the group filled in are test data.
     await db.delete(intakeResponses).where(eq(intakeResponses.test, true));
+    await deleteTestRegistrations();
   }
   return {
     ok: failures.length === 0,

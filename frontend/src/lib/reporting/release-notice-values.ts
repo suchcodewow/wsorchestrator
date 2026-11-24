@@ -5,16 +5,15 @@
  */
 
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
-import { BOOTCAMP_COHORT_PREFIX } from "@/lib/list-specs";
 import type { ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { surveyMonth } from "@/lib/surveys/survey-values";
 
 /**
  * "Feedback has been released for November 2026 Bootcamp!  Click here …", with
- * "Click here" linking to `url` with Current cohort filtered to the class released.
+ * "Click here" linking to `url` with Live Sessions showing the graduates of the class released.
  */
 export function releaseNoticeText(stage: ReleaseStage, startDate: string, url: string): string {
-  const link = `${url}?${BOOTCAMP_COHORT_PREFIX}.stage=${stage}`;
+  const link = `${url}?stage=${stage}`;
   return `Feedback has been released for ${surveyMonth(startDate)} ${STAGE_LABELS[stage]}!  <${link}|Click here> to view results for your attendees`;
 }
 

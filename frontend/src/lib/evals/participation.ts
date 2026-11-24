@@ -425,8 +425,8 @@ async function marksOf(bootcampId: string, stage: EvalsAssessmentStage, email?: 
 /** Who a press of Generate touches for one class at this bootcamp, and who it leaves out. */
 /**
  * What Generate would write for each person in `stage`'s class. Anyone in its
- * cohort, having RSVP'd, counts as attending, as does anyone scored on
- * something else there.
+ * cohort, having registered for it at this bootcamp, counts as attending, as
+ * does anyone scored on something else there.
  */
 async function generationPlans(bootcamp: { id: string; startDate: string }, stage: EvalsAssessmentStage, assessmentId: string) {
   const bootcampId = bootcamp.id;

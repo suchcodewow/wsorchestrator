@@ -21,6 +21,7 @@ process.env.AUTH_SECRET ||= "reporting-bootcamp-test-secret-reporting-b";
 import { db } from "@/db";
 import {
   bootcampClassReviews,
+  bootcampRegistrations,
   bootcamps,
   employees,
   evalsAssessmentCriteria,
@@ -34,15 +35,21 @@ import {
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { BOOTCAMP_COHORT_LIST, BOOTCAMP_RECORD_LIST, RELEASE_NOTICE_LIST, RELEASE_NOTICE_MESSAGE_LIST } from "@/lib/list-specs";
+import { nextClassOf, register } from "@/lib/cohorts/registrations";
 import { listCardViewers, recordCardView } from "@/lib/reporting/card-views";
 import {
   bootcampRecordCounts,
   classAttendees,
   classReviewSchema,
+  classStages,
   cohortBootcamp,
   editSubmission,
   getBootcampPerson,
+  graduatesBootcamp,
   listBootcampRecords,
+  listLiveSessions,
+  liveSessionsContext,
+  liveSessionsFilters,
   cohortCounts,
   listCohort,
   readerOf,
@@ -51,7 +58,6 @@ import {
   saveClassReview,
   submissionEditSchema,
   unscoredAttendees,
-  visibleStages,
   type BootcampReader,
 } from "@/lib/reporting/bootcamp";
 import { pendingOverall, suggestOverallFeedback } from "@/lib/reporting/overall-feedback";
@@ -117,6 +123,14 @@ async function seen(reader: ReturnType<typeof readerOf>) {
   return Object.fromEntries(page.rows.map((r) => [r.email, r.level]));
 }
 
+/** One page of Live Sessions' table as the reader would ask for it with `params`, this suite's people only. */
+async function table(reader: BootcampReader, params: Record<string, string> = {}) {
+  const context = await liveSessionsContext(reader);
+  const filters = liveSessionsFilters(context, (name) => params[name]);
+  const page = await listLiveSessions(reader, context, filters, { ...BOOTCAMP_RECORD_LIST, q: SCOPED, page: 1 });
+  return { context, filters, rows: page.rows };
+}
+
 before(async () => {
   await scope.setUp();
   admin = await scope.createUser("admin", PERSONAS.assessmentsAdmin);
@@ -145,8 +159,9 @@ before(async () => {
   // The newcomer is scored at the active bootcamp, which nobody below Assessments sees until it is released.
   // They are a bootcamp candidate on Cohorts → Current too, so that releasing moves them on.
   await employee("newcomer", "lead");
-  // Saving the registration form is what puts them in the cohort.
+  // Saving the registration form is what puts them in the class: its answers, and their registration for this bootcamp.
   await db.insert(intakeResponses).values({ form: "bootcamp", email: emailOf("newcomer"), answers: {} });
+  await db.insert(bootcampRegistrations).values({ bootcampId, stage: "bootcamp", email: emailOf("newcomer") });
   await employee("no-rsvp", "lead");
   const today = new Date().toISOString().slice(0, 10);
   await db
@@ -184,6 +199,7 @@ after(async () => {
   await db.delete(bootcampClassReviews).where(eq(bootcampClassReviews.attendeeEmail, emailOf("newcomer")));
   await db.update(bootcamps).set(restoreRelease).where(eq(bootcamps.id, bootcampId));
   await db.delete(intakeResponses).where(eq(intakeResponses.email, emailOf("newcomer")));
+  await db.delete(bootcampRegistrations).where(inArray(bootcampRegistrations.email, [emailOf("newcomer"), emailOf("no-rsvp")]));
   await scope.tearDown();
 });
 
@@ -279,7 +295,7 @@ describe("releasing a class", () => {
       );
       assert.match(
         page.rows[0]!.detail ?? "",
-        /^Feedback has been released for .+ Bootcamp!  <https:\/\/example\.test\/reporting\/bootcamp\?cohort\.stage=bootcamp\|Click here>/,
+        /^Feedback has been released for .+ Bootcamp!  <https:\/\/example\.test\/reporting\/bootcamp\?stage=bootcamp\|Click here>/,
       );
       assert.equal(page.rows[0]!.fullName, "Person lead");
       const counts = await countReleaseNoticeMessages(run.runId);
@@ -294,7 +310,8 @@ describe("releasing a class", () => {
   test("hides the active cohort's results from a manager entirely until released", async () => {
     const bootcamp = (await cohortBootcamp())!;
     const query = { ...BOOTCAMP_COHORT_LIST, q: SCOPED, page: 1 };
-    assert.deepEqual(visibleStages(manager(), bootcamp), []);
+    assert.deepEqual(classStages(manager(), bootcamp), []);
+    assert.ok(classStages(viewer(), bootcamp).includes("bootcamp"));
     assert.deepEqual((await listCohort(manager(), bootcamp, query)).rows, []);
     const forViewer = await listCohort(viewer(), bootcamp, query);
     assert.deepEqual(
@@ -302,32 +319,79 @@ describe("releasing a class", () => {
       [[emailOf("newcomer"), "bootcamp", 1, 3]],
     );
 
+    // On Live Sessions the class is the viewer's to switch to, and never a manager's, however they ask.
+    const managerTable = await table(manager(), { show: "class" });
+    assert.equal(managerTable.context.class, null);
+    assert.notEqual(managerTable.filters.show, "class");
+    assert.equal(
+      managerTable.rows.some((r) => r.email === emailOf("newcomer")),
+      false,
+    );
+    assert.ok(managerTable.rows.every((r) => r.inClass === null));
+    const viewerTable = await table(viewer(), { show: "class" });
+    assert.equal(viewerTable.filters.show, "class");
+    const inClass = viewerTable.rows.find((r) => r.email === emailOf("newcomer"));
+    assert.deepEqual([inClass?.level, inClass?.inClass, inClass?.averageScore], ["bootcamp", "bootcamp", 3]);
+    assert.ok((await cohortCounts(viewer(), bootcamp)).bootcamp >= 1);
+    assert.deepEqual(await cohortCounts(manager(), bootcamp), { bootcamp: 0, intermediate: 0 });
+
     const newcomer = (await getBootcampPerson(manager(), `${SCOPED}newcomer`))!;
     assert.equal(newcomer.classes.bootcamp.date, null, "not released, so not attended as far as a manager knows");
   });
 
-  test("lists only those who RSVP'd, and not a candidate who has been deferred", async () => {
+  test("lists only those registered for this bootcamp, and not one who has been deferred since", async () => {
     const bootcamp = (await cohortBootcamp())!;
     const listed = async () =>
       (await listCohort(viewer(), bootcamp, { ...BOOTCAMP_COHORT_LIST, q: SCOPED, page: 1 })).rows.map((r) => r.email);
-    assert.deepEqual(await listed(), [emailOf("newcomer")], "no-rsvp is a candidate who has not saved the form");
+    assert.deepEqual(await listed(), [emailOf("newcomer")], "no-rsvp is a candidate who has not registered");
+    // Answers saved for no bootcamp in particular, as before registrations, put no one in a class.
     const [rsvp] = await db
       .insert(intakeResponses)
       .values({ form: "bootcamp", email: emailOf("no-rsvp"), answers: {} })
       .returning({ id: intakeResponses.id });
+    // A registration for another bootcamp's class is not one for this.
+    const [elsewhere] = await db
+      .insert(bootcamps)
+      .values({ startDate: "2099-01-04", btcDays: 4, intDays: 3, status: "scheduled", createdBy: admin.id })
+      .returning({ id: bootcamps.id });
     try {
+      await db.insert(bootcampRegistrations).values({ bootcampId: elsewhere!.id, stage: "bootcamp", email: emailOf("no-rsvp") });
+      assert.deepEqual(await listed(), [emailOf("newcomer")]);
+
+      await db.insert(bootcampRegistrations).values({ bootcampId, stage: "bootcamp", email: emailOf("no-rsvp") });
       assert.deepEqual(await listed(), [emailOf("newcomer"), emailOf("no-rsvp")]);
       await db
         .update(employees)
         .set({ track: "deferred" })
         .where(eq(employees.id, `${SCOPED}no-rsvp`));
       assert.deepEqual(await listed(), [emailOf("newcomer")]);
+      assert.equal((await unscoredAttendees(bootcamp, "bootcamp")).names.includes("Person no-rsvp"), false);
     } finally {
       await db.delete(intakeResponses).where(eq(intakeResponses.id, rsvp!.id));
+      await db.delete(bootcampRegistrations).where(eq(bootcampRegistrations.email, emailOf("no-rsvp")));
+      await db.delete(bootcamps).where(eq(bootcamps.id, elsewhere!.id));
       await db
         .update(employees)
         .set({ track: "sales" })
         .where(eq(employees.id, `${SCOPED}no-rsvp`));
+    }
+  });
+
+  test("saving the form registers for the class it offers, and saving again keeps the one registration", async () => {
+    const next = (await nextClassOf("bootcamp"))!;
+    assert.equal(next.id, bootcampId, "the active bootcamp is the next one");
+    const mine = and(eq(bootcampRegistrations.email, emailOf("no-rsvp")), eq(bootcampRegistrations.stage, "bootcamp"));
+    try {
+      assert.deepEqual(await register("bootcamp", emailOf("no-rsvp").toUpperCase(), false), next);
+      const [first] = await db.select().from(bootcampRegistrations).where(mine);
+      assert.equal(first?.bootcampId, bootcampId);
+      await register("bootcamp", emailOf("no-rsvp"), false);
+      const again = await db.select().from(bootcampRegistrations).where(mine);
+      assert.equal(again.length, 1);
+      assert.equal(again[0]!.registeredAt.getTime(), first!.registeredAt.getTime());
+      assert.ok(again[0]!.updatedAt.getTime() >= first!.updatedAt.getTime());
+    } finally {
+      await db.delete(bootcampRegistrations).where(mine);
     }
   });
 
@@ -411,16 +475,27 @@ describe("releasing a class", () => {
 
     const bootcamp = (await cohortBootcamp())!;
     assert.equal(bootcamp.released.bootcamp?.byName, "admin");
-    assert.deepEqual(visibleStages(manager(), bootcamp), ["bootcamp"]);
-    const rows = (await listCohort(manager(), bootcamp, { ...BOOTCAMP_COHORT_LIST, q: SCOPED, page: 1 })).rows;
+    // Released, the class is its graduates', and no longer one being judged.
+    assert.equal(classStages(viewer(), bootcamp).includes("bootcamp"), false);
+    assert.deepEqual((await listCohort(viewer(), bootcamp, { ...BOOTCAMP_COHORT_LIST, q: SCOPED, page: 1 }, "bootcamp")).rows, []);
+    const graduates = (await graduatesBootcamp())!;
+    assert.equal(graduates.id, bootcampId);
+    assert.deepEqual(graduates.stages, ["bootcamp"]);
+
+    // A manager's table opens on the graduates, who are theirs to see once released.
+    const { filters, rows } = await table(manager());
+    assert.equal(filters.show, "graduates");
     assert.deepEqual(
-      rows.map((r) => [r.email, r.stage]),
-      [[emailOf("newcomer"), "bootcamp"]],
-      "the BTC date its own release wrote keeps them in this bootcamp's BTC class",
+      rows.map((r) => [r.email, r.level, r.graduated, r.inClass]),
+      [[emailOf("newcomer"), "bootcamp", "bootcamp", null]],
+      "the rep and the lead graduated from an older bootcamp, so they are only in everyone",
     );
+    assert.ok((await bootcampRecordCounts(manager())).graduates.bootcamp >= 1);
+    const everyone = (await table(manager(), { show: "all" })).rows.map((r) => r.email);
+    assert.deepEqual(everyone.sort(), [emailOf("lead"), emailOf("newcomer"), emailOf("rep")]);
     // The rep's lead sees them too; the outsider, whose org they are not in, does not.
     const outsider = readerOf({ access: PERSONAS.nobody, email: emailOf("outsider") });
-    assert.deepEqual((await listCohort(outsider, bootcamp, { ...BOOTCAMP_COHORT_LIST, q: SCOPED, page: 1 })).rows, []);
+    assert.deepEqual((await table(outsider)).rows, []);
 
     const newcomer = (await getBootcampPerson(manager(), `${SCOPED}newcomer`))!;
     assert.equal(newcomer.classes.bootcamp.score, 3);
@@ -614,15 +689,8 @@ describe("a class's overall review", () => {
     assert.equal(classReviewSchema.safeParse({ ...input, exitExam: 90.25, revises: null }).success, false);
   });
 
-  test("counts the exams in the active cohort's average", async () => {
-    const average = async () => {
-      const page = await listCohort(viewer(), (await cohortBootcamp())!, {
-        ...BOOTCAMP_COHORT_LIST,
-        q: emailOf("newcomer"),
-        page: 1,
-      });
-      return page.rows.find((r) => r.email === emailOf("newcomer"))!.averageScore;
-    };
+  test("counts the exams in the graduates' average", async () => {
+    const average = async () => (await table(viewer())).rows.find((r) => r.email === emailOf("newcomer"))!.averageScore;
     const scores = await db
       .select({ score: evalsSubmissions.averageScore })
       .from(evalsSubmissions)
@@ -652,26 +720,17 @@ describe("a class's overall review", () => {
     assert.equal(await average(), expected);
   });
 
-  test("History shows the score the cohort does, and the cohort narrows to one class", async () => {
-    const bootcamp = (await cohortBootcamp())!;
-    const query = { ...BOOTCAMP_COHORT_LIST, q: emailOf("newcomer"), page: 1 };
-    const inCohort = (await listCohort(viewer(), bootcamp, query)).rows.find((r) => r.email === emailOf("newcomer"))!;
-    const history = await listBootcampRecords(viewer(), { ...BOOTCAMP_RECORD_LIST, q: emailOf("newcomer"), page: 1 });
-    const inHistory = history.rows.find((r) => r.email === emailOf("newcomer"))!;
-    assert.deepEqual(
-      [inHistory.level, inHistory.averageScore, inHistory.scored, inHistory.date],
-      [inCohort.stage, inCohort.averageScore, inCohort.scored, inCohort.date],
-    );
-
-    assert.deepEqual(
-      (await listCohort(viewer(), bootcamp, query, "bootcamp")).rows.map((r) => r.email),
-      [emailOf("newcomer")],
-    );
-    assert.deepEqual((await listCohort(viewer(), bootcamp, query, "intermediate")).rows, []);
-    const counts = await cohortCounts(viewer(), bootcamp);
-    assert.ok(counts.bootcamp >= 1);
-    // A manager sees counts only for the classes released to them.
-    assert.equal((await cohortCounts(manager(), bootcamp)).intermediate, 0);
+  test("the graduates narrow to a class they hold, and ignore one they do not", async () => {
+    const graduates = (await graduatesBootcamp())!;
+    const btc = await table(viewer(), { stage: "bootcamp" });
+    assert.equal(btc.filters.stage, "bootcamp");
+    assert.ok(btc.rows.some((r) => r.email === emailOf("newcomer")));
+    assert.ok(btc.rows.every((r) => r.graduated === "bootcamp"));
+    // Its intermediate class is not released, so asking for it narrows nothing.
+    const int = await table(viewer(), { stage: "intermediate" });
+    assert.equal(int.filters.stage, graduates.stages.includes("intermediate") ? "intermediate" : null);
+    // Everyone is not narrowed by class at all.
+    assert.equal((await table(viewer(), { show: "all", stage: "bootcamp" })).filters.stage, null);
   });
 
   test("records who opens a card, once per person, and names them on both lists", async () => {
@@ -686,7 +745,7 @@ describe("a class's overall review", () => {
 
     const q = emailOf("newcomer");
     const rowsFor = async (reader: BootcampReader) => [
-      (await listCohort(reader, (await cohortBootcamp())!, { ...BOOTCAMP_COHORT_LIST, q, page: 1 })).rows[0]!,
+      (await table(reader)).rows.find((r) => r.email === q)!,
       (await listBootcampRecords(reader, { ...BOOTCAMP_RECORD_LIST, q, page: 1 })).rows[0]!,
     ];
     for (const row of await rowsFor(opener())) {

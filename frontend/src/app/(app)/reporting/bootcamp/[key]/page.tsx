@@ -7,13 +7,13 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
-import { BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX, BOOTCAMP_RECORD_LIST, isHistoryStatus, isTrackFilter } from "@/lib/list-specs";
+import { BOOTCAMP_RECORD_LIST, isHistoryStatus, isLiveSessionsShow, isTrackFilter } from "@/lib/list-specs";
 import { listParam, parseListQuery, withParams, writeListQuery, type Page } from "@/lib/paging";
 import {
-  cohortBootcamp,
   getBootcampPerson,
-  listBootcampRecords,
-  listCohort,
+  listLiveSessions,
+  liveSessionsContext,
+  liveSessionsFilters,
   readerOf,
   type BootcampReader,
 } from "@/lib/reporting/bootcamp";
@@ -56,30 +56,16 @@ async function stepsFor(
   key: string,
   carried: URLSearchParams,
 ) {
-  const cohort = list.from === "cohort";
-  const prefix = cohort ? BOOTCAMP_COHORT_PREFIX : "";
-  let page: number;
-  let fetchPage: (page: number) => Promise<Page<{ key: string }>>;
-  if (cohort) {
-    const query = parseListQuery(list, BOOTCAMP_COHORT_LIST, prefix);
-    const bootcamp = await cohortBootcamp();
-    if (!bootcamp) return { prev: null, next: null };
-    const stage = list[`${prefix}.stage`];
-    page = query.page;
-    const track = list[`${prefix}.track`];
-    fetchPage = (n) =>
-      listCohort(reader, bootcamp, { ...query, page: n }, isReleaseStage(stage) ? stage : null, isTrackFilter(track) ? track : null);
-  } else {
-    const query = parseListQuery(list, BOOTCAMP_RECORD_LIST);
-    const status = isHistoryStatus(list.status) ? list.status : null;
-    page = query.page;
-    fetchPage = (n) => listBootcampRecords(reader, { ...query, page: n }, status, isTrackFilter(list.track) ? list.track : null);
-  }
+  const query = parseListQuery(list, BOOTCAMP_RECORD_LIST);
+  const context = await liveSessionsContext(reader);
+  const filters = liveSessionsFilters(context, (name) => list[name]);
+  const page = query.page;
+  const fetchPage = (n: number) => listLiveSessions(reader, context, filters, { ...query, page: n });
   const { prev, next } = await neighbours(fetchPage, page, key);
   const hrefTo = (to: { key: string; page: number } | null) => {
     if (!to) return null;
     const p = new URLSearchParams(carried);
-    p.set(listParam("page", prefix), String(to.page));
+    p.set(listParam("page"), String(to.page));
     return `/reporting/bootcamp/${encodeURIComponent(to.key)}?${p}`;
   };
   return { prev: hrefTo(prev), next: hrefTo(next) };
@@ -103,18 +89,15 @@ export default async function BootcampPersonPage({
   // The list carried its search, sorts, pages and filters here, so the back link returns to them.
   const list = await searchParams;
   const back = writeListQuery(parseListQuery(list, BOOTCAMP_RECORD_LIST), BOOTCAMP_RECORD_LIST);
-  writeListQuery(parseListQuery(list, BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX), BOOTCAMP_COHORT_LIST, back, BOOTCAMP_COHORT_PREFIX);
+  if (isLiveSessionsShow(list.show)) back.set("show", list.show);
+  if (isReleaseStage(list.stage)) back.set("stage", list.stage);
   if (isHistoryStatus(list.status)) back.set("status", list.status);
-  const stage = list[`${BOOTCAMP_COHORT_PREFIX}.stage`];
-  if (isReleaseStage(stage)) back.set(`${BOOTCAMP_COHORT_PREFIX}.stage`, stage);
   if (isTrackFilter(list.track)) back.set("track", list.track);
-  const cohortTrack = list[`${BOOTCAMP_COHORT_PREFIX}.track`];
-  if (isTrackFilter(cohortTrack)) back.set(`${BOOTCAMP_COHORT_PREFIX}.track`, cohortTrack);
 
   const carried = new URLSearchParams();
   for (const [k, v] of Object.entries(list)) if (typeof v === "string") carried.set(k, v);
   const steps =
-    list.from === "cohort" || list.from === "history"
+    list.from === "history"
       ? await stepsFor(readerOf({ access, email: session.user.email ?? null, id: session.user.id }), list, key, carried)
       : { prev: null, next: null };
 

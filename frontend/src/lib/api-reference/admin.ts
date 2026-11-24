@@ -17,6 +17,7 @@ import {
   HIBOB_SYNC_LIST,
   HISTORY_STATUSES,
   JUDGE_LIST,
+  LIVE_SESSIONS_SHOWS,
   ORGANIZATION_LIST,
   PREVIOUS_SESSION_LIST,
   RELEASE_NOTICE_LIST,
@@ -3323,13 +3324,20 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/reporting/bootcamp",
-        summary: "Lists the people the caller may see with a BTC or INT record, newest class first, a page at a time.",
+        summary:
+          "Lists Reporting → Live Sessions' one table, a page at a time: the latest released bootcamp's graduates by default, everyone the caller may see with a BTC or INT record, or for an Assessments Viewer the class still being judged.",
         access: "signedIn",
         token: true,
         notes:
-          "A record is a class someone was assessed in that the caller may see: once it is released, or for an Assessments Viewer also once its bootcamp is complete. level is the furthest class attended: intermediate, else bootcamp. date is their latest class day. averageScore is their score in level at the newest bootcamp they had it, worked out as GET /api/reporting/bootcamp/cohort does, and scored how many assessments it counts. viewers names who has opened their card (POST /api/reporting/bootcamp/people/{key}/views), newest first, at most 20, with when each last did; viewerCount counts them all. Both are empty until the caller has opened that card themself. key addresses their page: their employee id, else, for someone assessed whom the employee list does not have, a submission's. fullName is null for someone it has no name for, and active false for anyone the last HiBob sync did not send. counts gives everyone the caller may see, the active and the inactive, whatever the search or status.",
+          "show picks the rows. graduates, the default while any bootcamp has a class released, is the people scored in a released class of the latest bootcamp that has one (graduates names it); all is everyone with a record; class, for an Assessments Viewer while the cohort bootcamp (as GET /api/reporting/bootcamp/cohort has it) holds a class not yet released, is that class's members, as GET /api/reporting/bootcamp/cohort lists them. A show the caller may not have falls back to the default, and the response's show says which was used. A record is a class someone was assessed in that the caller may see: once it is released, or for an Assessments Viewer also once its bootcamp is complete. level is the furthest class attended: intermediate, else bootcamp; in class, the class they are in. date is their latest class day, or in class the bootcamp's start. averageScore is their score in level at the newest bootcamp they had it, worked out as GET /api/reporting/bootcamp/cohort does, and scored how many assessments it counts. graduated is the class they graduated from at the latest released bootcamp, else null. inClass is the class still being judged they are in, for an Assessments Viewer, else null. viewers names who has opened their card (POST /api/reporting/bootcamp/people/{key}/views), newest first, at most 20, with when each last did; viewerCount counts them all. Both are empty until the caller has opened that card themself. key addresses their page: their employee id, else, for someone assessed whom the employee list does not have, a submission's. fullName is null for someone it has no name for, and active false for anyone the last HiBob sync did not send. stage narrows graduates or class to one class the bootcamp holds and is ignored otherwise; status narrows only all. counts gives everyone the caller may see, the active and the inactive, and the graduates of each class, whatever the search or filters. graduates and class are null when there is none for the caller.",
         query: [
           ...listQuery(BOOTCAMP_RECORD_LIST.sorts, "the name or email", BOOTCAMP_RECORD_LIST.dir),
+          {
+            name: "show",
+            type: LIVE_SESSIONS_SHOWS.map((s) => `"${s}"`).join(" | "),
+            note: "which rows; graduates if omitted, or all before any class is released",
+          },
+          { name: "stage", type: '"bootcamp" | "intermediate"', note: "only that class of the graduates or the class; both if omitted" },
           {
             name: "status",
             type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "),
@@ -3337,8 +3345,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           },
           { name: "track", type: '"sales" | "engineer"', note: "only that assessed track; both if omitted" },
         ],
-        returns: `{ people: { key, email, fullName: string | null, level: "intermediate" | "bootcamp", date: "YYYY-MM-DD", active: boolean, scored: number, averageScore: number | null, viewers: { name, at }[], viewerCount: number }[], ${PAGE_FIELDS}, status: "active" | "inactive" | null, track: "sales" | "engineer" | null, counts: { total: number, active: number, inactive: number } }`,
+        returns: `{ people: { key, email, fullName: string | null, level: "intermediate" | "bootcamp", date: "YYYY-MM-DD", active: boolean, scored: number, averageScore: number | null, viewers: { name, at }[], viewerCount: number, graduated: "bootcamp" | "intermediate" | null, inClass: "bootcamp" | "intermediate" | null }[], ${PAGE_FIELDS}, show: "graduates" | "class" | "all", stage: "bootcamp" | "intermediate" | null, status: "active" | "inactive" | null, track: "sales" | "engineer" | null, graduates: { startDate: "YYYY-MM-DD", stages: ("bootcamp" | "intermediate")[] } | null, class: { startDate: "YYYY-MM-DD", stages: ("bootcamp" | "intermediate")[] } | null, counts: { total: number, active: number, inactive: number, graduates: { bootcamp: number, intermediate: number } } }`,
         errors: [
+          { status: 400, error: "invalid_show", when: "show is not graduates, class or all" },
+          { status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" },
           { status: 400, error: "invalid_status", when: "status is neither active nor inactive" },
           { status: 400, error: "invalid_track", when: "track is neither sales nor engineer" },
         ],
@@ -3347,17 +3357,17 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/reporting/bootcamp/cohort",
         summary:
-          "Returns the cohort's bootcamp (the active one, or with none active the latest complete one), which of its classes are released, and a page of the people in its cohort the caller may see.",
+          "Returns the cohort's bootcamp (the active one, or with none active the latest complete one), which of its classes are released, and for an Assessments Viewer a page of the people in its classes not yet released.",
         access: "signedIn",
         token: true,
         notes:
-          "stages lists the classes the caller may see the cohort of: every class the bootcamp holds for an Assessments Viewer or above, else only those released. cohort holds one row per person and class in those stages: everyone who RSVP'd to their class by saving its registration form and is not deferred, whether a current candidate or already scored at the bootcamp; averageScore is the mean of their submissions' averages, both exams counting as one more once both are in, to one decimal place, null with none scored, and scored how many submissions there are. date is the bootcamp's start date, the day of both its classes. viewers and viewerCount are as on GET /api/reporting/bootcamp. stage narrows cohort to one class; counts gives how many are in each class the caller may see, whatever the search or stage. bootcamp is null, and cohort empty, when no bootcamp is active.",
+          "stages lists the classes still being judged: for an Assessments Viewer or above, every class the bootcamp holds that is not released yet; for anyone else none, since a released class's people are its graduates on GET /api/reporting/bootcamp. cohort holds one row per person in those stages: everyone registered for that class at this bootcamp by saving its registration form, who is still sent by HiBob, not deferred, ignored or exempt, and assessed on Sales or Engineer, and anyone scored at the bootcamp; averageScore is the mean of their submissions' averages, both exams counting as one more once both are in, to one decimal place, null with none scored, and scored how many submissions there are. date is the bootcamp's start date, the day of both its classes. viewers and viewerCount are as on GET /api/reporting/bootcamp, and graduated says which class they graduated from at the latest released bootcamp, else null. stage narrows cohort to one class; counts gives how many are in each class in stages, whatever the search or stage. bootcamp is null, and cohort empty, when no bootcamp is active.",
         query: [
           ...listQuery(BOOTCAMP_COHORT_LIST.sorts, "the name or email", BOOTCAMP_COHORT_LIST.dir),
           { name: "stage", type: '"bootcamp" | "intermediate"', note: "only that class; both if omitted" },
           { name: "track", type: '"sales" | "engineer"', note: "only that assessed track; both if omitted" },
         ],
-        returns: `{ bootcamp: { id, startDate, intermediate: boolean, released: { bootcamp: { at, byName: string | null } | null, intermediate: { at, byName: string | null } | null } } | null, stages: ("bootcamp" | "intermediate")[], stage: "bootcamp" | "intermediate" | null, track: "sales" | "engineer" | null, counts: { bootcamp: number, intermediate: number }, cohort: { key, email, fullName: string | null, stage: "bootcamp" | "intermediate", scored: number, averageScore: number | null, date: "YYYY-MM-DD", viewers: { name, at }[], viewerCount: number }[], ${PAGE_FIELDS} }`,
+        returns: `{ bootcamp: { id, startDate, intermediate: boolean, released: { bootcamp: { at, byName: string | null } | null, intermediate: { at, byName: string | null } | null } } | null, stages: ("bootcamp" | "intermediate")[], stage: "bootcamp" | "intermediate" | null, track: "sales" | "engineer" | null, counts: { bootcamp: number, intermediate: number }, cohort: { key, email, fullName: string | null, stage: "bootcamp" | "intermediate", scored: number, averageScore: number | null, date: "YYYY-MM-DD", viewers: { name, at }[], viewerCount: number, graduated: "bootcamp" | "intermediate" | null }[], ${PAGE_FIELDS} }`,
         errors: [{ status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" }],
       },
       {
@@ -3367,7 +3377,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "comments counts the blank comments there are marks to write, so one person can count twice. overall counts the blank overall positive and constructive feedback of the cohort (PUT /api/reporting/bootcamp/people/{key}/review) that some assessment's saved feedback on that side could fill. scores counts the people who would get a score. skipped names candidates who have not RSVP'd and have no marks and no assessment, whom it leaves out, at most 100. unscored is everyone in the class still waiting on a score, which keeps it from being released: someone in the cohort (RSVP'd to the class and not deferred, as Live Sessions lists them) without a scored assessment for every active assessment of the class taught to their track and for Participation, or anyone with a blank score there. total, and up to 100 names. noExitExam and noFeedback, in the same shape, are everyone in that cohort without an exit exam, and without both overall positive and constructive feedback; either also keeps it from being released. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
+          "comments counts the blank comments there are marks to write, so one person can count twice. overall counts the blank overall positive and constructive feedback of the cohort (PUT /api/reporting/bootcamp/people/{key}/review) that some assessment's saved feedback on that side could fill. scores counts the people who would get a score. skipped names candidates who have not registered for this bootcamp's class and have no marks and no assessment, whom it leaves out, at most 100. unscored is everyone in the class still waiting on a score, which keeps it from being released: someone in the class (registered for it at this bootcamp and not deferred, as Live Sessions lists them) without a scored assessment for every active assessment of the class taught to their track and for Participation, or anyone with a blank score there. total, and up to 100 names. noExitExam and noFeedback, in the same shape, are everyone in that cohort without an exit exam, and without both overall positive and constructive feedback; either also keeps it from being released. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
         returns:
           "{ bootcamp: StagePending | null, intermediate: StagePending | null }, where StagePending is { comments: number, overall: number, scores: number, skipped: string[], unscored: Waiting, noExitExam: Waiting, noFeedback: Waiting }, where Waiting is { total: number, names: string[] }",
       },

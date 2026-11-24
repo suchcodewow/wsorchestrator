@@ -30,7 +30,6 @@ import {
   evalsAssessments,
   evalsSubmissionScores,
   evalsSubmissions,
-  intakeResponses,
   scorecardViews,
   users,
   type BootcampStatus,
@@ -39,11 +38,19 @@ import {
 } from "@/db/schema";
 import { getLiveSessionsSettings } from "@/lib/reporting/live-sessions-settings";
 import { averageScore, requiredFeedback, wholeScore } from "@/lib/evals/assessment-values";
-import { attended } from "@/lib/evals/attendance";
-import { assessedOn, assessedTrackOf, isCandidate } from "@/lib/evals/current-cohort";
-import { getCandidateCutoffs } from "@/lib/evals/settings";
+import { assessedTrackOf } from "@/lib/evals/current-cohort";
+import { registeredFor } from "@/lib/cohorts/registrations";
 import { retrackEmployees } from "@/lib/evals/tracks";
-import type { BootcampCohortSort, BootcampRecordSort, HistoryStatus, TrackFilter } from "@/lib/list-specs";
+import {
+  isHistoryStatus,
+  isLiveSessionsShow,
+  isTrackFilter,
+  type BootcampCohortSort,
+  type BootcampRecordSort,
+  type HistoryStatus,
+  type LiveSessionsShow,
+  type TrackFilter,
+} from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
 import {
@@ -58,6 +65,7 @@ import {
   RELEASE_STAGES,
   examAverage,
   examScore,
+  isReleaseStage,
   type BootcampLevel,
   type ClassSummary,
   type ReleaseStage,
@@ -167,6 +175,41 @@ function classScore(bootcamp: SQL, email: SQL, stage: SQL): { scored: SQL; avera
 }
 
 /**
+ * The latest bootcamp with a class released, whose people Live Sessions
+ * shows as its graduates until the next one is released: of two on the same
+ * day, the one saved last.
+ */
+const LATEST_RELEASED = sql`(select lr.id from ${bootcamps} lr
+  where lr.btc_released_at is not null or lr.int_released_at is not null
+  order by lr.start_date desc, lr.updated_at desc limit 1)`;
+
+/**
+ * The class `email` graduated from at the latest released bootcamp: scored
+ * there in a class that is released, the further if both; null for anyone
+ * who is not one of its graduates.
+ */
+function graduatedIn(email: SQL): SQL {
+  return sql`(select max(ga.stage) from ${evalsSubmissions} gs
+      join ${evalsAssessments} ga on ga.id = gs.assessment_id
+      join ${bootcamps} gb on gb.id = gs.bootcamp_id
+     where gs.attendee_email = ${email} and gs.bootcamp_id = ${LATEST_RELEASED}
+       and (case ga.stage when 'bootcamp' then gb.btc_released_at else gb.int_released_at end) is not null)`;
+}
+
+/** The latest released bootcamp and which of its classes are out: whose graduates Live Sessions shows. */
+export type GraduatesBootcamp = { id: string; startDate: string; stages: ReleaseStage[] };
+
+export async function graduatesBootcamp(): Promise<GraduatesBootcamp | null> {
+  const { rows } = await db.execute<{ id: string; startDate: string; btc: boolean; int: boolean }>(sql`
+    select b.id, b.start_date::text as "startDate", b.btc_released_at is not null as btc, b.int_released_at is not null as int
+      from ${bootcamps} b where b.id = ${LATEST_RELEASED}`);
+  const row = rows[0];
+  if (!row) return null;
+  const stages: ReleaseStage[] = [...(row.btc ? (["bootcamp"] as const) : []), ...(row.int ? (["intermediate"] as const) : [])];
+  return { id: row.id, startDate: row.startDate, stages };
+}
+
+/**
  * One row per person in reach with a past record: their level, latest class
  * day, name, key, whether they are still here, and their score in that level
  * at the newest bootcamp they had it.
@@ -185,7 +228,8 @@ function people(reader: BootcampReader): SQL {
                ${nameOf(sql`r.email`)} as full_name,
                coalesce((select bool_or(n.active) from ${employees} n where n.email = r.email), false) as active,
                ${keyOf(sql`r.email`)} as key,
-               (select ${assessedTrackOf("n")} from ${employees} n where n.email = r.email order by n.active desc, n.id limit 1) as track
+               (select ${assessedTrackOf("n")} from ${employees} n where n.email = r.email order by n.active desc, n.id limit 1) as track,
+               ${graduatedIn(sql`r.email`)} as graduated
           from ${pastRecords(reader)} r
          where ${inReach(reader, sql`r.email`)}
          group by r.email
@@ -218,7 +262,29 @@ export type BootcampRecordRow = {
   /** Who has opened their card, newest first, at most `VIEWERS_SHOWN`; none until the reader has. */
   viewers: CardViewer[];
   viewerCount: number;
+  /** The class they graduated from at the latest released bootcamp (`graduatesBootcamp`); null for anyone else. */
+  graduated: ReleaseStage | null;
+  /** For an Assessments Viewer, the class still being judged they are in (`classStages`); always null for anyone else. */
+  inClass: ReleaseStage | null;
 };
+
+/**
+ * Narrows the records: `graduates` to the latest released bootcamp's, of one
+ * class with `stage`; `inClass` names the class still being judged, whose
+ * members each row marks, given only to an Assessments Viewer.
+ */
+export type RecordScope = {
+  graduates?: boolean;
+  stage?: ReleaseStage | null;
+  inClass?: { bootcamp: CohortBootcamp; stages: ReleaseStage[] } | null;
+};
+
+/** The members of the class still being judged, by email and stage, or an empty list without one. */
+async function classMembersSql(inClass: RecordScope["inClass"]): Promise<SQL> {
+  return inClass && inClass.stages.length > 0
+    ? sql`select c.email, c.stage from (${await cohortSql(inClass.bootcamp, inClass.stages)}) c`
+    : sql`select null::text as email, null::text as stage where false`;
+}
 
 /** One page of the people the reader may see with a record, newest class first by default; the search matches the name or email. */
 export async function listBootcampRecords(
@@ -226,6 +292,7 @@ export async function listBootcampRecords(
   query: ListQuery<BootcampRecordSort>,
   status: HistoryStatus | null = null,
   track: TrackFilter | null = null,
+  scope: RecordScope = {},
 ): Promise<Page<BootcampRecordRow>> {
   const { limit, offset } = pageWindow(query.page);
   const where = and(
@@ -233,12 +300,16 @@ export async function listBootcampRecords(
     searchAny(query.q, [sql`p.full_name`, sql`p.email`]),
     status ? STATUS_FILTER[status] : undefined,
     track ? sql`p.track = ${track}` : undefined,
+    scope.graduates ? (scope.stage ? sql`p.graduated = ${scope.stage}` : sql`p.graduated is not null`) : undefined,
   );
   // A class shares one day, so its people fall back to name order.
   const order = orderFor(RECORD_SORT_COLUMNS[query.sort], query.dir, sql`lower(p.full_name) asc nulls last`, sql`p.email`);
+  const inClass = reader.all ? scope.inClass : null;
   const { rows } = await db.execute<BootcampRecordRow>(sql`
+    with cls as (${await classMembersSql(inClass)})
     select p.key, p.email, p.full_name as "fullName", p.level, p.date, p.active, p.scored, p.average as "averageScore",
-           ${viewersOf(reader, sql`p.email`)} as viewers, ${viewerCountOf(reader, sql`p.email`)} as "viewerCount"
+           ${viewersOf(reader, sql`p.email`)} as viewers, ${viewerCountOf(reader, sql`p.email`)} as "viewerCount",
+           p.graduated, (select c.stage from cls c where c.email = p.email limit 1) as "inClass"
       from ${people(reader)} p
      where ${where}
      order by ${sql.join(order, sql`, `)}
@@ -246,15 +317,23 @@ export async function listBootcampRecords(
   return toPage(rows, query.page);
 }
 
-export type BootcampRecordCounts = { total: number } & Record<HistoryStatus, number>;
+export type BootcampRecordCounts = { total: number; graduates: Record<ReleaseStage, number> } & Record<HistoryStatus, number>;
 
-/** How many people the reader may see with a record, and how many are still here, whatever the search. */
+/** How many people the reader may see with a record, how many are still here, and how many graduated from each class of the latest released bootcamp, whatever the search. */
 export async function bootcampRecordCounts(reader: BootcampReader): Promise<BootcampRecordCounts> {
-  const { rows } = await db.execute<{ total: number; active: number }>(sql`
-    select count(*)::int as total, (count(*) filter (where p.active))::int as active from ${people(reader)} p`);
+  const { rows } = await db.execute<{ total: number; active: number; btc: number; int: number }>(sql`
+    select count(*)::int as total, (count(*) filter (where p.active))::int as active,
+           (count(*) filter (where p.graduated = 'bootcamp'))::int as btc,
+           (count(*) filter (where p.graduated = 'intermediate'))::int as int
+      from ${people(reader)} p`);
   const total = rows[0]?.total ?? 0;
   const active = rows[0]?.active ?? 0;
-  return { total, active, inactive: total - active };
+  return {
+    total,
+    active,
+    inactive: total - active,
+    graduates: { bootcamp: rows[0]?.btc ?? 0, intermediate: rows[0]?.int ?? 0 },
+  };
 }
 
 /** The active bootcamp and whether each class's scores are out. */
@@ -308,10 +387,15 @@ export async function cohortBootcamp(): Promise<CohortBootcamp | null> {
   };
 }
 
-/** The stages of `bootcamp` the reader may see the cohort of. */
-export function visibleStages(reader: BootcampReader, bootcamp: CohortBootcamp): ReleaseStage[] {
+/**
+ * The classes of `bootcamp` still being judged, which only an Assessments
+ * Viewer sees: those not released yet. A class once released is its
+ * graduates' (`graduatesBootcamp`), which everyone sees.
+ */
+export function classStages(reader: BootcampReader, bootcamp: CohortBootcamp): ReleaseStage[] {
+  if (!reader.all) return [];
   const held: ReleaseStage[] = bootcamp.intermediate ? ["bootcamp", "intermediate"] : ["bootcamp"];
-  return reader.all ? held : held.filter((stage) => bootcamp.released[stage] !== null);
+  return held.filter((stage) => bootcamp.released[stage] === null);
 }
 
 export type CohortRow = {
@@ -328,6 +412,8 @@ export type CohortRow = {
   /** Who has opened their card, newest first, at most `VIEWERS_SHOWN`; none until the reader has. */
   viewers: CardViewer[];
   viewerCount: number;
+  /** As on `BootcampRecordRow`: the class they graduated from at the latest released bootcamp, or null. */
+  graduated: ReleaseStage | null;
 };
 
 const COHORT_SORT_COLUMNS: Record<BootcampCohortSort, SQL> = {
@@ -339,38 +425,31 @@ const COHORT_SORT_COLUMNS: Record<BootcampCohortSort, SQL> = {
 };
 
 /**
- * The active bootcamp's cohort in `stages`, as a query giving each member's
- * `email`, `stage` and `track`: everyone who RSVP'd to their class by saving
- * its registration form, as Cohorts → Current marks them. That is a current
- * candidate, which leaves out the deferred, or someone already scored at it,
- * who stays after the class is released even if that defers them from the next.
+ * `bootcamp`'s class in `stages`, as a query giving each member's `email`,
+ * `stage` and `track`: everyone registered for it (`registeredFor`) who is
+ * assessed on Sales or Engineer, and anyone scored at it, who stays after the
+ * class is released even if that defers them from the next.
  */
 async function cohortSql(bootcamp: { id: string; startDate: string }, stages: ReleaseStage[]): Promise<SQL> {
-  const cutoffs = await getCandidateCutoffs();
+  const inStages = sql.join(
+    stages.map((st) => sql`${st}`),
+    sql`, `,
+  );
   return sql`
     select distinct on (c.email) c.email, c.stage, e.track
       from (
-        select ${employees.email} as email,
-               -- Releasing this bootcamp's own BTC class still counts them in it.
-               (case when ${attended("bootcamp", sql`${employees.email}`, { before: bootcamp.startDate })}
-                     then 'intermediate' else 'bootcamp' end) as stage
-          from ${employees}
-         where ${and(isCandidate(cutoffs), assessedOn(["sales", "engineer"]))}
+        select g.email, g.stage, false as scored from (${registeredFor(bootcamp.id, inStages)}) g
         union
-        select s.attendee_email, a.stage
+        select s.attendee_email, a.stage, true
           from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
-         where s.bootcamp_id = ${bootcamp.id}
+         where s.bootcamp_id = ${bootcamp.id} and a.stage in (${inStages})
       ) c
       left join lateral (
         select ${assessedTrackOf("n")} as track from ${employees} n where n.email = c.email order by n.active desc, n.id limit 1
       ) e on true
-     where c.stage in (${sql.join(
-       stages.map((st) => sql`${st}`),
-       sql`, `,
-     )})
-       and exists (select 1 from ${intakeResponses} i where i.form = c.stage and i.email = lower(c.email))
-     -- Someone scored in both classes is listed once, at the further.
-     order by c.email, c.stage desc`;
+     where c.scored or e.track is not null
+     -- Someone in both classes is listed once, at the further; scored first, so a score's stage wins.
+     order by c.email, c.stage desc, c.scored desc`;
 }
 
 /** Everyone in `stage`'s cohort at `bootcamp`, by email: at most 1,000, for Generate to count as attending. */
@@ -391,9 +470,9 @@ async function cohortMembers(reader: BootcampReader, bootcamp: CohortBootcamp, s
 }
 
 /**
- * One page of the active bootcamp's cohort in reach of the reader, as
- * `cohortSql` has it, of one class when `stage` is given. Empty for a stage
- * the reader may not see yet.
+ * One page of the cohort bootcamp's class still being judged, in reach of
+ * the reader, as `cohortSql` has it, of one class when `stage` is given.
+ * Empty for anyone below Assessments Viewer, and for a class released.
  */
 export async function listCohort(
   reader: BootcampReader,
@@ -402,14 +481,15 @@ export async function listCohort(
   stage: ReleaseStage | null = null,
   track: TrackFilter | null = null,
 ): Promise<Page<CohortRow>> {
-  const stages = visibleStages(reader, bootcamp).filter((s) => !stage || s === stage);
+  const stages = classStages(reader, bootcamp).filter((s) => !stage || s === stage);
   if (stages.length === 0) return toPage([], query.page);
   const { limit, offset } = pageWindow(query.page);
   const order = orderFor(COHORT_SORT_COLUMNS[query.sort], query.dir, sql`lower(m.full_name) asc nulls last`, sql`m.email`);
   const { rows } = await db.execute<CohortRow>(sql`
     select m.key, m.email, m.full_name as "fullName", m.stage, m.scored, m.average as "averageScore",
            ${bootcamp.startDate}::text as date,
-           ${viewersOf(reader, sql`m.email`)} as viewers, ${viewerCountOf(reader, sql`m.email`)} as "viewerCount"
+           ${viewersOf(reader, sql`m.email`)} as viewers, ${viewerCountOf(reader, sql`m.email`)} as "viewerCount",
+           ${graduatedIn(sql`m.email`)} as graduated
       from (${await cohortMembers(reader, bootcamp, stages)}) m
      where ${and(sql`true`, searchAny(query.q, [sql`m.full_name`, sql`m.email`]), track ? sql`m.track = ${track}` : undefined)}
      order by ${sql.join(order, sql`, `)}
@@ -417,15 +497,100 @@ export async function listCohort(
   return toPage(rows, query.page);
 }
 
-/** How many of the cohort in reach of the reader are in each class they may see, whatever the search. */
+/** How many of the cohort in reach of the reader are in each class still being judged they may see, whatever the search. */
 export async function cohortCounts(reader: BootcampReader, bootcamp: CohortBootcamp): Promise<Record<ReleaseStage, number>> {
   const counts: Record<ReleaseStage, number> = { bootcamp: 0, intermediate: 0 };
-  const stages = visibleStages(reader, bootcamp);
+  const stages = classStages(reader, bootcamp);
   if (stages.length === 0) return counts;
   const { rows } = await db.execute<{ stage: ReleaseStage; count: number }>(sql`
     select m.stage, count(*)::int as count from (${await cohortMembers(reader, bootcamp, stages)}) m group by m.stage`);
   for (const r of rows) counts[r.stage] = r.count;
   return counts;
+}
+
+/** What Live Sessions can show the reader: the latest graduates, and for an Assessments Viewer the class still being judged. */
+export type LiveSessionsContext = {
+  graduates: GraduatesBootcamp | null;
+  class: { bootcamp: CohortBootcamp; stages: ReleaseStage[] } | null;
+};
+
+export async function liveSessionsContext(reader: BootcampReader): Promise<LiveSessionsContext> {
+  const [graduates, bootcamp] = await Promise.all([graduatesBootcamp(), reader.all ? cohortBootcamp() : null]);
+  const stages = bootcamp ? classStages(reader, bootcamp) : [];
+  return { graduates, class: bootcamp && stages.length > 0 ? { bootcamp, stages } : null };
+}
+
+/** How Live Sessions' one table is narrowed. `stage` applies to the graduates and the class, `status` only to `all`. */
+export type LiveSessionsFilters = {
+  show: LiveSessionsShow;
+  status: HistoryStatus | null;
+  track: TrackFilter | null;
+  stage: ReleaseStage | null;
+};
+
+/**
+ * The filters `get` asks for, as the reader may have them: the graduates
+ * when it names none and there are some, else everyone; the class only for
+ * an Assessments Viewer while one is being judged; a stage only of the
+ * graduates or the class, and only one they hold. Anything else is dropped,
+ * as a bad sort is.
+ */
+export function liveSessionsFilters(context: LiveSessionsContext, get: (name: string) => unknown): LiveSessionsFilters {
+  const fallback: LiveSessionsShow = context.graduates ? "graduates" : "all";
+  const asked = get("show");
+  let show: LiveSessionsShow = isLiveSessionsShow(asked) ? asked : fallback;
+  if ((show === "class" && !context.class) || (show === "graduates" && !context.graduates)) show = fallback;
+  const held = show === "class" ? context.class!.stages : show === "graduates" ? context.graduates!.stages : [];
+  const stage = get("stage");
+  const status = get("status");
+  const track = get("track");
+  return {
+    show,
+    status: show === "all" && isHistoryStatus(status) ? status : null,
+    track: isTrackFilter(track) ? track : null,
+    stage: isReleaseStage(stage) && held.includes(stage) ? stage : null,
+  };
+}
+
+/** A History sort as the class's own: its stage is the level shown. */
+const COHORT_SORT_FOR: Record<BootcampRecordSort, BootcampCohortSort> = {
+  date: "date",
+  fullName: "fullName",
+  level: "stage",
+  averageScore: "averageScore",
+};
+
+/**
+ * One page of Live Sessions' table as `filters` narrow it. The class still
+ * being judged is its members with their score there, each `inClass`; anything
+ * else is people with a record, each marked with whether they graduated from
+ * the latest released bootcamp and, for an Assessments Viewer, the class they
+ * are in.
+ */
+export async function listLiveSessions(
+  reader: BootcampReader,
+  context: LiveSessionsContext,
+  filters: LiveSessionsFilters,
+  query: ListQuery<BootcampRecordSort>,
+): Promise<Page<BootcampRecordRow>> {
+  if (filters.show === "class" && context.class) {
+    const page = await listCohort(
+      reader,
+      context.class.bootcamp,
+      { ...query, sort: COHORT_SORT_FOR[query.sort] },
+      filters.stage,
+      filters.track,
+    );
+    return {
+      ...page,
+      rows: page.rows.map(({ stage, ...m }) => ({ ...m, level: stage, active: true, inClass: stage })),
+    };
+  }
+  return listBootcampRecords(reader, query, filters.status, filters.track, {
+    graduates: filters.show === "graduates",
+    stage: filters.stage,
+    inClass: context.class,
+  });
 }
 
 /** `examScore` of the mean of `r`'s exams, or null until both are in. */

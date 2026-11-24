@@ -12,6 +12,7 @@ import { chosenNameOnRecord, setChosenName } from "@/lib/evals/chosen-names";
 import { attended } from "@/lib/evals/attendance";
 import { setTimezone, timezoneOnRecord } from "@/lib/evals/timezones";
 import { testGroupStageOf } from "@/lib/cohorts/test-group";
+import { register } from "@/lib/cohorts/registrations";
 import { cohortStageOf } from "@/lib/evals/current-cohort";
 import { nextBootcamp, nextIntermediate, setTrack } from "@/lib/evals/tracks";
 import {
@@ -249,6 +250,7 @@ export type SaveIntakeError = AnswerProblem | { problem: "not_in_cohort" } | { p
 /**
  * Checks someone's answers against their form as it stands now and saves them
  * as their latest, under their own email; `form` says which form that was.
+ * Saving registers them for the class the form offers (`register`).
  * Their answer to the name question becomes their name across the app, and
  * their answer to the time zone question their time zone.
  */
@@ -271,15 +273,20 @@ export async function saveMyIntake(
   const nameQuestion = form.questions.find(isNameQuestion);
   const preferred = nameQuestion && checked.answers[nameQuestion.id];
 
-  const [row] = await db
-    .insert(intakeResponses)
-    .values({
-      form: stage,
-      email: email.toLowerCase(),
-      answers: checked.answers,
-      test,
-    })
-    .returning({ submittedAt: intakeResponses.submittedAt });
+  const [row] = await db.transaction(async (tx) => {
+    const saved = await tx
+      .insert(intakeResponses)
+      .values({
+        form: stage,
+        email: email.toLowerCase(),
+        answers: checked.answers,
+        test,
+      })
+      .returning({ submittedAt: intakeResponses.submittedAt });
+    // Saving the form is registering for the class it offers now.
+    await register(stage, email, test, tx);
+    return saved;
+  });
 
   // A test answer never renames a real employee.
   if (typeof preferred === "string" && !test) await setChosenName(email, preferred);
