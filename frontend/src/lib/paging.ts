@@ -40,9 +40,9 @@ export const MAX_QUERY_LENGTH = 200;
 /** The last page anyone could reach by paging; anything past it is a typo or an attack on OFFSET. */
 export const MAX_PAGE = 10_000;
 
-type ParamSource = URLSearchParams | Record<string, string | string[] | undefined> | undefined;
+export type ParamSource = URLSearchParams | Record<string, string | string[] | undefined> | undefined;
 
-function read(params: ParamSource, key: string): string | undefined {
+export function read(params: ParamSource, key: string): string | undefined {
   if (!params) return undefined;
   if (params instanceof URLSearchParams) return params.get(key) ?? undefined;
   const value = params[key];

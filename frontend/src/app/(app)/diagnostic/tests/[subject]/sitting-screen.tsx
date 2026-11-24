@@ -15,12 +15,10 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { SittingView } from "@/lib/iris/attempts";
-import type { Confidence, Level } from "@/lib/iris/engine";
-import { LEVEL_LABELS, TRAINING, type SubjectKey } from "@/lib/iris/subjects";
+import type { SubjectKey } from "@/lib/iris/subjects";
 import { TEXT_ANSWER_LIMITS, textAnswerProblem, wordsIn } from "@/lib/iris/text-answer";
 import { FADE, riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-import { LevelBadge } from "../../level-badge";
 import { QuestionFeedback } from "./question-feedback";
 
 const IDK = -1;

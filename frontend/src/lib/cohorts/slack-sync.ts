@@ -58,6 +58,7 @@ import { forgetTestArtifact, getTestGroup, outboundCohort, recordTestArtifact, t
 import type { SlackSyncChangeSort, SlackSyncSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
+import { nextBootcamp } from "@/lib/evals/tracks";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
 import { SlackError, SlackOutOfTime, slackClient, slackToken, type SlackClient } from "@/lib/slack";
 
@@ -542,12 +543,17 @@ async function syncChannels(slack: SlackClient | null, runId: string, dryRun: bo
 /**
  * The intake form reminders that are due, one direct message each, or a
  * note saying why none were. Each message's text is logged as its detail,
- * so a dry run shows exactly what each person would be sent. A live run
+ * so a dry run shows exactly what each person would be sent. None are due
+ * while no bootcamp is active or scheduled to come. A live run
  * claims the day first, so no one is reminded twice in it.
  */
 async function sendReminders(slack: SlackClient | null, dryRun: boolean, appUrl: string, log: RunLog): Promise<string | null> {
   if (!(await getIntakeRemindersOn())) {
     return "The daily reminder is off, so no intake form reminders were sent. Turn it on above.";
+  }
+  // Asking people whether they are coming is pointless with no bootcamp to come to; checked before the day is claimed.
+  if (!(await nextBootcamp())) {
+    return "No bootcamp is scheduled, so no intake form reminders were sent.";
   }
   const { missingScopes } = await intakeReminderSlack();
   if (missingScopes.length > 0) {

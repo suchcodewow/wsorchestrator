@@ -615,7 +615,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title or track"),
         ],
         returns: `{ stage: string | null, members: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "deferred", overridden: boolean, added: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, counts: { bootcamp: number, intermediate: number }, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
-        errors: [{ status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" }],
+        errors: [
+          { status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" },
+          { status: 400, error: "invalid_track", when: "track is neither sales nor engineer" },
+        ],
       },
       {
         method: "GET",
@@ -659,7 +662,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "sales, engineer and ignored put the person's title on that list, moving it off another list if it is on one, and re-track everyone in the org who holds it, compared as the lists compare titles; title says where it went, and is null when it was on that list already or the person has no title. Anyone else with the title whose track was set by hand keeps it. The person is also pinned to the choice where the rules still give them something else, such as a late start, and always when they have no title. undecided, deferred and exempt pin just this person; deferred moves them from the Current tab to the Deferred tab. A pin holds through every later sync, title-list change and bootcamp change, until automatic hands the person back to the rules. ignored and exempt take people off the Current tab. Someone added to the cohort by hand (POST /api/cohorts/current/attendees), inside the org or not, is pinned to every choice with no title moved, and automatic gives them back the track they were added on. track in the response is the one the person has now, overridden whether they are pinned, and retracked how many people's tracks changed, the person included.",
+          "sales, engineer and ignored put the person's title on that list, moving it off another list if it is on one, and re-track everyone in the org who holds it, compared as the lists compare titles; title says where it went, and is null when it was on that list already or the person has no title. Anyone else with the title whose track was set by hand keeps it. The person is also pinned to the choice where the rules still give them something else, such as a late start, and always when they have no title. undecided, deferred and exempt pin just this person; deferred moves them from the Current tab to the Deferred tab. A pin holds through every later sync, title-list change and bootcamp change, until automatic hands the person back to the rules; a Deferred pin also ends when the active bootcamp is marked complete. ignored and exempt take people off the Current tab. Someone added to the cohort by hand (POST /api/cohorts/current/attendees), inside the org or not, is pinned to every choice with no title moved, and automatic gives them back the track they were added on. track in the response is the one the person has now, overridden whether they are pinned, and retracked how many people's tracks changed, the person included.",
         body: {
           kind: "json",
           fields: [
@@ -1384,7 +1387,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Only one bootcamp may be active; releasing its BTC or INT scores on Reporting → Live Sessions is what marks everyone assessed in that class as having attended it. To make a new one active while another is, name that other in completeActive: it is marked complete in the same write.",
+          "Only one bootcamp may be active; releasing its BTC or INT scores on Reporting → Live Sessions is what marks everyone assessed in that class as having attended it. To make a new one active while another is, name that other in completeActive: it is marked complete in the same write. Completing the active bootcamp hands everyone pinned to Deferred back to the rules, as automatic does, and the audit record lists them in unpinnedDeferred.",
         body: {
           kind: "json",
           fields: [
@@ -1423,7 +1426,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Takes any of POST's fields and changes only those. judges replaces the whole set: anyone left out is removed, and anyone kept keeps when and by whom they were added.",
+          "Takes any of POST's fields and changes only those. judges replaces the whole set: anyone left out is removed, and anyone kept keeps when and by whom they were added. Changing the active bootcamp's status to complete, or completing it through completeActive, hands everyone pinned to Deferred back to the rules, as POST does.",
         params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
         body: {
           kind: "json",
@@ -3332,15 +3335,19 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "),
             note: "only the active or only the inactive; everyone if omitted",
           },
+          { name: "track", type: '"sales" | "engineer"', note: "only that assessed track; both if omitted" },
         ],
-        returns: `{ people: { key, email, fullName: string | null, level: "intermediate" | "bootcamp", date: "YYYY-MM-DD", active: boolean, scored: number, averageScore: number | null, viewers: { name, at }[], viewerCount: number }[], ${PAGE_FIELDS}, status: "active" | "inactive" | null, counts: { total: number, active: number, inactive: number } }`,
-        errors: [{ status: 400, error: "invalid_status", when: "status is neither active nor inactive" }],
+        returns: `{ people: { key, email, fullName: string | null, level: "intermediate" | "bootcamp", date: "YYYY-MM-DD", active: boolean, scored: number, averageScore: number | null, viewers: { name, at }[], viewerCount: number }[], ${PAGE_FIELDS}, status: "active" | "inactive" | null, track: "sales" | "engineer" | null, counts: { total: number, active: number, inactive: number } }`,
+        errors: [
+          { status: 400, error: "invalid_status", when: "status is neither active nor inactive" },
+          { status: 400, error: "invalid_track", when: "track is neither sales nor engineer" },
+        ],
       },
       {
         method: "GET",
         path: "/api/reporting/bootcamp/cohort",
         summary:
-          "Returns the active bootcamp, which of its classes are released, and a page of the people in its cohort the caller may see.",
+          "Returns the cohort's bootcamp (the active one, or with none active the latest complete one), which of its classes are released, and a page of the people in its cohort the caller may see.",
         access: "signedIn",
         token: true,
         notes:
@@ -3348,8 +3355,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         query: [
           ...listQuery(BOOTCAMP_COHORT_LIST.sorts, "the name or email", BOOTCAMP_COHORT_LIST.dir),
           { name: "stage", type: '"bootcamp" | "intermediate"', note: "only that class; both if omitted" },
+          { name: "track", type: '"sales" | "engineer"', note: "only that assessed track; both if omitted" },
         ],
-        returns: `{ bootcamp: { id, startDate, intermediate: boolean, released: { bootcamp: { at, byName: string | null } | null, intermediate: { at, byName: string | null } | null } } | null, stages: ("bootcamp" | "intermediate")[], stage: "bootcamp" | "intermediate" | null, counts: { bootcamp: number, intermediate: number }, cohort: { key, email, fullName: string | null, stage: "bootcamp" | "intermediate", scored: number, averageScore: number | null, date: "YYYY-MM-DD", viewers: { name, at }[], viewerCount: number }[], ${PAGE_FIELDS} }`,
+        returns: `{ bootcamp: { id, startDate, intermediate: boolean, released: { bootcamp: { at, byName: string | null } | null, intermediate: { at, byName: string | null } | null } } | null, stages: ("bootcamp" | "intermediate")[], stage: "bootcamp" | "intermediate" | null, track: "sales" | "engineer" | null, counts: { bootcamp: number, intermediate: number }, cohort: { key, email, fullName: string | null, stage: "bootcamp" | "intermediate", scored: number, averageScore: number | null, date: "YYYY-MM-DD", viewers: { name, at }[], viewerCount: number }[], ${PAGE_FIELDS} }`,
         errors: [{ status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" }],
       },
       {
@@ -3376,8 +3384,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           '{ stage, bootcamp: { id, startDate }, people: number, scores: number, comments: number, failed: number, overall: { written: number, failed: number, error: "unconfigured" | "upstream" | null } }',
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
-          { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
-          { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active and none is complete" },
+          { status: 409, error: "no_intermediate", when: "stage is intermediate and the cohort's bootcamp holds no intermediate class" },
           { status: 409, error: "released", when: "that class is already released" },
           { status: 409, error: "no_assessment", when: "the built-in assessment is missing on this database" },
           { status: 502, error: "upstream", when: "Claude wrote nothing" },
@@ -3408,7 +3416,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/reporting/bootcamp/release",
         summary:
-          "Releases the active bootcamp's BTC or INT results to managers, which marks everyone assessed in that class as having attended it.",
+          "Releases the cohort's bootcamp (the active one, or with none active the latest complete one)'s BTC or INT results to managers, which marks everyone assessed in that class as having attended it.",
         access: "assessmentsAdmin",
         token: true,
         notes:
@@ -3417,8 +3425,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: "{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number, notice: { runId, dryRun: boolean } | null }",
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
-          { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
-          { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active and none is complete" },
+          { status: 409, error: "no_intermediate", when: "stage is intermediate and the cohort's bootcamp holds no intermediate class" },
           { status: 409, error: "unscored", when: "someone in the class has an assessment still waiting on a score" },
           { status: 409, error: "no_exit_exam", when: "everyone is scored, but someone in the cohort has no exit exam" },
           {
@@ -3432,7 +3440,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/reporting/release-notices/preview",
         summary:
-          "Logs who releasing the active bootcamp's BTC or INT scores would message in Slack, without releasing or sending anything.",
+          "Logs who releasing the cohort's bootcamp (the active one, or with none active the latest complete one)'s BTC or INT scores would message in Slack, without releasing or sending anything.",
         access: "assessmentsAdmin",
         token: true,
         notes:
@@ -3441,8 +3449,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: "{ runId }",
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
-          { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
-          { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active and none is complete" },
+          { status: 409, error: "no_intermediate", when: "stage is intermediate and the cohort's bootcamp holds no intermediate class" },
         ],
       },
       {
@@ -4346,7 +4354,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "A request refused with 401 is not recorded, and nor is a GET or a POST that changes nothing. Request bodies are stored with secret-looking fields redacted.",
-        query: listQuery(AUDIT_LIST.sorts, "who, action, summary, path, target, address, outcome or detail", "desc"),
+        query: [
+          ...listQuery(AUDIT_LIST.sorts, "who, action, summary, path, target, address, outcome or detail", "desc"),
+          {
+            name: "activity",
+            type: "string",
+            note: 'An area of the app: an API reference group id such as "users", or "other" for sign-ins and the runner. Default every area.',
+          },
+          { name: "system", type: '"0"', note: "0 hides the rows the app wrote on its own (the scheduler, the runner). Default shown." },
+          { name: "user", type: '"0"', note: "0 hides the rows someone caused, signed in or not. Default shown." },
+        ],
         returns: `{ events: { id, at: ISO 8601 string, actorId: string | null, actorName: string | null, actorEmail: string | null, via: "session" | "token" | "system" | "anonymous", action, summary, path: string | null, target: string | null, targetLabel: string | null, status: number | null, outcome: "succeeded" | "denied" | "failed", detail: object | null, ip: string | null }[], ${PAGE_FIELDS} }`,
       },
     ],

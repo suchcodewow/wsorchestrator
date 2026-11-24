@@ -5,8 +5,9 @@
 import { Fragment, useState } from "react";
 import { motion } from "framer-motion";
 import { Ban, CheckCircle2, ChevronRight, XCircle } from "lucide-react";
-import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
+import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch, useListParams } from "@/components/data-table";
 import type { AuditListing } from "@/lib/audit";
+import type { AuditFilter } from "@/lib/audit-shape";
 import type { AuditSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
@@ -75,7 +76,46 @@ function Detail({ row }: { row: AuditListing }) {
   );
 }
 
-export function AuditTable({ query, page }: { query: ListQuery<AuditSort>; page: Page<AuditListing> }) {
+function Filters({ filter, activities }: { filter: AuditFilter; activities: { id: string; title: string }[] }) {
+  const { set } = useListParams();
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+      <select
+        aria-label="Filter by activity"
+        value={filter.activity ?? ""}
+        onChange={(e) => set({ activity: e.target.value || null })}
+        className="h-9 rounded-md border border-input bg-field px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        <option value="">All activity</option>
+        {activities.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.title}
+          </option>
+        ))}
+      </select>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={filter.system} onChange={(e) => set({ system: e.target.checked ? null : "0" })} />
+        System
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={filter.user} onChange={(e) => set({ user: e.target.checked ? null : "0" })} />
+        User
+      </label>
+    </div>
+  );
+}
+
+export function AuditTable({
+  query,
+  page,
+  filter,
+  activities,
+}: {
+  query: ListQuery<AuditSort>;
+  page: Page<AuditListing>;
+  filter: AuditFilter;
+  activities: { id: string; title: string }[];
+}) {
   const [open, setOpen] = useState<string | null>(null);
   const sortProps = { sort: query.sort, dir: query.dir };
 
@@ -85,8 +125,9 @@ export function AuditTable({ query, page }: { query: ListQuery<AuditSort>; page:
         <h1 className="text-2xl font-medium tracking-tight">Audit Trail</h1>
       </motion.div>
 
-      <motion.div variants={riseChild}>
+      <motion.div variants={riseChild} className="flex flex-wrap items-center gap-x-5 gap-y-3">
         <TableSearch value={query.q} placeholder="Search by who, action, target, outcome or detail" label="Search the audit trail" />
+        <Filters filter={filter} activities={activities} />
       </motion.div>
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -166,7 +207,7 @@ export function AuditTable({ query, page }: { query: ListQuery<AuditSort>; page:
               {page.rows.length === 0 && (
                 <tr>
                   <td colSpan={COLUMN_COUNT} className="px-5 py-8 text-center text-muted-foreground">
-                    {query.q ? "Nothing matches." : "Nothing has been recorded yet."}
+                    {query.q || filter.activity || !filter.system || !filter.user ? "Nothing matches." : "Nothing has been recorded yet."}
                   </td>
                 </tr>
               )}

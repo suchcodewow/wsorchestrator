@@ -6,7 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
-import { BOOTCAMP_RECORD_LIST, isHistoryStatus } from "@/lib/list-specs";
+import { BOOTCAMP_RECORD_LIST, isHistoryStatus, isTrackFilter } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { bootcampRecordCounts, listBootcampRecords, readerOf } from "@/lib/reporting/bootcamp";
 import { canSeeBootcampRecords } from "@/lib/roles";
@@ -21,8 +21,16 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "invalid_status" }, { status: 400 });
   }
 
+  const track = params.get("track");
+  if (track !== null && !isTrackFilter(track)) {
+    return NextResponse.json({ error: "invalid_track" }, { status: 400 });
+  }
+
   const reader = readerOf(user);
   const query = parseListQuery(params, BOOTCAMP_RECORD_LIST);
-  const [{ rows, page, hasMore }, counts] = await Promise.all([listBootcampRecords(reader, query, status), bootcampRecordCounts(reader)]);
-  return NextResponse.json({ people: rows, page, hasMore, status, counts });
+  const [{ rows, page, hasMore }, counts] = await Promise.all([
+    listBootcampRecords(reader, query, status, track),
+    bootcampRecordCounts(reader),
+  ]);
+  return NextResponse.json({ people: rows, page, hasMore, status, track, counts });
 }

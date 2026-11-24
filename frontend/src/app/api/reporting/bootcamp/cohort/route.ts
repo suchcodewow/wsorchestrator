@@ -7,7 +7,7 @@
 
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
-import { BOOTCAMP_COHORT_LIST } from "@/lib/list-specs";
+import { BOOTCAMP_COHORT_LIST, isTrackFilter } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { cohortBootcamp, cohortCounts, listCohort, readerOf, visibleStages } from "@/lib/reporting/bootcamp";
 import { isReleaseStage } from "@/lib/reporting/bootcamp-values";
@@ -23,12 +23,18 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "invalid_stage" }, { status: 400 });
   }
 
+  const track = params.get("track");
+  if (track !== null && !isTrackFilter(track)) {
+    return NextResponse.json({ error: "invalid_track" }, { status: 400 });
+  }
+
   const bootcamp = await cohortBootcamp();
   if (!bootcamp) {
     return NextResponse.json({
       bootcamp: null,
       stages: [],
       stage,
+      track,
       counts: { bootcamp: 0, intermediate: 0 },
       cohort: [],
       page: 1,
@@ -38,6 +44,9 @@ export async function GET(req: Request) {
 
   const reader = readerOf(user);
   const query = parseListQuery(params, BOOTCAMP_COHORT_LIST);
-  const [{ rows, page, hasMore }, counts] = await Promise.all([listCohort(reader, bootcamp, query, stage), cohortCounts(reader, bootcamp)]);
-  return NextResponse.json({ bootcamp, stages: visibleStages(reader, bootcamp), stage, counts, cohort: rows, page, hasMore });
+  const [{ rows, page, hasMore }, counts] = await Promise.all([
+    listCohort(reader, bootcamp, query, stage, track),
+    cohortCounts(reader, bootcamp),
+  ]);
+  return NextResponse.json({ bootcamp, stages: visibleStages(reader, bootcamp), stage, track, counts, cohort: rows, page, hasMore });
 }

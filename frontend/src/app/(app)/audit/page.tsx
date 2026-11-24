@@ -3,6 +3,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
+import { auditActivities, parseAuditFilter } from "@/lib/audit-shape";
 import { listAuditEvents } from "@/lib/audit";
 import { AUDIT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
@@ -21,8 +22,10 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
   if (!session?.user) redirect(await signInPath());
   if (!canViewAuditTrail(session.user.access)) notFound();
 
-  const query = parseListQuery(await searchParams, AUDIT_LIST);
-  const page = await listAuditEvents(query);
+  const params = await searchParams;
+  const query = parseListQuery(params, AUDIT_LIST);
+  const filter = parseAuditFilter(params);
+  const page = await listAuditEvents(query, filter);
 
-  return <AuditTable query={query} page={page} />;
+  return <AuditTable query={query} page={page} filter={filter} activities={auditActivities()} />;
 }

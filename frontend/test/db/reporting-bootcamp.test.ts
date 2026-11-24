@@ -751,3 +751,57 @@ describe("Claude's overall feedback", () => {
     });
   });
 });
+
+describe("the current cohort's bootcamp", () => {
+  test("is the active one, or with none active the latest complete one that has started", async () => {
+    assert.equal((await cohortBootcamp())?.id, bootcampId);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const later = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const made = await db
+      .insert(bootcamps)
+      .values([
+        // Not started yet, so never the cohort's, complete or not.
+        { startDate: later, btcDays: 4, intDays: 3, status: "complete", createdBy: admin.id },
+        // Two on the same day: the scored one wins over the one saved last.
+        { startDate: today, btcDays: 4, intDays: 3, status: "complete", createdBy: admin.id, updatedAt: new Date(Date.now() - 60_000) },
+        { startDate: today, btcDays: 4, intDays: null, status: "complete", createdBy: admin.id },
+      ])
+      .returning({ id: bootcamps.id });
+    const [, scored, unscored] = made.map((b) => b.id);
+    const assessmentId = await scope.createAssessment(admin.id, `${SCOPED}Fallback day`);
+    const [sub] = await db
+      .insert(evalsSubmissions)
+      .values({
+        bootcampId: scored!,
+        assessmentId,
+        attendeeEmail: emailOf("outsider"),
+        assessmentName: `${SCOPED}Fallback day`,
+        averageScore: 3,
+        ownerId: admin.id,
+      })
+      .returning({ id: evalsSubmissions.id });
+    try {
+      // The active one still wins over any complete one.
+      assert.equal((await cohortBootcamp())?.id, bootcampId);
+
+      await db.update(bootcamps).set({ status: "complete" }).where(eq(bootcamps.id, bootcampId));
+      const fallback = await cohortBootcamp();
+      assert.equal(fallback?.id, scored);
+      assert.equal(fallback?.intermediate, true);
+
+      await db.delete(evalsSubmissions).where(eq(evalsSubmissions.id, sub!.id));
+      assert.equal((await cohortBootcamp())?.id, unscored);
+    } finally {
+      await db.update(bootcamps).set({ status: "active" }).where(eq(bootcamps.id, bootcampId));
+      await db.delete(evalsSubmissions).where(eq(evalsSubmissions.id, sub!.id));
+      await db.delete(bootcamps).where(
+        inArray(
+          bootcamps.id,
+          made.map((b) => b.id),
+        ),
+      );
+    }
+    assert.equal((await cohortBootcamp())?.id, bootcampId);
+  });
+});

@@ -5,7 +5,6 @@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { MyIris, SubjectStatus } from "@/lib/iris/attempts";
-import type { Level } from "@/lib/iris/engine";
 import { TRACKS, TRACK_LABELS, type Track } from "@/lib/iris/subjects";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -14,7 +13,6 @@ import { ArrowRight, CheckCircle2, Circle, Lightbulb, Loader2, Lock, PlayCircle 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { LevelBadge } from "../level-badge";
 
 const STATUS_ICON: Record<SubjectStatus, React.ReactNode> = {
   completed: <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400" />,
