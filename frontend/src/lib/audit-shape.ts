@@ -6,6 +6,7 @@
 
 import { GROUPS, type Endpoint } from "@/lib/api-reference";
 import type { AuditOutcome } from "@/db/schema";
+import { read, type ParamSource } from "@/lib/paging";
 
 type Matcher = { endpoint: Endpoint; pattern: RegExp; literal: number };
 
@@ -94,4 +95,70 @@ export function outcomeFor(status: number): AuditOutcome {
   if (status < 400) return "succeeded";
   if (status === 403) return "denied";
   return "failed";
+}
+
+/* ------------------------------------------------------------------ */
+/* Filtering the trail                                                 */
+/* ------------------------------------------------------------------ */
+
+/** The Activity choice for actions that belong to no API reference group: sign-ins, the runner. */
+export const OTHER_ACTIVITY = "other";
+
+/** What the trail is narrowed to: one area of the app, and whether system and user rows show. */
+export type AuditFilter = {
+  /** An API reference group id, `OTHER_ACTIVITY`, or null for every area. */
+  activity: string | null;
+  /** Rows the app wrote on its own: the scheduler, the runner. */
+  system: boolean;
+  /** Rows someone caused, signed in or not. */
+  user: boolean;
+};
+
+export const AUDIT_FILTER_DEFAULT: AuditFilter = { activity: null, system: true, user: true };
+
+/**
+ * API reference groups behind a settings page (or My settings, or the app's own
+ * plumbing). Their rows still show under "All activity"; they are too rarely
+ * looked for to earn a place in the Activity dropdown.
+ */
+const SETTINGS_GROUPS = new Set([
+  "account",
+  "evals",
+  "event-settings",
+  "harness-tokens",
+  "internal",
+  "my-org-secrets-templates",
+  "page-tours",
+  "platform",
+]);
+
+/** The areas offered in the Activity dropdown, A to Z, with "Other" last: the groups outside settings with a handler that writes. */
+export function auditActivities(): { id: string; title: string }[] {
+  const areas = GROUPS.filter((g) => !SETTINGS_GROUPS.has(g.id) && g.endpoints.some((e) => e.method !== "GET")).map((g) => ({
+    id: g.id,
+    title: g.title,
+  }));
+  areas.sort((a, b) => a.title.localeCompare(b.title));
+  return [...areas, { id: OTHER_ACTIVITY, title: "Other" }];
+}
+
+/** Every action string a group's writing handlers record, as `audited` writes them. */
+export function actionsOfActivity(id: string): string[] {
+  return (GROUPS.find((g) => g.id === id)?.endpoints ?? []).filter((e) => e.method !== "GET").map((e) => `${e.method} ${e.path}`);
+}
+
+/** Every route action of every group: what "Other" is everything but. */
+export function routeActions(): string[] {
+  return GROUPS.flatMap((g) => actionsOfActivity(g.id));
+}
+
+/** The filter a page's `searchParams` or a route's URL asked for; `system=0` and `user=0` turn a kind off. */
+export function parseAuditFilter(params: ParamSource): AuditFilter {
+  const asked = read(params, "activity");
+  const known = auditActivities().some((a) => a.id === asked);
+  return {
+    activity: asked && known ? asked : null,
+    system: read(params, "system") !== "0",
+    user: read(params, "user") !== "0",
+  };
 }

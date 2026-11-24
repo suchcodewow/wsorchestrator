@@ -15,7 +15,13 @@ import { ChevronRight, Eye, UserCheck, UserX, type LucideIcon } from "lucide-rea
 import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
-import { BOOTCAMP_COHORT_PREFIX, type BootcampCohortSort, type BootcampRecordSort, type HistoryStatus } from "@/lib/list-specs";
+import {
+  BOOTCAMP_COHORT_PREFIX,
+  type BootcampCohortSort,
+  type BootcampRecordSort,
+  type HistoryStatus,
+  type TrackFilter,
+} from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { BootcampRecordCounts, BootcampRecordRow, CardViewer, CohortRow } from "@/lib/reporting/bootcamp";
@@ -95,6 +101,20 @@ const STATUSES: { status: HistoryStatus; label: string; title: string; Icon: Luc
   { status: "active", label: "Active", title: "Still in the employee list from the last HiBob sync", Icon: UserCheck },
   { status: "inactive", label: "Inactive", title: "Not in the employee list from the last HiBob sync", Icon: UserX },
 ];
+
+const TRACKS: { track: TrackFilter; label: string }[] = [
+  { track: "sales", label: "Sales" },
+  { track: "engineer", label: "Engineer" },
+];
+
+/** A box round chips of which at most one is pressed; each box narrows on its own. */
+function ChipGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div role="group" aria-label={label} className="flex gap-1.5 rounded-full border p-1">
+      {children}
+    </div>
+  );
+}
 
 /**
  * Shows only `value` of the search parameter `name`, or everything again when
@@ -231,6 +251,7 @@ export function BootcampView({
   cohort,
   query,
   status,
+  track,
   records,
   counts,
 }: {
@@ -244,14 +265,18 @@ export function BootcampView({
     page: Page<CohortRow>;
     stages: ReleaseStage[];
     stage: ReleaseStage | null;
+    track: TrackFilter | null;
     counts: Record<ReleaseStage, number>;
   } | null;
   query: ListQuery<BootcampRecordSort>;
   status: HistoryStatus | null;
+  track: TrackFilter | null;
   records: Page<BootcampRecordRow>;
   counts: BootcampRecordCounts;
 }) {
   const { toggle, pending } = useToggleFilter("status", "page");
+  const trackFilter = useToggleFilter("track", "page");
+  const cohortTrackFilter = useToggleFilter(`${BOOTCAMP_COHORT_PREFIX}.track`, `${BOOTCAMP_COHORT_PREFIX}.page`);
   const stageFilter = useToggleFilter(`${BOOTCAMP_COHORT_PREFIX}.stage`, `${BOOTCAMP_COHORT_PREFIX}.page`);
   // A person's page links back to the list as it is now: search, sorts, pages and filters.
   const listParams = useSearchParams().toString();
@@ -278,18 +303,6 @@ export function BootcampView({
 
       <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3">
         <TableSearch value={query.q} placeholder="Search by name or email" label="Search bootcamp records" className="min-w-56 flex-1" />
-        <div role="group" aria-label="Show" className="flex gap-2">
-          {STATUSES.map(({ status: s, label, title, Icon }) => {
-            const on = status === s;
-            return (
-              <FilterChip key={s} on={on} disabled={pending} title={title} onClick={() => toggle(s)}>
-                <Icon className={cn("size-4", on && "text-brand")} />
-                {label}
-                <span className="font-medium tabular-nums text-foreground">{counts[s].toLocaleString()}</span>
-              </FilterChip>
-            );
-          })}
-        </div>
       </motion.div>
 
       {bootcamp && cohort && (
@@ -297,15 +310,27 @@ export function BootcampView({
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <h3 className="text-base font-medium tracking-tight">Current cohort</h3>
             {cohort.stages.length > 1 && (
-              <div role="group" aria-label="Show class" className="flex gap-2">
+              <ChipGroup label="Show class">
                 {cohort.stages.map((st) => (
                   <FilterChip key={st} on={cohort.stage === st} disabled={stageFilter.pending} onClick={() => stageFilter.toggle(st)}>
                     {STAGE_LABELS[st]}
                     <span className="font-medium tabular-nums text-foreground">{cohort.counts[st].toLocaleString()}</span>
                   </FilterChip>
                 ))}
-              </div>
+              </ChipGroup>
             )}
+            <ChipGroup label="Show track">
+              {TRACKS.map(({ track: t, label }) => (
+                <FilterChip
+                  key={t}
+                  on={cohort.track === t}
+                  disabled={cohortTrackFilter.pending}
+                  onClick={() => cohortTrackFilter.toggle(t)}
+                >
+                  {label}
+                </FilterChip>
+              ))}
+            </ChipGroup>
           </div>
           <PeopleTable
             columns={COHORT_COLUMNS}
@@ -315,7 +340,7 @@ export function BootcampView({
             page={cohort.page}
             hrefFor={hrefIn("cohort")}
             empty={
-              query.q || cohort.stage
+              query.q || cohort.stage || cohort.track
                 ? "No one in the cohort matches."
                 : cohort.page.page > 1
                   ? "No one on this page."
@@ -328,7 +353,28 @@ export function BootcampView({
       )}
 
       <motion.section variants={riseChild} className="space-y-3">
-        {bootcamp && cohort && <h3 className="text-base font-medium tracking-tight">History</h3>}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {bootcamp && cohort && <h3 className="text-base font-medium tracking-tight">History</h3>}
+          <ChipGroup label="Show">
+            {STATUSES.map(({ status: s, label, title, Icon }) => {
+              const on = status === s;
+              return (
+                <FilterChip key={s} on={on} disabled={pending} title={title} onClick={() => toggle(s)}>
+                  <Icon className={cn("size-4", on && "text-brand")} />
+                  {label}
+                  <span className="font-medium tabular-nums text-foreground">{counts[s].toLocaleString()}</span>
+                </FilterChip>
+              );
+            })}
+          </ChipGroup>
+          <ChipGroup label="Show track">
+            {TRACKS.map(({ track: t, label }) => (
+              <FilterChip key={t} on={track === t} disabled={trackFilter.pending} onClick={() => trackFilter.toggle(t)}>
+                {label}
+              </FilterChip>
+            ))}
+          </ChipGroup>
+        </div>
         <PeopleTable
           columns={RECORD_COLUMNS}
           query={query}
@@ -336,7 +382,7 @@ export function BootcampView({
           page={records}
           hrefFor={hrefIn("history")}
           empty={
-            query.q || status
+            query.q || status || track
               ? "No one matches."
               : records.page > 1
                 ? "No one on this page."

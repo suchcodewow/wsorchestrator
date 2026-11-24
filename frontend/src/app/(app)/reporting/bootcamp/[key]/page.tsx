@@ -7,7 +7,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
-import { BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX, BOOTCAMP_RECORD_LIST, isHistoryStatus } from "@/lib/list-specs";
+import { BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX, BOOTCAMP_RECORD_LIST, isHistoryStatus, isTrackFilter } from "@/lib/list-specs";
 import { listParam, parseListQuery, withParams, writeListQuery, type Page } from "@/lib/paging";
 import {
   cohortBootcamp,
@@ -66,12 +66,14 @@ async function stepsFor(
     if (!bootcamp) return { prev: null, next: null };
     const stage = list[`${prefix}.stage`];
     page = query.page;
-    fetchPage = (n) => listCohort(reader, bootcamp, { ...query, page: n }, isReleaseStage(stage) ? stage : null);
+    const track = list[`${prefix}.track`];
+    fetchPage = (n) =>
+      listCohort(reader, bootcamp, { ...query, page: n }, isReleaseStage(stage) ? stage : null, isTrackFilter(track) ? track : null);
   } else {
     const query = parseListQuery(list, BOOTCAMP_RECORD_LIST);
     const status = isHistoryStatus(list.status) ? list.status : null;
     page = query.page;
-    fetchPage = (n) => listBootcampRecords(reader, { ...query, page: n }, status);
+    fetchPage = (n) => listBootcampRecords(reader, { ...query, page: n }, status, isTrackFilter(list.track) ? list.track : null);
   }
   const { prev, next } = await neighbours(fetchPage, page, key);
   const hrefTo = (to: { key: string; page: number } | null) => {
@@ -105,6 +107,9 @@ export default async function BootcampPersonPage({
   if (isHistoryStatus(list.status)) back.set("status", list.status);
   const stage = list[`${BOOTCAMP_COHORT_PREFIX}.stage`];
   if (isReleaseStage(stage)) back.set(`${BOOTCAMP_COHORT_PREFIX}.stage`, stage);
+  if (isTrackFilter(list.track)) back.set("track", list.track);
+  const cohortTrack = list[`${BOOTCAMP_COHORT_PREFIX}.track`];
+  if (isTrackFilter(cohortTrack)) back.set(`${BOOTCAMP_COHORT_PREFIX}.track`, cohortTrack);
 
   const carried = new URLSearchParams();
   for (const [k, v] of Object.entries(list)) if (typeof v === "string") carried.set(k, v);
