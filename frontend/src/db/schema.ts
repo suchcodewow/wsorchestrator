@@ -2374,6 +2374,36 @@ export const bootcampClassReviews = pgTable(
 
 export type BootcampClassReview = typeof bootcampClassReviews.$inferSelect;
 
+/**
+ * Who registered for which class: one row per bootcamp, class and person,
+ * written when they save their stage's registration form for the class it
+ * offers then (`lib/cohorts/registrations.ts`). It is what ties a sign-up to
+ * a bootcamp; the form's answers stay in `intake_responses`. Deferring, or a
+ * track that is not trained, takes them out of a class not yet released.
+ */
+export const bootcampRegistrations = pgTable(
+  "bootcamp_registrations",
+  {
+    bootcampId: uuid("bootcamp_id")
+      .notNull()
+      .references(() => bootcamps.id, { onDelete: "cascade" }),
+    stage: text("stage").$type<EvalsAssessmentStage>().notNull(),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    /** Saved by a member of the cohort test group; deleted when the group is turned off. */
+    test: boolean("test").notNull().default(false),
+    /** Their first save of the form for this class. */
+    registeredAt: timestamp("registered_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Their latest. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.bootcampId, t.stage, t.email] }),
+    index("bootcamp_registrations_email_idx").on(t.email),
+    check("bootcamp_registrations_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
+  ],
+);
+
 export const PARTICIPATION_POLARITIES = ["positive", "negative"] as const;
 export type ParticipationPolarity = (typeof PARTICIPATION_POLARITIES)[number];
 

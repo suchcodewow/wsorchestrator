@@ -18,6 +18,13 @@ export type BootcampLevel = (typeof BOOTCAMP_LEVELS)[number];
 
 export const STAGE_CODES: Record<ReleaseStage, string> = { bootcamp: "BTC", intermediate: "INT" };
 
+const COHORT_MONTH = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+
+/** "Nov 2026", for a bootcamp starting `startDate` (YYYY-MM-DD), as the Scheduler names it. */
+export function cohortMonth(startDate: string): string {
+  return COHORT_MONTH.format(new Date(`${startDate}T00:00:00Z`));
+}
+
 export const RELEASE_LABELS: Record<ReleaseStage, string> = {
   bootcamp: "Release Bootcamp Scores",
   intermediate: "Release Intermediate Scores",

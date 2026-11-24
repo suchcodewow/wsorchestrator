@@ -1,25 +1,24 @@
 /**
- * Reporting → Bootcamp: the active bootcamp's cohort, then everyone with a BTC
- * or INT record, each a page at a time. Everyone signed in sees it; an
- * Assessments Viewer sees everyone, anyone else the people below them in
- * HiBob, and of the cohort only the classes an administrator has released.
+ * Reporting → Live Sessions: one table of everyone with a BTC or INT record,
+ * a page at a time, opening on the latest released bootcamp's graduates. An
+ * Assessments Viewer sees everyone, and can switch to the class still being
+ * judged; anyone else sees the people below them in HiBob, and of a bootcamp
+ * only the classes an administrator has released.
  */
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
-import { BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX, BOOTCAMP_RECORD_LIST, isHistoryStatus, isTrackFilter } from "@/lib/list-specs";
+import { BOOTCAMP_RECORD_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import {
   bootcampRecordCounts,
-  cohortBootcamp,
   cohortCounts,
-  listBootcampRecords,
-  listCohort,
+  listLiveSessions,
+  liveSessionsContext,
+  liveSessionsFilters,
   readerOf,
-  visibleStages,
 } from "@/lib/reporting/bootcamp";
-import { isReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { BootcampView } from "./bootcamp-view";
 
 export const metadata: Metadata = { title: "Live Sessions" };
@@ -32,50 +31,23 @@ export default async function BootcampPage({ searchParams }: { searchParams: Pro
 
   const params = await searchParams;
   const query = parseListQuery(params, BOOTCAMP_RECORD_LIST);
-  const cohortQuery = parseListQuery(params, BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX);
-  // A hand-typed status that isn't one shows everyone, as a bad sort does.
-  const status = isHistoryStatus(params.status) ? params.status : null;
-  const track = isTrackFilter(params.track) ? params.track : null;
-  const cohortTrack = isTrackFilter(params[`${BOOTCAMP_COHORT_PREFIX}.track`])
-    ? (params[`${BOOTCAMP_COHORT_PREFIX}.track`] as typeof track)
-    : null;
-  const stageParam = params[`${BOOTCAMP_COHORT_PREFIX}.stage`];
-  const cohortStage = isReleaseStage(stageParam) ? stageParam : null;
-
-  const bootcamp = await cohortBootcamp();
-  const stages = bootcamp ? visibleStages(reader, bootcamp) : [];
-  const [records, counts, cohort, stageCounts] = await Promise.all([
-    listBootcampRecords(reader, query, status, track),
+  const context = await liveSessionsContext(reader);
+  const filters = liveSessionsFilters(context, (name) => params[name]);
+  const [records, counts, classCounts] = await Promise.all([
+    listLiveSessions(reader, context, filters, query),
     bootcampRecordCounts(reader),
-    bootcamp && stages.length > 0 ? listCohort(reader, bootcamp, cohortQuery, cohortStage, cohortTrack) : null,
-    bootcamp && stages.length > 0 ? cohortCounts(reader, bootcamp) : null,
+    context.class ? cohortCounts(reader, context.class.bootcamp) : null,
   ]);
 
   return (
     <BootcampView
       everyone={reader.all}
-      bootcamp={
-        bootcamp && {
-          startDate: bootcamp.startDate,
-          intermediate: bootcamp.intermediate,
-          released: {
-            bootcamp: bootcamp.released.bootcamp && {
-              at: bootcamp.released.bootcamp.at.toISOString(),
-              byName: bootcamp.released.bootcamp.byName,
-            },
-            intermediate: bootcamp.released.intermediate && {
-              at: bootcamp.released.intermediate.at.toISOString(),
-              byName: bootcamp.released.intermediate.byName,
-            },
-          },
-        }
-      }
-      cohort={
-        cohort && stageCounts && { query: cohortQuery, page: cohort, stages, stage: cohortStage, track: cohortTrack, counts: stageCounts }
+      graduates={context.graduates && { startDate: context.graduates.startDate, stages: context.graduates.stages }}
+      inClass={
+        context.class && classCounts && { startDate: context.class.bootcamp.startDate, stages: context.class.stages, counts: classCounts }
       }
       query={query}
-      status={status}
-      track={track}
+      filters={filters}
       records={records}
       counts={counts}
     />

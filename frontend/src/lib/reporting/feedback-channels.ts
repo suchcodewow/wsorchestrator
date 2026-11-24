@@ -2,14 +2,15 @@
  * The Slack button on a Reporting → Live Sessions card: a private channel per
  * attendee, `event-feedback-{first}-{last}`, where the people who may see the
  * card talk about them. Each press finds the attendee's channel, unarchiving
- * it or making it when it has to, brings its members in line, posts a link
+ * it or making it when it has to, invites whoever is missing, posts a link
  * back to the card with its scorecard, and says how to open it.
  *
- * It invites everyone above the attendee in HiBob's reporting lines (whoever
- * may see the card as their manager), whoever pressed the button, and the
- * Additional Slack Contacts. Someone the app invited who no longer belongs is
- * taken out; someone added by hand never is. The attendee is never invited
- * to their own channel.
+ * It invites everyone above the attendee in HiBob's reporting lines, up to the
+ * Organization Leader and no higher, or just their manager for someone outside
+ * the leader's organization (whoever may see the card as their manager), whoever pressed the button, and the
+ * Additional Slack Contacts. It only ever adds people: no one is taken out of
+ * the channel, whether the app invited them or not. The attendee is never
+ * invited to their own channel.
  *
  * While Slack is in dry run (Admin Settings → External Connectors) a press
  * changes nothing and says so.
@@ -21,6 +22,8 @@ import { and, eq, inArray, like, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, feedbackChannels, slackChannelMembers, users } from "@/db/schema";
 import { planMembership } from "@/lib/cohorts/slack-plan";
+import { managersFor } from "@/lib/evals/org";
+import { getOrgLeaderEmail } from "@/lib/evals/settings";
 import { slackContactEmails } from "@/lib/evals/slack-contacts";
 import { channelMembers, getSlackSyncLive, isFatal, resolveSlackUsers } from "@/lib/cohorts/slack-sync";
 import { canReach, getBootcampPerson, nameOf, resolvePerson, type BootcampReader } from "@/lib/reporting/bootcamp";
@@ -37,18 +40,20 @@ const NAME_TRIES = 20;
 /* Who belongs                                                         */
 /* ------------------------------------------------------------------ */
 
-/** Everyone above `email` in HiBob's reporting lines, nearest first; `union` stops a loop. */
+/**
+ * Everyone above `email` in HiBob's reporting lines, nearest first, up to and
+ * including the Organization Leader and no further. Someone outside the
+ * leader's organization has their direct manager alone.
+ */
 async function managersOf(email: string): Promise<string[]> {
-  const { rows } = await db.execute<{ email: string }>(sql`
-    with recursive line(email, depth) as (
-      select e.reports_to_email, 1 from ${employees} e
-       where e.email = ${email} and e.active and e.reports_to_email <> ''
-      union
-      select m.reports_to_email, line.depth + 1 from ${employees} m join line on m.email = line.email
-       where m.active and m.reports_to_email <> '' and line.depth < 50
-    )
-    select email from line group by email order by min(depth)`);
-  return rows.map((r) => r.email);
+  const [[row], leader] = await Promise.all([
+    db
+      .select({ chain: employees.managementChain, reportsTo: employees.reportsToEmail })
+      .from(employees)
+      .where(and(eq(employees.email, email), eq(employees.active, true))),
+    getOrgLeaderEmail(),
+  ]);
+  return managersFor(row?.chain ?? null, row?.reportsTo ?? null, leader);
 }
 
 /* ------------------------------------------------------------------ */
@@ -132,9 +137,8 @@ export type FeedbackChannelResult = {
   name: string;
   created: boolean;
   unarchived: boolean;
-  /** Emails newly invited, and taken out. */
+  /** Emails newly invited. */
   invited: string[];
-  removed: string[];
   /** Emails that belong but have no Slack account, or that Slack would not invite. */
   skipped: string[];
   /** Whether whoever pressed is in the channel after this press. */
@@ -235,21 +239,6 @@ export async function openFeedbackChannel(
       for (const id of added) members.add(id);
     }
 
-    const removed: string[] = [];
-    for (const id of plan.remove) {
-      try {
-        await slack.call("conversations.kick", { channel: channel.id, user: id });
-      } catch (err) {
-        if (!(err instanceof SlackError) || isFatal(err)) throw err;
-        if (err.error !== "not_in_channel") continue;
-      }
-      await db
-        .delete(slackChannelMembers)
-        .where(and(eq(slackChannelMembers.slackChannelId, channel.id), eq(slackChannelMembers.slackUserId, id)));
-      removed.push(emailOf(id));
-      members.delete(id);
-    }
-
     const who = presser?.name || presser?.email || "Someone";
     const about = attendee.fullName ?? attendee.email;
     // The furthest class they have been to, as the caller sees it on the card.
@@ -272,7 +261,6 @@ export async function openFeedbackChannel(
         created: channel.created,
         unarchived: channel.unarchived,
         invited: invited.sort(),
-        removed: removed.sort(),
         skipped: [...new Set(skipped)].sort(),
         callerIn: callerSlackId ? members.has(callerSlackId) : false,
         appUrl: `slack://channel?team=${team}&id=${channel.id}`,

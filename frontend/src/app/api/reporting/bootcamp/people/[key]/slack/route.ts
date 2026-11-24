@@ -1,6 +1,6 @@
 /**
  * The Slack button on a Live Sessions card: finds, unarchives or makes the
- * attendee's private channel, brings its members in line, and posts a link
+ * attendee's private channel, invites whoever is missing (it never removes anyone), and posts a link
  * back to the card there. 404 for someone the caller may not see.
  */
 
@@ -34,7 +34,6 @@ export const POST = audited(async function POST(req: Request, { params }: { para
       created: result.created,
       unarchived: result.unarchived,
       invited: result.invited,
-      removed: result.removed,
       skipped: result.skipped,
     },
   });

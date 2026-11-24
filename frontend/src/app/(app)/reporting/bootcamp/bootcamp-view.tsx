@@ -1,71 +1,55 @@
 "use client";
 
 /**
- * Reporting → Bootcamp: the current cohort, then everyone with a record,
- * marked with the furthest class they have been to. Both tables have the
- * same columns. One search narrows both;
- * the cohort can be narrowed to one class; a row opens that person.
+ * Reporting → Live Sessions: one table of everyone with a record, marked with
+ * the furthest class they have been to, whether they graduated from the
+ * latest released bootcamp, and for an Assessments Viewer the class still
+ * being judged they are in. It opens on those graduates; a viewer can switch
+ * to that class, which shows its members with their score there. One search,
+ * the filters and a row opening that person.
  */
 
 import { useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ChevronRight, Eye, UserCheck, UserX, type LucideIcon } from "lucide-react";
+import { ChevronRight, Eye, GraduationCap, Presentation, UserCheck, UserX, type LucideIcon } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
-import {
-  BOOTCAMP_COHORT_PREFIX,
-  type BootcampCohortSort,
-  type BootcampRecordSort,
-  type HistoryStatus,
-  type TrackFilter,
-} from "@/lib/list-specs";
+import type { BootcampRecordSort, HistoryStatus, TrackFilter } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
-import type { BootcampRecordCounts, BootcampRecordRow, CardViewer, CohortRow } from "@/lib/reporting/bootcamp";
-import type { BootcampLevel, ReleaseStage } from "@/lib/reporting/bootcamp-values";
+import type { BootcampRecordCounts, BootcampRecordRow, CardViewer, LiveSessionsFilters } from "@/lib/reporting/bootcamp";
+import { cohortMonth, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
 import { formatDate, formatWholeScore, formatWhen } from "../../cohort-settings/format";
 import { LevelChip } from "./class-card";
 
 type Released = { at: string; byName: string | null } | null;
 
+/** A bootcamp and whether each class's scores are out, as Reporting Settings → Feedback shows it. */
 export type ViewBootcamp = {
   startDate: string;
   intermediate: boolean;
   released: Record<ReleaseStage, Released>;
 };
 
-type Column<S extends string> = { column: S; label: string; className?: string };
+/** The latest released bootcamp, whose graduates the table opens on. */
+export type ViewGraduates = { startDate: string; stages: ReleaseStage[] };
 
-/** The same four columns in both tables, in the same order and widths, so the two line up. */
-const RECORD_COLUMNS: Column<BootcampRecordSort>[] = [
+/** The class still being judged, for an Assessments Viewer: its classes and how many are in each. */
+export type ViewClass = { startDate: string; stages: ReleaseStage[]; counts: Record<ReleaseStage, number> };
+
+type Column = { column: BootcampRecordSort; label: string; className?: string };
+
+const COLUMNS: Column[] = [
   { column: "fullName", label: "Name" },
   { column: "level", label: "Class", className: "w-36 whitespace-nowrap" },
   { column: "averageScore", label: "Average score", className: "w-36 whitespace-nowrap text-right" },
   { column: "date", label: "Session Date", className: "w-40 whitespace-nowrap" },
 ];
-
-const COHORT_COLUMNS: Column<BootcampCohortSort>[] = [
-  { column: "fullName", label: "Name" },
-  { column: "stage", label: "Class", className: "w-36 whitespace-nowrap" },
-  { column: "averageScore", label: "Average score", className: "w-36 whitespace-nowrap text-right" },
-  { column: "date", label: "Session Date", className: "w-40 whitespace-nowrap" },
-];
-
-/** A row of either table. */
-type PersonRow = {
-  key: string;
-  email: string;
-  fullName: string | null;
-  level: BootcampLevel;
-  averageScore: number | null;
-  date: string;
-  viewers: CardViewer[];
-  viewerCount: number;
-};
 
 /** A quiet eye beside the name of someone whose card the reader has opened; hovered, it names everyone who opened it. */
 function ViewedBy({ viewers, count }: { viewers: CardViewer[]; count: number }) {
@@ -116,29 +100,28 @@ function ChipGroup({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-/**
- * Shows only `value` of the search parameter `name`, or everything again when
- * it is the one already shown; back to that table's page 1 either way.
- */
-function useToggleFilter(name: string, pageParam: string) {
+/** Replaces the page's search parameters with `changes`, a null deleting one, back to page 1. */
+function useSetParams() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
 
-  function toggle(value: string) {
+  function set(changes: Record<string, string | null>) {
     const next = new URLSearchParams(params.toString());
-    if (next.get(name) === value) next.delete(name);
-    else next.set(name, value);
-    next.delete(pageParam);
+    for (const [name, value] of Object.entries(changes)) {
+      if (value === null) next.delete(name);
+      else next.set(name, value);
+    }
+    next.delete("page");
     const qs = next.toString();
     startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
   }
 
-  return { toggle, pending };
+  return { set, pending };
 }
 
-/** A filter chip: pressed, it narrows its table; pressed again, it shows everything. */
+/** A filter chip: pressed, it narrows the table; pressed again, it shows everything. */
 function FilterChip({
   on,
   disabled,
@@ -171,124 +154,73 @@ function FilterChip({
   );
 }
 
-/** Either table: Name, Class, Average score and Session Date, a row opening the person. */
-function PeopleTable<S extends string>({
-  columns,
-  query,
-  prefix,
-  rows,
-  page,
-  hrefFor,
-  empty,
-}: {
-  columns: Column<S>[];
-  query: ListQuery<S>;
-  prefix?: string;
-  rows: PersonRow[];
-  page: Page<unknown>;
-  hrefFor: (key: string) => string;
-  empty: string;
-}) {
-  const rowLink = useRowLink();
+const Count = ({ n }: { n: number }) => <span className="font-medium tabular-nums text-foreground">{n.toLocaleString()}</span>;
+
+/** Where someone stands now: one of the latest graduates, and in the class still being judged. */
+function StatusChips({ row, graduates, inClass }: { row: BootcampRecordRow; graduates: ViewGraduates | null; inClass: ViewClass | null }) {
   return (
-    <TooltipProvider>
-      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-160 table-fixed text-sm">
-            <thead>
-              <tr className={HEADER_ROW}>
-                {columns.map(({ column, label, className }) => (
-                  <SortHeader key={column} column={column} sort={query.sort} dir={query.dir} prefix={prefix} className={className}>
-                    {label}
-                  </SortHeader>
-                ))}
-                <PlainHeader className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p) => {
-                const href = hrefFor(p.key);
-                return (
-                  <tr key={`${p.email}:${p.level}`} className={LINK_ROW} onClick={rowLink(href)}>
-                    <td className="px-5 py-2.5 font-medium">
-                      <Link href={href} className="outline-none group-hover:underline focus-visible:underline">
-                        {p.fullName ?? <span className="font-normal text-muted-foreground">{p.email}</span>}
-                      </Link>
-                      <ViewedBy viewers={p.viewers} count={p.viewerCount} />
-                    </td>
-                    <td className="px-5 py-2.5">
-                      <LevelChip level={p.level} />
-                    </td>
-                    <td className="px-5 py-2.5 text-right whitespace-nowrap tabular-nums">{formatWholeScore(p.averageScore)}</td>
-                    <td className="px-5 py-2.5 whitespace-nowrap tabular-nums text-muted-foreground">{formatDate(p.date)}</td>
-                    <td className="px-3 py-2.5">
-                      <ChevronRight className="ml-auto size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                    </td>
-                  </tr>
-                );
-              })}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={columns.length + 1} className="px-5 py-8 text-center text-muted-foreground">
-                    {empty}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="border-t empty:hidden">
-          <Pager page={page} noun="people" prefix={prefix} />
-        </div>
-      </div>
-    </TooltipProvider>
+    <div className="flex flex-wrap gap-1.5">
+      {row.graduated && graduates && (
+        <Badge variant="outline" className="border-transparent bg-brand-subtle text-foreground">
+          {cohortMonth(graduates.startDate)} Graduate
+        </Badge>
+      )}
+      {row.inClass && inClass && (
+        <Badge variant="outline" className="border-transparent bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
+          {cohortMonth(inClass.startDate)} {STAGE_LABELS[row.inClass]}
+        </Badge>
+      )}
+    </div>
   );
 }
 
 export function BootcampView({
   everyone,
-  bootcamp,
-  cohort,
+  graduates,
+  inClass,
   query,
-  status,
-  track,
+  filters,
   records,
   counts,
 }: {
   /** An Assessments Viewer or above, who sees everyone rather than their org. */
   everyone: boolean;
-  /** The active bootcamp, or null with none. */
-  bootcamp: ViewBootcamp | null;
-  /** Its cohort, or null when there is none to show this reader: the classes they may see, the one shown, and how many are in each. */
-  cohort: {
-    query: ListQuery<BootcampCohortSort>;
-    page: Page<CohortRow>;
-    stages: ReleaseStage[];
-    stage: ReleaseStage | null;
-    track: TrackFilter | null;
-    counts: Record<ReleaseStage, number>;
-  } | null;
+  /** The latest released bootcamp, or null before any is. */
+  graduates: ViewGraduates | null;
+  /** The class still being judged, for an Assessments Viewer while there is one; null otherwise. */
+  inClass: ViewClass | null;
   query: ListQuery<BootcampRecordSort>;
-  status: HistoryStatus | null;
-  track: TrackFilter | null;
+  filters: LiveSessionsFilters;
   records: Page<BootcampRecordRow>;
   counts: BootcampRecordCounts;
 }) {
-  const { toggle, pending } = useToggleFilter("status", "page");
-  const trackFilter = useToggleFilter("track", "page");
-  const cohortTrackFilter = useToggleFilter(`${BOOTCAMP_COHORT_PREFIX}.track`, `${BOOTCAMP_COHORT_PREFIX}.page`);
-  const stageFilter = useToggleFilter(`${BOOTCAMP_COHORT_PREFIX}.stage`, `${BOOTCAMP_COHORT_PREFIX}.page`);
+  const { set, pending } = useSetParams();
+  const rowLink = useRowLink();
   // A person's page links back to the list as it is now: search, sorts, pages and filters.
   const listParams = useSearchParams().toString();
-  // `from` names the table a row was opened from, so the person's page can step to the next and previous in it.
-  const hrefIn = (from: "cohort" | "history") => (key: string) => {
+  const hrefFor = (key: string) => {
     const params = new URLSearchParams(listParams);
-    params.set("from", from);
+    params.set("from", "history");
     return `/reporting/bootcamp/${encodeURIComponent(key)}?${params}`;
   };
 
+  const { show } = filters;
+  // Pressing the one shown shows everyone; the graduates are where the page opens, so leaving them is said outright.
+  const toggleShow = (value: "graduates" | "class") => set({ show: show === value ? "all" : value, stage: null, status: null });
+  const toggle = (name: "stage" | "status" | "track", value: string) => set({ [name]: filters[name] === value ? null : value });
+
+  const stageChips =
+    show === "graduates" && graduates && graduates.stages.length > 1
+      ? graduates.stages.map((st) => ({ stage: st, count: counts.graduates[st] }))
+      : show === "class" && inClass && inClass.stages.length > 1
+        ? inClass.stages.map((st) => ({ stage: st, count: inClass.counts[st] }))
+        : [];
+  const graduateTotal = counts.graduates.bootcamp + counts.graduates.intermediate;
+  const classTotal = inClass ? inClass.stages.reduce((n, st) => n + inClass.counts[st], 0) : 0;
+  const narrowed = Boolean(query.q || filters.status || filters.track || filters.stage);
+
   return (
-    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-4xl space-y-6">
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-5xl space-y-6">
       <motion.div variants={riseChild} className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1.5">
           <h2 className="text-xl font-medium tracking-tight">Live Sessions</h2>
@@ -305,92 +237,132 @@ export function BootcampView({
         <TableSearch value={query.q} placeholder="Search by name or email" label="Search bootcamp records" className="min-w-56 flex-1" />
       </motion.div>
 
-      {bootcamp && cohort && (
-        <motion.section variants={riseChild} className="space-y-3">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <h3 className="text-base font-medium tracking-tight">Current cohort</h3>
-            {cohort.stages.length > 1 && (
-              <ChipGroup label="Show class">
-                {cohort.stages.map((st) => (
-                  <FilterChip key={st} on={cohort.stage === st} disabled={stageFilter.pending} onClick={() => stageFilter.toggle(st)}>
-                    {STAGE_LABELS[st]}
-                    <span className="font-medium tabular-nums text-foreground">{cohort.counts[st].toLocaleString()}</span>
-                  </FilterChip>
-                ))}
-              </ChipGroup>
-            )}
-            <ChipGroup label="Show track">
-              {TRACKS.map(({ track: t, label }) => (
-                <FilterChip
-                  key={t}
-                  on={cohort.track === t}
-                  disabled={cohortTrackFilter.pending}
-                  onClick={() => cohortTrackFilter.toggle(t)}
-                >
-                  {label}
+      <motion.section variants={riseChild} className="space-y-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {(graduates || inClass) && (
+            <ChipGroup label="Show">
+              {graduates && (
+                <FilterChip on={show === "graduates"} disabled={pending} onClick={() => toggleShow("graduates")}>
+                  <GraduationCap className={cn("size-4", show === "graduates" && "text-brand")} />
+                  {cohortMonth(graduates.startDate)} Graduates
+                  <Count n={graduateTotal} />
+                </FilterChip>
+              )}
+              {inClass && (
+                <FilterChip on={show === "class"} disabled={pending} onClick={() => toggleShow("class")}>
+                  <Presentation className={cn("size-4", show === "class" && "text-brand")} />
+                  {cohortMonth(inClass.startDate)} Class
+                  <Count n={classTotal} />
+                </FilterChip>
+              )}
+            </ChipGroup>
+          )}
+          {stageChips.length > 0 && (
+            <ChipGroup label="Show class">
+              {stageChips.map(({ stage, count }) => (
+                <FilterChip key={stage} on={filters.stage === stage} disabled={pending} onClick={() => toggle("stage", stage)}>
+                  {STAGE_LABELS[stage]}
+                  <Count n={count} />
                 </FilterChip>
               ))}
             </ChipGroup>
-          </div>
-          <PeopleTable
-            columns={COHORT_COLUMNS}
-            query={cohort.query}
-            prefix={BOOTCAMP_COHORT_PREFIX}
-            rows={cohort.page.rows.map((m) => ({ ...m, level: m.stage }))}
-            page={cohort.page}
-            hrefFor={hrefIn("cohort")}
-            empty={
-              query.q || cohort.stage || cohort.track
-                ? "No one in the cohort matches."
-                : cohort.page.page > 1
-                  ? "No one on this page."
-                  : everyone
-                    ? "No one is in the cohort yet."
-                    : "No one in your org is in this cohort."
-            }
-          />
-        </motion.section>
-      )}
-
-      <motion.section variants={riseChild} className="space-y-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {bootcamp && cohort && <h3 className="text-base font-medium tracking-tight">History</h3>}
-          <ChipGroup label="Show">
-            {STATUSES.map(({ status: s, label, title, Icon }) => {
-              const on = status === s;
-              return (
-                <FilterChip key={s} on={on} disabled={pending} title={title} onClick={() => toggle(s)}>
-                  <Icon className={cn("size-4", on && "text-brand")} />
-                  {label}
-                  <span className="font-medium tabular-nums text-foreground">{counts[s].toLocaleString()}</span>
-                </FilterChip>
-              );
-            })}
-          </ChipGroup>
+          )}
+          {/* Its counts are of everyone, so it sits with everyone. */}
+          {show === "all" && (
+            <ChipGroup label="Show status">
+              {STATUSES.map(({ status: s, label, title, Icon }) => {
+                const on = filters.status === s;
+                return (
+                  <FilterChip key={s} on={on} disabled={pending} title={title} onClick={() => toggle("status", s)}>
+                    <Icon className={cn("size-4", on && "text-brand")} />
+                    {label}
+                    <Count n={counts[s]} />
+                  </FilterChip>
+                );
+              })}
+            </ChipGroup>
+          )}
           <ChipGroup label="Show track">
             {TRACKS.map(({ track: t, label }) => (
-              <FilterChip key={t} on={track === t} disabled={trackFilter.pending} onClick={() => trackFilter.toggle(t)}>
+              <FilterChip key={t} on={filters.track === t} disabled={pending} onClick={() => toggle("track", t)}>
                 {label}
               </FilterChip>
             ))}
           </ChipGroup>
         </div>
-        <PeopleTable
-          columns={RECORD_COLUMNS}
-          query={query}
-          rows={records.rows}
-          page={records}
-          hrefFor={hrefIn("history")}
-          empty={
-            query.q || status || track
-              ? "No one matches."
-              : records.page > 1
-                ? "No one on this page."
-                : everyone
-                  ? "No bootcamp records yet."
-                  : "No one in your org has a bootcamp record."
-          }
-        />
+
+        <TooltipProvider>
+          <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-200 table-fixed text-sm">
+                <thead>
+                  <tr className={HEADER_ROW}>
+                    {COLUMNS.slice(0, 2).map(({ column, label, className }) => (
+                      <SortHeader key={column} column={column} sort={query.sort} dir={query.dir} className={className}>
+                        {label}
+                      </SortHeader>
+                    ))}
+                    <PlainHeader className="w-56">Status</PlainHeader>
+                    {COLUMNS.slice(2).map(({ column, label, className }) => (
+                      <SortHeader key={column} column={column} sort={query.sort} dir={query.dir} className={className}>
+                        {label}
+                      </SortHeader>
+                    ))}
+                    <PlainHeader className="w-10" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {records.rows.map((p) => {
+                    const href = hrefFor(p.key);
+                    return (
+                      <tr key={`${p.email}:${p.level}`} className={LINK_ROW} onClick={rowLink(href)}>
+                        <td className="px-5 py-2.5 font-medium">
+                          <Link href={href} className="outline-none group-hover:underline focus-visible:underline">
+                            {p.fullName ?? <span className="font-normal text-muted-foreground">{p.email}</span>}
+                          </Link>
+                          <ViewedBy viewers={p.viewers} count={p.viewerCount} />
+                        </td>
+                        <td className="px-5 py-2.5">
+                          <LevelChip level={p.level} />
+                        </td>
+                        <td className="px-5 py-2.5">
+                          <StatusChips row={p} graduates={graduates} inClass={inClass} />
+                        </td>
+                        <td className="px-5 py-2.5 text-right whitespace-nowrap tabular-nums">{formatWholeScore(p.averageScore)}</td>
+                        <td className="px-5 py-2.5 whitespace-nowrap tabular-nums text-muted-foreground">{formatDate(p.date)}</td>
+                        <td className="px-3 py-2.5">
+                          <ChevronRight className="ml-auto size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {records.rows.length === 0 && (
+                    <tr>
+                      <td colSpan={COLUMNS.length + 2} className="px-5 py-8 text-center text-muted-foreground">
+                        {narrowed
+                          ? "No one matches."
+                          : records.page > 1
+                            ? "No one on this page."
+                            : show === "class"
+                              ? "No one is in the class yet."
+                              : show === "graduates"
+                                ? everyone
+                                  ? "No one graduated from it."
+                                  : "No one in your org graduated from it."
+                                : everyone
+                                  ? "No bootcamp records yet."
+                                  : "No one in your org has a bootcamp record."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="border-t empty:hidden">
+              <Pager page={records} noun="people" />
+            </div>
+          </div>
+        </TooltipProvider>
       </motion.section>
     </motion.div>
   );

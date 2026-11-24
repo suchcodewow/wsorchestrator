@@ -1,15 +1,16 @@
 /**
- * Reporting → Bootcamp's current cohort: the active bootcamp, which of its
- * classes are released, and a page of the people in it the caller may see,
- * of one class with `stage`. A class not yet released is empty for anyone
- * below Assessments Viewer.
+ * Reporting → Live Sessions' class still being judged: the cohort bootcamp,
+ * which of its classes are released, and a page of the people in those not
+ * yet released, of one class with `stage`. Only an Assessments Viewer sees
+ * anyone in it; a released class's people are its graduates, on
+ * GET /api/reporting/bootcamp.
  */
 
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
 import { BOOTCAMP_COHORT_LIST, isTrackFilter } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
-import { cohortBootcamp, cohortCounts, listCohort, readerOf, visibleStages } from "@/lib/reporting/bootcamp";
+import { classStages, cohortBootcamp, cohortCounts, listCohort, readerOf } from "@/lib/reporting/bootcamp";
 import { isReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { canSeeBootcampRecords } from "@/lib/roles";
 
@@ -48,5 +49,5 @@ export async function GET(req: Request) {
     listCohort(reader, bootcamp, query, stage, track),
     cohortCounts(reader, bootcamp),
   ]);
-  return NextResponse.json({ bootcamp, stages: visibleStages(reader, bootcamp), stage, track, counts, cohort: rows, page, hasMore });
+  return NextResponse.json({ bootcamp, stages: classStages(reader, bootcamp), stage, track, counts, cohort: rows, page, hasMore });
 }

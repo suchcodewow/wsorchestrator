@@ -284,7 +284,9 @@ export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; previe
             )}
             {!savedAt && intake.carriedFrom && (
               <p className="rounded-lg border border-brand-border bg-brand-subtle px-4 py-3">
-                We&apos;ve filled in your dietary needs from your Bootcamp registration on{" "}
+                {intake.carriedFrom.form === intake.form
+                  ? "We've filled this in from the registration you sent for an earlier class on "
+                  : "We've filled in your dietary needs from your Bootcamp registration on "}
                 {new Date(intake.carriedFrom.savedAt).toLocaleDateString()}. Update anything that&apos;s changed, then submit.
               </p>
             )}

@@ -22,6 +22,7 @@ process.env.AUTH_SECRET ||= "evals-settings-test-secret-evals-settings";
 import { db } from "@/db";
 import {
   bootcampJudges,
+  bootcampRegistrations,
   bootcamps,
   cohortAdditions,
   employees,
@@ -37,6 +38,7 @@ import {
   scheduleSessions,
   scheduleSessionStaff,
 } from "@/db/schema";
+import { register } from "@/lib/cohorts/registrations";
 import { chosenNameOnRecord, nameOnRecord, setChosenName } from "@/lib/evals/chosen-names";
 import { hibobServiceUser, listHibobSyncRuns, syncHibobEmployees } from "@/lib/evals/hibob";
 import { toEmployeeRow } from "@/lib/evals/hibob-record";
@@ -102,6 +104,7 @@ async function clearOwnRows() {
   await db.delete(evalsSlackContacts).where(like(evalsSlackContacts.email, `%@${TEST_EMAIL_DOMAIN}`));
   await db.delete(cohortAdditions).where(like(cohortAdditions.email, `%@${TEST_EMAIL_DOMAIN}`));
   await db.delete(intakeResponses).where(like(intakeResponses.email, `%@${TEST_EMAIL_DOMAIN}`));
+  await db.delete(bootcampRegistrations).where(like(bootcampRegistrations.email, `%@${TEST_EMAIL_DOMAIN}`));
   await db.delete(employees).where(like(employees.id, `${TEST_PREFIX}%`));
 }
 
@@ -773,6 +776,7 @@ describe("HiBob sync", () => {
       // Someone added by hand is marked Added, and no one else is; one RSVP leaves the rest unanswered.
       assert.ok((await addAttendee(admin.id, { email: email("c-out"), stage: "bootcamp", track: "sales" })).ok);
       await db.insert(intakeResponses).values({ form: "bootcamp", email: email("c-ae"), answers: { attend: "Yes" } });
+      await register("bootcamp", email("c-ae"), false);
       const listed = async (s: CandidateStage) =>
         (await listCurrentCohort({ stage: s, track: null }, { ...CURRENT_COHORT_LIST, q: "", page: 1, sort: "email", dir: "asc" })).rows;
       const outsider = async (s: CandidateStage) => {

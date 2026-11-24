@@ -59,9 +59,9 @@ export async function nextBootcampStart(): Promise<string | null> {
 }
 
 /** `nextBootcampStart`, with how many days its Bootcamp class runs. */
-export async function nextBootcamp(): Promise<{ startDate: string; btcDays: number } | null> {
+export async function nextBootcamp(): Promise<{ id: string; startDate: string; btcDays: number } | null> {
   const [next] = await db
-    .select({ startDate: bootcamps.startDate, btcDays: bootcamps.btcDays })
+    .select({ id: bootcamps.id, startDate: bootcamps.startDate, btcDays: bootcamps.btcDays })
     .from(bootcamps)
     .where(or(eq(bootcamps.status, "active"), and(eq(bootcamps.status, "scheduled"), gte(bootcamps.startDate, sql`current_date`))))
     .orderBy(sql`(${bootcamps.status} = 'active') desc`, asc(bootcamps.startDate))
@@ -74,9 +74,9 @@ export async function nextBootcamp(): Promise<{ startDate: string; btcDays: numb
  * soonest scheduled one that has not started yet and holds one. It runs from
  * the bootcamp's first day for `intDays` days, which can differ from `btcDays`.
  */
-export async function nextIntermediate(): Promise<{ startDate: string; intDays: number } | null> {
+export async function nextIntermediate(): Promise<{ id: string; startDate: string; intDays: number } | null> {
   const [next] = await db
-    .select({ startDate: bootcamps.startDate, intDays: bootcamps.intDays })
+    .select({ id: bootcamps.id, startDate: bootcamps.startDate, intDays: bootcamps.intDays })
     .from(bootcamps)
     .where(
       and(
@@ -86,7 +86,7 @@ export async function nextIntermediate(): Promise<{ startDate: string; intDays: 
     )
     .orderBy(sql`(${bootcamps.status} = 'active') desc`, asc(bootcamps.startDate))
     .limit(1);
-  return next && next.intDays !== null ? { startDate: next.startDate, intDays: next.intDays } : null;
+  return next && next.intDays !== null ? { id: next.id, startDate: next.startDate, intDays: next.intDays } : null;
 }
 
 /** The deferral window against the next bootcamp, or null when either is missing. */

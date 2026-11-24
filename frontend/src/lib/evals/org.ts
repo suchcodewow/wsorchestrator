@@ -37,3 +37,33 @@ export function orgUnder<T extends OrgPerson>(people: readonly T[], rootEmail: s
   }
   return members;
 }
+
+/**
+ * The managers in a stored `management_chain` (lowercased emails joined with
+ * `;`, the direct manager first), cut off at `leaderEmail`, who is the last one
+ * kept. Anyone above the leader is dropped, so a chain stored under an earlier
+ * leader never reaches past the one set now. A chain that never names the
+ * leader, or none, yields no one.
+ */
+export function chainUpTo(chain: string | null, leaderEmail: string): string[] {
+  const leader = leaderEmail.trim().toLowerCase();
+  const managers = (chain ?? "")
+    .split(";")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const at = managers.indexOf(leader);
+  return at < 0 ? [] : managers.slice(0, at + 1);
+}
+
+/**
+ * Who manages someone, for whoever is told about them or may see them: their
+ * stored chain up to the leader (`chainUpTo`), or, when they sit outside the
+ * leader's organization and so have none, their direct manager alone. The
+ * fallback goes one level and no further.
+ */
+export function managersFor(chain: string | null, reportsToEmail: string | null, leaderEmail: string): string[] {
+  const upToLeader = chainUpTo(chain, leaderEmail);
+  if (upToLeader.length > 0) return upToLeader;
+  const direct = (reportsToEmail ?? "").trim().toLowerCase();
+  return direct ? [direct] : [];
+}

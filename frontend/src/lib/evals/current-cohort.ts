@@ -18,6 +18,7 @@ import { db } from "@/db";
 import { cohortAdditions, employees, intakeResponses, type Employee } from "@/db/schema";
 import { officialNameSql } from "@/lib/evals/official-name-sql";
 import { attended, classDate } from "@/lib/evals/attendance";
+import { registeredForNext } from "@/lib/cohorts/registrations";
 import { getCandidateCutoffs, getDeferralDays, type CandidateCutoffs } from "@/lib/evals/settings";
 import { nextBootcampStart } from "@/lib/evals/tracks";
 import type { CurrentCohortSort } from "@/lib/list-specs";
@@ -54,7 +55,7 @@ export function isCurrentTrack(value: unknown): value is CurrentTrack {
 /**
  * At most one stage and one track; null for the stage shows both, and for the
  * track every one but deferred. `unanswered` keeps only those who have not
- * RSVP'd: saved no answers to their stage's registration form.
+ * RSVP'd: registered for the next class of their stage by saving its form.
  */
 export type CurrentCohortFilter = { stage: CandidateStage | null; track: CandidateTrack | null; unanswered?: boolean };
 
@@ -102,8 +103,12 @@ const btcDate = classDate("bootcamp", sql`${e.email}`);
  * which a subquery over a table with its own `email` column reads as that one.
  */
 const employeeEmail = sql.raw(`lower("employees"."email")`);
-/** They saved answers to their stage's registration form, as the RSVP mark beside their name shows. */
-const rsvped = sql<boolean>`exists (select 1 from ${intakeResponses} where ${intakeResponses.form} = ${candidateStage} and ${intakeResponses.email} = ${employeeEmail})`;
+/**
+ * They registered for the next class of their stage by saving its form, as
+ * the RSVP mark beside their name shows (`registeredForNext`): a registration
+ * for an earlier class they did not attend no longer counts.
+ */
+const rsvped = registeredForNext(candidateStage, employeeEmail);
 
 const SORT_COLUMNS = {
   fullName: sql`lower(${e.fullName})`,

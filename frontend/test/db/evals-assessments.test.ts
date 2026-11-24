@@ -19,7 +19,8 @@ import { eq, like } from "drizzle-orm";
 process.env.AUTH_SECRET ||= "evals-assessments-test-secret-evals-assess";
 
 import { db } from "@/db";
-import { employees, evalsAssessmentCriteria, intakeResponses, type EmployeeTrack } from "@/db/schema";
+import { bootcampRegistrations, employees, evalsAssessmentCriteria, intakeResponses, type EmployeeTrack } from "@/db/schema";
+import { register } from "@/lib/cohorts/registrations";
 import {
   createAssessment,
   deleteAssessment,
@@ -306,18 +307,22 @@ describe("the Current tab", () => {
       .insert(intakeResponses)
       .values({ form: "intermediate", email: sales.email.toLowerCase(), answers: {} })
       .returning({ id: intakeResponses.id });
+    // Saving the form is answering it and registering for the next class.
     const [rsvp] = await db
       .insert(intakeResponses)
       .values({ form: "bootcamp", email: sales.email.toLowerCase(), answers: {} })
       .returning({ id: intakeResponses.id });
+    await register("bootcamp", sales.email, false);
     try {
       assert.equal(await listed(), false);
       assert.equal((await currentCohortSummary()).unanswered.bootcamp.sales, before - 1);
       await db.delete(intakeResponses).where(eq(intakeResponses.id, rsvp!.id));
+      await db.delete(bootcampRegistrations).where(eq(bootcampRegistrations.email, sales.email.toLowerCase()));
       assert.equal(await listed(), true, "the other stage's form is not an RSVP to this one");
     } finally {
       await db.delete(intakeResponses).where(eq(intakeResponses.id, rsvp!.id));
       await db.delete(intakeResponses).where(eq(intakeResponses.id, other!.id));
+      await db.delete(bootcampRegistrations).where(eq(bootcampRegistrations.email, sales.email.toLowerCase()));
     }
   });
 });
