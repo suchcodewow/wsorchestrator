@@ -287,10 +287,11 @@ export async function syncHibobEmployees(trigger: HibobSyncTrigger, actorId: str
         delete from ${employees} stale
         where stale.imported_at <> ${importedAt}
           and exists (select 1 from ${employees} n where n.email = stale.email and n.imported_at = ${importedAt})`);
-      // Whoever HiBob no longer sends has left: kept, out of every org and list.
+      // Whoever HiBob no longer sends has left: kept, out of every org and list. Their
+      // track stays, so Live Sessions history can still be narrowed to Sales or Engineer.
       await tx
         .update(employees)
-        .set({ active: false, orgDepth: null, managementChain: null, track: null })
+        .set({ active: false, orgDepth: null, managementChain: null })
         .where(and(eq(employees.active, true), ne(employees.importedAt, importedAt)));
       await tx
         .update(hibobSyncRuns)
