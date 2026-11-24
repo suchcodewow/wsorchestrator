@@ -8,7 +8,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
-import { BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX, BOOTCAMP_RECORD_LIST, isHistoryStatus } from "@/lib/list-specs";
+import { BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX, BOOTCAMP_RECORD_LIST, isHistoryStatus, isTrackFilter } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import {
   bootcampRecordCounts,
@@ -35,15 +35,19 @@ export default async function BootcampPage({ searchParams }: { searchParams: Pro
   const cohortQuery = parseListQuery(params, BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX);
   // A hand-typed status that isn't one shows everyone, as a bad sort does.
   const status = isHistoryStatus(params.status) ? params.status : null;
+  const track = isTrackFilter(params.track) ? params.track : null;
+  const cohortTrack = isTrackFilter(params[`${BOOTCAMP_COHORT_PREFIX}.track`])
+    ? (params[`${BOOTCAMP_COHORT_PREFIX}.track`] as typeof track)
+    : null;
   const stageParam = params[`${BOOTCAMP_COHORT_PREFIX}.stage`];
   const cohortStage = isReleaseStage(stageParam) ? stageParam : null;
 
   const bootcamp = await cohortBootcamp();
   const stages = bootcamp ? visibleStages(reader, bootcamp) : [];
   const [records, counts, cohort, stageCounts] = await Promise.all([
-    listBootcampRecords(reader, query, status),
+    listBootcampRecords(reader, query, status, track),
     bootcampRecordCounts(reader),
-    bootcamp && stages.length > 0 ? listCohort(reader, bootcamp, cohortQuery, cohortStage) : null,
+    bootcamp && stages.length > 0 ? listCohort(reader, bootcamp, cohortQuery, cohortStage, cohortTrack) : null,
     bootcamp && stages.length > 0 ? cohortCounts(reader, bootcamp) : null,
   ]);
 
@@ -66,9 +70,12 @@ export default async function BootcampPage({ searchParams }: { searchParams: Pro
           },
         }
       }
-      cohort={cohort && stageCounts && { query: cohortQuery, page: cohort, stages, stage: cohortStage, counts: stageCounts }}
+      cohort={
+        cohort && stageCounts && { query: cohortQuery, page: cohort, stages, stage: cohortStage, track: cohortTrack, counts: stageCounts }
+      }
       query={query}
       status={status}
+      track={track}
       records={records}
       counts={counts}
     />

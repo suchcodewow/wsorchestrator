@@ -615,7 +615,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title or track"),
         ],
         returns: `{ stage: string | null, members: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "deferred", overridden: boolean, added: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, counts: { bootcamp: number, intermediate: number }, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
-        errors: [{ status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" }],
+        errors: [
+          { status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" },
+          { status: 400, error: "invalid_track", when: "track is neither sales nor engineer" },
+        ],
       },
       {
         method: "GET",
@@ -3332,9 +3335,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "),
             note: "only the active or only the inactive; everyone if omitted",
           },
+          { name: "track", type: '"sales" | "engineer"', note: "only that assessed track; both if omitted" },
         ],
-        returns: `{ people: { key, email, fullName: string | null, level: "intermediate" | "bootcamp", date: "YYYY-MM-DD", active: boolean, scored: number, averageScore: number | null, viewers: { name, at }[], viewerCount: number }[], ${PAGE_FIELDS}, status: "active" | "inactive" | null, counts: { total: number, active: number, inactive: number } }`,
-        errors: [{ status: 400, error: "invalid_status", when: "status is neither active nor inactive" }],
+        returns: `{ people: { key, email, fullName: string | null, level: "intermediate" | "bootcamp", date: "YYYY-MM-DD", active: boolean, scored: number, averageScore: number | null, viewers: { name, at }[], viewerCount: number }[], ${PAGE_FIELDS}, status: "active" | "inactive" | null, track: "sales" | "engineer" | null, counts: { total: number, active: number, inactive: number } }`,
+        errors: [
+          { status: 400, error: "invalid_status", when: "status is neither active nor inactive" },
+          { status: 400, error: "invalid_track", when: "track is neither sales nor engineer" },
+        ],
       },
       {
         method: "GET",
@@ -3348,8 +3355,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         query: [
           ...listQuery(BOOTCAMP_COHORT_LIST.sorts, "the name or email", BOOTCAMP_COHORT_LIST.dir),
           { name: "stage", type: '"bootcamp" | "intermediate"', note: "only that class; both if omitted" },
+          { name: "track", type: '"sales" | "engineer"', note: "only that assessed track; both if omitted" },
         ],
-        returns: `{ bootcamp: { id, startDate, intermediate: boolean, released: { bootcamp: { at, byName: string | null } | null, intermediate: { at, byName: string | null } | null } } | null, stages: ("bootcamp" | "intermediate")[], stage: "bootcamp" | "intermediate" | null, counts: { bootcamp: number, intermediate: number }, cohort: { key, email, fullName: string | null, stage: "bootcamp" | "intermediate", scored: number, averageScore: number | null, date: "YYYY-MM-DD", viewers: { name, at }[], viewerCount: number }[], ${PAGE_FIELDS} }`,
+        returns: `{ bootcamp: { id, startDate, intermediate: boolean, released: { bootcamp: { at, byName: string | null } | null, intermediate: { at, byName: string | null } | null } } | null, stages: ("bootcamp" | "intermediate")[], stage: "bootcamp" | "intermediate" | null, track: "sales" | "engineer" | null, counts: { bootcamp: number, intermediate: number }, cohort: { key, email, fullName: string | null, stage: "bootcamp" | "intermediate", scored: number, averageScore: number | null, date: "YYYY-MM-DD", viewers: { name, at }[], viewerCount: number }[], ${PAGE_FIELDS} }`,
         errors: [{ status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" }],
       },
       {
@@ -4346,7 +4354,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "A request refused with 401 is not recorded, and nor is a GET or a POST that changes nothing. Request bodies are stored with secret-looking fields redacted.",
-        query: listQuery(AUDIT_LIST.sorts, "who, action, summary, path, target, address, outcome or detail", "desc"),
+        query: [
+          ...listQuery(AUDIT_LIST.sorts, "who, action, summary, path, target, address, outcome or detail", "desc"),
+          {
+            name: "activity",
+            type: "string",
+            note: 'An area of the app: an API reference group id such as "users", or "other" for sign-ins and the runner. Default every area.',
+          },
+          { name: "system", type: '"0"', note: "0 hides the rows the app wrote on its own (the scheduler, the runner). Default shown." },
+          { name: "user", type: '"0"', note: "0 hides the rows someone caused, signed in or not. Default shown." },
+        ],
         returns: `{ events: { id, at: ISO 8601 string, actorId: string | null, actorName: string | null, actorEmail: string | null, via: "session" | "token" | "system" | "anonymous", action, summary, path: string | null, target: string | null, targetLabel: string | null, status: number | null, outcome: "succeeded" | "denied" | "failed", detail: object | null, ip: string | null }[], ${PAGE_FIELDS} }`,
       },
     ],

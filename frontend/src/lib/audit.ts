@@ -17,7 +17,7 @@
  */
 
 import "server-only";
-import { desc, sql } from "drizzle-orm";
+import { and, desc, inArray, notInArray, or, eq, sql, type SQL } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
@@ -25,7 +25,17 @@ import { db } from "@/db";
 import { auditEvents, type AuditEvent, type AuditOutcome, type AuditVia } from "@/db/schema";
 import { sessionOrToken } from "@/lib/api-auth";
 import { auditScope, noteAudit, noteCaller, type AuditActor, type AuditScope } from "@/lib/audit-context";
-import { createdTarget, endpointFor, outcomeFor, redact } from "@/lib/audit-shape";
+import {
+  actionsOfActivity,
+  AUDIT_FILTER_DEFAULT,
+  createdTarget,
+  endpointFor,
+  OTHER_ACTIVITY,
+  outcomeFor,
+  redact,
+  routeActions,
+  type AuditFilter,
+} from "@/lib/audit-shape";
 import { IMPERSONATION_PATH } from "@/lib/impersonation";
 import type { AuditSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
@@ -262,12 +272,31 @@ const SORT_COLUMNS = {
   outcome: auditEvents.outcome,
 } as const;
 
+/** Rows of one area: the actions its API reference group records, or, for Other, those no group does. */
+function activityFilter(activity: string | null): SQL | undefined {
+  if (!activity) return undefined;
+  if (activity === OTHER_ACTIVITY) return notInArray(auditEvents.action, routeActions());
+  const actions = actionsOfActivity(activity);
+  return actions.length ? inArray(auditEvents.action, actions) : sql`false`;
+}
+
+/** System rows are the app's own; user rows are everyone else's. Neither ticked matches nothing. */
+function viaFilter({ system, user }: AuditFilter): SQL | undefined {
+  if (system && user) return undefined;
+  if (system) return eq(auditEvents.via, "system");
+  if (user) return or(eq(auditEvents.via, "session"), eq(auditEvents.via, "token"), eq(auditEvents.via, "anonymous"));
+  return sql`false`;
+}
+
 /**
  * One page of the trail, newest first unless asked otherwise. The search
  * matches any part of who, what, where, the outcome and the recorded detail.
  */
-export async function listAuditEvents(query: ListQuery<AuditSort>): Promise<Page<AuditListing>> {
-  const where = searchAny(query.q, [
+export async function listAuditEvents(
+  query: ListQuery<AuditSort>,
+  filter: AuditFilter = AUDIT_FILTER_DEFAULT,
+): Promise<Page<AuditListing>> {
+  const search = searchAny(query.q, [
     auditEvents.actorName,
     auditEvents.actorEmail,
     auditEvents.action,
@@ -280,6 +309,7 @@ export async function listAuditEvents(query: ListQuery<AuditSort>): Promise<Page
     sql`${auditEvents.outcome}::text`,
     sql`${auditEvents.detail}::text`,
   ]);
+  const where = and(search, activityFilter(filter.activity), viaFilter(filter));
   const { limit, offset } = pageWindow(query.page);
 
   const rows = await db

@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { GROUPS } from "@/lib/api-reference";
-import { endpointFor, outcomeFor, redact } from "@/lib/audit-shape";
+import { actionsOfActivity, auditActivities, endpointFor, outcomeFor, parseAuditFilter, redact } from "@/lib/audit-shape";
 import { listParam, PAGE_SIZE, pageRange, pageWindow, parseListQuery, toPage } from "@/lib/paging";
 import { containsPattern } from "@/lib/paging-sql";
 import { API_DIR, routeFiles, urlPath } from "../support/routes";
@@ -173,5 +173,24 @@ describe("paging", () => {
 
   test("escapes ILIKE wildcards in a search", () => {
     assert.equal(containsPattern("100%_off\\"), "%100\\%\\_off\\\\%");
+  });
+});
+
+describe("audit filter", () => {
+  test("defaults to every area, system and user", () => {
+    assert.deepEqual(parseAuditFilter(new URLSearchParams()), { activity: null, system: true, user: true });
+  });
+
+  test("reads an area and the two switches, and ignores an unknown area", () => {
+    const users = auditActivities().find((a) => a.id === "users")!;
+    assert.ok(users);
+    assert.deepEqual(parseAuditFilter(new URLSearchParams("activity=users&system=0")), { activity: "users", system: false, user: true });
+    assert.equal(parseAuditFilter(new URLSearchParams("activity=nope")).activity, null);
+  });
+
+  test("an area's actions are exactly what `audited` records for it", () => {
+    const actions = actionsOfActivity("users");
+    assert.ok(actions.length > 0);
+    for (const a of actions) assert.match(a, /^(POST|PUT|PATCH|DELETE) \/api\//);
   });
 });

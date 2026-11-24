@@ -19,7 +19,7 @@ import { useDebouncedSearch } from "@/components/use-debounced-search";
 import { listParam, pageRange, type Page, type SortDir } from "@/lib/paging";
 import { cn } from "@/lib/utils";
 
-type ListChange = Partial<Record<"q" | "sort" | "dir" | "page" | "today", string | null>>;
+type ListChange = Partial<Record<"q" | "sort" | "dir" | "page" | "today", string | null>> & Record<string, string | null | undefined>;
 
 /**
  * Sets one table's list parameters in the URL (`prefix` names the table when
@@ -35,9 +35,9 @@ export function useListParams(prefix = "") {
 
   function set(changes: ListChange) {
     const next = new URLSearchParams(params.toString());
-    for (const [name, value] of Object.entries(changes) as [keyof ListChange, string | null][]) {
-      const key = name === "today" ? name : listParam(name, prefix);
-      if (value === null || value === "") next.delete(key);
+    for (const [name, value] of Object.entries(changes) as [string, string | null | undefined][]) {
+      const key = name === "q" || name === "sort" || name === "dir" || name === "page" ? listParam(name, prefix) : name;
+      if (value === null || value === undefined || value === "") next.delete(key);
       else next.set(key, value);
     }
     if ("q" in changes) {

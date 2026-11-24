@@ -88,6 +88,14 @@ export function isHistoryStatus(value: unknown): value is HistoryStatus {
   return HISTORY_STATUSES.includes(value as HistoryStatus);
 }
 
+/** Reporting → Live Sessions narrowed to one assessed track, in either table. */
+export const TRACK_FILTERS = ["sales", "engineer"] as const;
+export type TrackFilter = (typeof TRACK_FILTERS)[number];
+
+export function isTrackFilter(value: unknown): value is TrackFilter {
+  return TRACK_FILTERS.includes(value as TrackFilter);
+}
+
 /** Reporting → Live Sessions: everyone with a released BTC or INT the caller may see, newest first. */
 export const BOOTCAMP_RECORD_LIST = spec(["date", "fullName", "level", "averageScore"], "desc");
 export type BootcampRecordSort = (typeof BOOTCAMP_RECORD_LIST.sorts)[number];

@@ -43,7 +43,7 @@ import { attended } from "@/lib/evals/attendance";
 import { assessedOn, assessedTrackOf, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { retrackEmployees } from "@/lib/evals/tracks";
-import type { BootcampCohortSort, BootcampRecordSort, HistoryStatus } from "@/lib/list-specs";
+import type { BootcampCohortSort, BootcampRecordSort, HistoryStatus, TrackFilter } from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
 import {
@@ -184,7 +184,8 @@ function people(reader: BootcampReader): SQL {
                (array_agg(r.bootcamp_id order by (r.stage = 'intermediate') desc, r.day desc))[1] as bootcamp_id,
                ${nameOf(sql`r.email`)} as full_name,
                coalesce((select bool_or(n.active) from ${employees} n where n.email = r.email), false) as active,
-               ${keyOf(sql`r.email`)} as key
+               ${keyOf(sql`r.email`)} as key,
+               (select ${assessedTrackOf("n")} from ${employees} n where n.email = r.email order by n.active desc, n.id limit 1) as track
           from ${pastRecords(reader)} r
          where ${inReach(reader, sql`r.email`)}
          group by r.email
@@ -224,9 +225,15 @@ export async function listBootcampRecords(
   reader: BootcampReader,
   query: ListQuery<BootcampRecordSort>,
   status: HistoryStatus | null = null,
+  track: TrackFilter | null = null,
 ): Promise<Page<BootcampRecordRow>> {
   const { limit, offset } = pageWindow(query.page);
-  const where = and(sql`true`, searchAny(query.q, [sql`p.full_name`, sql`p.email`]), status ? STATUS_FILTER[status] : undefined);
+  const where = and(
+    sql`true`,
+    searchAny(query.q, [sql`p.full_name`, sql`p.email`]),
+    status ? STATUS_FILTER[status] : undefined,
+    track ? sql`p.track = ${track}` : undefined,
+  );
   // A class shares one day, so its people fall back to name order.
   const order = orderFor(RECORD_SORT_COLUMNS[query.sort], query.dir, sql`lower(p.full_name) asc nulls last`, sql`p.email`);
   const { rows } = await db.execute<BootcampRecordRow>(sql`
@@ -364,7 +371,7 @@ async function cohortMembers(reader: BootcampReader, bootcamp: CohortBootcamp, s
   const score = classScore(sql`${bootcamp.id}::uuid`, sql`c.email`, sql`c.stage`);
   return sql`
     with cohort as (${await cohortSql(bootcamp, stages)})
-    select c.email, c.stage, ${nameOf(sql`c.email`)} as full_name, ${keyOf(sql`c.email`)} as key,
+    select c.email, c.stage, c.track, ${nameOf(sql`c.email`)} as full_name, ${keyOf(sql`c.email`)} as key,
            ${score.scored} as scored, ${score.average} as average
       from cohort c
      where ${inReach(reader, sql`c.email`)}`;
@@ -380,6 +387,7 @@ export async function listCohort(
   bootcamp: CohortBootcamp,
   query: ListQuery<BootcampCohortSort>,
   stage: ReleaseStage | null = null,
+  track: TrackFilter | null = null,
 ): Promise<Page<CohortRow>> {
   const stages = visibleStages(reader, bootcamp).filter((s) => !stage || s === stage);
   if (stages.length === 0) return toPage([], query.page);
@@ -390,7 +398,7 @@ export async function listCohort(
            ${bootcamp.startDate}::text as date,
            ${viewersOf(reader, sql`m.email`)} as viewers, ${viewerCountOf(reader, sql`m.email`)} as "viewerCount"
       from (${await cohortMembers(reader, bootcamp, stages)}) m
-     where ${and(sql`true`, searchAny(query.q, [sql`m.full_name`, sql`m.email`]))}
+     where ${and(sql`true`, searchAny(query.q, [sql`m.full_name`, sql`m.email`]), track ? sql`m.track = ${track}` : undefined)}
      order by ${sql.join(order, sql`, `)}
      limit ${limit} offset ${offset}`);
   return toPage(rows, query.page);
