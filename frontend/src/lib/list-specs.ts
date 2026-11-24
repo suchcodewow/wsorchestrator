@@ -109,7 +109,7 @@ export function isTrackFilter(value: unknown): value is TrackFilter {
 }
 
 /** Reporting → Live Sessions: everyone with a released BTC or INT the caller may see, newest first. */
-export const BOOTCAMP_RECORD_LIST = spec(["date", "fullName", "level", "averageScore"], "desc");
+export const BOOTCAMP_RECORD_LIST = spec(["date", "fullName", "level", "bootcampScore", "intermediateScore"], "desc");
 export type BootcampRecordSort = (typeof BOOTCAMP_RECORD_LIST.sorts)[number];
 
 /** Reporting → Live Sessions' current cohort, above the history; its sort and page are prefixed `cohort`. */

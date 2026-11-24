@@ -229,16 +229,19 @@ export async function graduatesBootcamp(): Promise<GraduatesBootcamp | null> {
  * at the newest bootcamp they had it.
  */
 function people(reader: BootcampReader): SQL {
-  const score = classScore(sql`g.bootcamp_id`, sql`g.email`, sql`g.level`);
+  const btc = classScore(sql`g.btc_id`, sql`g.email`, sql`'bootcamp'`);
+  const int = classScore(sql`g.int_id`, sql`g.email`, sql`'intermediate'`);
   return sql`(
-    select g.*, ${score.scored} as scored, ${score.average} as average
+    select g.*, ${btc.average} as btc_average, ${int.average} as int_average
       from (
         select r.email,
                (case when ${ATTENDED_INT} then 'intermediate' else 'bootcamp' end) as level,
                (case when ${ATTENDED_INT} then 2 else 1 end) as rank,
                max(r.day)::text as date,
                -- Their furthest class's newest bootcamp: an INT, if they have one, sorts first.
-               (array_agg(r.bootcamp_id order by (r.stage = 'intermediate') desc, r.day desc))[1] as bootcamp_id,
+               -- The newest bootcamp they had each class at; null for a class not yet attended.
+               (array_agg(r.bootcamp_id order by r.day desc) filter (where r.stage = 'bootcamp'))[1] as btc_id,
+               (array_agg(r.bootcamp_id order by r.day desc) filter (where r.stage = 'intermediate'))[1] as int_id,
                ${nameOf(sql`r.email`)} as full_name,
                coalesce((select bool_or(n.active) from ${employees} n where n.email = r.email), false) as active,
                ${keyOf(sql`r.email`)} as key,
@@ -257,7 +260,8 @@ const RECORD_SORT_COLUMNS: Record<BootcampRecordSort, SQL> = {
   date: sql`p.date`,
   fullName: sql`lower(p.full_name)`,
   level: sql`p.rank`,
-  averageScore: sql`p.average`,
+  bootcampScore: sql`p.btc_average`,
+  intermediateScore: sql`p.int_average`,
 };
 
 export type BootcampRecordRow = {
@@ -269,10 +273,10 @@ export type BootcampRecordRow = {
   date: string;
   /** Sent by the last HiBob sync: still at Harness. */
   active: boolean;
-  /** Assessments scored in `level` at the newest bootcamp they had it. */
-  scored: number;
-  /** Their score there, as the current cohort shows it; null with none. */
-  averageScore: number | null;
+  /** Their Bootcamp score at the newest bootcamp they had it, as the current cohort shows it; null with none. */
+  bootcampScore: number | null;
+  /** Their Intermediate score likewise; null before they have attended it or with none. */
+  intermediateScore: number | null;
   /** Who has opened their card, newest first, at most `VIEWERS_SHOWN`; none until the reader has. */
   viewers: CardViewer[];
   viewerCount: number;
@@ -321,7 +325,7 @@ export async function listBootcampRecords(
   const inClass = reader.all ? scope.inClass : null;
   const { rows } = await db.execute<BootcampRecordRow>(sql`
     with cls as (${await classMembersSql(inClass)})
-    select p.key, p.email, p.full_name as "fullName", p.level, p.date, p.active, p.scored, p.average as "averageScore",
+    select p.key, p.email, p.full_name as "fullName", p.level, p.date, p.active, p.btc_average as "bootcampScore", p.int_average as "intermediateScore",
            ${viewersOf(reader, sql`p.email`)} as viewers, ${viewerCountOf(reader, sql`p.email`)} as "viewerCount",
            p.graduated, (select c.stage from cls c where c.email = p.email limit 1) as "inClass"
       from ${people(reader)} p
@@ -331,12 +335,15 @@ export async function listBootcampRecords(
   return toPage(rows, query.page);
 }
 
-export type BootcampRecordCounts = { total: number; graduates: Record<ReleaseStage, number> } & Record<HistoryStatus, number>;
+export type BootcampRecordCounts = { total: number; graduates: Record<ReleaseStage, number> } & Record<HistoryStatus, number> &
+  Record<TrackFilter, number>;
 
-/** How many people the reader may see with a record, how many are still here, and how many graduated from each class of the latest released bootcamp, whatever the search. */
+/** How many people the reader may see with a record, how many are still here, how many are on each track, and how many graduated from each class of the latest released bootcamp, whatever the search. */
 export async function bootcampRecordCounts(reader: BootcampReader): Promise<BootcampRecordCounts> {
-  const { rows } = await db.execute<{ total: number; active: number; btc: number; int: number }>(sql`
+  const { rows } = await db.execute<{ total: number; active: number; sales: number; engineer: number; btc: number; int: number }>(sql`
     select count(*)::int as total, (count(*) filter (where p.active))::int as active,
+           (count(*) filter (where p.track = 'sales'))::int as sales,
+           (count(*) filter (where p.track = 'engineer'))::int as engineer,
            (count(*) filter (where p.graduated = 'bootcamp'))::int as btc,
            (count(*) filter (where p.graduated = 'intermediate'))::int as int
       from ${people(reader)} p`);
@@ -346,6 +353,8 @@ export async function bootcampRecordCounts(reader: BootcampReader): Promise<Boot
     total,
     active,
     inactive: total - active,
+    sales: rows[0]?.sales ?? 0,
+    engineer: rows[0]?.engineer ?? 0,
     graduates: { bootcamp: rows[0]?.btc ?? 0, intermediate: rows[0]?.int ?? 0 },
   };
 }
@@ -571,7 +580,8 @@ const COHORT_SORT_FOR: Record<BootcampRecordSort, BootcampCohortSort> = {
   date: "date",
   fullName: "fullName",
   level: "stage",
-  averageScore: "averageScore",
+  bootcampScore: "averageScore",
+  intermediateScore: "averageScore",
 };
 
 /**
@@ -597,7 +607,21 @@ export async function listLiveSessions(
     );
     return {
       ...page,
-      rows: page.rows.map(({ stage, ...m }) => ({ ...m, level: stage, active: true, inClass: stage })),
+      rows: page.rows.map((m) => ({
+        key: m.key,
+        email: m.email,
+        fullName: m.fullName,
+        date: m.date,
+        viewers: m.viewers,
+        viewerCount: m.viewerCount,
+        graduated: m.graduated,
+        level: m.stage,
+        active: true,
+        inClass: m.stage,
+        // A class's members show their score in that class only.
+        bootcampScore: m.stage === "bootcamp" ? m.averageScore : null,
+        intermediateScore: m.stage === "intermediate" ? m.averageScore : null,
+      })),
     };
   }
   return listBootcampRecords(reader, query, filters.status, filters.track, {

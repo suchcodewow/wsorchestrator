@@ -14,7 +14,6 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ChevronRight, Eye, GraduationCap, Presentation, UserCheck, UserX, type LucideIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
@@ -46,8 +45,9 @@ type Column = { column: BootcampRecordSort; label: string; className?: string };
 
 const COLUMNS: Column[] = [
   { column: "fullName", label: "Name" },
-  { column: "level", label: "Class", className: "w-36 whitespace-nowrap" },
-  { column: "averageScore", label: "Average score", className: "w-36 whitespace-nowrap text-right" },
+  { column: "level", label: "Most Recent Class", className: "w-44 whitespace-nowrap" },
+  { column: "bootcampScore", label: "BTC Score", className: "w-32 whitespace-nowrap" },
+  { column: "intermediateScore", label: "INT Score", className: "w-32 whitespace-nowrap" },
   { column: "date", label: "Session Date", className: "w-40 whitespace-nowrap" },
 ];
 
@@ -156,21 +156,19 @@ function FilterChip({
 
 const Count = ({ n }: { n: number }) => <span className="font-medium tabular-nums text-foreground">{n.toLocaleString()}</span>;
 
-/** Where someone stands now: one of the latest graduates, and in the class still being judged. */
-function StatusChips({ row, graduates, inClass }: { row: BootcampRecordRow; graduates: ViewGraduates | null; inClass: ViewClass | null }) {
+/** A whole-number score, orange at 1 or 2 and green at 4; empty before the class is attended or scored. */
+function ScoreCell({ score }: { score: number | null }) {
+  if (score === null) return null;
+  const whole = Number(formatWholeScore(score));
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {row.graduated && graduates && (
-        <Badge variant="outline" className="border-transparent bg-brand-subtle text-foreground">
-          {cohortMonth(graduates.startDate)} Graduate
-        </Badge>
+    <span
+      className={cn(
+        whole <= 2 && "font-medium text-orange-600 dark:text-orange-400",
+        whole === 4 && "font-medium text-green-600 dark:text-green-400",
       )}
-      {row.inClass && inClass && (
-        <Badge variant="outline" className="border-transparent bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
-          {cohortMonth(inClass.startDate)} {STAGE_LABELS[row.inClass]}
-        </Badge>
-      )}
-    </div>
+    >
+      {formatWholeScore(score)}
+    </span>
   );
 }
 
@@ -286,6 +284,7 @@ export function BootcampView({
             {TRACKS.map(({ track: t, label }) => (
               <FilterChip key={t} on={filters.track === t} disabled={pending} onClick={() => toggle("track", t)}>
                 {label}
+                <Count n={counts[t]} />
               </FilterChip>
             ))}
           </ChipGroup>
@@ -297,13 +296,7 @@ export function BootcampView({
               <table className="w-full min-w-200 table-fixed text-sm">
                 <thead>
                   <tr className={HEADER_ROW}>
-                    {COLUMNS.slice(0, 2).map(({ column, label, className }) => (
-                      <SortHeader key={column} column={column} sort={query.sort} dir={query.dir} className={className}>
-                        {label}
-                      </SortHeader>
-                    ))}
-                    <PlainHeader className="w-56">Status</PlainHeader>
-                    {COLUMNS.slice(2).map(({ column, label, className }) => (
+                    {COLUMNS.map(({ column, label, className }) => (
                       <SortHeader key={column} column={column} sort={query.sort} dir={query.dir} className={className}>
                         {label}
                       </SortHeader>
@@ -325,10 +318,12 @@ export function BootcampView({
                         <td className="px-5 py-2.5">
                           <LevelChip level={p.level} />
                         </td>
-                        <td className="px-5 py-2.5">
-                          <StatusChips row={p} graduates={graduates} inClass={inClass} />
+                        <td className="px-5 py-2.5 whitespace-nowrap tabular-nums">
+                          <ScoreCell score={p.bootcampScore} />
                         </td>
-                        <td className="px-5 py-2.5 text-right whitespace-nowrap tabular-nums">{formatWholeScore(p.averageScore)}</td>
+                        <td className="px-5 py-2.5 whitespace-nowrap tabular-nums">
+                          <ScoreCell score={p.intermediateScore} />
+                        </td>
                         <td className="px-5 py-2.5 whitespace-nowrap tabular-nums text-muted-foreground">{formatDate(p.date)}</td>
                         <td className="px-3 py-2.5">
                           <ChevronRight className="ml-auto size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
@@ -338,7 +333,7 @@ export function BootcampView({
                   })}
                   {records.rows.length === 0 && (
                     <tr>
-                      <td colSpan={COLUMNS.length + 2} className="px-5 py-8 text-center text-muted-foreground">
+                      <td colSpan={COLUMNS.length + 1} className="px-5 py-8 text-center text-muted-foreground">
                         {narrowed
                           ? "No one matches."
                           : records.page > 1
