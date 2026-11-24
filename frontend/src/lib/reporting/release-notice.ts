@@ -26,6 +26,8 @@ import {
 } from "@/db/schema";
 import { getSlackSyncLive, isFatal, resolveSlackUsers } from "@/lib/cohorts/slack-sync";
 import { getTestGroup } from "@/lib/cohorts/test-group";
+import { managersFor } from "@/lib/evals/org";
+import { getOrgLeaderEmail } from "@/lib/evals/settings";
 import { slackContactEmails } from "@/lib/evals/slack-contacts";
 import type { ReleaseNoticeMessageSort, ReleaseNoticeSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
@@ -49,13 +51,14 @@ async function recipientsOf(stage: ReleaseStage, attendees: string[]): Promise<{
       testGroup: true,
     };
   }
+  const leader = await getOrgLeaderEmail();
   const chains: (string | null)[] = [];
   for (let i = 0; i < attendees.length; i += 500) {
     const rows = await db
-      .select({ chain: employees.managementChain })
+      .select({ chain: employees.managementChain, reportsTo: employees.reportsToEmail })
       .from(employees)
       .where(and(inArray(employees.email, attendees.slice(i, i + 500)), eq(employees.active, true)));
-    chains.push(...rows.map((r) => r.chain));
+    chains.push(...rows.map((r) => managersFor(r.chain, r.reportsTo, leader).join(";")));
   }
   return { emails: releaseNoticeRecipients(chains, await slackContactEmails()), testGroup: false };
 }

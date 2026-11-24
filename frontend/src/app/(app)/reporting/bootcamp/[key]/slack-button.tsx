@@ -2,7 +2,7 @@
 
 /**
  * The Slack button on a Live Sessions card: opens the attendee's private
- * channel in the Slack app, making it or bringing its members in line first,
+ * channel in the Slack app, making it or inviting whoever is missing first,
  * then says what changed and offers the channel in a browser too.
  */
 
@@ -15,7 +15,6 @@ type Opened = {
   created: boolean;
   unarchived: boolean;
   invited: string[];
-  removed: string[];
   skipped: string[];
   callerIn: boolean;
   appUrl: string;
@@ -34,7 +33,6 @@ const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;
 function summary(o: Opened): string {
   const parts = [o.created ? `Made #${o.name}` : o.unarchived ? `Unarchived #${o.name}` : `Posted in #${o.name}`];
   if (o.invited.length > 0) parts.push(`invited ${people(o.invited.length)}`);
-  if (o.removed.length > 0) parts.push(`took out ${people(o.removed.length)}`);
   return `${parts.join(", ")}.`;
 }
 

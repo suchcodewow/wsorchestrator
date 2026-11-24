@@ -19,6 +19,7 @@ import { and, eq, inArray } from "drizzle-orm";
 process.env.AUTH_SECRET ||= "reporting-bootcamp-test-secret-reporting-b";
 
 import { db } from "@/db";
+import { getOrgLeaderEmail } from "@/lib/evals/settings";
 import {
   bootcampClassReviews,
   bootcampRegistrations,
@@ -59,6 +60,7 @@ import {
   liveSessionsContext,
   liveSessionsFilters,
   cohortCounts,
+  canReach,
   listCohort,
   readerOf,
   releaseBlockers,
@@ -102,6 +104,8 @@ async function employee(key: string, reportsTo: string | null) {
     email: emailOf(key),
     fullName: `Person ${key}`,
     reportsToEmail: reportsTo ? emailOf(reportsTo) : "",
+    // Under the Organization Leader, as the HiBob sync leaves everyone a reader may reach.
+    orgDepth: 1,
     raw: {},
   });
 }
@@ -244,6 +248,44 @@ describe("who a reader sees", () => {
     }
   });
 
+  test("someone above the Organization Leader sees no one, even the people who report up to them", async () => {
+    await employee("chief", null);
+    await db
+      .update(employees)
+      .set({ orgDepth: null })
+      .where(eq(employees.id, `${SCOPED}chief`));
+    await db
+      .update(employees)
+      .set({ reportsToEmail: emailOf("chief") })
+      .where(eq(employees.id, `${SCOPED}manager`));
+    try {
+      assert.deepEqual(await seen(readerOf({ access: PERSONAS.nobody, email: emailOf("chief") })), {});
+    } finally {
+      await db
+        .update(employees)
+        .set({ reportsToEmail: "" })
+        .where(eq(employees.id, `${SCOPED}manager`));
+    }
+  });
+
+  test("someone outside the leader's organization is reached by their direct manager alone", async () => {
+    await employee("boss", null);
+    await employee("stray", "boss");
+    await employee("above", null);
+    await db
+      .update(employees)
+      .set({ orgDepth: null })
+      .where(inArray(employees.id, [`${SCOPED}boss`, `${SCOPED}stray`, `${SCOPED}above`]));
+    await db
+      .update(employees)
+      .set({ reportsToEmail: emailOf("above") })
+      .where(eq(employees.id, `${SCOPED}boss`));
+    const reach = (who: string, whom: string) => canReach(readerOf({ access: PERSONAS.nobody, email: emailOf(who) }), emailOf(whom));
+    assert.equal(await reach("boss", "stray"), true);
+    assert.equal(await reach("above", "stray"), false);
+    assert.equal(await reach("stray", "boss"), false);
+  });
+
   test("a person's page is not found for someone outside the reader's org, and shows a manager no assessments", async () => {
     assert.equal(await getBootcampPerson(manager(), `${SCOPED}outsider`), null);
     const person = await getBootcampPerson(manager(), `${SCOPED}rep`);
@@ -272,7 +314,8 @@ describe("releasing a class", () => {
   test("a preview logs the message each manager in the chain would get, and sends nothing", async () => {
     await db
       .update(employees)
-      .set({ managementChain: `${emailOf("lead")};${emailOf("manager")}` })
+      // The chain runs on past the Organization Leader to someone above them, who must not be told.
+      .set({ managementChain: `${emailOf("lead")};${emailOf("manager")};${await getOrgLeaderEmail()};${emailOf("chief")}` })
       .where(eq(employees.id, `${SCOPED}newcomer`));
     assert.ok((await classAttendees(bootcampId, "bootcamp")).includes(emailOf("newcomer")));
     const bootcamp = (await cohortBootcamp())!;

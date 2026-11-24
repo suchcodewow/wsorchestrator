@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { hibobAuthorization, nameFromEmail, toEmployeeRow } from "@/lib/evals/hibob-record";
 import { inScoreRange, isIsoDay, normalEmail, roundScore } from "@/lib/evals/history-values";
 import { formatScore } from "@/app/(app)/cohort-settings/format";
-import { orgUnder, ORG_ROOT_EMAIL } from "@/lib/evals/org";
+import { chainUpTo, managersFor, orgUnder, ORG_ROOT_EMAIL } from "@/lib/evals/org";
 import { cleanTitle, isDeferred, listForTitle, splitTitles, titleKey, trackFor } from "@/lib/evals/title-lists";
 
 describe("toEmployeeRow", () => {
@@ -126,6 +126,38 @@ describe("nameFromEmail", () => {
   for (const [email, hibob, shown] of cases) {
     test(`${hibob} <${email}> is ${shown}`, () => assert.equal(nameFromEmail(email, hibob), shown));
   }
+});
+
+describe("chainUpTo", () => {
+  test("keeps the managers up to and including the leader, and drops everyone above", () => {
+    assert.deepEqual(chainUpTo("mgr@x.com;vp@x.com;carlos@x.com;jyoti@x.com", "carlos@x.com"), ["mgr@x.com", "vp@x.com", "carlos@x.com"]);
+  });
+
+  test("compares emails case-insensitively", () => {
+    assert.deepEqual(chainUpTo("MGR@x.com; Carlos@x.com ;jyoti@x.com", "CARLOS@x.com"), ["mgr@x.com", "carlos@x.com"]);
+  });
+
+  test("a chain that never reaches the leader, or no chain, names no one", () => {
+    assert.deepEqual(chainUpTo("mgr@x.com;jyoti@x.com", "carlos@x.com"), []);
+    assert.deepEqual(chainUpTo(null, "carlos@x.com"), []);
+    assert.deepEqual(chainUpTo("", "carlos@x.com"), []);
+  });
+});
+
+describe("managersFor", () => {
+  test("uses the chain up to the leader when there is one", () => {
+    assert.deepEqual(managersFor("mgr@x.com;carlos@x.com;jyoti@x.com", "mgr@x.com", "carlos@x.com"), ["mgr@x.com", "carlos@x.com"]);
+  });
+
+  test("falls back to the direct manager alone for someone outside the leader's organization", () => {
+    assert.deepEqual(managersFor(null, "Nick@x.com", "carlos@x.com"), ["nick@x.com"]);
+    assert.deepEqual(managersFor("mgr@x.com;jyoti@x.com", "mgr@x.com", "carlos@x.com"), ["mgr@x.com"]);
+  });
+
+  test("names no one for someone with no manager", () => {
+    assert.deepEqual(managersFor(null, "", "carlos@x.com"), []);
+    assert.deepEqual(managersFor(null, null, "carlos@x.com"), []);
+  });
 });
 
 describe("orgUnder", () => {

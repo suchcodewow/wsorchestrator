@@ -23,11 +23,13 @@ import {
   BOOTCAMP_EXAM,
   BOOTCAMP_SCORE,
   EVALS_ASSESSMENT_LIMITS,
+  EVALS_SETTINGS_KEYS,
   bootcampClassReviews,
   bootcamps,
   employees,
   evalsAssessmentCriteria,
   evalsAssessments,
+  evalsSettings,
   evalsSubmissionScores,
   evalsSubmissions,
   scorecardViews,
@@ -36,6 +38,7 @@ import {
   type Employee,
   type EvalsBuiltInAssessment,
 } from "@/db/schema";
+import { ORG_ROOT_EMAIL } from "@/lib/evals/org";
 import { getLiveSessionsSettings } from "@/lib/reporting/live-sessions-settings";
 import { averageScore, requiredFeedback, wholeScore } from "@/lib/evals/assessment-values";
 import { assessedTrackOf } from "@/lib/evals/current-cohort";
@@ -89,18 +92,29 @@ export function readerOf(caller: { access: Access; email: string | null; id?: st
  * HiBob sync reaches the reader, the reader themself left out. Only people
  * HiBob still sends count, so someone who has left reaches no one, and a
  * former report of the reader's is out of reach. `union` stops a loop in the
- * reporting lines.
+ * reporting lines. The Organization Leader is the top: the leader and anyone
+ * under them reach their reports, and anyone above the leader reaches no one,
+ * except the people outside the leader's organization who report to them directly.
  */
 function inReach(reader: BootcampReader, email: SQL): SQL {
   if (reader.all) return sql`true`;
   if (!reader.email) return sql`false`;
-  return sql`(${email} <> ${reader.email} and ${email} in (
-    with recursive org(email) as (
-      select m.email from ${employees} m where m.reports_to_email = ${reader.email} and m.active
-      union
-      select r.email from ${employees} r join org on r.reports_to_email = org.email where r.active
+  const leader = sql`coalesce((select ${evalsSettings.value} from ${evalsSettings} where ${evalsSettings.key} = ${EVALS_SETTINGS_KEYS.orgLeaderEmail}), ${ORG_ROOT_EMAIL})`;
+  return sql`(${email} <> ${reader.email} and (
+    (
+      (${reader.email} = lower(${leader})
+        or exists (select 1 from ${employees} h where h.email = ${reader.email} and h.active and h.org_depth is not null))
+      and ${email} in (
+        with recursive org(email) as (
+          select m.email from ${employees} m where m.reports_to_email = ${reader.email} and m.active
+          union
+          select r.email from ${employees} r join org on r.reports_to_email = org.email where r.active
+        )
+        select email from org)
     )
-    select email from org))`;
+    or ${email} in (
+      select o.email from ${employees} o where o.reports_to_email = ${reader.email} and o.active and o.org_depth is null
+    )))`;
 }
 
 /**
